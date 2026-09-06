@@ -140,7 +140,11 @@ describe("Sudden Reversal (101896) — the first cancel", () => {
       ["Alice", "pass"], // end master phase
       ["Alice", "end"], // minion phase
       ["Alice", "pass"], // influence
-      ["Alice", "pass"], // discard → Bob's turn, unlock is silent
+      ["Alice", "pass"], // discard → Bob's turn
+      // Bob's unlock is no longer silent: this fixture's libraries are
+      // empty and hands are short, which is exactly the condition for
+      // announcing a withdrawal (p. 38). He declines.
+      ["Bob", "pass"],
     ]);
     const bobMaster = engine.decision()!;
     expect(bobMaster.seat).toBe("Bob");

@@ -291,6 +291,25 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
     // -- endgame -----------------------------------------------------------
     case "Ousted":
       return { text: `${ev.seat} is ousted!`, weight: "major" };
+    case "WithdrawalAnnounced":
+      return {
+        text: `${ev.seat} announces a withdrawal from the game — it succeeds at their next unlock phase if they lose no blood or pool and fight nothing.`,
+        weight: "major",
+      };
+    case "WithdrawalFailed":
+      return { text: `${ev.seat}'s withdrawal fails: ${ev.why}.`, weight: "major" };
+    case "Withdrew":
+      return {
+        text: `${ev.seat} withdraws from the game for 1 victory point. Their predator gets nothing.`,
+        weight: "major",
+      };
+    case "CardsRevealed":
+      // WHAT was seen is deliberately not named: the log is read by
+      // whoever is at the screen, and the look is the actor's alone.
+      return {
+        text: `${ev.to} looks at ${ev.cards.length} card${ev.cards.length === 1 ? "" : "s"}.`,
+        weight: "normal",
+      };
     case "VictoryPointGained":
       return { text: `${ev.seat} gains a victory point.`, weight: "major" };
 

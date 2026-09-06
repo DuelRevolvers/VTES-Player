@@ -943,6 +943,20 @@ export interface SeatState {
    *  command logs are untouched (the `idSeq` precedent).
    *  docs/ash-heap-design.md */
   ashHeap?: CardInstance[];
+  /**
+   * This Methuselah has announced a withdrawal and it is still on track
+   * (p. 38, "Withdrawing from the Game").
+   *
+   * Announced in your unlock phase once your library is exhausted and you
+   * begin a turn with less than a full hand. It succeeds at your NEXT
+   * unlock phase provided that, in between, none of your minions entered
+   * combat, none of your minions lost or spent blood, and you lost or
+   * spent no pool. Any one of those clears the flag — "the withdrawal
+   * fails if you lose a single blood or pool counter, EVEN IF you also
+   * gain enough to make up for the loss", which is why this is a latch
+   * tripped by the loss rather than a comparison of totals.
+   */
+  withdrawing?: boolean;
   ousted: boolean;
   victoryPoints: number;
   /** Cards awaiting "do not replace until your next unlock phase". */
@@ -1126,6 +1140,14 @@ export type GameEvent =
   | { type: "Ousted"; seat: SeatId }
   | { type: "VictoryPointGained"; seat: SeatId }
   | { type: "GameEnded"; winner: SeatId | null }
+  /** A Methuselah announced their intent to withdraw (p. 38). */
+  | { type: "WithdrawalAnnounced"; seat: SeatId }
+  /** …and it did not hold: they lost blood or pool, or a minion of theirs
+   *  entered combat. `why` is for the log, which is read in English. */
+  | { type: "WithdrawalFailed"; seat: SeatId; why: string }
+  /** …or it did. Worth 1 victory point, and the predator gets NOTHING —
+   *  neither a victory point nor pool, unlike an oust (p. 38). */
+  | { type: "Withdrew"; seat: SeatId }
   /**
    * One seat was SHOWN cards it does not own (Revelations' "look at your
    * prey's hand"). An event rather than a direct write, so the knowledge

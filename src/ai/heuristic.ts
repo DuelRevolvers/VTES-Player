@@ -73,6 +73,10 @@ export interface Weights {
   voteAgainstOthers: number;
   /** Taking the Edge is nearly free pool. */
   gainEdge: number;
+  /** Announcing a withdrawal (p. 38). Offered only once the library is
+   *  exhausted, which is a losing position — 1 guaranteed victory point
+   *  beats decking out, so this is worth taking when it appears. */
+  withdraw: number;
   /** Discarding: shed the least useful card, but discarding is a cost. */
   discard: number;
   /** A tiny bias toward passing, so the AI does not take pointless
@@ -106,6 +110,7 @@ export const DEFAULT_WEIGHTS: Weights = {
   voteOwn: 6,
   voteAgainstOthers: 4,
   gainEdge: 5,
+  withdraw: 12,
   discard: -1,
   pass: 0.5,
 };
@@ -220,6 +225,13 @@ export class HeuristicAgent implements Agent {
 
       case "gainEdgePool":
         return w.gainEdge;
+
+      case "announceWithdrawal":
+        // The engine offers this only when the library is EXHAUSTED and
+        // the hand is short (p. 38) — a position with no way back, since
+        // nothing will ever be drawn again. One certain victory point is
+        // worth more than playing out the deck-out.
+        return w.withdraw;
 
       case "declareBlock":
         return this.scoreBlock(o, view, me);

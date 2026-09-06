@@ -351,6 +351,10 @@ export class VtesEngine implements EngineOps {
     this.state.eventLog.push(ev);
     this.applyToEntities(ev);
     this.applyToFrames(ev);
+    // A withdrawal in progress is broken by losing blood or pool, or by a
+    // minion entering combat (p. 38). Checked at the one point every event
+    // passes through, so no future emit site can forget it.
+    this.checkWithdrawal(ev);
   }
 
   private applyToEntities(ev: GameEvent): void {
@@ -457,6 +461,19 @@ export class VtesEngine implements EngineOps {
       case "PoolBurned":
         getSeat(this.state, ev.seat).pool -= ev.amount;
         break;
+      case "WithdrawalAnnounced":
+        getSeat(this.state, ev.seat).withdrawing = true;
+        break;
+      case "Withdrew": {
+        // 1 victory point, and the seat leaves the game. The PREDATOR gets
+        // nothing — no victory point and no pool — which is what makes
+        // withdrawing different from being ousted (p. 38).
+        const seat = getSeat(this.state, ev.seat);
+        seat.withdrawing = false;
+        seat.ousted = true;
+        seat.victoryPoints += 1;
+        break;
+      }
       case "PoolGained":
         getSeat(this.state, ev.seat).pool += ev.amount;
         break;
@@ -1225,6 +1242,85 @@ export class VtesEngine implements EngineOps {
     }
   }
 
+  /**
+   * May this Methuselah announce a withdrawal (p. 38)?
+   *
+   * "If you have EXHAUSTED YOUR LIBRARY and begin your turn with LESS THAN
+   * A FULL HAND, you have the option to withdraw." Both halves matter and
+   * the second follows from the first: p. 7 draws you back up to hand size
+   * after every play, so a short hand is only possible once there is
+   * nothing left to draw.
+   *
+   * Not offered to a seat already withdrawing — the announcement is made
+   * once and then has to survive a turn.
+   */
+  private canAnnounceWithdrawal(seatId: SeatId): boolean {
+    const seat = getSeat(this.state, seatId);
+    if (seat.ousted || seat.withdrawing) return false;
+    return seat.library.length === 0 && seat.hand.length < handSizeOf(this.state, seatId);
+  }
+
+  /**
+   * A withdrawal in progress is broken by any of p. 38's three conditions.
+   *
+   * Hung on `emit`, which is the one place every event passes through, for
+   * the reason the `ActionAnnounced` chokepoint exists: three or four
+   * sites can each lose blood, and a check written at each of them is a
+   * check the fifth will forget.
+   *
+   * "The withdrawal fails if you lose a single blood or pool counter, EVEN
+   * IF you also gain enough to make up for the loss" — so this is a latch
+   * tripped by the LOSS, never a comparison of totals.
+   */
+  private checkWithdrawal(ev: GameEvent): void {
+    const fail = (seat: SeatId, why: string): void => {
+      const s = this.state.seats.find((x) => x.id === seat);
+      if (!s?.withdrawing) return;
+      s.withdrawing = false;
+      this.state.eventLog.push({ type: "WithdrawalFailed", seat, why });
+    };
+    const ownerOf = (minion: MinionId): SeatId | null =>
+      findMinion(this.state, minion)?.controller ?? null;
+
+    switch (ev.type) {
+      case "PoolBurned":
+        fail(ev.seat, "lost pool");
+        break;
+      case "BloodBurned": {
+        const seat = ownerOf(ev.minion);
+        if (seat) fail(seat, "a minion lost blood");
+        break;
+      }
+      case "CombatBegan": {
+        // "None of your minions enter combat" — either side of it.
+        for (const m of [ev.acting, ev.opposing]) {
+          const seat = ownerOf(m);
+          if (seat) fail(seat, "a minion entered combat");
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  /**
+   * Resolve a withdrawal at the start of the announcing seat's next unlock
+   * phase (p. 38): "if you have met these conditions when you would start
+   * your unlock phase, you successfully withdraw."
+   *
+   * Worth 1 victory point — and the predator gets NOTHING, neither a
+   * victory point nor the pool an oust would hand them. That asymmetry is
+   * the whole point of withdrawing rather than being ousted, so it is
+   * spelled out here rather than routed through `processOusts`.
+   */
+  private resolveWithdrawal(seatId: SeatId): void {
+    const seat = getSeat(this.state, seatId);
+    if (!seat.withdrawing || seat.ousted) return;
+    seat.withdrawing = false;
+    this.emit({ type: "Withdrew", seat: seatId });
+  }
+
   commitDiablerie(diablerist: MinionId, victim: MinionId): void {
     // p. 34 — treated as a single unit; no effect interrupts.
     const v = getMinion(this.state, victim);
@@ -1365,6 +1461,15 @@ export class VtesEngine implements EngineOps {
 
     if (tf.phase === "unlock") {
       if (!tf.unlockDone) {
+        // "If you have met these conditions WHEN YOU WOULD START YOUR
+        // UNLOCK PHASE, you successfully withdraw" (p. 38) — before the
+        // unlock sweep, because a seat that has just left the game has no
+        // cards to unlock and no contests to settle.
+        this.resolveWithdrawal(tf.seat);
+        if (getSeat(this.state, tf.seat).ousted) {
+          this.processOusts();
+          return true;
+        }
         // "Unlock all of your cards" — then unlock-phase effects (p. 17).
         const seat = getSeat(this.state, tf.seat);
         for (const m of seat.minions) {
@@ -1459,7 +1564,17 @@ export class VtesEngine implements EngineOps {
       const unlockAbilities =
         !tf.unlockAbilitiesDone &&
         this.abilityOptionsFor(tf.seat, "turn.unlock").length > 0;
-      if (!edgeNeeded && !unlockAbilities && this.nextUnlockAbilitySeat(tf) === null) {
+      // A withdrawal is ANNOUNCED in this phase (p. 38), so the phase must
+      // not settle past it — the third reason the window stays open, and
+      // it has to be named at all three sites that decide that (here,
+      // `turnDecision`, and `applyTurnPass`).
+      const mayWithdraw = !tf.unlockAbilitiesDone && this.canAnnounceWithdrawal(tf.seat);
+      if (
+        !edgeNeeded &&
+        !unlockAbilities &&
+        !mayWithdraw &&
+        this.nextUnlockAbilitySeat(tf) === null
+      ) {
         tf.phase = "master";
         // 1 master phase action by default, minus the out-of-turn debt
         // (p. 8, p. 18).
@@ -5981,8 +6096,19 @@ export class VtesEngine implements EngineOps {
         const ownAbilities = tf.unlockAbilitiesDone
           ? []
           : this.abilityOptionsFor(tf.seat, "turn.unlock");
-        if (edgeNeeded || ownAbilities.length > 0) {
+        // "Announce your intent to withdraw during your unlock phase"
+        // (p. 38). Offered only while it is actually available, so a
+        // player is never shown a button that cannot work.
+        const mayWithdraw = this.canAnnounceWithdrawal(tf.seat) && !tf.unlockAbilitiesDone;
+        if (edgeNeeded || ownAbilities.length > 0 || mayWithdraw) {
           const options: LegalOption[] = [];
+          if (mayWithdraw) {
+            options.push({
+              id: "withdraw",
+              kind: "announceWithdrawal",
+              label: "Announce a withdrawal from the game",
+            });
+          }
           if (edgeNeeded) {
             options.push({
               id: "edge:gain",
@@ -6867,6 +6993,14 @@ export class VtesEngine implements EngineOps {
         tf.edgeDone = true;
         return;
       }
+      case "announceWithdrawal": {
+        // The announcement alone does nothing (p. 38): it starts a turn's
+        // probation, and the withdrawal succeeds only if the seat reaches
+        // its next unlock phase having lost no blood and no pool and
+        // fought nothing.
+        this.emit({ type: "WithdrawalAnnounced", seat: (top as TurnFrame).seat });
+        return;
+      }
       case "discard": {
         const tf = top as TurnFrame;
         // A discard spends a discard phase action (p. 37); with only the
@@ -7243,7 +7377,12 @@ export class VtesEngine implements EngineOps {
         const ownAbilities =
           !tf.unlockAbilitiesDone &&
           this.abilityOptionsFor(tf.seat, "turn.unlock").length > 0;
-        if (edgeNeeded || ownAbilities) {
+        // The withdrawal offer opens this window too, so declining it has
+        // to close the turn seat's turn at it — otherwise the pass falls
+        // through and the OTHER seats' "during any unlock phase" cards
+        // never get asked (which is what broke the Homunculus test).
+        const mayWithdraw = !tf.unlockAbilitiesDone && this.canAnnounceWithdrawal(tf.seat);
+        if (edgeNeeded || ownAbilities || mayWithdraw) {
           tf.edgeDone = true; // declined the Edge pool
           tf.unlockAbilitiesDone = true;
           return;

@@ -59,6 +59,9 @@ export type LegalOption =
       rescueActorPortion?: number;
     }
   | { id: string; kind: "endMinionPhase"; label: string }
+  /** "Announce your intent to withdraw during your unlock phase" (p. 38) —
+   *  offered only when the library is exhausted and the hand is short. */
+  | { id: string; kind: "announceWithdrawal"; label: string }
   | { id: string; kind: "gainEdgePool"; label: string }
   | { id: string; kind: "discard"; label: string; card: CardInstanceId }
   | {

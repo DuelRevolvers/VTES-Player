@@ -4995,7 +4995,94 @@ already means something else), inner tile wins for nested attachments, menu
 grows **down** (a table card has room below it, a hand card does not), and
 nothing lights while an AI's move is paced.
 
-**Green baseline as of 2026-09-05: 167 test files, 1747 tests, typecheck and
+**THE OLD GAPS, CLOSED — 2026-09-05 (`docs/old-gaps-closeout.md`).** The
+owner asked for five long-standing items. **Go-getter superior was ALREADY
+DONE** (the ledger-closeout built it; the "Next" queue line was stale —
+another stale queue entry). The other four:
+
+**1. "WHO HAS LOOKED AT THIS CARD" — BUILT.** The gap recorded the day
+`PlayerView` was finished, and real since Revelations. `GameState.knowledge`
+(seat → card instance ids), event **`CardsRevealed`**, emitted where the
+card says "look at your prey's hand" — **not** in the choice's option list,
+which is a pure read, and the actor has seen the hand whether or not they
+discard from it. `redactFor` unmasks a known card in somebody else's hand;
+`PlayerView.hand` for another seat is now `{ count, known }`, where `known`
+is a SUBSET (they may have drawn since). Keyed by card INSTANCE and never
+expired — you saw that physical card. Event-sourced, so a replay remembers
+what the original player remembered.
+
+**A LIVE RULES BUG FOUND WHILE BUILDING IT: Revelations' BASIC mode was
+putting the card into play**, which is the superior's whole text ("[AUS]
+Put this card in play. Your prey plays with an open hand"), so the basic
+mode granted a permanent open hand on the prey for the rest of the game.
+Cause: **`putsInPlayOnSuccess` is registered when ANY mode does it, and
+returned a default entry for a mode with no such effect** — the Wall of
+Filth shape again (*a handler lookup cannot answer a question whose answer
+differs by mode*). It returns `null` now and the engine falls through.
+
+**2. LEADERBOARD — BUILT.** `src/ui/results.ts`: `resultFrom` and
+`standings` are pure; storage is guarded. Recorded from the **transport**,
+for the game log's reason — only the authority sees a game that bots
+finish. The sink is INJECTED (`onResult`), so the fuzz and the batch
+harness record nothing. A name counts as a bot only if a person never
+played it.
+
+**3. DECK LIBRARY — BUILT, and it reaches the lobby.** `src/ui/decklibrary.ts`
+stores the deck's **SOURCE**, not its cards: a precon stays a pointer (it
+follows the registry as the pool widens) and a pasted list keeps the words,
+so the import report can be shown again. `deckSummary` is re-derived on
+every read through the same path a game is dealt from — a deck saved today
+can stop being legal tomorrow. Saving happens in the deck panel, which
+serves the new-game screen AND a lobby guest through one code path, so a
+saved deck appears in both by construction.
+
+**4. DIABLERIE STEPS 2 AND 4 — BUILT** (`docs/diablerie-design.md` §6 was
+stale AGAIN: it said "needs an equipment-move primitive, which no gate has
+built" — `moveAttachment` had existed since the granted-rush wave, and
+`attachFromZone`'s own comment already named this use).
+**Step 2 (equipment) is taken AUTOMATICALLY and synchronously**, before the
+burn — a recorded reading: the resolution is an indivisible unit, and a
+choice raised inside action resolution is *deferred until the action
+settles*, by which time the victim and its equipment are burned. Equipment
+that would duplicate a unique the taker already controls is left to burn.
+**Step 4 (older victim's Discipline) is a real question**, engine-owned
+like the discard-down, and lands **before the blood hunt** — the correct
+p. 34–35 order (the resolution completes, then the referendum).
+
+**5. WITHDRAWAL — BUILT** (p. 38, quoted in the test file). Announced in
+your unlock phase once your library is **exhausted** and your hand is
+short; succeeds at your next unlock phase if no minion entered combat, no
+minion lost blood, and you lost no pool. **1 victory point, and the
+predator gets NOTHING** — no VP and no pool, which is the whole point of
+withdrawing rather than being ousted. The violation check hangs on `emit`,
+the one point every event passes through. **It is a LATCH tripped by the
+loss, not a comparison of totals** — "fails if you lose a single counter,
+EVEN IF you also gain enough to make up for the loss".
+
+**Three sites decide whether the unlock window stays open** (settle's
+phase-advance, `turnDecision`, `applyTurnPass`) and all three had to name
+the withdrawal — missing one silently skipped the OTHER seats' "during any
+unlock phase" cards. **Every fixture has an empty library**, so the option
+now appears across the suite; three traces gained a decision, and that is
+the engine being right rather than an artifact to suppress.
+
+**THE PDF READER**: the rulebook was read with a ~40-line Node script using
+only `zlib` (kept in the scratchpad, not the repo) rather than adding
+`pdf-parse` as a dependency. Worth repeating — the contested-cards and
+withdrawal rules are quoted verbatim in `docs/old-gaps-closeout.md`.
+
+**STILL OPEN: contested cards and contested titles** (p. 17–18). The rules
+are now transcribed exactly, and the finding is that this is a real
+subsystem rather than a patch: contested cards are turned **face down and
+out of play**, cost **1 pool per unlock phase** to hold, and yielding
+**burns** the card; contested titles cost **1 blood**, are yielded
+automatically by a vampire in torpor or with no blood, and are keyed on the
+**CITY** for prince/baron/archbishop and on the **CLAN** for justicar and
+Inner Circle. **`MinionState` carries no title city** — the `path` lesson
+again: the data is in the crypt card text and the importer drops it. Not
+started.
+
+**Green baseline as of 2026-09-05: 169 test files, 1792 tests, typecheck and
 `vite build` clean.** If a fresh session sees fewer, something regressed.
 
 **BLOCKED — THE LIST IS EMPTY (2026-09-03).** Every gate that was on it

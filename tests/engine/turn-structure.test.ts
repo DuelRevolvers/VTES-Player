@@ -43,6 +43,9 @@ describe("turn structure", () => {
 
     runTrace(engine, [
       ["Alice", "edge:gain"],
+      // The unlock window stays open: with an empty library and a short
+      // hand, a withdrawal may be announced here (p. 38). Declined.
+      ["Alice", "pass"],
       // Master phase (no master cards yet).
       ["Alice", "pass"],
       // Minion phase: V1 is empty → hunting is mandatory and exclusive.
@@ -75,8 +78,15 @@ describe("turn structure", () => {
     const stealth = state.eventLog.find((e) => e.type === "StealthModified")!;
     expect(stealth).toMatchObject({ delta: 1, source: "hunt" });
 
-    // Bob's turn began; his unlock is silent (no Edge), so he's asked in
-    // the master phase.
+    // Bob's turn began. He holds no Edge, but his library is empty and his
+    // hand is short, so his unlock phase offers the withdrawal (p. 38);
+    // declining it takes him to the master phase.
+    const bobUnlock = engine.decision()!;
+    expect(bobUnlock.seat).toBe("Bob");
+    expect(bobUnlock.window).toBe("turn.unlock");
+    expect(bobUnlock.options.map((o) => o.id)).toEqual(["withdraw", "pass"]);
+    runTrace(engine, [["Bob", "pass"]]);
+
     const next = engine.decision()!;
     expect(next.seat).toBe("Bob");
     expect(next.window).toBe("turn.master");

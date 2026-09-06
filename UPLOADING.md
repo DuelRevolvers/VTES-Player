@@ -40,7 +40,7 @@ Replace the name and email with yours (the email should be the one on your
 GitHub account):
 
 ```
-git config --global user.name "Aaron"
+git config --global user.name "DuelRevolvers"
 git config --global user.email "duelrevolvers@gmail.com"
 ```
 
@@ -186,8 +186,8 @@ To paste into that window, use **right-click → Paste** or
 
 ---
 
-## What about putting the game online for people to play?
+## Putting the game online for people to play
 
-That's a separate job (GitHub Pages), and it needs one build setting
-changed first. Ask me when you want it — it's not part of uploading the
-code.
+That's **`PUBLISHING.md`** — GitHub Pages, free, about four steps and then
+it keeps itself up to date. The build needs no changes; it was already set
+up for it.

@@ -1,0 +1,53 @@
+# Builds the client and publishes it to GitHub Pages on every push to main.
+#
+# The site is a plain static bundle: `vite build` writes dist/, and dist/
+# is what gets served. There is no server, which is why `base: "./"` in
+# vite.config.ts matters — every asset is referenced relatively, so the
+# same bundle works at https://<user>.github.io/<repo>/ without the repo
+# name being compiled in.
+#
+# The dev-server log sink (vite.config.ts, apply: "serve") does not exist
+# here by design: on the published site the client keeps its play log in
+# memory and offers it for download instead.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # lets you re-publish by hand from the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a newer push waits rather than racing.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -178,7 +178,12 @@ describe("Vessel (102113)", () => {
     expect(v1.blood).toBe(1);
     expect(alice.pool).toBe(11);
 
-    // Used → no options left → the phase advances on its own.
+    // Used → the ability is gone. The unlock window stays open for the
+    // one other thing it offers: this fixture's library is empty and the
+    // hand is short, which is the printed condition for announcing a
+    // withdrawal (p. 38). Decline it and the phase advances.
+    expect(engine.decision()!.options.map((o) => o.id)).toEqual(["withdraw", "pass"]);
+    runTrace(engine, [["Alice", "pass"]]);
     const next = engine.decision()!;
     expect(next.window).toBe("turn.master");
   });
