@@ -1,0 +1,16 @@
+node_modules/
+dist/
+data/vtes-raw.json
+
+# Reference material only — a 52MB GPL-2.0 C++ tree, not a dependency.
+# Read for architecture (docs/cockatrice-lessons.md); never ported into src/.
+Cockatrice-*/
+
+# Per-playthrough game logs, written by the dev server for debugging.
+logs/
+
+# Saved games — one player's position, not part of the project.
+saves/
+
+# Local Claude Code settings for this machine.
+.claude/

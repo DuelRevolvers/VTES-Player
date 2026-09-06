@@ -1,0 +1,369 @@
+/**
+ * The deck importer (docs/deck-import-design.md) — phase 7.
+ *
+ * Takes a deck list pasted from a deck-building site and turns it into a
+ * `DeckList` this client can deal, or tells the player exactly why it
+ * cannot. The standing rule from CLAUDE.md is the whole brief: *"Deck
+ * import must validate against the registry and report unsupported cards
+ * to the user — never silently drop or break."*
+ *
+ * ONE PARSER FOR EVERY SITE. VDB, Amaranth, ARDB, JOL, Lackey and the TWD
+ * archive all export the same thing underneath — a count and a name per
+ * line, with headers and stat columns around it — and they disagree only
+ * about the decoration. So instead of a parser per site, this reads the
+ * count, then finds the LONGEST PREFIX of the rest that is a card in the
+ * V5 pool. The registry does the work no format-specific parser could do
+ * anyway: it says whether a name is a crypt card or a library card, so
+ * section headers are optional rather than load-bearing.
+ *
+ * That also decides the failure mode. A line that resolves to nothing is
+ * REPORTED with its text and its line number, never skipped — a deck that
+ * silently lost a card would be a deck the player did not build.
+ */
+
+import registry from "../cards/registry.json";
+import type { CardDef, CardRegistry, CryptCardDef, PreconDeck } from "../cards/types.ts";
+import { importCryptCard } from "./cardinfo.ts";
+import type { DeckList } from "./decks.ts";
+import { MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
+
+const reg = registry as unknown as CardRegistry;
+
+// ---------------------------------------------------------------------------
+// Name matching
+// ---------------------------------------------------------------------------
+
+/**
+ * Names as a comparison sees them.
+ *
+ * Deck exports are typed, translated, copied through spreadsheets and
+ * mangled by fonts, so a match cannot depend on any of that surviving:
+ * case, accents (`Kuyén`, `Día de los Muertos`), curly quotes, the `™` on
+ * Pentex, or how many spaces someone left in. What it MUST keep is the
+ * letters, because two card names can differ by nothing else.
+ */
+function normalise(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // accents, after NFD splits them off
+    .replace(/[‘’ʼ]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/[‐-―]/g, "-")
+    .replace(/[™®]/g, "") // ™ and ®: decoration, never meaning
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** KRCG suffixes a crypt name with its group — "Ariane (G5)". Deck lists
+ *  usually print the group in its own column instead, so both spellings
+ *  have to resolve. `(ADV)` marks an advanced vampire (none in V5). */
+function stripCryptSuffix(name: string): string {
+  return name.replace(/\s*\((?:g\s*\d+|adv)\)\s*$/i, "").trim();
+}
+
+const byName = new Map<string, CardDef>();
+for (const entry of Object.values(reg.entries)) {
+  const card = entry.card;
+  byName.set(normalise(card.name), card);
+  if (card.kind === "crypt") {
+    // The bare name, for a list that puts the group in a column. No V5
+    // crypt card collides once its group is stripped — a test asserts it,
+    // because the day one does this map would silently prefer one of them.
+    const base = normalise(stripCryptSuffix(card.name));
+    if (!byName.has(base)) byName.set(base, card);
+  }
+}
+
+const byId = new Map<number, CardDef>();
+for (const entry of Object.values(reg.entries)) byId.set(entry.card.id, entry.card);
+
+/** Look up one exact name, in any of the spellings a site might use. */
+export function findCard(name: string): CardDef | null {
+  const n = normalise(name);
+  return byName.get(n) ?? byName.get(normalise(stripCryptSuffix(name))) ?? null;
+}
+
+/**
+ * The longest run of leading words that names a card.
+ *
+ * This is what lets one parser read every format: ARDB and VDB pad a crypt
+ * line out with capacity, disciplines and clan (`Ariane  3  cel pot pre
+ * Brujah:5`), JOL and Lackey print the name alone, and none of them agree
+ * on the separator. Matching longest-first matters — a shorter card name
+ * can be the prefix of a longer one, and the longer one is the real card.
+ */
+function resolveLine(rest: string): CardDef | null {
+  const words = rest.split(/\s+/).filter(Boolean);
+  for (let take = words.length; take > 0; take--) {
+    const hit = findCard(words.slice(0, take).join(" "));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// The report
+// ---------------------------------------------------------------------------
+
+export interface ImportedCard {
+  id: number;
+  name: string;
+  copies: number;
+}
+
+export interface ImportProblem {
+  /** 1-based line number in the pasted text, so the player can find it. */
+  line: number;
+  text: string;
+  reason: string;
+}
+
+export interface ImportReport {
+  /** True when the deck can actually be played as imported. */
+  ok: boolean;
+  deckName: string | null;
+  crypt: ImportedCard[];
+  library: ImportedCard[];
+  cryptCount: number;
+  libraryCount: number;
+  /** Lines that named no card in the V5 pool. FATAL — a card that is not
+   *  in the pool cannot be dealt, and dropping it would change the deck. */
+  unknown: ImportProblem[];
+  /** Cards in the pool whose effects are not implemented. FATAL: playing
+   *  them would silently do nothing. (The library is at 444/444, so this
+   *  only bites once the pool is widened.) */
+  unsupported: ImportedCard[];
+  /** Vampires whose printed ability is not implemented. NOT fatal — the
+   *  vampire is a real card with real stats and the game plays fine; the
+   *  player is told so a game is never misled. */
+  inertAbilities: string[];
+  /** Deck-construction problems (rulebook p. 4 and p. 14). FATAL. */
+  illegal: string[];
+  /** The crypt groups the deck uses, in order. */
+  groups: Array<number | "ANY">;
+}
+
+/** p. 4: "A Methuselah's crypt must be built using vampires from a single
+ *  group or from two consecutive groups." Glossary: "A crypt card with the
+ *  group 'any' is not subject to the group restriction." */
+function groupProblem(cards: CryptCardDef[]): { problem: string | null; groups: Array<number | "ANY"> } {
+  const seen = new Set<number | "ANY">();
+  for (const c of cards) seen.add(c.group);
+  const numeric = [...seen].filter((g): g is number => typeof g === "number").sort((a, b) => a - b);
+  const groups = [...seen].sort((a, b) =>
+    a === "ANY" ? 1 : b === "ANY" ? -1 : (a as number) - (b as number),
+  );
+  if (numeric.length === 0) return { problem: null, groups };
+  const span = numeric[numeric.length - 1]! - numeric[0]!;
+  if (span > 1) {
+    return {
+      problem: `crypt mixes groups ${numeric.join(", ")}; a crypt may use one group or two consecutive ones (p. 4)`,
+      groups,
+    };
+  }
+  return { problem: null, groups };
+}
+
+/** "Deck Name: X" / "Name: X", however the site spells it. */
+function findDeckName(lines: string[]): string | null {
+  for (const raw of lines) {
+    const m = /^\s*(?:deck\s*)?name\s*[:=]\s*(.+?)\s*$/i.exec(raw);
+    if (m && m[1]) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Read a pasted deck list.
+ *
+ * `seat` is who will play it. A deck does not know where it sits — that is
+ * the lobby's business — but `DeckList` carries the seat, so the caller
+ * says which one.
+ */
+export function importDeck(text: string, seat: string): { deck: DeckList | null; report: ImportReport } {
+  const lines = text.split(/\r?\n/);
+  const crypt: ImportedCard[] = [];
+  const library: ImportedCard[] = [];
+  const cryptDefs: CryptCardDef[] = [];
+  const unknown: ImportProblem[] = [];
+  const unsupported: ImportedCard[] = [];
+  const inert = new Set<string>();
+  const counted = new Map<number, ImportedCard>();
+
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (line === "") return;
+    // A deck line starts with a count. Everything else — titles, section
+    // headers, "Crypt (12 cards)", author notes — does not, and is not a
+    // failure to report: it was never claiming to be a card.
+    // "2 Name", "2x Name", "2 x Name", "2. Name", "2 - Name", "2<tab>Name".
+    // The punctuation separator must be FOLLOWED BY WHITESPACE, or the
+    // pattern eats the first character of a card whose name begins with
+    // one: `.44 Magnum` imported as "44 Magnum" and was reported as not
+    // being in the pool. Found by round-tripping a real precon.
+    const m = /^(\d+)\s*(?:x\b)?\s*(?:[:.\-]\s+)?\s*(.+)$/i.exec(line);
+    if (!m) return;
+    const copies = Number(m[1]);
+    const rest = (m[2] ?? "").trim();
+    if (!Number.isFinite(copies) || copies <= 0 || rest === "") return;
+
+    const card = resolveLine(rest);
+    if (!card) {
+      unknown.push({
+        line: i + 1,
+        text: line,
+        reason: "no card of that name is in the V5 pool",
+      });
+      return;
+    }
+
+    // The same card can be listed twice (some exports split by card type);
+    // fold the counts rather than emitting it twice.
+    const already = counted.get(card.id);
+    if (already) {
+      already.copies += copies;
+      return;
+    }
+    const item: ImportedCard = { id: card.id, name: card.name, copies };
+    counted.set(card.id, item);
+
+    if (card.kind === "crypt") {
+      crypt.push(item);
+      cryptDefs.push(card);
+      // A vampire whose card text is a bare sect/title line needs no code
+      // and plays correctly; one with real text that is unimplemented is
+      // reported, not refused (the same reading validateDecks takes).
+      if (importCryptCard(card.id).hasUnimplementedAbility) inert.add(card.name);
+    } else {
+      library.push(item);
+      if (!(reg.entries[card.id]?.supported ?? false)) unsupported.push(item);
+    }
+  });
+
+  const cryptCount = crypt.reduce((n, c) => n + c.copies, 0);
+  const libraryCount = library.reduce((n, c) => n + c.copies, 0);
+
+  const illegal: string[] = [];
+  if (cryptCount < MIN_CRYPT) {
+    illegal.push(`crypt has ${cryptCount} cards; at least ${MIN_CRYPT} are needed (p. 14)`);
+  }
+  if (libraryCount < MIN_LIBRARY || libraryCount > MAX_LIBRARY) {
+    illegal.push(
+      `library has ${libraryCount} cards; it must hold between ${MIN_LIBRARY} and ${MAX_LIBRARY} (p. 14)`,
+    );
+  }
+  const { problem, groups } = groupProblem(cryptDefs);
+  if (problem) illegal.push(problem);
+
+  const report: ImportReport = {
+    ok: unknown.length === 0 && unsupported.length === 0 && illegal.length === 0,
+    deckName: findDeckName(lines),
+    crypt,
+    library,
+    cryptCount,
+    libraryCount,
+    unknown,
+    unsupported,
+    inertAbilities: [...inert].sort(),
+    illegal,
+    groups,
+  };
+
+  return { deck: report.ok ? toDeckList(seat, crypt, library) : null, report };
+}
+
+/** Expand counts into the one-entry-per-copy shape a `DeckList` holds. */
+function toDeckList(seat: string, crypt: ImportedCard[], library: ImportedCard[]): DeckList {
+  const out: DeckList = { kind: "deck", seat, crypt: [], library: [] };
+  for (const c of crypt) {
+    for (let i = 0; i < c.copies; i++) out.crypt.push({ id: c.id });
+  }
+  for (const c of library) {
+    for (let i = 0; i < c.copies; i++) out.library.push(c.name);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// What this client can play — the answer the importer screen has to show
+// ---------------------------------------------------------------------------
+
+/** The sets whose cards this client knows, straight from the registry. */
+export function supportedSets(): string[] {
+  return [...reg.pool];
+}
+
+export interface PreconSummary {
+  set: string;
+  name: string;
+  cryptCount: number;
+  libraryCount: number;
+  /** Library cards in it that are not implemented. Empty today. */
+  unsupported: string[];
+  /** Legal as a standalone deck (p. 14). The New Blood starters are not:
+   *  they are half-size on purpose. */
+  playable: boolean;
+  /** Why not, when it is not. */
+  problems: string[];
+}
+
+/**
+ * Every preconstructed deck in the pool, and whether this client can play
+ * it as printed. Derived from the registry's precon table, which is itself
+ * derived from the KRCG snapshot — so this list cannot drift from the
+ * cards, and widening the pool grows it with no code change.
+ */
+export function supportedPrecons(): PreconSummary[] {
+  return reg.precons.map((p) => summarisePrecon(p));
+}
+
+function summarisePrecon(p: PreconDeck): PreconSummary {
+  let cryptCount = 0;
+  let libraryCount = 0;
+  const unsupported: string[] = [];
+  const cryptDefs: CryptCardDef[] = [];
+  for (const { id, copies } of p.cards) {
+    const card = byId.get(id);
+    if (!card) continue;
+    if (card.kind === "crypt") {
+      cryptCount += copies;
+      cryptDefs.push(card);
+    } else {
+      libraryCount += copies;
+      if (!(reg.entries[id]?.supported ?? false)) unsupported.push(card.name);
+    }
+  }
+  const problems: string[] = [];
+  if (cryptCount < MIN_CRYPT) problems.push(`only ${cryptCount} crypt cards`);
+  if (libraryCount < MIN_LIBRARY) problems.push(`only ${libraryCount} library cards`);
+  if (libraryCount > MAX_LIBRARY) problems.push(`${libraryCount} library cards`);
+  const { problem } = groupProblem(cryptDefs);
+  if (problem) problems.push(problem);
+  if (unsupported.length > 0) problems.push(`${unsupported.length} cards not implemented`);
+  return {
+    set: p.set,
+    name: p.name,
+    cryptCount,
+    libraryCount,
+    unsupported: unsupported.sort(),
+    playable: problems.length === 0,
+    problems,
+  };
+}
+
+/** A precon as a dealable deck, for a lobby that offers ready-made ones. */
+export function preconDeck(set: string, name: string, seat: string): DeckList | null {
+  const p = reg.precons.find((d) => d.set === set && d.name === name);
+  if (!p) return null;
+  const out: DeckList = { kind: "deck", seat, crypt: [], library: [] };
+  for (const { id, copies } of p.cards) {
+    const card = byId.get(id);
+    if (!card) continue;
+    for (let i = 0; i < copies; i++) {
+      if (card.kind === "crypt") out.crypt.push({ id: card.id });
+      else out.library.push(card.name);
+    }
+  }
+  return out;
+}

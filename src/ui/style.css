@@ -1,0 +1,813 @@
+/* Debug table styling (docs/debug-ui-design.md §4). Dense and legible
+   over pretty — this is an engine debugger, not the shipping table. */
+
+:root {
+  --bg: #14131a;
+  --panel: #1d1c26;
+  --panel2: #262533;
+  --line: #383647;
+  --ink: #e8e6f0;
+  --dim: #8f8ba6;
+  --accent: #b8452f;
+  --gold: #c9a34a;
+  --good: #4a8f5f;
+  --blood: #c4402c;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+}
+
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+.dim { color: var(--dim); }
+
+/* --- header ------------------------------------------------------------ */
+
+/* Slim: the turn readout, the history controls, and settings. The action
+   bar itself lives at the BOTTOM, under the hand. */
+.top {
+  display: flex; gap: 12px; align-items: center;
+  background: var(--panel); border-bottom: 2px solid var(--accent);
+  padding: 6px 12px;
+}
+
+.turnstatus { display: flex; gap: 10px; align-items: baseline; }
+.tnum { font-weight: 700; color: var(--gold); }
+.tseat { font-weight: 700; }
+.tphase {
+  font-family: ui-monospace, Consolas, monospace;
+  background: var(--panel2); padding: 1px 6px; border-radius: 3px;
+  color: var(--dim);
+}
+
+.gear {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 4px 12px; cursor: pointer; font-size: 12px;
+}
+.gear:hover { background: var(--line); }
+
+/* --- the action bar, below the hand ------------------------------------ */
+
+/* The player's half of the screen: your cards, and directly beneath them
+   the buttons that act on them. */
+.bottom {
+  background: var(--panel); border-top: 2px solid var(--accent);
+  display: flex; flex-direction: column; flex: 0 0 auto;
+}
+
+/* Capped and scrolled here rather than on .hand: the chooser that opens on
+   a selected card grows UPWARD out of the hand, and a scroll container
+   would clip it. */
+.decision { padding: 6px 12px 8px; max-height: 30vh; overflow-y: auto; }
+.decision.over { color: var(--gold); font-size: 15px; }
+
+/* An AI's move is being held back so it can be watched. No buttons: that
+   decision is the computer's, and a human sharing the screen must not be
+   able to answer it for them. The dots exist so the pause reads as the
+   client working rather than as the client stuck. */
+.decision.thinking {
+  display: flex; gap: 8px; align-items: center;
+  font-size: 14px; color: var(--gold); min-height: 30px;
+}
+.tdots { display: inline-flex; gap: 4px; }
+.tdots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gold); opacity: .25;
+  animation: tblink 1.05s infinite ease-in-out;
+}
+.tdots i:nth-child(2) { animation-delay: .18s; }
+.tdots i:nth-child(3) { animation-delay: .36s; }
+@keyframes tblink {
+  0%, 70%, 100% { opacity: .25; }
+  35% { opacity: 1; }
+}
+/* A player who has asked for no motion gets none; the text still says who
+   is deciding. */
+@media (prefers-reduced-motion: reduce) {
+  .tdots i { animation: none; opacity: .7; }
+}
+
+.dhead { display: flex; gap: 10px; align-items: baseline; margin-bottom: 6px; }
+.dseat { font-weight: 700; font-size: 15px; color: var(--gold); }
+.dwindow {
+  font-family: ui-monospace, Consolas, monospace;
+  background: var(--panel2); padding: 1px 6px; border-radius: 3px;
+  color: var(--dim);
+}
+
+.ogroup { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.olabel {
+  min-width: 110px; text-align: right; color: var(--dim);
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+}
+.obuttons { display: flex; flex-wrap: wrap; gap: 4px; }
+
+button.opt {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 3px 9px; cursor: pointer; font-size: 12px;
+}
+button.opt:hover { background: var(--accent); border-color: var(--accent); }
+button.opt.pass { color: var(--dim); }
+button.opt.declareBlock { border-color: var(--good); }
+button.opt.takeAction { border-color: var(--gold); }
+/* A block that would fail right now (p. 25 still allows the attempt, and
+   either side may yet play a card — so it is dimmed, never hidden). */
+button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim); }
+/* What a play costs, on its own button. */
+.ocost { color: var(--gold); font-variant-numeric: tabular-nums; }
+
+/* How to Play search. */
+.helpsearch {
+  width: 100%; box-sizing: border-box; margin: 6px 0 10px;
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 6px 9px; font-size: 13px; font-family: inherit;
+}
+.helpsearch:focus { outline: none; border-color: var(--accent); }
+.rulebody mark {
+  background: var(--gold); color: #000; border-radius: 2px; padding: 0 1px;
+}
+
+.controls { display: flex; flex-direction: row; gap: 4px; }
+.controls button {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 3px 10px; cursor: pointer; font-size: 12px;
+}
+.controls button:hover:not(:disabled) { background: var(--line); }
+.controls button:disabled { opacity: .4; cursor: default; }
+
+/* --- combat strip (the battlefield) ------------------------------------ */
+
+.combat {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  background: #2a1714; border-bottom: 1px solid var(--accent);
+  padding: 6px 12px;
+}
+.clabel { font-weight: 700; color: var(--accent); letter-spacing: .08em; }
+.combat .vs { font-size: 14px; }
+.combatant { white-space: nowrap; }
+
+/* The card being played, across the top of the whole table, so everyone
+   can read it while it is on the stack — the combat strip's job, widened
+   to every card. */
+.playstrip {
+  display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+  background: #1b2033; border-bottom: 1px solid var(--gold);
+  padding: 6px 12px;
+}
+.playing { display: inline-flex; gap: 8px; align-items: center; }
+.playinfo { display: flex; flex-direction: column; gap: 1px; font-size: 12px; }
+.playinfo b { color: var(--gold); font-size: 13px; }
+.pmode { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent); }
+.scanwrap.playing-scan { --cw: 62px; --ch: 86px; }
+.actinfo { display: inline-flex; gap: 10px; align-items: baseline; font-size: 12px; }
+.actminions { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.am {
+  font-size: 11px; padding: 2px 7px; border-radius: 10px;
+  background: var(--panel2); border: 1px solid var(--line); white-space: nowrap;
+}
+.am .num { color: var(--dim); margin-left: 5px; font-variant-numeric: tabular-nums; }
+.am.acting { border-color: var(--accent); }
+.am.acting .num { color: var(--accent); }
+/* Intercept has caught stealth: this minion's block would land. */
+.am.canblock { border-color: var(--good); }
+.am.canblock .num { color: var(--good); }
+
+/* --- main split -------------------------------------------------------- */
+
+.main { flex: 1; display: flex; gap: 8px; padding: 8px; overflow: hidden; }
+/* The seats wrap into two rows — three across at most — so the table reads
+   like people sitting round one rather than a line running off the side of
+   the screen. --seat-cols is set from the seat count (render.ts). */
+.table {
+  flex: 1; display: grid; gap: 8px; overflow: auto; align-content: start;
+  grid-template-columns: repeat(var(--seat-cols, 3), minmax(0, 1fr));
+}
+.side { width: 340px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+  padding: 6px 8px; overflow: hidden; display: flex; flex-direction: column;
+}
+.panel.grow { flex: 1; }
+.panel h3 {
+  margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--dim);
+  display: flex; gap: 6px; align-items: center;
+}
+.panel h3 input {
+  flex: 1; background: var(--panel2); border: 1px solid var(--line);
+  color: var(--ink); border-radius: 3px; padding: 1px 5px; font-size: 11px;
+}
+
+.frames { display: flex; flex-direction: column; gap: 2px; }
+.frame {
+  font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+  background: var(--panel2); padding: 2px 6px; border-radius: 3px;
+  border-left: 3px solid var(--line);
+}
+.frame:last-child { border-left-color: var(--gold); }
+
+.events { overflow-y: auto; flex: 1; }
+.ev { font-size: 12px; padding: 2px 0; line-height: 1.35; }
+.ev.major { color: var(--ink); font-weight: 600; }
+.ev.normal { color: #cdc9db; }
+.ev.minor { color: var(--dim); font-size: 11px; }
+.evtype {
+  font-family: ui-monospace, Consolas, monospace; font-size: 9px;
+  color: #6a6580; margin-left: 4px;
+}
+.toggle { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--dim); cursor: pointer; }
+.toggle input { margin: 0; }
+
+/* --- player mats ------------------------------------------------------- */
+
+.mat {
+  min-width: 0;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 4px;
+  display: flex; flex-direction: column;
+}
+.mat.deciding { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+.mat.ousted { opacity: .45; }
+
+.mat header {
+  display: flex; gap: 8px; align-items: center;
+  padding: 5px 8px; border-bottom: 1px solid var(--line); background: var(--panel2);
+}
+.seatname { font-weight: 700; font-size: 14px; }
+.spacer { flex: 1; }
+
+/* Who is in this seat. A player's own picture; a bot gets a glyph rather
+   than a borrowed face — the point is telling people apart. */
+.seatface {
+  width: 26px; height: 26px; flex: none; border-radius: 50%;
+  background: var(--panel2); border: 1px solid var(--line);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: var(--gold); overflow: hidden;
+}
+.seatface img { width: 100%; height: 100%; object-fit: cover; }
+.seatface.bot { color: var(--dim); border-style: dashed; }
+.pool { color: var(--blood); font-weight: 700; }
+.vp { color: var(--gold); }
+
+.zone { display: flex; gap: 6px; padding: 5px 8px; border-bottom: 1px dotted var(--line); }
+.zlabel {
+  width: 74px; flex: none; color: var(--dim);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .05em; padding-top: 3px;
+}
+.zbody { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+
+/* --- card scans -------------------------------------------------------- */
+
+/* The name sits behind the image; if the scan fails to load, `.failed`
+   hides the <img> and the name shows through. */
+/* Every scan is sized through --cw/--ch rather than plain width/height, so
+   the locked rule below can compute a rotated card's real footprint from
+   them instead of needing a hand-tuned margin per size. */
+.scanwrap {
+  position: relative; display: inline-flex; align-items: center;
+  justify-content: center; overflow: hidden;
+  background: #0f0e14; border: 1px solid var(--line); border-radius: 4px;
+  flex: none;
+  --cw: 66px; --ch: 92px;
+  width: var(--cw); height: var(--ch);
+}
+.scanwrap .scan {
+  display: block; width: 100%; height: 100%; object-fit: cover;
+  position: relative; z-index: 1;
+}
+.scanwrap .scan.failed { display: none; }
+.scanfallback {
+  position: absolute; inset: 0; z-index: 0;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 4px; font-size: 10px; line-height: 1.15;
+  color: var(--ink);
+}
+/* A card this viewer may not see: a back, as it sits on the table. */
+.scanwrap.cardback {
+  background: repeating-linear-gradient(45deg, #2a1c3a, #2a1c3a 6px, #221630 6px, #221630 12px);
+  border-color: #4a3a5f; color: #6d5f86; font-size: 22px; font-weight: 700;
+}
+
+/* A locked card sits turned 90°, the way it does on a real table.
+   `transform` does NOT change the layout box: a rotated card keeps
+   reserving an upright card's worth of space, so its long side overhangs
+   whatever sits beside it. The margins here swap the reserved box to
+   <height> wide by <width> tall — the rotated card's actual footprint —
+   so a locked card spaces itself out instead of overlapping its
+   neighbours. Rotation is about the centre, so the correction is split
+   evenly across both margins. Written against --cw/--ch, so it holds for
+   every size below (and any size added later) with no per-size rule. */
+.scanwrap.locked {
+  transform: rotate(90deg);
+  margin: calc((var(--cw) - var(--ch)) / 2) calc((var(--ch) - var(--cw)) / 2);
+}
+
+.scanwrap.minion-scan { --cw: 108px; --ch: 150px; }
+.scanwrap.combat-scan { --cw: 52px; --ch: 72px; }
+.scanwrap.small { --cw: 66px; --ch: 92px; }
+.scanwrap.tiny { --cw: 40px; --ch: 56px; }
+.scanwrap.hand-card { --cw: 76px; --ch: 106px; cursor: zoom-in; }
+
+/* Counters and capacity laid over the card, as they sit on the table. */
+.cardslot { position: relative; display: inline-block; }
+.cardslot.mini { vertical-align: middle; }
+.blood-overlay {
+  position: absolute; left: 3px; bottom: 3px; z-index: 2;
+  background: rgba(10, 8, 12, .82); border-radius: 8px;
+  padding: 0 5px; font-size: 12px; line-height: 1.5;
+}
+.cap-overlay {
+  position: absolute; right: 3px; top: 3px; z-index: 2;
+  background: rgba(10, 8, 12, .82); color: var(--gold);
+  border-radius: 8px; padding: 0 5px; font-size: 11px; font-weight: 700;
+}
+.counter-badge {
+  position: absolute; right: -4px; top: -4px; z-index: 2;
+  background: var(--gold); color: #201c14; border-radius: 8px;
+  padding: 0 5px; font-size: 10px; font-weight: 700;
+}
+
+.perm-card, .attached-card { position: relative; display: inline-block; }
+.attached-cards { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+
+.minion { padding: 2px; min-width: 112px; }
+.minion.acting .scanwrap { border-color: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.minion.in-torpor { opacity: .6; }
+.minion.uncontrolled .scanwrap { border-style: dashed; filter: grayscale(.45); }
+.minion.ally .scanwrap { border-left: 3px solid var(--good); }
+
+.mline { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+.mid { color: var(--dim); font-weight: 400; font-size: 10px; }
+.mdisc { font-size: 10px; color: var(--dim); max-width: 112px; }
+.pips { color: var(--blood); letter-spacing: -1px; }
+.pips.empty { color: var(--dim); }
+.disc.superior { color: var(--gold); }
+
+/* --- hover magnifier --------------------------------------------------- */
+
+.zoom {
+  position: fixed; z-index: 100; pointer-events: none;
+  width: 300px; background: var(--panel); border: 1px solid var(--gold);
+  border-radius: 6px; padding: 6px; box-shadow: 0 8px 32px rgba(0, 0, 0, .7);
+}
+.zoom img { width: 100%; display: block; border-radius: 4px; }
+/* Sized from Settings — the scan is glanced at, the text is read. */
+.zoomtext {
+  margin-top: 6px; font-size: var(--cardtext, 15px); color: var(--ink);
+  white-space: pre-wrap; max-height: 40vh; overflow: hidden; line-height: 1.4;
+}
+
+.mbadges { display: flex; gap: 3px; flex-wrap: wrap; }
+.badge {
+  font-size: 9px; text-transform: uppercase; letter-spacing: .04em;
+  padding: 0 4px; border-radius: 2px; background: var(--line);
+}
+.badge.lock { background: #4a3a2a; }
+.badge.torpor { background: #3a2a3a; }
+.badge.awake { background: #2a3a4a; }
+.badge.title { background: var(--gold); color: #201c14; }
+.badge.edge { background: var(--gold); color: #201c14; }
+.badge.out { background: var(--accent); }
+
+.attached { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+.chip {
+  font-size: 10px; background: var(--line); border-radius: 2px;
+  padding: 0 5px; white-space: nowrap;
+}
+.chip.counter { background: #3a2f22; color: var(--gold); }
+.chip.perm { background: #23303a; }
+.chip.card { background: var(--panel2); border: 1px solid var(--line); font-size: 11px; padding: 2px 7px; }
+
+.piles {
+  display: flex; gap: 6px; padding: 5px 8px; margin-top: auto;
+  border-top: 1px solid var(--line); background: var(--panel2);
+}
+.pile {
+  font-size: 10px; letter-spacing: .04em; padding: 1px 6px;
+  border-radius: 2px; background: var(--line);
+}
+.pile.crypt { background: #43301f; }
+.pile.library { background: #1f3a3a; }
+.pile.ash { background: #2a2a2a; color: var(--dim); }
+
+/* --- hand -------------------------------------------------------------- */
+
+/* The hand sits inside .bottom, directly above the action bar. It never
+   scrolls horizontally away from you: it wraps, and the whole bottom
+   section is capped so the table above always stays visible. */
+.hand {
+  display: flex; gap: 5px; align-items: flex-end; flex-wrap: wrap;
+  padding: 8px 12px 6px; background: var(--panel);
+  border-bottom: 1px dotted var(--line);
+  overflow: visible; flex: 0 0 auto;
+}
+.hlabel {
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--dim); margin-right: 4px; align-self: center;
+}
+
+.fatal { padding: 40px; max-width: 800px; }
+.fatal h2 { color: var(--accent); }
+.fatal code { background: var(--panel2); padding: 1px 5px; border-radius: 3px; }
+
+/* --- playing from the hand --------------------------------------------- */
+
+.handslot { position: relative; display: inline-block; }
+
+/* A card with at least one legal play is lit and reaches for the cursor. */
+.handslot.playable { cursor: pointer; }
+.handslot.playable .scanwrap {
+  border-color: var(--gold);
+  box-shadow: 0 0 8px rgba(201, 163, 74, .45);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.handslot.playable:hover .scanwrap {
+  transform: translateY(-8px);
+  box-shadow: 0 6px 18px rgba(201, 163, 74, .7);
+}
+.handslot.selected .scanwrap {
+  transform: translateY(-10px);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+/* An unplayable card stays visible but clearly out of reach. */
+.handslot.unplayable .scanwrap { filter: grayscale(.7) brightness(.62); }
+
+.playdot {
+  position: absolute; right: -5px; top: -5px; z-index: 3;
+  background: var(--gold); color: #201c14;
+  border-radius: 9px; padding: 0 6px;
+  font-size: 10px; font-weight: 700;
+}
+
+/* The chooser that opens on a selected card, above the hand. */
+.playmenu {
+  position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+  margin-bottom: 10px; z-index: 20;
+  display: flex; flex-direction: column; gap: 3px;
+  background: var(--panel); border: 1px solid var(--accent);
+  border-radius: 5px; padding: 5px; min-width: 260px; max-width: 340px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .75);
+}
+/* Two lines per row: what it does, then who and what it touches. The
+   detail line is what the player is really choosing between when a card
+   offers the same mode against several targets. */
+.playmenu .opt {
+  text-align: left; white-space: normal; line-height: 1.35;
+  display: flex; flex-direction: column; gap: 1px; padding: 5px 8px;
+}
+.pmain { font-weight: 600; }
+.pdetail { color: var(--dim); font-size: 11px; }
+.playmenu .opt:hover .pdetail { color: var(--ink); }
+
+/* Drag and drop: only legal targets light up. */
+.dragging .minion, .dragging .mat { transition: box-shadow .1s ease; }
+.droptarget {
+  outline: 2px dashed var(--gold);
+  outline-offset: 2px;
+  background: rgba(201, 163, 74, .09);
+}
+
+/* --- sorting your hand -------------------------------------------------- */
+
+/* Every card can be picked up, playable or not — dropping it on another
+   hand card sorts, dropping it on the table plays. */
+.handslot { cursor: grab; }
+.handslot:active { cursor: grabbing; }
+.handslot.dragsource { opacity: .4; }
+
+/* The insertion point, as a line down the side of the card you are over. */
+.handslot.insert-before::before,
+.handslot.insert-after::after {
+  content: ""; position: absolute; top: -4px; bottom: -4px; width: 3px;
+  background: var(--gold); border-radius: 2px; z-index: 5;
+  box-shadow: 0 0 6px var(--gold);
+}
+.handslot.insert-before::before { left: -4px; }
+.handslot.insert-after::after { right: -4px; }
+
+/* --- settings ----------------------------------------------------------- */
+
+.scrim {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, .55);
+}
+.settings {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 41; width: 420px; max-height: 80vh; overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--gold); border-radius: 6px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .8);
+}
+.settings header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+}
+.settings h3 { margin: 0; font-size: 15px; color: var(--gold); }
+.settings header button {
+  background: none; border: none; color: var(--dim);
+  font-size: 15px; cursor: pointer;
+}
+.settings header button:hover { color: var(--ink); }
+.settings section { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.settings section:last-child { border-bottom: none; }
+.sethead {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--gold); margin-bottom: 6px;
+}
+.setnote { color: var(--dim); font-size: 11px; line-height: 1.5; margin: 0 0 8px; }
+.toggle.strong { font-size: 13px; color: var(--ink); font-weight: 600; }
+.setseats {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  margin: 6px 0 0 18px; padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+.setrow {
+  display: flex; gap: 10px; align-items: center;
+  margin: 10px 0 8px 18px; padding-left: 10px;
+  border-left: 1px solid var(--line); font-size: 12px;
+}
+.setrow select {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 3px 6px; font-size: 12px;
+}
+
+/* --- how to play -------------------------------------------------------- */
+
+/* The rules panel is the settings dialog, wider: same chrome, same scrim,
+   same close button, so there is one dialog to style and to get right. */
+.settings.help { width: min(760px, 92vw); max-height: 86vh; }
+
+.rulesec { border-top: 1px solid var(--line); }
+.rulesec:first-of-type { border-top: none; }
+.rulesec > summary {
+  cursor: pointer; padding: 8px 2px; list-style: none;
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+.rulesec > summary::-webkit-details-marker { display: none; }
+/* A caret we draw ourselves, so it turns with the section on every
+   browser rather than depending on the default marker. */
+.rulesec > summary::before {
+  content: "▸"; color: var(--gold); font-size: 11px;
+  transition: transform .12s ease; display: inline-block;
+}
+.rulesec[open] > summary::before { transform: rotate(90deg); }
+.rulesec > summary:hover { color: var(--gold); }
+.rulepage {
+  margin-left: auto; font-size: 10px; font-weight: 400; color: var(--dim);
+  text-transform: uppercase; letter-spacing: .05em;
+}
+
+.rulebody {
+  padding: 0 4px 10px 18px; font-size: 12px; line-height: 1.65;
+  color: var(--ink);
+}
+.rulebody p { margin: 0 0 8px; }
+.rulebody ul, .rulebody ol { margin: 0 0 8px; padding-left: 18px; }
+.rulebody li { margin-bottom: 4px; }
+.rulebody li ul { margin: 4px 0 0; }
+.rulebody b { color: var(--gold); font-weight: 600; }
+/* A rule that is easy to mistake for a bug in the client — flagged, not
+   buried in the paragraph. */
+.rulebody .rulenote {
+  border-left: 2px solid var(--gold); padding: 6px 10px;
+  background: rgba(0, 0, 0, .25); color: var(--dim);
+}
+.rulebody .rulenote b { color: var(--gold); }
+
+.settings .credits { font-size: 11px; line-height: 1.6; color: var(--dim); }
+.settings .credits p { margin: 0 0 6px; }
+.settings .credits b { color: var(--ink); font-weight: 600; }
+
+.hint { color: var(--dim); font-size: 11px; font-style: italic; }
+
+/* --- the app shell (docs/shell-design.md) ------------------------------- */
+
+/* The shell is the front of the application — profile, menu, new game —
+   and it is the one part of the client that is not a debugger, so it gets
+   room to breathe where the table gets density. */
+.shell {
+  flex: 1; overflow-y: auto;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 40px 20px;
+}
+.shell .card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 22px 26px; width: min(520px, 94vw);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+}
+.shell .card.wide { width: min(760px, 94vw); }
+.shell h1 { margin: 0 0 12px; font-size: 20px; color: var(--gold); font-weight: 600; }
+.shell .note { color: var(--dim); font-size: 12px; line-height: 1.6; margin: 0 0 14px; }
+.shell .err { color: var(--blood); font-size: 12px; margin: 0 0 10px; }
+.shell .ok { color: var(--good); font-size: 12px; margin: 10px 0; }
+.shell .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+.shell button {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 7px 14px; cursor: pointer; font-size: 13px;
+}
+.shell button:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+.shell button:disabled { opacity: .4; cursor: not-allowed; }
+.shell button.primary { background: var(--accent); border-color: var(--accent); }
+.shell button.danger { color: var(--blood); }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 12px; }
+.field > span:first-child { color: var(--dim); }
+.field input[type="text"], .field input:not([type]) , #pname {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; font-size: 14px;
+}
+.avatarrow { display: flex; align-items: center; gap: 12px; }
+.avatar {
+  width: 56px; height: 56px; border-radius: 50%; overflow: hidden; flex: 0 0 auto;
+  background: var(--panel2); border: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: center; color: var(--dim);
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.menubuttons { display: flex; flex-direction: column; gap: 8px; margin: 18px 0; }
+.menubuttons button { padding: 11px; font-size: 14px; }
+
+/* One row per seat: who they are, who plays them, what they play. */
+.seats { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; }
+.seatrow { display: flex; gap: 8px; align-items: center; }
+.seatrow .seatname {
+  flex: 1 1 140px; background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px;
+}
+.seatrow select {
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px; padding: 6px;
+}
+.seatrow .deckbtn { flex: 2 1 220px; text-align: left; }
+
+.deckpanel {
+  border: 1px solid var(--line); border-left: 3px solid var(--gold);
+  border-radius: 4px; padding: 12px 14px; margin: 2px 0 8px; background: var(--panel2);
+}
+.preconset { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 6px; }
+.preconset > .dim { width: 100%; font-size: 11px; }
+.precon { font-size: 12px; padding: 4px 9px; }
+.pastebox {
+  width: 100%; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px; padding: 8px;
+  font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+}
+
+/* Every reason the table cannot start, not one at a time. */
+.problems {
+  border: 1px solid var(--blood); border-radius: 4px;
+  padding: 10px 14px; margin: 12px 0; font-size: 12px;
+}
+.problems ul { margin: 6px 0 0; padding-left: 18px; }
+.problems li { margin: 2px 0; }
+
+.supported { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 10px; }
+.supported summary { cursor: pointer; color: var(--gold); font-size: 12px; }
+
+/* --- the lobby (docs/lobby-design.md) ----------------------------------- */
+
+/* The room code is the whole of how people find this table, so it is the
+   largest thing on the screen and set in a face where 8 and B differ. */
+.roombox {
+  display: flex; gap: 16px; align-items: center; justify-content: space-between;
+  flex-wrap: wrap;
+  background: var(--panel2); border: 1px solid var(--gold);
+  border-radius: 6px; padding: 12px 16px; margin-bottom: 12px;
+}
+.roomlabel {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
+}
+.roomcode {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 30px; font-weight: 700; letter-spacing: .12em; color: var(--gold);
+}
+.roombox .row { margin-top: 0; }
+
+.lobbyrow {
+  display: flex; gap: 12px; align-items: baseline;
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--panel2);
+}
+.lobbyrow.mine { border-color: var(--gold); }
+.lname { flex: 1 1 40%; font-weight: 600; }
+.lkind { flex: 0 0 auto; font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+.ldeck { flex: 1 1 40%; font-size: 12px; color: var(--dim); text-align: right; }
+.ldeck.ready { color: var(--good); }
+
+#joincode {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 22px; letter-spacing: .18em; text-transform: uppercase;
+  background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px;
+}
+.dhash {
+  font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+  color: var(--dim); letter-spacing: .04em;
+}
+
+/* --- looking through a pile of cards ----------------------------------- */
+
+/* An ash heap, or the candidates of a library search. A column of names is
+   the one thing a physical table never makes you read: these are cards. */
+.cardgrid {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  max-height: 58vh; overflow-y: auto; padding: 2px;
+}
+.gridcard {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: 76px; text-align: center;
+}
+.gcname { font-size: 10px; color: var(--dim); line-height: 1.25; }
+.cardgrid.picker { max-height: 34vh; }
+button.gridcard {
+  background: none; border: 1px solid transparent; border-radius: 4px;
+  cursor: pointer; padding: 3px; font: inherit;
+}
+button.gridcard:hover { border-color: var(--gold); background: var(--panel2); }
+button.gridcard:hover .gcname { color: var(--ink); }
+.settings.ashheap { width: min(720px, 92vw); max-height: 84vh; }
+
+/* The ash pile on a mat is a button: any Methuselah may look in any ash
+   heap at any time (p. 16). */
+button.pile.opens {
+  font: inherit; cursor: pointer; border: 1px solid var(--line);
+  color: var(--dim);
+}
+button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
+
+/* Leaving the game. Set apart from the other header buttons, and confirmed
+   before it does anything. */
+.gear.leave { color: var(--blood); }
+.gear.leave:hover { background: var(--blood); color: var(--ink); }
+
+/* The hand while somebody else is deciding: still yours to read, but
+   nothing on it is playable, so it does not invite a click. */
+.hand.watching .handslot { cursor: default; }
+
+/* --- actions ON the table ---------------------------------------------- */
+
+/* The hand's treatment, applied to the board: a minion or a card in play
+   with something it could do is lit, badged with how many, and clicked.
+   Same classes where the shape is the same (.playdot, .playmenu,
+   .selected), a class of its own where the element differs. */
+.actionable { position: relative; cursor: pointer; }
+.actionable > .cardslot > .scanwrap,
+.actionable > .scanwrap {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 0 8px rgba(201, 163, 74, .35);
+}
+.actionable:hover > .cardslot > .scanwrap,
+.actionable:hover > .scanwrap { filter: brightness(1.12); }
+.actionable.selected > .cardslot > .scanwrap,
+.actionable.selected > .scanwrap {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 0 12px rgba(184, 69, 47, .5);
+}
+
+/* A card on the table has room BELOW it; a hand card at the bottom of the
+   screen does not, which is why its menu grows the other way. */
+.playmenu.down {
+  bottom: auto; top: 100%; margin-bottom: 0; margin-top: 10px;
+}
+
+/* The acting minion's own highlight must not be lost under the action
+   ring — it is a different fact (who is acting, not what you may do). */
+.minion.acting.actionable > .cardslot > .scanwrap {
+  border-color: var(--accent);
+}
+
+/* --- deck library and leaderboard --------------------------------------- */
+
+.mydeck { font-size: 12px; padding: 4px 9px; border-color: var(--gold); }
+.mydeck.broken { opacity: .5; border-color: var(--line); text-decoration: line-through; }
+.deckname {
+  flex: 1 1 200px; background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 3px; padding: 5px 8px;
+  font-size: 12px; font-family: inherit;
+}
+.deckstore .lobbyrow { gap: 6px; }
+.deckstore button { padding: 3px 8px; font-size: 11px; }
+
+.lbtable { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
+.lbtable th {
+  text-align: left; color: var(--dim); font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: .05em;
+  border-bottom: 1px solid var(--line); padding: 4px 8px;
+}
+.lbtable td { padding: 5px 8px; border-bottom: 1px solid var(--line); }
+.lbtable tbody tr:first-child td { color: var(--gold); font-weight: 600; }
+.lbtable tr.isbot td { color: var(--dim); font-weight: 400; }

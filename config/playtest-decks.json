@@ -1,0 +1,227 @@
+{
+  "_comment": [
+    "Playtest decks for the debug hotseat UI (docs/debug-ui-design.md §6).",
+    "Vampires are REAL V5 crypt cards referenced by stable KRCG id; name,",
+    "capacity, clan, disciplines, sect, title and the card scan are read",
+    "from src/cards/registry.json by src/ui/cardinfo.ts.",
+    "Every vampire here is deliberately chosen from the 118 crypt cards whose",
+    "ability text is EMPTY (just a sect/title line), because crypt abilities",
+    "are not implemented yet (0/217, phase 7) — so nothing on the table is",
+    "silently doing nothing. Swap in a vampire with card text and the UI",
+    "will badge it INERT.",
+    "Library names are validated against the registry AND supported.json;",
+    "a bad name refuses to start the game rather than being dropped."
+  ],
+  "seed": 20260829,
+  "maxTurns": null,
+  "decks": [
+    {
+      "seat": "Alice",
+      "pool": 15,
+      "_deck": "Camarilla Malkavian/Ventrue — vote and bleed (dom/aus/obf/pre)",
+      "ready": [
+        {
+          "id": 201532
+        },
+        {
+          "id": 201548
+        }
+      ],
+      "uncontrolled": [
+        {
+          "counters": 3,
+          "vampire": {
+            "id": 201531
+          }
+        }
+      ],
+      "crypt": [
+        {
+          "id": 201543
+        }
+      ],
+      "library": [
+        "Govern the Unaligned",
+        "Govern the Unaligned",
+        "Govern the Unaligned",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Scouting Mission",
+        "Social Charm",
+        "Conditioning",
+        "Conditioning",
+        "Aire of Elation",
+        "Aire of Elation",
+        "Bewitching Oration",
+        "Seduction",
+        "Threats",
+        "Elder Impersonation",
+        "Dominant Personality",
+        "Seeds of Terror",
+        "The Sleeping Mind",
+        "Forced Confessional",
+        "Deflection",
+        "Deflection",
+        "Deflection",
+        "Eyes of Argus",
+        "Eyes of Argus",
+        "Telepathic Misdirection",
+        "Spirit's Touch",
+        "Wake with Evening's Freshness",
+        "Wake with Evening's Freshness",
+        "Majesty",
+        "Majesty",
+        "Kine Resources Contested",
+        "Parity Shift",
+        "Malkavian Justicar",
+        "Blood Doll",
+        "Blood Doll",
+        "The Barrens",
+        "Dreams of the Sphinx",
+        "Academic Hunting Ground",
+        "Vessel",
+        "Sudden Reversal",
+        ".44 Magnum",
+        "Sport Bike"
+      ]
+    },
+    {
+      "seat": "Bob",
+      "pool": 18,
+      "_deck": "Sabbat Nosferatu/Lasombra — combat and Oblivion (pot/obl/ani/for)",
+      "ready": [
+        {
+          "id": 201742
+        },
+        {
+          "id": 201749
+        }
+      ],
+      "uncontrolled": [
+        {
+          "counters": 2,
+          "vampire": {
+            "id": 201744
+          }
+        }
+      ],
+      "crypt": [
+        {
+          "id": 201762
+        }
+      ],
+      "library": [
+        "Army of Rats",
+        "Army of Rats",
+        "Preternatural Strength",
+        "Preternatural Strength",
+        "Umbrous Clutch",
+        "Umbrous Clutch",
+        "Torn Signpost",
+        "Torn Signpost",
+        "Slam",
+        "Slam",
+        "Roundhouse",
+        "Roundhouse",
+        "Rage of Apedemak",
+        "Rage of Apedemak",
+        "Touch of Oblivion",
+        "Arms of Ahriman",
+        "Shadow Shift",
+        "Weighted Walking Stick",
+        "Where the Veil Thins",
+        "Where the Veil Thins",
+        "Stygian Shroud",
+        "Unthinkable Humiliation",
+        "Daring the Dawn",
+        "Rat's Warning",
+        "Rat's Warning",
+        "Guard Dogs",
+        "Sense the Savage Way",
+        "Forced Vigilance",
+        "Wake with Evening's Freshness",
+        "Wake with Evening's Freshness",
+        "Raven Spy",
+        "Dread Mastiff",
+        "Blood Doll",
+        "Blood Doll",
+        "Powerbase: Madrid",
+        "Wasserschloss Anif, Austria",
+        "Under Siege",
+        "Week of Nightmares",
+        "Kali's Fang",
+        "Assault Rifle"
+      ]
+    },
+    {
+      "seat": "Carol",
+      "pool": 18,
+      "_deck": "Anarch Gangrel/Brujah — rush and speed (cel/pro/ani/pot)",
+      "ready": [
+        {
+          "id": 201521
+        },
+        {
+          "id": 201581
+        }
+      ],
+      "uncontrolled": [
+        {
+          "counters": 1,
+          "vampire": {
+            "id": 201526
+          }
+        }
+      ],
+      "crypt": [
+        {
+          "id": 200303
+        }
+      ],
+      "library": [
+        "Fleetness",
+        "Fleetness",
+        "Fleetness",
+        "Thing",
+        "Creeping Sabotage",
+        "Blur",
+        "Blur",
+        "Blur",
+        "Pursuit",
+        "Pursuit",
+        "Quickness",
+        "Side Strike",
+        "Flash",
+        "Claws of the Dead",
+        "Claws of the Dead",
+        "Wolf Claws",
+        "Terror Frenzy",
+        "Form of the Wolf",
+        "Earth Meld",
+        "Body Flare",
+        "Rapid Change",
+        "Swift Cover",
+        "Form of the Cobra",
+        "Resist Earth's Grasp",
+        "Relentlessness",
+        "Eyes of the Wild",
+        "Eyes of the Wild",
+        "One With the Land",
+        "Organized Resistance",
+        "Cats' Guidance",
+        "Dogged Pursuit",
+        "Wake with Evening's Freshness",
+        "Wake with Evening's Freshness",
+        "Blood Doll",
+        "Blood Doll",
+        "Park Hunting Ground",
+        "Gangrel Revel",
+        "Anarch Railroad",
+        "The Rack",
+        "Fortune Teller Shop",
+        "Sport Bike",
+        "Ivory Bow"
+      ]
+    }
+  ]
+}
