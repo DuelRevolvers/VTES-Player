@@ -203,11 +203,29 @@ function disciplineList(m: MinionState): string {
     .join(" ");
 }
 
+/**
+ * The card a minion's OWN text rides in on, which must never be drawn.
+ *
+ * A crypt card's ability, an ally's card text and a token vampire's card
+ * all reach play as a SELF-ATTACHED entry — that is what lets the whole
+ * `permanent` vocabulary reach them without a second set of rules
+ * (docs/crypt-plan.md §2). The engine's own test for one is that its card
+ * id IS the minion's id (`minionTags` in derived.ts), and that identity is
+ * what makes hiding it safe: an option about it is indexed under the same
+ * key as the minion, so `minionTile` already lights and badges it. Nothing
+ * becomes unreachable — which is the property to preserve, since a missing
+ * option looks exactly like an illegal one.
+ */
+function isSelfEntry(m: MinionState, p: PermanentInPlay): boolean {
+  return p.card.id === m.id;
+}
+
 function attachedList(m: MinionState, ctx: TableCtx | null): string {
-  if (m.attached.length === 0) return "";
+  const attached = m.attached.filter((p) => !isSelfEntry(m, p));
+  if (attached.length === 0) return "";
   // Equipment, retainers and attached masters render as their own (small)
   // scans, tucked under the minion they sit on.
-  return `<div class="attached-cards">${m.attached
+  return `<div class="attached-cards">${attached
     .map((p) => {
       const mark = tableActionMarks(p.card.id, ctx);
       return `<div class="attached-card ${mark.cls}" data-tcard="${esc(p.card.id)}">

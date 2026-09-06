@@ -75,14 +75,9 @@ sometimes slow to hook the address up on the first publish.
 
 ## From now on: updating the site
 
-There is nothing extra to do. The same three commands you already use to
-save your work also republish the site:
-
-```
-git add -A
-git commit -m "a short note about what changed"
-git push
-```
+There is nothing extra to do. Saving your work also republishes the site:
+double-click **`Update GitHub.bat`** in the project folder (or run
+`git add -A`, `git commit -m "a note"`, `git push` by hand).
 
 About a minute later the live site is running the new version. If you want
 to check, the Actions tab shows the run.

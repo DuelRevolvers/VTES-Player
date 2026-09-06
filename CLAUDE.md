@@ -5082,7 +5082,7 @@ Inner Circle. **`MinionState` carries no title city** — the `path` lesson
 again: the data is in the crypt card text and the importer drops it. Not
 started.
 
-**Green baseline as of 2026-09-05: 169 test files, 1792 tests, typecheck and
+**Green baseline as of 2026-09-05: 170 test files, 1795 tests, typecheck and
 `vite build` clean.** If a fresh session sees fewer, something regressed.
 
 **BLOCKED — THE LIST IS EMPTY (2026-09-03).** Every gate that was on it

@@ -237,7 +237,10 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
     case "PermanentEnteredPlay":
       return {
         text: `${ev.seat} puts ${ev.name} into play${
-          ev.attachedTo ? ` on ${m(ev.attachedTo)}` : ""
+          // A minion's own card text rides in as a SELF-attached entry
+          // (an ally, a token vampire), and `attachedTo` is then the card
+          // itself — "puts War Ghoul into play on War Ghoul". Say it once.
+          ev.attachedTo && ev.attachedTo !== ev.cardId ? ` on ${m(ev.attachedTo)}` : ""
         }.`,
         weight: "normal",
       };

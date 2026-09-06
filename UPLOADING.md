@@ -131,10 +131,18 @@ When it finishes, refresh your repository page. Your code is there.
 
 ---
 
-## From now on: saving your changes
+## From now on: saving your changes — just double-click
 
-Any time you've changed something and want it saved to GitHub, it's three
-commands in the project folder:
+**`Update GitHub.bat`**, in the project folder, does the whole routine:
+it gathers your changes, checks nothing private is going up, saves them
+with a note, and uploads. It asks you for a short note first — press Enter
+on its own and it calls it "Updates".
+
+The window stays open so you can read what happened. If anything goes
+wrong it says so and stops, having sent nothing.
+
+<details>
+<summary>The three commands it runs, if you'd rather type them</summary>
 
 ```
 git add -A
@@ -142,14 +150,10 @@ git commit -m "a short note about what changed"
 git push
 ```
 
-That's the whole routine. `git add -A` gathers the changes, `git commit`
-saves them with a note, `git push` sends them to GitHub.
+`git add -A` gathers the changes, `git commit` saves them with a note,
+`git push` sends them to GitHub. To see what changed first: `git status`.
 
-If you want to see what changed before committing:
-
-```
-git status
-```
+</details>
 
 ---
 
