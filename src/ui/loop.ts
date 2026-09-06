@@ -20,6 +20,7 @@ import { cardText } from "./cardinfo.ts";
 import { chatProblem, onChat } from "./chat.ts";
 import { DevServerSink, GameLog } from "./gamelog.ts";
 import { downloadSave, loadFromStorage, readSaveFile, saveToStorage } from "./history.ts";
+import { DEFAULT_CHAT_COLOR } from "./profile.ts";
 import type { ModerationView, SeatFace } from "./render.ts";
 import { actionsByTableCard, orderHand, playsByCard, render } from "./render.ts";
 import type { UiSettings } from "./settings.ts";
@@ -58,8 +59,12 @@ export interface TableIdentity {
    * button is not drawn rather than drawn and refused.
    */
   moderate?: () => ModerationView;
-  kick?: (seat: string) => void;
+  kick?: (seat: string, reason: string) => void;
   setChatBan?: (seat: string, banned: boolean) => void;
+  /** Read and write this player's chat name colour. The value lives on
+   *  their profile, which the shell owns — the table only shows it. */
+  chatColor?: () => string;
+  setChatColor?: (color: string) => void;
 }
 
 const escapeText = (s: string): string =>
@@ -91,6 +96,8 @@ export class DebugApp {
   private holding = false;
   /** The moderation panel is open. View state, like the settings panel. */
   private modOpen = false;
+  private chatSettingsOpen = false;
+  private emojiOpen = false;
   private settings: UiSettings;
 
   constructor(
@@ -186,6 +193,9 @@ export class DebugApp {
       canLeave: this.table.onLeave !== undefined,
       canChat: this.table.say !== undefined,
       canModerate: this.table.moderate !== undefined,
+      chatColor: this.table.chatColor?.() ?? DEFAULT_CHAT_COLOR,
+      chatSettingsOpen: this.chatSettingsOpen,
+      emojiOpen: this.emojiOpen,
       moderation: this.modOpen ? (this.table.moderate?.() ?? null) : null,
     });
     this.wire();
@@ -560,11 +570,49 @@ export class DebugApp {
     for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".mod-kick"))) {
       el.addEventListener("click", () => {
         const seat = el.dataset["seat"] ?? "";
-        if (!confirm(`Remove ${seat} from the game? A bot will play their seat.`)) return;
-        this.table.kick?.(seat);
+        // ASK FOR A REASON, and send it to the person it is about. Being
+        // removed from a game with no explanation is the thing worth
+        // avoiding; `prompt` returning null is a cancelled kick, which is
+        // different from an empty reason.
+        const reason = prompt(
+          `Remove ${seat} from the game? A bot will play their seat.\n\nWhy? (they will be told)`,
+          "",
+        );
+        if (reason === null) return;
+        this.table.kick?.(seat, reason.trim() || "no reason given");
         this.paint();
       });
     }
+
+    // Chat settings, and the emoji pad. Both are pure view state: they
+    // never reach the command log, like every other client preference.
+    on("#chat-gear", () => {
+      this.chatSettingsOpen = !this.chatSettingsOpen;
+      this.paint();
+    });
+    on("#chatemoji", () => {
+      this.emojiOpen = !this.emojiOpen;
+      this.paint();
+    });
+    for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".emoji"))) {
+      el.addEventListener("click", () => {
+        const box = this.root.querySelector<HTMLInputElement>("#chatinput");
+        if (!box) return;
+        // Insert AT THE CARET rather than appending: somebody adding a
+        // face mid-sentence should not have it land at the end.
+        const at = box.selectionStart ?? box.value.length;
+        const end = box.selectionEnd ?? at;
+        const emoji = el.dataset["emoji"] ?? "";
+        box.value = box.value.slice(0, at) + emoji + box.value.slice(end);
+        box.focus();
+        box.setSelectionRange(at + emoji.length, at + emoji.length);
+      });
+    }
+    const colorBox = this.root.querySelector<HTMLInputElement>("#chatcolor");
+    colorBox?.addEventListener("change", () => {
+      this.table.setChatColor?.(colorBox.value);
+      this.paint();
+    });
     for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".mod-ban"))) {
       el.addEventListener("click", () => {
         const seat = el.dataset["seat"] ?? "";

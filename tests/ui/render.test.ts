@@ -10,8 +10,9 @@ import playtestDecks from "../../config/playtest-decks.json";
 import registry from "../../src/cards/registry.json";
 import type { GameState, LegalOption } from "../../src/engine/index.ts";
 import type { DeckDef, GameSetup } from "../../src/ui/decks.ts";
+import { addChat, clearChat } from "../../src/ui/chat.ts";
 import { narrate } from "../../src/ui/narrate.ts";
-import { describePlay, orderHand, playsByCard, render } from "../../src/ui/render.ts";
+import { CHAT_EMOJI, describePlay, orderHand, playsByCard, render } from "../../src/ui/render.ts";
 import { RULE_SECTIONS, ruleText, searchRules } from "../../src/ui/rules.ts";
 import { AI_SPEEDS } from "../../src/ui/settings.ts";
 import { LocalTransport } from "../../src/ui/transport.ts";
@@ -37,14 +38,18 @@ function screen(
     thinking?: boolean;
     aiDelayMs?: number;
     cardTextPx?: number;
-    seatFaces?: Record<string, { avatar: string | null; bot: boolean }>;
+    seatFaces?: Record<string, { avatar: string | null; bot: boolean; label?: string }>;
     localSeat?: string | null;
     ashOpen?: string | null;
     canLeave?: boolean;
+    canChat?: boolean;
     /** This client runs the engine — a private table, or an online host.
      *  A guest gets a shorter Settings menu and no Moderation at all. */
     canModerate?: boolean;
     moderation?: { people: Array<{ seat: string; name: string; remote: boolean; banned: boolean }> } | null;
+    chatColor?: string;
+    chatSettingsOpen?: boolean;
+    emojiOpen?: boolean;
   } = {},
 ): string {
   const t = new LocalTransport({ setup, ...(opts.omniscient ? { omniscient: true } : {}) });
@@ -55,11 +60,14 @@ function screen(
     localSeat: opts.localSeat ?? null,
     ashOpen: opts.ashOpen ?? null,
     canLeave: opts.canLeave ?? false,
-    canChat: false,
+    canChat: opts.canChat ?? false,
     // The default is the ordinary case: one person playing bots on their
     // own machine, who IS the authority.
     canModerate: opts.canModerate ?? true,
     moderation: opts.moderation ?? null,
+    chatColor: opts.chatColor ?? "#c9a227",
+    chatSettingsOpen: opts.chatSettingsOpen ?? false,
+    emojiOpen: opts.emojiOpen ?? false,
     state: t.view(),
     dp: t.decision(),
     eventFilter: "",
@@ -738,6 +746,7 @@ describe("who is whose prey", () => {
     const html = render({
       cardTextPx: 15, seatFaces: {}, localSeat: null, ashOpen: null,
       canLeave: false, canChat: false, canModerate: true, moderation: null,
+      chatColor: "#c9a227", chatSettingsOpen: false, emojiOpen: false,
       state, dp: t.decision(), eventFilter: "", canUndo: false, canRewind: true,
       omniscient: false, selectedCard: null, handOrder: [], settingsOpen: false,
       helpOpen: false, helpOpenSections: [], helpQuery: "", autoPass: {},
@@ -769,5 +778,77 @@ describe("the hand while you are not being asked", () => {
     // The control: nothing in it is lit as playable.
     const strip = hand.slice(0, hand.indexOf('id="ashheap"') + 1 || undefined);
     expect(strip).not.toContain('handslot playable');
+  });
+});
+
+/**
+ * The chat's own settings (owner request 2026-09-06): a colour for your
+ * name, reachable from a gear beside the title AND from the profile page,
+ * because it is ONE value on the profile with two ways in.
+ */
+describe("chat settings and emoji", () => {
+  const withChat = { canChat: true } as const;
+
+  it("puts a gear beside the Table chat title", () => {
+    const html = screen(withChat);
+    expect(html).toContain('id="chat-gear"');
+    // Closed until asked for.
+    expect(html).not.toContain('id="chatcolor"');
+    expect(screen({ ...withChat, chatSettingsOpen: true })).toContain('id="chatcolor"');
+  });
+
+  it("shows the colour wheel with the player's current colour", () => {
+    const html = screen({ ...withChat, chatSettingsOpen: true, chatColor: "#3366ff" });
+    const at = html.indexOf('id="chatcolor"');
+    const box = html.slice(at - 60, at + 60);
+    expect(box).toContain('type="color"');
+    expect(box).toContain("#3366ff");
+  });
+
+  it("hides the emoji pad until the button is pressed", () => {
+    expect(screen(withChat)).toContain('id="chatemoji"');
+    expect(screen(withChat)).not.toContain('id="emojipad"');
+    const open = screen({ ...withChat, emojiOpen: true });
+    expect(open).toContain('id="emojipad"');
+    for (const e of CHAT_EMOJI) expect(open).toContain(`data-emoji="${e}"`);
+  });
+
+  it("writes a name in its own colour, and leaves an uncoloured one alone", () => {
+    clearChat();
+    addChat({ from: "Bea", text: "hello", at: 1, color: "#3366ff" });
+    addChat({ from: "Cal", text: "hi", at: 2 });
+    const html = screen(withChat);
+    expect(html).toContain('<b style="color:#3366ff">Bea</b>');
+    // The control: no style at all rather than an empty one.
+    expect(html).toContain("<b>Cal</b>");
+    clearChat();
+  });
+
+  it("drops a colour that is not #rrggbb before it reaches the markup", () => {
+    // It goes into a style attribute, so the gate is on the way INTO the
+    // store — one place, rather than at each site that draws a line.
+    clearChat();
+    addChat({ from: "Bea", text: "x", at: 1, color: 'red" onload="alert(1)' });
+    expect(screen(withChat)).toContain("<b>Bea</b>");
+    clearChat();
+  });
+});
+
+/**
+ * A seat a bot took over is RELABELLED, never renamed: the seat name is
+ * the engine's identifier, and every option id, the command log and every
+ * saved game are written in terms of it.
+ */
+describe("a seat a bot took over", () => {
+  it("shows the label on the mat while the seat id is untouched", () => {
+    const seats = config.decks.map((d) => d.seat);
+    const html = screen({
+      seatFaces: { [seats[1]!]: { avatar: null, bot: true, label: `${seats[1]} Bot` } },
+    });
+    const at = html.indexOf(`data-seat="${seats[1]}"`);
+    expect(html.slice(at, at + 400)).toContain(`${seats[1]} Bot`);
+    // The control: a seat with no label still shows its plain name.
+    const other = html.indexOf(`data-seat="${seats[0]}"`);
+    expect(html.slice(other, other + 400)).not.toContain("Bot");
   });
 });

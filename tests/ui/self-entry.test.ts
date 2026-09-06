@@ -73,6 +73,9 @@ function screen(state: unknown, dp: DecisionPoint | null): string {
     canChat: false,
     canModerate: false,
     moderation: null,
+    chatColor: "#c9a227",
+    chatSettingsOpen: false,
+    emojiOpen: false,
   } as RenderInput);
 }
 

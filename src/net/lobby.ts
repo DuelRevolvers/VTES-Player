@@ -22,7 +22,7 @@ import { addChat } from "../ui/chat.ts";
 import { DevServerSink, GameLog } from "../ui/gamelog.ts";
 import type { SeatConfig, TableConfig } from "../ui/newgame.ts";
 import { botSeats, buildTable, MAX_SEATS, seatDeckHash } from "../ui/newgame.ts";
-import { avatarProblem, nameProblem } from "../ui/profile.ts";
+import { avatarProblem, colorProblem, nameProblem } from "../ui/profile.ts";
 import { recordResult } from "../ui/results.ts";
 import { seatSeed } from "../ui/settings.ts";
 import { LocalTransport } from "../ui/transport.ts";
@@ -39,11 +39,18 @@ import type {
 } from "./protocol.ts";
 import { PROTOCOL_VERSION } from "./protocol.ts";
 
+/** A colour off the wire, or nothing. One gate, both join paths. */
+const cleanColor = (c: string | undefined): string | null =>
+  c && !colorProblem(c) ? c : null;
+
 interface LobbyGuest {
   channel: HostChannel;
   name: string;
   /** The seat they were given, or null if the table was full. */
   seat: string | null;
+  /** Their chosen name colour, validated on arrival. The HOST holds it so
+   *  it can be stamped onto every line it relays for them. */
+  chatColor: string | null;
   off: () => void;
 }
 
@@ -110,10 +117,23 @@ export class LobbyHost {
   private readonly watchers = new Set<() => void>();
 
   /** Say something as the host, and relay it to everyone. */
-  say(text: string, from: string, system = false): void {
-    const line = { type: "chatLine" as const, from, text, at: Date.now(), ...(system ? { system: true } : {}) };
-    addChat({ from, text, at: line.at, ...(system ? { system: true } : {}) });
+  say(text: string, from: string, system = false, color: string | null = null): void {
+    const tint = color && !colorProblem(color) ? { color } : {};
+    const line = {
+      type: "chatLine" as const,
+      from,
+      text,
+      at: Date.now(),
+      ...(system ? { system: true } : {}),
+      ...tint,
+    };
+    addChat({ from, text, at: line.at, ...(system ? { system: true } : {}), ...tint });
     for (const g of this.guests) if (g.channel.open) g.channel.send(line);
+    // THE HOST'S OWN SCREEN HAS TO BE TOLD, exactly as it does for a seat
+    // change. Without this a guest's message reached the store and sat
+    // there until something else happened to repaint — the same bug as
+    // "the host lobby doesn't update", one message type along.
+    this.notify();
   }
 
   private handle(channel: HostChannel, msg: PeerMessage, off: () => void): void {
@@ -124,8 +144,11 @@ export class LobbyHost {
     else if (msg.type === "chat") {
       // The host is the only relay, so everybody lists the conversation in
       // the same order — including the sender, who does not add it locally.
+      // The colour comes from what the HOST recorded at join, not from
+      // the message — a guest may not write somebody else's name into the
+      // conversation, and may not paint one either.
       const guest = this.guests.find((g) => g.channel === channel);
-      this.say(msg.text, guest?.name ?? "someone");
+      this.say(msg.text, guest?.name ?? "someone", false, guest?.chatColor ?? null);
     }
     // Game-phase messages are the HostSession's business once it exists;
     // it has its own subscription on the same channel.
@@ -146,7 +169,13 @@ export class LobbyHost {
     // list with `seat: null`, which means they are handed to the game
     // session at start along with everyone else.
     if (msg.spectate) {
-      this.guests.push({ channel, name: name.trim() || "Spectator", seat: null, off });
+      this.guests.push({
+        channel,
+        name: name.trim() || "Spectator",
+        seat: null,
+        chatColor: cleanColor(msg.chatColor),
+        off,
+      });
       this.broadcast();
       return;
     }
@@ -175,7 +204,13 @@ export class LobbyHost {
     // the profile makes on the way in, applied again here because this one
     // arrived over the wire from somebody else's client.
     open.avatar = msg.avatar && !avatarProblem(msg.avatar) ? msg.avatar : null;
-    this.guests.push({ channel, name: open.name, seat: open.name, off });
+    this.guests.push({
+      channel,
+      name: open.name,
+      seat: open.name,
+      chatColor: cleanColor(msg.chatColor),
+      off,
+    });
     this.broadcast();
   }
 
@@ -276,8 +311,14 @@ export class LobbyHost {
     };
   }
 
+  /** Tell this client's own screen. A chat line changes nothing about the
+   *  table, so it needs this and not a whole `broadcast`. */
+  private notify(): void {
+    for (const cb of [...this.watchers]) cb();
+  }
+
   private broadcast(): void {
-    for (const cb of this.watchers) cb();
+    this.notify();
     for (const guest of this.guests) {
       if (guest.channel.open) guest.channel.send(this.lobbyFor(guest));
     }
@@ -356,6 +397,9 @@ export class LobbyPeer {
     private readonly spectate = false,
     /** This player's picture, so the table can put a face to the name. */
     avatar: string | null = null,
+    /** The colour their name is written in, so everyone sees them the
+     *  same way. Travels with the join, like the picture. */
+    chatColor: string | null = null,
   ) {
     this.off = this.channel.onMessage((msg) => this.receive(msg));
     this.channel.send({
@@ -364,6 +408,7 @@ export class LobbyPeer {
       name,
       ...(spectate ? { spectate: true } : {}),
       ...(avatar ? { avatar } : {}),
+      ...(chatColor ? { chatColor } : {}),
     });
   }
 
@@ -436,7 +481,11 @@ export class LobbyPeer {
         text: msg.text,
         at: msg.at,
         ...(msg.system ? { system: true } : {}),
+        ...(msg.color ? { color: msg.color } : {}),
       });
+      // …and repaint, or the line sits in the store unseen until something
+      // else happens. Same omission as the host's `say`.
+      this.emit();
     } else if (msg.type === "started") {
       this.onStarted();
     } else if (msg.type === "bye") {

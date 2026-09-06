@@ -26,6 +26,7 @@
 import { HeuristicAgent } from "../ai/heuristic.ts";
 import type { SeatId } from "../engine/index.ts";
 import { addChat } from "../ui/chat.ts";
+import { colorProblem } from "../ui/profile.ts";
 import { seatSeed } from "../ui/settings.ts";
 import type { LocalTransport } from "../ui/transport.ts";
 import type { ChooseMsg, HelloMsg, HostChannel, PeerMessage } from "./protocol.ts";
@@ -35,6 +36,8 @@ interface Connected {
   seat: SeatId;
   channel: HostChannel;
   name: string;
+  /** Their name colour, so the host can stamp it on what it relays. */
+  chatColor: string | null;
   off: () => void;
 }
 
@@ -90,7 +93,7 @@ export class HostSession {
       // client — a banned player's browser has no reason to cooperate.
       // They are not told, and nothing of theirs reaches anybody.
       if (who && this.chatBanned.has(who.seat)) return;
-      this.say(msg.text, who?.name ?? "someone");
+      this.say(msg.text, who?.name ?? "someone", false, who?.chatColor ?? null);
     }
     // A peer that says goodbye mid-game leaves its seat to a bot rather
     // than to nobody — see `onLeave`.
@@ -123,17 +126,28 @@ export class HostSession {
     const peer = this.peers.get(seat);
     if (!peer) return;
     if (peer.channel.open) {
+      // The reason goes to the person it is about, in the `bye` they were
+      // already being sent — being removed with no explanation is the
+      // thing worth avoiding here, and the field existed all along.
       peer.channel.send({ type: "bye", reason });
       peer.channel.close();
     }
-    this.takeOver(peer.seat, peer.name, "was removed by the host");
+    this.takeOver(peer.seat, peer.name, `was removed by the host: ${reason}`);
   }
 
   /** Relay a chat line to every peer, and to the host's own screen. */
-  say(text: string, from: string, system = false): void {
+  say(text: string, from: string, system = false, color: string | null = null): void {
     const at = Date.now();
-    addChat({ from, text, at, ...(system ? { system: true } : {}) });
-    const line = { type: "chatLine" as const, from, text, at, ...(system ? { system: true } : {}) };
+    const tint = color ? { color } : {};
+    addChat({ from, text, at, ...(system ? { system: true } : {}), ...tint });
+    const line = {
+      type: "chatLine" as const,
+      from,
+      text,
+      at,
+      ...(system ? { system: true } : {}),
+      ...tint,
+    };
     for (const p of this.peers.values()) if (p.channel.open) p.channel.send(line);
     for (const c of this.spectators) if (c.open) c.send(line);
   }
@@ -164,8 +178,27 @@ export class HostSession {
     this.peers.delete(seat);
     this.chatBanned.delete(seat);
     this.transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
+    // MARK THE SEAT AS A BOT'S, but only for display. The seat name IS the
+    // engine's seat id — renaming it would invalidate every option id, the
+    // command log and every saved game — so the suffix lives in
+    // `botSeats`, which the table reads when it labels a mat.
+    this.botNames.set(seat, `${seat} Bot`);
     this.transport.note(`${seat} ${how}; a bot is playing that seat now.`);
     this.say(`${name} ${how} — a bot is playing ${seat} now.`, "", true);
+  }
+
+  /**
+   * Seats a bot took over, and what to CALL them.
+   *
+   * Display only, and that distinction is the whole of it: a seat's name
+   * is the engine's identifier for it, so this never reaches the engine,
+   * the command log or a saved game — it is read where a mat is labelled,
+   * exactly like an avatar.
+   */
+  private readonly botNames = new Map<SeatId, string>();
+
+  get botSeatNames(): Record<string, string> {
+    return Object.fromEntries(this.botNames);
   }
 
   /** How many people are watching without a seat. */
@@ -214,7 +247,13 @@ export class HostSession {
     // every change anyway, so a returning peer needs no catch-up
     // machinery: it just gets the next sync, which is the whole game.
     if (existing) existing.off();
-    this.peers.set(msg.seat, { seat: msg.seat, channel, name: msg.name ?? msg.seat, off });
+    this.peers.set(msg.seat, {
+      seat: msg.seat,
+      channel,
+      name: msg.name ?? msg.seat,
+      chatColor: msg.chatColor && !colorProblem(msg.chatColor) ? msg.chatColor : null,
+      off,
+    });
     channel.send({ type: "welcome", version: PROTOCOL_VERSION, seat: msg.seat, seats });
     this.syncOne(msg.seat);
   }

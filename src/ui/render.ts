@@ -41,6 +41,14 @@ import { AI_SPEEDS, CARD_TEXT_SIZES } from "./settings.ts";
 export interface SeatFace {
   avatar: string | null;
   bot: boolean;
+  /**
+   * What to CALL this seat, when that differs from its id.
+   *
+   * Display only. A seat's name IS the engine's identifier for it — every
+   * option id, the command log and every saved game are written in terms
+   * of it — so a seat a bot took over is relabelled here and nowhere else.
+   */
+  label?: string;
 }
 
 function seatThumb(seat: string, face: SeatFace | undefined): string {
@@ -312,7 +320,7 @@ function seatMat(
     <section class="mat ${seat.ousted ? "ousted" : ""} ${dp?.seat === seat.id ? "deciding" : ""}" data-seat="${esc(seat.id)}">
       <header>
         ${seatThumb(seat.id, face)}
-        <span class="seatname">${esc(seat.id)}</span>
+        <span class="seatname">${esc(face?.label ?? seat.id)}</span>
         ${
           // Who they bleed and who bleeds them, small and unbolded beside
           // the name. Read through `preyOf`/`predatorOf` rather than the
@@ -1234,6 +1242,11 @@ export interface RenderInput {
    *  ban anybody, so the button is not drawn rather than drawn and
    *  refused. */
   canModerate: boolean;
+  /** This player's own name colour, `#rrggbb`. */
+  chatColor: string;
+  /** Whether the chat's gear panel and emoji pad are open. View state. */
+  chatSettingsOpen: boolean;
+  emojiOpen: boolean;
   /** The moderation panel, when it is open: who is here and who is
    *  chat-banned. Null when closed. */
   moderation: ModerationView | null;
@@ -1342,7 +1355,7 @@ export function render(input: RenderInput): string {
           <h3>Game log <input id="evfilter" placeholder="filter…" value="${esc(input.eventFilter)}" /></h3>
           <div class="events" id="events">${events}</div>
         </div>
-        ${input.canChat ? chatPanel() : ""}
+        ${input.canChat ? chatPanel(input.chatColor, input.chatSettingsOpen, input.emojiOpen) : ""}
       </aside>
     </div>
     ${moderationPanel(input)}
@@ -1374,28 +1387,95 @@ export function seatColumns(seats: number): number {
  * conversation is one conversation, and a player who agreed a house rule
  * in the lobby should still be able to read it three turns in.
  */
-function chatPanel(): string {
-  const lines = chatLines();
+function chatPanel(color: string, settingsOpen: boolean, emojiOpen: boolean): string {
   return `
     <div class="panel chatbox tablechat">
-      <h3>Table chat</h3>
-      <div class="chatlines" id="chatlines">
-        ${
-          lines.length === 0
-            ? `<p class="note dim">Nothing said yet.</p>`
-            : lines
-                .map((l) =>
-                  l.system
-                    ? `<div class="chatline system">${esc(l.text)}</div>`
-                    : `<div class="chatline"><b>${esc(l.from)}</b> ${esc(l.text)}</div>`,
-                )
-                .join("")
-        }
-      </div>
-      <div class="row">
-        <input id="chatinput" maxlength="${MAX_CHAT_TEXT}" placeholder="Say something…" />
-        <button id="chatsend">Send</button>
-      </div>
+      <h3>Table chat
+        <button id="chat-gear" class="chatgear" title="Chat settings">⚙</button>
+      </h3>
+      ${chatSettings(color, settingsOpen)}
+      ${chatLinesMarkup()}
+      ${chatComposer(emojiOpen)}
+    </div>`;
+}
+
+/** The conversation itself. Shared by the table and the lobby, so a name
+ *  is drawn in its owner's colour in both. */
+export function chatLinesMarkup(): string {
+  const lines = chatLines();
+  return `
+    <div class="chatlines" id="chatlines">
+      ${
+        lines.length === 0
+          ? `<p class="note dim">Nothing said yet.</p>`
+          : lines
+              .map((l) =>
+                l.system
+                  ? `<div class="chatline system">${esc(l.text)}</div>`
+                  : // The colour was validated as `#rrggbb` on the way into
+                    // the store (src/ui/chat.ts), which is why it can go in
+                    // a style attribute at all.
+                    `<div class="chatline"><b${
+                      l.color ? ` style="color:${esc(l.color)}"` : ""
+                    }>${esc(l.from)}</b> ${esc(l.text)}</div>`,
+              )
+              .join("")
+      }
+    </div>`;
+}
+
+/**
+ * A palette of emoji, and the box to type in.
+ *
+ * A fixed list rather than a picker library: it is one grid of buttons
+ * that inserts a character at the caret, which is the whole of what was
+ * asked for, and it adds no dependency to a project that has exactly one.
+ */
+export const CHAT_EMOJI = [
+  "🙂", "😄", "😂", "😉", "😍", "😎", "🤔", "😐",
+  "😢", "😡", "😱", "🎉", "👍", "👎", "👏", "🙏",
+  "🩸", "🧛", "🦇", "⚰️", "💀", "🔥", "⚔️", "🛡",
+  "🃏", "🎲", "👑", "💰", "⏳", "❤️", "💔", "✨",
+];
+
+function chatComposer(emojiOpen: boolean): string {
+  return `
+    ${
+      emojiOpen
+        ? `<div class="emojipad" id="emojipad">
+             ${CHAT_EMOJI.map(
+               (e) => `<button class="emoji" data-emoji="${esc(e)}">${e}</button>`,
+             ).join("")}
+           </div>`
+        : ""
+    }
+    <div class="row">
+      <input id="chatinput" maxlength="${MAX_CHAT_TEXT}" placeholder="Say something…" />
+      <button id="chatemoji" title="Emoji">🙂</button>
+      <button id="chatsend">Send</button>
+    </div>`;
+}
+
+/**
+ * This player's own chat settings, behind the gear.
+ *
+ * The colour lives on the PROFILE, not in `settings.ts`, because it is
+ * something about the person rather than about this screen: it travels
+ * with them to a table and everyone sees them in it. That is why the same
+ * control appears on the profile page — one value, two ways in.
+ */
+function chatSettings(color: string, open: boolean): string {
+  if (!open) return "";
+  return `
+    <div class="chatsettings">
+      <label class="setrow">
+        <span>Your name colour</span>
+        <input type="color" id="chatcolor" value="${esc(color)}" />
+      </label>
+      <p class="setnote">
+        Saved to your profile, so it follows you to every table — and
+        everyone at the table sees you in it.
+      </p>
     </div>`;
 }
 

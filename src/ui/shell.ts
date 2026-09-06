@@ -38,6 +38,7 @@ import { DevServerSink, GameLog } from "./gamelog.ts";
 import { clearResults, loadResults, recordResult, standings } from "./results.ts";
 import { DebugApp } from "./loop.ts";
 import type { ModerationView, SeatFace } from "./render.ts";
+import { CHAT_EMOJI, chatLinesMarkup } from "./render.ts";
 import type { DeckSource, SeatConfig, TableConfig } from "./newgame.ts";
 import {
   botSeats,
@@ -53,6 +54,8 @@ import {
 import type { Profile } from "./profile.ts";
 import {
   clearProfile,
+  colorProblem,
+  DEFAULT_CHAT_COLOR,
   loadProfile,
   MAX_NAME_LENGTH,
   nameProblem,
@@ -66,7 +69,7 @@ import { LocalTransport } from "./transport.ts";
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-type Screen = "profile" | "menu" | "newgame" | "lobby" | "join" | "leaderboard" | "table";
+type Screen = "profile" | "menu" | "newgame" | "lobby" | "join" | "leaderboard" | "table" | "removed";
 
 export class Shell {
   private screen: Screen;
@@ -144,9 +147,39 @@ export class Shell {
         return this.joinScreen();
       case "leaderboard":
         return this.leaderboardScreen();
+      case "removed":
+        return this.removedScreen();
       default:
         return "";
     }
+  }
+
+  /** Why this client was shown the door, if it was. */
+  private removedReason = "";
+
+  /**
+   * Removed from a table, and TOLD WHY.
+   *
+   * The reason is the host's own words, typed into the kick prompt and
+   * carried in the `bye` the protocol already had. Without a screen for
+   * it, being kicked was indistinguishable from the connection dropping —
+   * and those two deserve very different reactions from the player.
+   */
+  private removedScreen(): string {
+    return `
+      <div class="card">
+        <h1>You were removed from the table</h1>
+        <p class="note">The host gave this reason:</p>
+        <p class="err quoted">${esc(this.removedReason)}</p>
+        <p class="note">
+          A bot is playing your seat, so the game goes on without you. You
+          can join another table whenever you like.
+        </p>
+        <div class="row">
+          <button id="m-join" class="primary">Join another game</button>
+          <button id="pback">Main menu</button>
+        </div>
+      </div>`;
   }
 
   // --- profile -------------------------------------------------------------
@@ -176,6 +209,19 @@ export class Shell {
           </span>
         </label>
         <p class="note">Pictures are shrunk to 128&times;128 before they are stored.</p>
+        <!--
+          The SAME setting as the chat's gear, not a copy of it: one value
+          on the profile, two ways in. It is a property of the person
+          rather than of a screen, so it travels to every table and
+          everyone there sees them in it.
+        -->
+        <label class="field">
+          <span>Chat name colour</span>
+          <input id="pcolor" type="color" value="${esc(p?.chatColor ?? DEFAULT_CHAT_COLOR)}" />
+        </label>
+        <p class="note">
+          The colour your name is written in when you talk at a table.
+        </p>
         ${this.error ? `<p class="err">${esc(this.error)}</p>` : ""}
         <div class="row">
           <button id="psave" class="primary">${p ? "Save" : "Create profile"}</button>
@@ -306,6 +352,16 @@ export class Shell {
   private lobbyScreen(): string {
     const host = this.lobbyHost;
     const guest = this.lobbyPeer?.state ?? null;
+    // A GUEST WHOSE LOBBY HAS NOT ARRIVED YET IS STILL A GUEST. Falling
+    // through to the host layout here drew somebody else's table with
+    // THIS client's default seats and a live Start button — a button that
+    // would deal a private game on their machine. `state` is null in a
+    // real window: between `join` and the host's first `lobby` message.
+    if (this.lobbyPeer && !guest) {
+      return `<div class="card"><h1>Joining…</h1>
+        <p class="note">Waiting for the host to send the table.</p>
+        <div class="row"><button id="ng-back">Leave</button></div></div>`;
+    }
     const build = buildTable(this.table);
     const precons = supportedPrecons().filter((p) => p.playable);
     const code = host?.code ?? guest?.code ?? "";
@@ -517,29 +573,49 @@ export class Shell {
    * (src/ui/chat.ts).
    */
   private chatPanel(): string {
-    const lines = chatLines();
+    // The LINES come from `render.ts` so the lobby and the table draw a
+    // name the same way — one place decides what a coloured name looks
+    // like, and the conversation does not change appearance when the game
+    // starts.
     return `
       <div class="chatbox">
-        <div class="sethead">Table chat</div>
-        <div class="chatlines" id="chatlines">
-          ${
-            lines.length === 0
-              ? `<p class="note dim">Nothing said yet.</p>`
-              : lines
-                  .map((l) =>
-                    l.system
-                      ? `<div class="chatline system">${esc(l.text)}</div>`
-                      : `<div class="chatline"><b>${esc(l.from)}</b> ${esc(l.text)}</div>`,
-                  )
-                  .join("")
-          }
+        <div class="sethead">Table chat
+          <button id="chat-gear" class="chatgear" title="Chat settings">⚙</button>
         </div>
+        ${
+          this.chatSettingsOpen
+            ? `<div class="chatsettings">
+                 <label class="setrow">
+                   <span>Your name colour</span>
+                   <input type="color" id="chatcolor"
+                          value="${esc(this.profile?.chatColor ?? DEFAULT_CHAT_COLOR)}" />
+                 </label>
+                 <p class="note">Saved to your profile — it follows you to every table.</p>
+               </div>`
+            : ""
+        }
+        ${chatLinesMarkup()}
+        ${
+          this.emojiOpen
+            ? `<div class="emojipad" id="emojipad">
+                 ${CHAT_EMOJI.map(
+                   (e) => `<button class="emoji" data-emoji="${esc(e)}">${e}</button>`,
+                 ).join("")}
+               </div>`
+            : ""
+        }
         <div class="row">
           <input id="chatinput" maxlength="${MAX_CHAT_TEXT}" placeholder="Say something…" />
+          <button id="chatemoji" title="Emoji">🙂</button>
           <button id="chatsend">Send</button>
         </div>
       </div>`;
   }
+
+  /** The chat's own gear panel and emoji pad — pure view state, like every
+   *  other client preference: never in the command log. */
+  private chatSettingsOpen = false;
+  private emojiOpen = false;
   private deckPanel(i: number, precons: PreconSummary[]): string {
     const bySet = new Map<string, PreconSummary[]>();
     for (const p of precons) bySet.set(p.set, [...(bySet.get(p.set) ?? []), p]);
@@ -805,16 +881,56 @@ export class Shell {
       if (!chatBox || chatProblem(text)) return;
       chatBox.value = "";
       const me = this.profile?.name ?? "You";
+      const mine = this.profile?.chatColor ?? null;
       if (this.lobbyPeer) this.lobbyPeer.say(text);
-      else if (this.lobbyHost) this.lobbyHost.say(text, me);
+      else if (this.lobbyHost) this.lobbyHost.say(text, me, false, mine);
       // A private table has nobody to relay to; it is still a notepad.
-      else addChat({ from: me, text, at: Date.now() });
+      else addChat({ from: me, text, at: Date.now(), ...(mine ? { color: mine } : {}) });
       this.paint();
     };
     this.on("#chatsend", () => send());
     chatBox?.addEventListener("keydown", (ev) => {
-      if ((ev as KeyboardEvent).key === "Enter") send();
+      if ((ev as KeyboardEvent).key !== "Enter") return;
+      // Enter in the chat SENDS A MESSAGE and does nothing else. Stopped
+      // explicitly rather than trusting that no ancestor ever becomes a
+      // form or grows a key handler: this box sits on a screen whose other
+      // button deals a game, and that is not a mistake to leave to luck.
+      ev.preventDefault();
+      ev.stopPropagation();
+      send();
     });
+    // The chat's own settings and the emoji pad. Both are view state, and
+    // the COLOUR is written to the profile — the same value the profile
+    // page edits, so the two controls cannot disagree.
+    this.on("#chat-gear", () => {
+      this.chatSettingsOpen = !this.chatSettingsOpen;
+      this.paint();
+    });
+    this.on("#chatemoji", () => {
+      this.emojiOpen = !this.emojiOpen;
+      this.paint();
+    });
+    for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".emoji"))) {
+      el.addEventListener("click", () => {
+        if (!chatBox) return;
+        // At the caret, not appended: a face added mid-sentence belongs
+        // where the player put it.
+        const at = chatBox.selectionStart ?? chatBox.value.length;
+        const end = chatBox.selectionEnd ?? at;
+        const emoji = el.dataset["emoji"] ?? "";
+        chatBox.value = chatBox.value.slice(0, at) + emoji + chatBox.value.slice(end);
+        chatBox.focus();
+        chatBox.setSelectionRange(at + emoji.length, at + emoji.length);
+      });
+    }
+    const colorBox = this.root.querySelector<HTMLInputElement>("#chatcolor");
+    colorBox?.addEventListener("change", () => {
+      if (!this.profile || colorProblem(colorBox.value)) return;
+      this.profile = { ...this.profile, chatColor: colorBox.value };
+      saveProfile(this.profile);
+      this.paint();
+    });
+
     // Keep the newest line in view after a repaint.
     const lines = this.root.querySelector<HTMLElement>("#chatlines");
     if (lines) lines.scrollTop = lines.scrollHeight;
@@ -886,7 +1002,11 @@ export class Shell {
         this.paint();
         return;
       }
-      const profile = { ...newProfile(name, avatar), created: this.profile?.created ?? new Date().toISOString() };
+      const colorInput = this.root.querySelector<HTMLInputElement>("#pcolor");
+      const profile = {
+        ...newProfile(name, avatar, colorInput?.value ?? this.profile?.chatColor ?? null),
+        created: this.profile?.created ?? new Date().toISOString(),
+      };
       const failed = saveProfile(profile);
       if (failed) {
         this.error = failed;
@@ -1037,7 +1157,19 @@ export class Shell {
    * describes.
    */
   private start(): void {
-    this.table.privateGame = !isOnlineTable(this.table);
+    // A GUEST HAS NO START BUTTON, and must never take this path even if
+    // one is somehow on screen: they would deal a private game on their
+    // own machine while the host went on waiting for them.
+    if (this.lobbyPeer) return;
+    // THE ROOM BEING OPEN IS THE FACT THAT DECIDES, not what the seats
+    // happen to say right now. `isOnlineTable` reads the seat kinds, and a
+    // seat's kind changes as people arrive and leave — so a host with a
+    // live room could fall through to the private path and start a game
+    // that nobody was told about, which is exactly "the online player is
+    // still in the lobby and not in the game that's started". The same
+    // shape as the `buildTable` fix: a condition written against one
+    // instant, applied at another.
+    this.table.privateGame = this.lobbyHost === null && !isOnlineTable(this.table);
     if (!this.table.privateGame) {
       // The room is already open — it opened the moment a seat went online
       // — so starting is just starting. This used to be where the host was
@@ -1124,6 +1256,7 @@ export class Shell {
         () => this.guestGameStarted(),
         this.wantSpectate,
         this.profile?.avatar ?? null,
+        this.profile?.chatColor ?? null,
       );
       this.lobbyPeer.onChanged(() => {
         // The host may have turned us away rather than seated us.
@@ -1161,6 +1294,7 @@ export class Shell {
       channel,
       spectating ? null : seat,
       this.profile?.name ?? undefined,
+      this.profile?.chatColor ?? null,
     );
     // A peer has no state to render until the host's first sync arrives.
     const off = transport.onChanged(() => {
@@ -1175,7 +1309,24 @@ export class Shell {
     this.screen = "table";
     this.root.innerHTML = "";
     if (session) this.hostSession = session;
+    // BEING REMOVED HAS TO BE SAID OUT LOUD. The host sends a `bye` with
+    // the reason it was given; without this the table simply stopped
+    // answering, which looks like the connection dropping rather than a
+    // decision somebody made about you. The shell takes the root back.
+    if (transport instanceof PeerTransport) {
+      const offBye = transport.onChanged(() => {
+        const reason = transport.closedReason;
+        if (!reason) return;
+        offBye();
+        this.removedReason = reason;
+        this.guestChannel = null;
+        clearChat();
+        this.screen = "removed";
+        this.paint();
+      });
+    }
     const me = this.profile?.name ?? "You";
+    const mine = this.profile?.chatColor ?? null;
     new DebugApp(this.root, transport, {
       faces: this.seatFaces(),
       localSeat: this.mySeat(),
@@ -1185,8 +1336,8 @@ export class Shell {
       // it is handed one function that says something.
       say: (text: string) => {
         if (transport instanceof PeerTransport) transport.say(text);
-        else if (this.hostSession) this.hostSession.say(text, me);
-        else addChat({ from: me, text, at: Date.now() });
+        else if (this.hostSession) this.hostSession.say(text, me, false, mine);
+        else addChat({ from: me, text, at: Date.now(), ...(mine ? { color: mine } : {}) });
       },
       // MODERATION IS THE AUTHORITY'S PANEL, not the online host's.
       //
@@ -1220,10 +1371,20 @@ export class Shell {
                   : [],
               };
             },
-            kick: (seat: string) => session?.kick(seat),
+            kick: (seat: string, reason: string) => session?.kick(seat, reason),
             setChatBan: (seat: string, ban: boolean) => session?.setChatBan(seat, ban),
           }
         : {}),
+      // The colour is read and written through the profile, which the
+      // shell owns; the table only shows it. Saving here rather than in
+      // the table is what makes the chat's gear and the profile page the
+      // same setting rather than two.
+      chatColor: () => this.profile?.chatColor ?? DEFAULT_CHAT_COLOR,
+      setChatColor: (color: string) => {
+        if (!this.profile || colorProblem(color)) return;
+        this.profile = { ...this.profile, chatColor: color };
+        saveProfile(this.profile);
+      },
     });
   }
 
@@ -1248,10 +1409,16 @@ export class Shell {
       return faces;
     }
     const seats = this.lobbyHost?.seats ?? this.table.seats;
+    // A seat a bot took over mid-game is RELABELLED, never renamed: the
+    // seat name is the engine's id for it, so "Bea Bot" is a label the mat
+    // draws and nothing else ever sees.
+    const botNames = this.hostSession?.botSeatNames ?? {};
     for (const s of seats) {
+      const label = botNames[s.name];
       faces[s.name] = {
         avatar: s.kind === "you" ? (this.profile?.avatar ?? null) : (s.avatar ?? null),
-        bot: s.kind === "ai",
+        bot: s.kind === "ai" || label !== undefined,
+        ...(label ? { label } : {}),
       };
     }
     return faces;

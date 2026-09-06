@@ -19,6 +19,8 @@
  * order from everybody else's.
  */
 
+import { colorProblem } from "./profile.ts";
+
 export interface ChatLine {
   from: string;
   text: string;
@@ -26,6 +28,17 @@ export interface ChatLine {
   at: number;
   /** A join, a leave, a bot taking over — printed differently. */
   system?: boolean;
+  /**
+   * `#rrggbb` for the sender's name, or absent for the default.
+   *
+   * Stamped by the HOST from what it knows about that player, not taken
+   * from the line's own sender — the host already owns `from` for the same
+   * reason (a guest must not be able to write somebody else's name into
+   * the conversation, and must not be able to write somebody else's
+   * colour either). Validated with `colorProblem` before it is stored,
+   * because it ends up in a `style` attribute.
+   */
+  color?: string;
 }
 
 /** Long enough for a real conversation, short enough never to matter. */
@@ -40,7 +53,18 @@ export function chatLines(): readonly ChatLine[] {
 }
 
 export function addChat(line: ChatLine): void {
-  lines.push({ ...line, text: line.text.slice(0, MAX_CHAT_TEXT) });
+  // A colour off the wire is somebody else's data and goes into a `style`
+  // attribute, so it is checked HERE — one gate on the way in, rather
+  // than at each of the places that draw a line.
+  //
+  // The key is DELETED rather than overwritten with a spread: `{...line,
+  // ...{}}` keeps whatever `line.color` held, so the first version of this
+  // gate let every bad value straight through. Caught by the test that
+  // feeds it a quoted string — a gate has to be asserted against the thing
+  // it exists to stop.
+  const clean: ChatLine = { ...line, text: line.text.slice(0, MAX_CHAT_TEXT) };
+  if (!clean.color || colorProblem(clean.color)) delete clean.color;
+  lines.push(clean);
   if (lines.length > MAX_CHAT) lines.splice(0, lines.length - MAX_CHAT);
   for (const cb of listeners) cb();
 }

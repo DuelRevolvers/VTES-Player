@@ -49,6 +49,9 @@ export class PeerTransport implements GameTransport {
     private readonly channel: PeerChannel,
     seat: string | null,
     name?: string,
+    /** Their chat name colour, so a RECONNECT (which arrives straight at
+     *  the session, never through the lobby) still carries it. */
+    chatColor?: string | null,
   ) {
     // A null seat means SPECTATE: watch a table you hold no seat at. The
     // host then sends everything face down and never a decision, so there
@@ -61,6 +64,7 @@ export class PeerTransport implements GameTransport {
       seat: seat ?? "",
       ...(this.spectating ? { spectate: true } : {}),
       ...(name === undefined ? {} : { name }),
+      ...(chatColor ? { chatColor } : {}),
     });
   }
 
@@ -161,6 +165,7 @@ export class PeerTransport implements GameTransport {
           text: msg.text,
           at: msg.at,
           ...(msg.system ? { system: true } : {}),
+          ...(msg.color ? { color: msg.color } : {}),
         });
         return;
       case "bye":

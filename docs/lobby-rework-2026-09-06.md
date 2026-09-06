@@ -495,3 +495,153 @@ seat.
 Its test has the control case that matters: a **bot's** box is asserted
 *not* disabled. Without it, the two positive assertions would pass on a
 panel that disabled everything.
+
+---
+
+# The fifth pass: chat and starting
+
+**The report:** *"When a player types in the lobby chat, it starts the
+game, and the online player is still in the lobby and not in the game
+that's started."*
+
+## 30. What I could prove, and what I could not
+
+The net layer is **exonerated for the start**: a headless repro over the
+loopback has a guest send a chat line and asserts neither
+`LobbyHost.onStart` nor the guest's `onStarted` fires. It does not. There
+is also **no form in the document** and no global key handler, so Enter in
+that input has no default action to trigger a button with.
+
+So I could not reproduce the "typing starts it" half by reading or
+headlessly — the shell is DOM code and this project has no jsdom. What I
+did instead was **close every path by which it could be true**, and each
+of the three is a real defect on its own.
+
+## 31. A host with a live room must never start a private game
+
+`start()` chose its path from `isOnlineTable(this.table)`, which reads the
+**seat kinds** — and seat kinds change as people arrive and leave. If that
+ever reads false while a room is open, the host deals a **local** game
+with bots and **nobody tells the guests**, who go on staring at a lobby.
+That is symptom two, exactly.
+
+The room being open is the fact that decides, so the test is
+`this.lobbyHost === null && !isOnlineTable(...)`. Same shape as the
+`buildTable` fix in §2 of the first pass: **a condition written against one
+instant, applied at another.**
+
+## 32. A guest can no longer start anything
+
+Two guards, because they fail differently:
+
+- `start()` **returns immediately if this client is a guest**. Even with a
+  Start button somehow on screen, a guest pressing it would deal a private
+  game on their own machine while the host waited for them.
+- The lobby screen no longer **falls through to the host layout** when a
+  guest's state has not arrived. `guest` is
+  `this.lobbyPeer?.state ?? null`, and that is genuinely null in a real
+  window — between `join` and the host's first `lobby` message — so the
+  screen was drawing somebody else's table using **this** client's default
+  seats, with a live Start button on it. It says "Joining…" now.
+
+That second one is the best candidate for what the owner saw: it needs
+only a click on a button that should never have been drawn.
+
+## 33. Enter sends a message and does nothing else
+
+`preventDefault` and `stopPropagation` on the chat box's Enter. There is
+no form today and no ancestor handler today, but **this box sits on a
+screen whose other button deals a game**, and that is not a thing to leave
+to the absence of a form element nobody has added yet.
+
+## 34. Two real bugs found on the way — the chat did not repaint either end
+
+Neither side's screen was told when a line arrived:
+
+- **`LobbyHost.say()`** wrote to the store and sent to every guest, and
+  never called its watchers — so the **host** saw nothing until something
+  else happened to repaint.
+- **`LobbyPeer`'s `chatLine` branch** called `addChat` without `emit()`, so
+  a **guest** saw nothing either.
+
+This is the *same bug* as "the host lobby doesn't update" from the first
+pass (§5), one message type along: `broadcast` told the watchers, and the
+two paths that do not broadcast told nobody. `notify()` is now its own
+method and `broadcast()` calls it, so the next path that changes something
+without changing the table has one obvious thing to call.
+
+Both are pinned, and both tests would have failed before the fix.
+
+---
+
+# The sixth pass: chat identity, emoji, and being kicked
+
+## 35. A name colour, on the PROFILE
+
+`Profile.chatColor` rather than `settings.ts`, and the split is the point:
+the settings file holds preferences that never leave the machine
+(auto-pass, pacing, the debug reveal), while this is a property of the
+**person** — it travels with them and everyone at the table sees them in
+it. That is also why the same control is on the profile page and behind
+the chat's gear: **one value, two ways in**, not two settings to disagree.
+
+It rides on `join` beside the avatar, and the **host stamps it onto every
+line it relays** — never copied from the sender's own message, for exactly
+the reason `from` is not: a guest must not be able to write somebody
+else's name into the conversation, and must not be able to paint one
+either. `hello` carries it too, because a **reconnect** arrives straight at
+the session and never passes through the lobby.
+
+`<input type="color">` is the wheel. It is the platform's own picker,
+needs no dependency, and this project has exactly one.
+
+**A colour ends up in a `style` attribute**, so `colorProblem` insists on
+`#rrggbb` and the check is on the way **into the store** — one gate, rather
+than at each place that draws a line.
+
+## 36. The gate did not work, and its own test found it
+
+The first version was:
+
+```ts
+const color = line.color && !colorProblem(line.color) ? { color: line.color } : {};
+lines.push({ ...line, ...color, ... });
+```
+
+`{...line, ...{}}` **keeps whatever `line.color` held** — spreading an
+empty object removes nothing. Every bad value went straight through. It was
+still escaped on the way out, so nothing could have been injected, but the
+gate this design leans on was doing nothing at all.
+
+Caught by the test that feeds it `red" onload="alert(1)`. **A gate has to
+be asserted against the thing it exists to stop**, and the assertion that
+found it is a negative one — the same lesson this project keeps relearning
+in cards, now in the UI.
+
+## 37. Emoji
+
+A fixed grid of 32 next to Send. Not a picker library: it is one grid of
+buttons that inserts a character **at the caret** — appending would put a
+face added mid-sentence at the end — and it adds no dependency.
+
+## 38. A kick asks for a reason, and the reason reaches the person
+
+`prompt` on the host's side; **`null` is a cancelled kick, which is not the
+same as an empty reason**. It travels in the `bye` the protocol already
+had, and a `removed` screen quotes it back.
+
+Without that screen, being kicked was **indistinguishable from the
+connection dropping** — and those two deserve very different reactions
+from the player. The reason also goes into the chat and the game log,
+because it changes who is answering for a seat.
+
+## 39. "Bea Bot" is a LABEL, not a rename
+
+`SeatFace.label`, read where a mat is drawn. **A seat's name IS the
+engine's identifier for it** — every option id, the command log and every
+saved game are written in terms of it — so renaming a seat mid-game would
+invalidate all three. The suffix lives in `HostSession.botSeatNames`, which
+never reaches the engine, exactly like an avatar.
+
+Its test pins both halves: the mat shows "Bea Bot", and
+`state.seats` still contains `Bea` and does **not** contain `Bea Bot`.

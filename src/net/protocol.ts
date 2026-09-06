@@ -44,6 +44,9 @@ export interface HelloMsg {
   seat: SeatId;
   /** Display name, for the lobby. Not a game concept. */
   name?: string;
+  /** The colour their name is written in, `#rrggbb`. Re-sent here as well
+   *  as on `join` because a RECONNECT arrives straight at the session. */
+  chatColor?: string;
   /**
    * Watch rather than play. A spectator is sent the table masked to
    * NOBODY — every hand face down, including the one they might have been
@@ -85,6 +88,16 @@ export interface JoinMsg {
    * 128px), so it cannot be used to push a large payload at the host.
    */
   avatar?: string;
+  /**
+   * The colour this player's name is written in, `#rrggbb`.
+   *
+   * It arrives with the join for the same reason the avatar does: it is a
+   * property of the PERSON, and the host stamps it onto every line it
+   * relays so everybody at the table sees them the same way. The host
+   * validates it — a peer's message is data, and this one ends up in a
+   * `style` attribute.
+   */
+  chatColor?: string;
 }
 
 /** "This is the deck I am bringing." Re-sent freely: the lobby revalidates
@@ -228,6 +241,9 @@ export interface ChatLineMsg {
   at: number;
   /** A join, a leave, a bot taking over — nobody typed it. */
   system?: boolean;
+  /** The sender's name colour, `#rrggbb`. Stamped by the host from what it
+   *  knows about that player, never copied from their own message. */
+  color?: string;
 }
 
 export type HostMessage =

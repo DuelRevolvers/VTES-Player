@@ -971,6 +971,40 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 
 /* --- moderation --------------------------------------------------------- */
 
+/* --- chat settings and emoji -------------------------------------------- */
+
+.chatgear {
+  float: right; background: none; border: none; cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 0 2px; color: var(--dim);
+}
+.chatgear:hover { color: var(--gold); }
+.chatsettings {
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 8px 10px; margin: 6px 0; background: var(--field);
+}
+.chatsettings .setrow { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+/* A colour input is a swatch, not a text box: give it a real size, or
+   browsers draw it as a thin sliver. */
+.chatsettings input[type="color"], .shell input[type="color"] {
+  width: 46px; height: 26px; padding: 1px; cursor: pointer;
+}
+/* A grid, so the faces line up rather than reflowing per row width. */
+.emojipad {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  padding: 6px; margin: 4px 0;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--field);
+}
+.emojipad .emoji {
+  background: none; border: none; cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 3px 0; border-radius: 3px;
+}
+.emojipad .emoji:hover { background: var(--line); }
+/* The host's own words, quoted back to a player who was removed. */
+.quoted {
+  border-left: 3px solid var(--blood); padding-left: 10px;
+  font-size: 13px; line-height: 1.5;
+}
+
 /* One row per seat: name, what kind of player, the AI box, and the two
    things that can be done to a person. Fixed columns so the buttons line
    up down the panel rather than tracking each name's length. */

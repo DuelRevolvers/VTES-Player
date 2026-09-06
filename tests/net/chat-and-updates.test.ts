@@ -262,3 +262,171 @@ describe("moderation, which only the host has", () => {
     expect(chatLines().some((l) => l.system && l.text.includes("removed"))).toBe(true);
   });
 });
+
+/**
+ * OWNER REPORT 2026-09-06: "when a player types in the lobby chat, it
+ * starts the game, and the online player is still in the lobby."
+ *
+ * The second half is the one this file can prove. A host with a live room
+ * must never start a PRIVATE game — a guest would be left waiting in a
+ * lobby for a game that had already been dealt without them.
+ */
+describe("a chat line does not start anything", () => {
+  it("a guest saying something leaves the game unstarted", async () => {
+    clearChat();
+    const table = hostingTable(1);
+    let started = 0;
+    const host = new LobbyHost("ABCDEF", table, () => started++);
+    const { host: h, peer: p } = loopback();
+    host.accept(h);
+    let peerStarted = 0;
+    const peer = new LobbyPeer(p, "Bea", () => peerStarted++);
+    await settle();
+
+    peer.say("hello");
+    await settle();
+    expect(started).toBe(0);
+    expect(peerStarted).toBe(0);
+    // …and the message did arrive, or the assertion above proves nothing.
+    expect(chatLines().some((l) => l.text === "hello")).toBe(true);
+  });
+
+  it("tells the HOST's own screen about a chat line, not only the guests", async () => {
+    // The same omission as "the host lobby doesn't update", one message
+    // type along: `say` reached the store and every guest, and never the
+    // screen that had to draw it.
+    clearChat();
+    const table = hostingTable(1);
+    const host = new LobbyHost("ABCDEF", table, () => {});
+    const { host: h, peer: p } = loopback();
+    host.accept(h);
+    new LobbyPeer(p, "Bea", () => {});
+    await settle();
+
+    let changes = 0;
+    host.onChanged(() => changes++);
+    host.say("evening", "Aaron");
+    expect(changes).toBeGreaterThan(0);
+  });
+
+  it("tells a GUEST's screen about a chat line", async () => {
+    clearChat();
+    const table = hostingTable(1);
+    const host = new LobbyHost("ABCDEF", table, () => {});
+    const { host: h, peer: p } = loopback();
+    host.accept(h);
+    const peer = new LobbyPeer(p, "Bea", () => {});
+    await settle();
+
+    let changes = 0;
+    peer.onChanged(() => changes++);
+    host.say("evening", "Aaron");
+    await settle();
+    expect(changes).toBeGreaterThan(0);
+    expect(chatLines().some((l) => l.text === "evening")).toBe(true);
+  });
+});
+
+/**
+ * A player's name colour (owner request 2026-09-06).
+ *
+ * It lives on the PROFILE, travels with the join, and is stamped by the
+ * HOST onto every line it relays — never copied from the sender's own
+ * message, for the same reason `from` is not: a guest must not be able to
+ * write somebody else's name into the conversation, or paint one.
+ */
+describe("chat name colours", () => {
+  it("carries a guest's colour from their join to everyone's line", async () => {
+    clearChat();
+    const table = hostingTable(1);
+    const host = new LobbyHost("ABCDEF", table, () => {});
+    const { host: h, peer: p } = loopback();
+    host.accept(h);
+    new LobbyPeer(p, "Bea", () => {}, false, null, "#3366ff");
+    await settle();
+
+    // The host relays it; the store is what both ends read.
+    const before = chatLines().length;
+    // Send as the guest by driving the channel the way LobbyPeer does.
+    p.send({ type: "chat", text: "hello" });
+    await settle();
+    const line = chatLines()[before];
+    expect(line?.text).toBe("hello");
+    expect(line?.color).toBe("#3366ff");
+  });
+
+  it("refuses a colour that is not #rrggbb", async () => {
+    clearChat();
+    const table = hostingTable(1);
+    const host = new LobbyHost("ABCDEF", table, () => {});
+    const { host: h, peer: p } = loopback();
+    host.accept(h);
+    // A colour ends up in a style attribute, so anything else is dropped
+    // rather than escaped — and the line still arrives, in the default.
+    new LobbyPeer(p, "Bea", () => {}, false, null, "red; background:url(x)");
+    await settle();
+    p.send({ type: "chat", text: "hi" });
+    await settle();
+    const line = chatLines().find((l) => l.text === "hi");
+    expect(line).toBeDefined();
+    expect(line?.color).toBeUndefined();
+  });
+});
+
+/**
+ * Being kicked, and being told why (owner request). The reason is the
+ * host's own words, carried in the `bye` the protocol already had.
+ */
+describe("a kick carries its reason", () => {
+  /** A started online game with Bea on a real seat — the same fixture the
+   *  moderation block uses, kept local so neither can quietly change the
+   *  other's board. */
+  async function startedOnline(): Promise<{
+    session: import("../../src/net/host.ts").HostSession;
+    transport: LocalTransport;
+    peerSide: ReturnType<typeof loopback>["peer"];
+  }> {
+    clearChat();
+    const table = hostingTable(1);
+    let out: { t: LocalTransport; s: unknown } | null = null;
+    const host = new LobbyHost("ABCDEF", table, (t, s) => (out = { t, s }));
+    const { host: hostSide, peer: peerSide } = loopback();
+    host.accept(hostSide);
+    const peer = new LobbyPeer(peerSide, "Bea", () => {});
+    await settle();
+    peer.setDeck(deckFor(1));
+    for (const s of host.seats) if (s.deck === null) s.deck = deckFor(3);
+    await settle();
+    host.start();
+    await settle();
+    peerSide.send({ type: "hello", version: PROTOCOL_VERSION, seat: "Bea", name: "Bea" });
+    await settle();
+    const got = out as unknown as { t: LocalTransport; s: never };
+    return { session: got.s, transport: got.t, peerSide };
+  }
+
+  it("sends the host's reason to the person it is about", async () => {
+    const { transport, session, peerSide } = await startedOnline();
+    let bye: string | null = null;
+    peerSide.onMessage((msg) => {
+      if (msg.type === "bye") bye = msg.reason;
+    });
+    session.kick("Bea", "table talk");
+    await settle();
+    expect(bye).toBe("table talk");
+    // …and the seat is a bot's now, so the game plays on.
+    expect(Object.keys(transport.agentSeats)).toContain("Bea");
+  });
+
+  it("marks the seat as a bot's — for DISPLAY only", async () => {
+    const { transport, session } = await startedOnline();
+    session.kick("Bea", "afk");
+    await settle();
+    // The label is what a mat draws. The seat ID is untouched, because it
+    // is the engine's identifier: renaming it would invalidate every
+    // option id, the command log and every saved game.
+    expect(session.botSeatNames["Bea"]).toBe("Bea Bot");
+    expect(transport.view().seats.map((s) => s.id)).toContain("Bea");
+    expect(transport.view().seats.map((s) => s.id)).not.toContain("Bea Bot");
+  });
+});
