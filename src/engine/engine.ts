@@ -43,6 +43,7 @@ import {
   preyOf,
   sequencingOrder,
   startingLifeBonus,
+  titleContestKey,
   unlockSuppressed,
 } from "./derived.ts";
 import { rngInt } from "./rng.ts";
@@ -67,6 +68,7 @@ import type {
   ChoiceFrame,
   CombatFrame,
   CombatRoundDamageRider,
+  ContestedCard,
   DisciplineLevel,
   Frame,
   GameEvent,
@@ -120,6 +122,12 @@ const HAND_SIZE_DOWN = "handSizeDown";
  *  ENGINE-owned choice key like the discard-down — it is a rule of the
  *  game, and no card is involved in it at all. */
 const DIABLERIE_DISCIPLINE = "diablerieDiscipline";
+/** Paying for, or yielding, a contest during your unlock phase (p. 17-18).
+ *  Engine-owned for the same reason again: it is a rule of the game, and
+ *  a contest can be over a card whose handler knows nothing about it — or
+ *  over a title, where there is no card to ask at all.
+ *  docs/contested-design.md §4 */
+const CONTEST = "contest";
 
 /** "<cardId>/<blood>/<pool>[,…]" — the payment split a play option carried
  *  (docs/cost-sources-design.md §4). */
@@ -291,6 +299,15 @@ export class VtesEngine implements EngineOps {
   changeMinionControl(minionId: MinionId, to: SeatId): void {
     const m = getMinion(this.state, minionId);
     if (m.controller === to) return;
+    // "You cannot voluntarily contest cards with yourself (IF SOME EFFECT
+    // WOULD FORCE YOU TO CONTEST A CARD WITH YOURSELF, THEN YOU SIMPLY
+    // BURN THE INCOMING COPY of the unique card)" (p. 17). Stealing is
+    // the only effect that can force it, so this is where it belongs —
+    // the sweep in settle cannot tell which copy is the incoming one.
+    if (this.uniqueMinion(m) && getSeat(this.state, to).minions.some((x) => x.name === m.name)) {
+      this.burnMinion(minionId);
+      return;
+    }
     this.emit({
       type: "ControlChanged",
       target: "minion",
@@ -318,6 +335,21 @@ export class VtesEngine implements EngineOps {
   changePermanentControl(cardId: CardInstanceId, to: SeatId): void {
     const from = this.controllerOfEntry(cardId);
     if (from === null || from === to) return;
+    // The same p. 17 rule as for a stolen minion: a forced self-contest
+    // burns the incoming copy rather than starting one.
+    const moving = this.findEntry(cardId);
+    if (moving && this.registry[moving.card.name]?.isUnique === true) {
+      const taker = getSeat(this.state, to);
+      const already =
+        taker.permanents.some((p) => p.card.name === moving.card.name) ||
+        taker.minions.some((m) =>
+          m.attached.some((p) => p.card.id !== m.id && p.card.name === moving.card.name),
+        );
+      if (already) {
+        this.burnPermanent(cardId);
+        return;
+      }
+    }
     this.emit({ type: "ControlChanged", target: "permanent", id: cardId, from, to });
     // "…or its controller changes" (The Rack): the new controller's copy
     // of the card text runs now.
@@ -712,6 +744,92 @@ export class VtesEngine implements EngineOps {
         }
         break;
       }
+      // -- contests (p. 17-18) ---------------------------------------------
+      case "ContestBegan": {
+        // "Turned face down and are OUT OF PLAY": the card leaves its
+        // zone entirely and parks, whole, in the contested pile. Whole,
+        // because a contest ends by the card coming back with everything
+        // on it — or by being yielded, when "any cards or counters
+        // stacked on the yielded card are also burned".
+        const seat = getSeat(this.state, ev.seat);
+        const held: ContestedCard = { card: { id: ev.cardId, name: ev.name } };
+        if (ev.minion !== undefined) {
+          const m = seat.minions.find((x) => x.id === ev.minion);
+          if (!m) break;
+          held.minion = m;
+          seat.minions = seat.minions.filter((x) => x.id !== ev.minion);
+        } else {
+          const found = this.allEntries().find((e) => e.entry.card.id === ev.cardId);
+          if (!found) break;
+          held.permanent = found.entry;
+          if (ev.bearer !== undefined) held.bearer = ev.bearer;
+          for (const s of this.state.seats) {
+            s.permanents = s.permanents.filter((p) => p.card.id !== ev.cardId);
+            for (const m of s.minions) {
+              m.attached = m.attached.filter((p) => p.card.id !== ev.cardId);
+            }
+          }
+        }
+        (seat.contested ??= []).push(held);
+        break;
+      }
+      case "ContestPaid":
+        break; // the pool moves via PoolBurned; this is the log's record
+      case "ContestYielded": {
+        // "A yielded card is burned." The pile entry goes; the card is
+        // filed in its OWNER's ash heap (p. 16) by the burn below.
+        const seat = getSeat(this.state, ev.seat);
+        seat.contested = (seat.contested ?? []).filter((c) => c.card.id !== ev.cardId);
+        break;
+      }
+      case "ContestWon": {
+        // "The card is UNLOCKED and turned face up during your next
+        // unlock phase, ending the contest."
+        const seat = getSeat(this.state, ev.seat);
+        const held = (seat.contested ?? []).find((c) => c.card.id === ev.cardId);
+        if (!held) break;
+        seat.contested = (seat.contested ?? []).filter((c) => c.card.id !== ev.cardId);
+        if (held.minion) {
+          held.minion.locked = false;
+          held.minion.controller = ev.seat;
+          seat.minions.push(held.minion);
+        } else if (held.permanent) {
+          held.permanent.locked = false;
+          const bearer =
+            held.bearer === undefined ? null : findMinion(this.state, held.bearer);
+          if (held.bearer === undefined) {
+            seat.permanents.push(held.permanent);
+          } else if (bearer) {
+            bearer.attached.push(held.permanent);
+          } else {
+            // The bearer is gone, so an attached card has nowhere to
+            // return to and is burned (§5) — a reading, not a citation.
+            this.toAshHeap(held.permanent.owner ?? ev.seat, held.permanent.card);
+          }
+        }
+        break;
+      }
+      case "TitleContested": {
+        // "Treated as if they have no title" — the claim parks on the
+        // minion and `title` goes null, so every site that reads a title
+        // is right with no change of its own.
+        const m = findMinion(this.state, ev.minion);
+        if (!m) break;
+        m.titleContest = ev.city === undefined ? { title: ev.title } : { title: ev.title, city: ev.city };
+        m.title = null;
+        break;
+      }
+      case "TitleYielded": {
+        // "…will now have no title and loses the benefits of the title
+        // for the remainder of the game." The city goes too, or the
+        // vampire would re-enter the contest on the next sweep.
+        const m = findMinion(this.state, ev.minion);
+        if (!m) break;
+        delete m.titleContest;
+        delete m.titleCity;
+        m.title = null;
+        break;
+      }
       case "CardBurned": {
         // Every burn of a card that is NOT in play (an action card at
         // resolution, a held-aside card, a burnt political vote card).
@@ -854,6 +972,11 @@ export class VtesEngine implements EngineOps {
           bledThisTurn: false,
           calledPoliticalThisTurn: false,
           title: null,
+          // "It becomes a 1-capacity (NON-UNIQUE) vampire" — the only
+          // vampires in the game that never contest, which matters now
+          // that "all crypt cards represent unique minions" (p. 17) is
+          // modelled. Both cards print the word.
+          nonUnique: true,
           clan: ev.clan,
           sect: ev.sect,
           cannotActThisTurn: false,
@@ -1034,6 +1157,13 @@ export class VtesEngine implements EngineOps {
       // invariant holds whenever it becomes false, whichever side moved.
       if (this.drainOverCapacity()) continue;
 
+      // "If more than one unique card with the same name is brought into
+      // play … all of the contested cards are turned face down and are
+      // out of play" (p. 17), and the same for a unique title (p. 18).
+      // A sweep for the same reason as the two above: it holds whenever
+      // it becomes false, however the card got there.
+      if (this.settleContests()) continue;
+
       // A question with no legal answer is no question at all: pop it
       // rather than offer an empty decision (docs/choice-frames-design.md
       // — an optional choice always has its Decline, so only a mandatory
@@ -1167,6 +1297,233 @@ export class VtesEngine implements EngineOps {
           return true;
         }
       }
+    }
+    return false;
+  }
+
+  /** Is this minion a unique card, and so contestable (p. 17)? */
+  private uniqueMinion(m: MinionState): boolean {
+    if (m.nonUnique === true) return false;
+    // "In addition, ALL crypt cards represent unique minions."
+    if (m.kind === "vampire") return true;
+    // An ally is an ordinary library card: unique only if it says so. Its
+    // own card rides in as the SELF-attached entry, which is where the
+    // printed type and the "Unique." line live.
+    const self = m.attached.find((e) => e.card.id === m.id);
+    return self !== undefined && this.registry[self.card.name]?.isUnique === true;
+  }
+
+  /**
+   * Start any contest that the board now demands (p. 17-18).
+   *
+   * A SWEEP, not a hook, and deliberately so. A unique card reaches play
+   * down six different paths (a master, an equip action, a recruit, an
+   * influence-out, a control change, a card that puts itself in play) and
+   * a title arrives down three more — instrumenting each is how
+   * `onAnyUnlock` missed attached cards, `onBleedSuccess` missed them
+   * again and `onActionAnnounced` fired a step early. This asks the board
+   * instead: the invariant holds whenever it becomes false, whichever
+   * side moved, which is the reading `drainOverCapacity` above already
+   * takes. Returns true if it changed anything, so settle loops.
+   */
+  private settleContests(): boolean {
+    interface Claim {
+      seat: SeatId;
+      /** Already face down: counts as a claimant, but has nothing to move. */
+      held: boolean;
+      minion?: MinionState;
+      entry?: PermanentInPlay;
+      bearer?: MinionId;
+    }
+    const claims = new Map<string, Claim[]>();
+    const add = (name: string, c: Claim): void => {
+      const list = claims.get(name) ?? [];
+      list.push(c);
+      claims.set(name, list);
+    };
+    for (const s of this.state.seats) {
+      if (s.ousted) continue;
+      for (const c of s.contested ?? []) add(c.card.name, { seat: s.id, held: true });
+      for (const p of s.permanents) {
+        if (this.registry[p.card.name]?.isUnique === true) {
+          // "CONTROL of the card is being contested" (p. 17), so the
+          // claimant is the controller — which is not always the seat
+          // holding the card, since a master played on another
+          // Methuselah's minion stays yours (p. 16).
+          add(p.card.name, { seat: p.controller ?? s.id, held: false, entry: p });
+        }
+      }
+      for (const m of s.minions) {
+        if (this.uniqueMinion(m)) add(m.name, { seat: m.controller, held: false, minion: m });
+        for (const p of m.attached) {
+          // The minion's own card is the minion, already counted; count
+          // it twice and every unique ally would contest with itself.
+          if (p.card.id === m.id) continue;
+          if (this.registry[p.card.name]?.isUnique === true) {
+            add(p.card.name, {
+              seat: p.controller ?? m.controller,
+              held: false,
+              entry: p,
+              bearer: m.id,
+            });
+          }
+        }
+      }
+    }
+
+    for (const [name, list] of claims) {
+      // "If MORE THAN ONE unique card with the same name is brought into
+      // play" — by more than one Methuselah. A seat cannot contest with
+      // itself (p. 17's deck-construction note), and the one way that can
+      // be forced is handled where control changes.
+      if (new Set(list.map((c) => c.seat)).size < 2) continue;
+      const toMove = list.filter((c) => !c.held);
+      if (toMove.length === 0) continue; // already all face down: stable
+      for (const c of toMove) {
+        this.emit({
+          type: "ContestBegan",
+          seat: c.seat,
+          cardId: c.minion ? c.minion.id : c.entry!.card.id,
+          name,
+          ...(c.minion ? { minion: c.minion.id } : {}),
+          ...(c.bearer !== undefined ? { bearer: c.bearer } : {}),
+        });
+      }
+      return true;
+    }
+
+    // Titles (p. 18). Same shape, keyed by what makes the title unique.
+    const byTitle = new Map<string, MinionState[]>();
+    for (const s of this.state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        if (m.kind !== "vampire") continue;
+        const key = titleContestKey(m);
+        if (key === null) continue;
+        byTitle.set(key, [...(byTitle.get(key) ?? []), m]);
+      }
+    }
+    for (const rivals of byTitle.values()) {
+      if (rivals.length < 2) continue;
+      // Unlike cards, a title contest CAN be within one Methuselah: p. 17
+      // forbids contesting a card with yourself and p. 18 says no such
+      // thing about titles, so two of your own vampires claiming one city
+      // both lose the benefit until one yields.
+      const fresh = rivals.filter((m) => m.titleContest === undefined && m.title !== null);
+      if (fresh.length === 0) continue;
+      for (const m of fresh) {
+        this.emit({
+          type: "TitleContested",
+          minion: m.id,
+          title: m.title!,
+          ...(m.titleCity !== undefined ? { city: m.titleCity } : {}),
+        });
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /** Every seat holding a copy of this contested name, in play or held. */
+  private contestClaimants(name: string): Set<SeatId> {
+    const out = new Set<SeatId>();
+    for (const s of this.state.seats) {
+      if (s.ousted) continue;
+      if ((s.contested ?? []).some((c) => c.card.name === name)) out.add(s.id);
+      for (const p of s.permanents) {
+        if (p.card.name === name) out.add(p.controller ?? s.id);
+      }
+      for (const m of s.minions) {
+        if (m.name === name && this.uniqueMinion(m)) out.add(m.controller);
+        for (const p of m.attached) {
+          if (p.card.id !== m.id && p.card.name === name) out.add(p.controller ?? m.controller);
+        }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * This seat's half of a contest, during their unlock phase (p. 17-18):
+   * collect anything won, force the yields the rules force, and ask about
+   * the rest one at a time.
+   *
+   * Returns true while there is more to do, so `settleTurn` keeps coming
+   * back — the repeated-ChoiceFrame shape `unlockToll` already uses,
+   * because the answers change the board the next question is asked
+   * against.
+   */
+  private settleUnlockContests(tf: TurnFrame): boolean {
+    const seat = getSeat(this.state, tf.seat);
+    const handled = (tf.contestsHandled ??= []);
+
+    // 1. "If all other cards contesting your unique card are yielded,
+    //    then the card is unlocked and turned face up during your NEXT
+    //    unlock phase, ending the contest."
+    for (const held of [...(seat.contested ?? [])]) {
+      if (this.contestClaimants(held.card.name).size > 1) continue;
+      this.emit({
+        type: "ContestWon",
+        seat: seat.id,
+        cardId: held.card.id,
+        name: held.card.name,
+      });
+      return true;
+    }
+
+    // 2. The same for a title: "your vampire acquires the title during
+    //    your next unlock phase, ending the contest."
+    for (const m of seat.minions) {
+      const claim = m.titleContest;
+      if (!claim) continue;
+      const key = titleContestKey(m);
+      const rivals = this.state.seats
+        .filter((s) => !s.ousted)
+        .flatMap((s) => s.minions)
+        .filter((x) => x.id !== m.id && titleContestKey(x) === key);
+      if (rivals.length > 0) continue;
+      this.emit({ type: "TitleGranted", minion: m.id, title: claim.title });
+      delete m.titleContest;
+      return true;
+    }
+
+    // 3. "Only READY vampires can contest titles. Vampires in torpor must
+    //    yield during the unlock phase" — and a vampire with no blood is
+    //    "forced to yield". Neither is a question.
+    for (const m of seat.minions) {
+      const claim = m.titleContest;
+      if (!claim || handled.includes(m.id)) continue;
+      if (m.inTorpor || m.blood < 1) {
+        handled.push(m.id);
+        this.emit({ type: "TitleYielded", minion: m.id, title: claim.title });
+        return true;
+      }
+    }
+
+    // 4. Everything left is a real choice: pay, or yield.
+    for (const held of seat.contested ?? []) {
+      if (handled.includes(held.card.id)) continue;
+      handled.push(held.card.id);
+      this.raiseChoice({
+        seat: seat.id,
+        cardName: CONTEST,
+        cardId: held.card.id,
+        key: CONTEST,
+        params: { what: "card", id: held.card.id },
+      });
+      return true;
+    }
+    for (const m of seat.minions) {
+      if (!m.titleContest || handled.includes(m.id)) continue;
+      handled.push(m.id);
+      this.raiseChoice({
+        seat: seat.id,
+        cardName: CONTEST,
+        cardId: m.id,
+        key: CONTEST,
+        params: { what: "title", id: m.id },
+      });
+      return true;
     }
     return false;
   }
@@ -1558,6 +1915,15 @@ export class VtesEngine implements EngineOps {
         for (let i = 0; i < seat.delayedDraws; i++) this.drawToReplace(seat.id);
         seat.delayedDraws = 0;
         tf.unlockDone = true;
+        return true;
+      }
+      // Contests are settled in the unlock phase (p. 17-18), after the
+      // cards have unlocked — "any cards or effects that require or allow
+      // you to do something during your unlock phase take effect AFTER
+      // you have unlocked your cards" (p. 17).
+      if (!tf.contestsDone) {
+        if (this.settleUnlockContests(tf)) return true;
+        tf.contestsDone = true;
         return true;
       }
       const edgeNeeded = this.state.edge === tf.seat && !tf.edgeDone;
@@ -8330,6 +8696,55 @@ export class VtesEngine implements EngineOps {
         params: { card: c.id },
       }));
     }
+    if (frame.key === CONTEST) {
+      const what = frame.params["what"];
+      const id = frame.params["id"] ?? "";
+      const out: LegalOption[] = [];
+      if (what === "card") {
+        const held = (getSeat(this.state, frame.seat).contested ?? []).find(
+          (c) => c.card.id === id,
+        );
+        if (!held) return [];
+        // "The cost to contest a card is 1 pool." A Methuselah who cannot
+        // find it is not offered it — and is not forced to yield either;
+        // p. 17 names no such rule, so the yield below is their only move.
+        if (getSeat(this.state, frame.seat).pool >= 1) {
+          out.push({
+            id: `choice:${CONTEST}:${id}:${CONTEST}:pay`,
+            kind: "answerChoice" as const,
+            label: `Pay 1 pool to keep contesting ${held.card.name}`,
+            params: { answer: "pay" },
+          });
+        }
+        out.push({
+          id: `choice:${CONTEST}:${id}:${CONTEST}:yield`,
+          kind: "answerChoice" as const,
+          label: `Yield ${held.card.name} (it is burned)`,
+          params: { answer: "yield" },
+        });
+        return out;
+      }
+      const m = findMinion(this.state, id);
+      if (!m?.titleContest) return [];
+      // "The cost to contest a title is 1 blood, which is PAID BY THE
+      // VAMPIRE" — not by their Methuselah, which is why an empty vampire
+      // is forced to yield (handled before this frame is ever raised).
+      if (m.blood >= 1) {
+        out.push({
+          id: `choice:${CONTEST}:${id}:${CONTEST}:pay`,
+          kind: "answerChoice" as const,
+          label: `${m.name} burns 1 blood to keep contesting ${m.titleContest.title}`,
+          params: { answer: "pay" },
+        });
+      }
+      out.push({
+        id: `choice:${CONTEST}:${id}:${CONTEST}:yield`,
+        kind: "answerChoice" as const,
+        label: `${m.name} yields the title of ${m.titleContest.title}`,
+        params: { answer: "yield" },
+      });
+      return out;
+    }
     // Diablerie's older-victim Discipline gain (p. 34) — engine-owned for
     // the same reason as the discard-down: it is a RULE, not a card, and
     // no card is involved in it at all.
@@ -8424,6 +8839,54 @@ export class VtesEngine implements EngineOps {
       // Still over? Ask again. The stack is clean: `choose()` pops before
       // calling this, for exactly this loop.
       this.reconcileHandSizeDown(frame.seat, frame.cardName, frame.cardId);
+      return;
+    }
+    if (frame.key === CONTEST) {
+      const yielding = option.params["answer"] === "yield";
+      const id = frame.params["id"] ?? "";
+      if (frame.params["what"] === "card") {
+        const seat = getSeat(this.state, frame.seat);
+        const held = (seat.contested ?? []).find((c) => c.card.id === id);
+        if (!held) return;
+        if (!yielding) {
+          this.emit({ type: "PoolBurned", seat: frame.seat, amount: 1 });
+          this.emit({
+            type: "ContestPaid",
+            seat: frame.seat,
+            cardId: held.card.id,
+            name: held.card.name,
+          });
+          return;
+        }
+        // "A yielded card is burned. ANY CARDS OR COUNTERS STACKED ON THE
+        // YIELDED CARD ARE ALSO BURNED" — which is what keeping the whole
+        // object in the pile makes possible.
+        this.emit({
+          type: "ContestYielded",
+          seat: frame.seat,
+          cardId: held.card.id,
+          name: held.card.name,
+        });
+        const stacked = held.minion ? held.minion.attached : [];
+        for (const p of stacked) {
+          if (p.card.id === held.card.id) continue;
+          this.toAshHeap(p.owner ?? frame.seat, p.card);
+        }
+        this.emit({
+          type: "CardBurned",
+          cardId: held.card.id,
+          name: held.card.name,
+          seat: held.permanent?.owner ?? frame.seat,
+        });
+        return;
+      }
+      const m = findMinion(this.state, id);
+      if (!m?.titleContest) return;
+      if (!yielding) {
+        this.emit({ type: "BloodBurned", minion: m.id, amount: 1 });
+        return;
+      }
+      this.emit({ type: "TitleYielded", minion: m.id, title: m.titleContest.title });
       return;
     }
     if (frame.key === DIABLERIE_DISCIPLINE) {

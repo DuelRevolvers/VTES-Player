@@ -43,6 +43,9 @@ function screen(t: LocalTransport, over: Partial<RenderInput> = {}): string {
     localSeat: null,
     ashOpen: null,
     canLeave: false,
+    canChat: false,
+    canModerate: false,
+    moderation: null,
     ...over,
   });
 }
@@ -200,5 +203,60 @@ describe("the strip across the top of the table", () => {
       .filter((m) => !m.inTorpor);
     expect(others.length).toBeGreaterThan(0);
     for (const m of others) expect(html).toContain(m.name);
+  });
+});
+
+describe("sorting your hand while somebody else decides", () => {
+  it("keeps every hand card draggable off-turn", () => {
+    // Owner-reported as "players should be able to rearrange the cards in
+    // their hands during their off-turns". They already could — the drag
+    // handlers are wired whoever is deciding, because hand ORDER is a
+    // client preference that never reaches the command log. What was
+    // missing was any sign of it: the strip showed a default cursor, so
+    // nobody tried. Pinned here so a future change to the watching state
+    // cannot quietly take the drag handles away.
+    const t = new LocalTransport({ setup });
+    const other = seats.find((s) => s !== t.decision()?.seat)!;
+    const html = screen(t, { localSeat: other });
+    // Watching somebody else's decision...
+    expect(html).toContain(`class="hand watching"`);
+    // ...and every card in the strip is still a drag source.
+    const slots = html.split(`class="handslot`).slice(1);
+    expect(slots.length).toBeGreaterThan(0);
+    for (const s of slots) expect(s.slice(0, 200)).toContain(`draggable="true"`);
+    // The control: none of them is lit to be PLAYED.
+    expect(html).not.toContain(`class="handslot playable`);
+  });
+});
+
+describe("the side column runs to the bottom", () => {
+  it("puts the hand and action bar INSIDE the left column", () => {
+    // Owner request: "extend the Table Chat down to the bottom, pushing
+    // aside the bar for player hand and action bar." That is a structural
+    // change, not a CSS one — the bottom bar has to be a sibling of the
+    // table inside a left column, or no amount of styling will keep it
+    // out from under the side.
+    const t = new LocalTransport({ setup });
+    const html = screen(t, { canChat: true, canModerate: false });
+    const lower = html.split(`<div class="lower">`)[1] ?? "";
+    const left = lower.split(`<aside class="side">`)[0] ?? "";
+    expect(left).toContain(`<div class="leftcol">`);
+    expect(left).toContain(`<div class="bottom">`);
+    // ...and the chat is on the other side of that boundary.
+    expect(left).not.toContain("Table chat");
+    expect(lower).toContain("Table chat");
+  });
+
+  it("shows the moderation button to the HOST only", () => {
+    // A guest's client has nothing to kick anybody with, so the button is
+    // not drawn rather than drawn and refused.
+    const t = new LocalTransport({ setup });
+    expect(screen(t, { canChat: true, canModerate: true })).toContain(`id="mod-btn"`);
+    expect(screen(t, { canChat: true, canModerate: false })).not.toContain(`id="mod-btn"`);
+  });
+
+  it("draws no chat at all when there is nobody to talk to", () => {
+    const t = new LocalTransport({ setup });
+    expect(screen(t)).not.toContain("Table chat");
   });
 });

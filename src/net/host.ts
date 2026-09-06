@@ -23,7 +23,10 @@
  * by the same code that validates a click.
  */
 
+import { HeuristicAgent } from "../ai/heuristic.ts";
 import type { SeatId } from "../engine/index.ts";
+import { addChat } from "../ui/chat.ts";
+import { seatSeed } from "../ui/settings.ts";
 import type { LocalTransport } from "../ui/transport.ts";
 import type { ChooseMsg, HelloMsg, HostChannel, PeerMessage } from "./protocol.ts";
 import { PROTOCOL_VERSION } from "./protocol.ts";
@@ -78,6 +81,91 @@ export class HostSession {
     if (this.closed) return;
     if (msg.type === "hello") this.onHello(channel, msg, off);
     else if (msg.type === "choose") this.onChoose(channel, msg);
+    // The conversation carries on into the game on the same channel: the
+    // host is still the only relay, so the order is still one order
+    // (src/ui/chat.ts).
+    else if (msg.type === "chat") {
+      const who = [...this.peers.values()].find((p) => p.channel === channel);
+      // A chat ban is enforced HERE, at the relay, not on the sender's
+      // client — a banned player's browser has no reason to cooperate.
+      // They are not told, and nothing of theirs reaches anybody.
+      if (who && this.chatBanned.has(who.seat)) return;
+      this.say(msg.text, who?.name ?? "someone");
+    }
+    // A peer that says goodbye mid-game leaves its seat to a bot rather
+    // than to nobody — see `onLeave`.
+    else if (msg.type === "leave") this.onLeave(channel);
+  }
+
+  /** Seats whose chat the host is dropping. Not game state: it is about
+   *  the room, never the table, and nothing here reaches the engine. */
+  private readonly chatBanned = new Set<SeatId>();
+
+  get bannedSeats(): SeatId[] {
+    return [...this.chatBanned];
+  }
+
+  setChatBan(seat: SeatId, banned: boolean): void {
+    if (banned) this.chatBanned.add(seat);
+    else this.chatBanned.delete(seat);
+    this.say(
+      banned ? `${seat} can no longer use the chat.` : `${seat} can use the chat again.`,
+      "",
+      true,
+    );
+  }
+
+  /**
+   * Remove a player. Their seat is handed to a bot, exactly as if they had
+   * left of their own accord — the table plays on.
+   */
+  kick(seat: SeatId, reason = "the host removed you from this table"): void {
+    const peer = this.peers.get(seat);
+    if (!peer) return;
+    if (peer.channel.open) {
+      peer.channel.send({ type: "bye", reason });
+      peer.channel.close();
+    }
+    this.takeOver(peer.seat, peer.name, "was removed by the host");
+  }
+
+  /** Relay a chat line to every peer, and to the host's own screen. */
+  say(text: string, from: string, system = false): void {
+    const at = Date.now();
+    addChat({ from, text, at, ...(system ? { system: true } : {}) });
+    const line = { type: "chatLine" as const, from, text, at, ...(system ? { system: true } : {}) };
+    for (const p of this.peers.values()) if (p.channel.open) p.channel.send(line);
+    for (const c of this.spectators) if (c.open) c.send(line);
+  }
+
+  /**
+   * A player leaves mid-game: a BOT takes the seat (owner request).
+   *
+   * The alternative is a seat nobody can answer, which stalls the table
+   * for everyone else — a game of VTES cannot skip a Methuselah's turn.
+   * A bot is the same `Agent` the seat could have been played by from the
+   * start, so nothing about the game changes shape; `stepAutomatic` picks
+   * it up on the next decision.
+   *
+   * It is announced in the chat AND in the game log, because it changes
+   * who is answering for that seat and every other player is entitled to
+   * know that the person is gone.
+   */
+  private onLeave(channel: HostChannel): void {
+    const peer = [...this.peers.values()].find((p) => p.channel === channel);
+    if (!peer) return;
+    peer.off();
+    this.takeOver(peer.seat, peer.name, "left");
+  }
+
+  /** One place a seat changes hands, so a kick and a departure cannot
+   *  drift apart in what they leave behind. */
+  private takeOver(seat: SeatId, name: string, how: string): void {
+    this.peers.delete(seat);
+    this.chatBanned.delete(seat);
+    this.transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
+    this.transport.note(`${seat} ${how}; a bot is playing that seat now.`);
+    this.say(`${name} ${how} — a bot is playing ${seat} now.`, "", true);
   }
 
   /** How many people are watching without a seat. */

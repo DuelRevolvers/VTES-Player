@@ -367,3 +367,52 @@ export function preconDeck(set: string, name: string, seat: string): DeckList | 
   }
   return out;
 }
+
+/**
+ * A one-line play-style note for each preconstructed deck.
+ *
+ * Keyed on the deck's NAME rather than on set+name, because the New Blood
+ * starters are the same clan and the same plan as their Fifth Edition
+ * counterparts at half the size — so one line serves both, and a note
+ * that drifted between the two would be worse than none.
+ *
+ * These describe how a deck WANTS to win, in the three verbs the game
+ * actually has: bleed your prey's pool away, fight their minions, or call
+ * referendums. Written against what is in each deck rather than clan
+ * flavour; a player picking blind should be able to tell a combat deck
+ * from a vote deck without reading 60 cards.
+ */
+const PRECON_STYLE: Record<string, string> = {
+  // --- Fifth Edition ---
+  Hecata: "Steady bleed backed by blood theft — drains your prey while topping its own vampires up.",
+  Lasombra: "Stealth bleed with hard removal; slips past blockers and answers the ones it cannot.",
+  Malkavian: "Bleed and misdirection — cheap stealth, and reactions that send bleeds somewhere else.",
+  Nosferatu: "Defensive and grindy: high intercept, big blockers, and a slow squeeze on your prey.",
+  Toreador: "Votes and presence — builds a titled crypt and wins referendums while bleeding for extra.",
+  Tremere: "Blood magic control: unblockable damage, pool burn and answers to almost anything.",
+  Ventrue: "The classic vote deck — princes and justicars, political actions, and a fat bleed behind them.",
+  // --- Anarch ---
+  "Banu Haqim": "Assassins: rushes your prey's minions down and bleeds through the gap they leave.",
+  Brujah: "Aggressive Anarch beatdown — cheap vampires, rushes, and pressure from turn one.",
+  Gangrel: "Animal-backed combat with a big ready crypt; fights well and blocks better.",
+  Ministry: "Corruption and temptation — takes over minions, and bleeds hard once the way is clear.",
+  // --- Companion ---
+  Ravnos: "Trickery and swings of fortune: cheap effects, stolen resources, and a fast unpredictable bleed.",
+  Salubri: "Healing and defence — survives the fights it is dragged into, then wins on attrition.",
+  Tzimisce: "Fleshcraft and monsters: enormous combat vampires and allies that grind a table down.",
+  // --- Sabbat V5 (the four Paths) ---
+  "Path of Caine": "Sabbat scholars: blood magic, rituals and a patient bleed while the table fights.",
+  "Path of Cathari": "Indulgence and pressure — corruption counters, stealth, and a bleed that grows.",
+  // Read off the deck rather than the flavour: Govern, shadow stealth and
+  // Telepathic Misdirection say "bleed", and the wraiths are the bodies
+  // that block for it.
+  "Path of Death":
+    "Shadowed bleed with wraith allies — slips actions past blockers and blocks well in turn.",
+  "Path of Power and the Inner Voice":
+    "Sabbat politics — archbishops and cardinals calling referendums, with muscle to back them.",
+};
+
+/** The play-style line for a precon, or null if there is none written. */
+export function preconStyle(name: string): string | null {
+  return PRECON_STYLE[name] ?? null;
+}

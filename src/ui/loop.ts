@@ -17,9 +17,10 @@ import type { LegalOption } from "../engine/index.ts";
 import type { DeckDef, GameSetup } from "./decks.ts";
 import { validateDecks } from "./decks.ts";
 import { cardText } from "./cardinfo.ts";
+import { chatProblem, onChat } from "./chat.ts";
 import { DevServerSink, GameLog } from "./gamelog.ts";
 import { downloadSave, loadFromStorage, readSaveFile, saveToStorage } from "./history.ts";
-import type { SeatFace } from "./render.ts";
+import type { ModerationView, SeatFace } from "./render.ts";
 import { actionsByTableCard, orderHand, playsByCard, render } from "./render.ts";
 import type { UiSettings } from "./settings.ts";
 import { HeuristicAgent } from "../ai/heuristic.ts";
@@ -41,6 +42,24 @@ export interface TableIdentity {
   localSeat?: string | null;
   /** Called when they leave the game, if there is anywhere to go back to. */
   onLeave?: () => void;
+  /**
+   * Say something to the table, if there is a table to say it to.
+   *
+   * The panel is the lobby's, reading the same store (src/ui/chat.ts), so
+   * the conversation survives the handover. WHO relays it — a host
+   * session, a peer channel, or nobody on a private game — is the shell's
+   * business; the table is handed one function and does not ask.
+   */
+  say?: (text: string) => void;
+  /**
+   * The host's moderation surface: who is connected, and the two things
+   * that can be done about them. Absent for a guest and for a private
+   * game — a guest's client has nothing to kick anybody WITH, so the
+   * button is not drawn rather than drawn and refused.
+   */
+  moderate?: () => ModerationView;
+  kick?: (seat: string) => void;
+  setChatBan?: (seat: string, banned: boolean) => void;
 }
 
 const escapeText = (s: string): string =>
@@ -70,6 +89,8 @@ export class DebugApp {
   /** The pointer is down on a card — the hover preview stays out of the
    *  way until it comes back up. */
   private holding = false;
+  /** The moderation panel is open. View state, like the settings panel. */
+  private modOpen = false;
   private settings: UiSettings;
 
   constructor(
@@ -103,6 +124,9 @@ export class DebugApp {
     // Any state change repaints, whoever caused it — our own click today, a
     // message from the host once a peer transport exists.
     this.transport.onChanged(() => this.paint());
+    // A chat line changes nothing about the GAME, so it arrives on its own
+    // channel and has to ask for its own repaint.
+    if (this.table.say) onChat(() => this.paint());
     this.paint();
   }
 
@@ -160,6 +184,9 @@ export class DebugApp {
       localSeat: this.table.localSeat ?? null,
       ashOpen: this.ashOpen,
       canLeave: this.table.onLeave !== undefined,
+      canChat: this.table.say !== undefined,
+      canModerate: this.table.moderate !== undefined,
+      moderation: this.modOpen ? (this.table.moderate?.() ?? null) : null,
     });
     this.wire();
     // Keep the event log pinned to the newest entry.
@@ -508,6 +535,50 @@ export class DebugApp {
     // LEAVING IS CONFIRMED. A local game is only saved when the player
     // asks, so walking out of one throws away everything since the last
     // save — that is worth one question.
+    // Table chat. The same panel as the lobby's, over the same store, so
+    // the conversation carries on rather than starting again.
+    const chatBox = this.root.querySelector<HTMLInputElement>("#chatinput");
+    const sayIt = (): void => {
+      const say = this.table.say;
+      if (!chatBox || !say || chatProblem(chatBox.value)) return;
+      const text = chatBox.value;
+      chatBox.value = "";
+      say(text);
+      this.paint();
+    };
+    on("#chatsend", () => sayIt());
+
+    // Moderation — host only, and the buttons only exist there.
+    on("#mod-btn", () => {
+      this.modOpen = !this.modOpen;
+      this.paint();
+    });
+    on("#mod-close", () => {
+      this.modOpen = false;
+      this.paint();
+    });
+    for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".mod-kick"))) {
+      el.addEventListener("click", () => {
+        const seat = el.dataset["seat"] ?? "";
+        if (!confirm(`Remove ${seat} from the game? A bot will play their seat.`)) return;
+        this.table.kick?.(seat);
+        this.paint();
+      });
+    }
+    for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".mod-ban"))) {
+      el.addEventListener("click", () => {
+        const seat = el.dataset["seat"] ?? "";
+        const banned = this.table.moderate?.().people.find((p) => p.seat === seat)?.banned ?? false;
+        this.table.setChatBan?.(seat, !banned);
+        this.paint();
+      });
+    }
+    chatBox?.addEventListener("keydown", (ev) => {
+      if ((ev as KeyboardEvent).key === "Enter") sayIt();
+    });
+    const chatLinesEl = this.root.querySelector<HTMLElement>("#chatlines");
+    if (chatLinesEl) chatLinesEl.scrollTop = chatLinesEl.scrollHeight;
+
     on("#leave-btn", () => {
       const leave = this.table.onLeave;
       if (!leave) return;

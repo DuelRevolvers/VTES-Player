@@ -246,6 +246,37 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
       };
     case "PermanentBurned":
       return { text: `${ev.name} is burned.`, weight: "normal" };
+
+    // -- contests (p. 17-18) -----------------------------------------------
+    case "ContestBegan":
+      return {
+        text: `${ev.name} is contested: ${ev.seat}'s copy goes face down, out of play.`,
+        weight: "major",
+      };
+    case "ContestPaid":
+      return {
+        text: `${ev.seat} pays 1 pool to keep contesting ${ev.name}.`,
+        weight: "normal",
+      };
+    case "ContestYielded":
+      return { text: `${ev.seat} yields ${ev.name}; it is burned.`, weight: "major" };
+    case "ContestWon":
+      return {
+        text: `${ev.seat} wins the contest for ${ev.name}; it returns, unlocked.`,
+        weight: "major",
+      };
+    case "TitleContested":
+      return {
+        text: `${m(ev.minion)}'s claim to ${ev.title}${
+          ev.city ? ` of ${ev.city}` : ""
+        } is contested — no title until it is settled.`,
+        weight: "major",
+      };
+    case "TitleYielded":
+      return {
+        text: `${m(ev.minion)} yields the title of ${ev.title}, for good.`,
+        weight: "major",
+      };
     case "PermanentLocked":
       return { text: `${cardName(state, ev.cardId)} is locked.`, weight: "minor" };
     case "CardBurned":

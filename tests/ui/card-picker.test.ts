@@ -64,6 +64,9 @@ function screen(state: GameState, engine: VtesEngine, over: Partial<RenderInput>
     localSeat: null,
     ashOpen: null,
     canLeave: false,
+    canChat: false,
+    canModerate: false,
+    moderation: null,
     ...over,
   });
 }

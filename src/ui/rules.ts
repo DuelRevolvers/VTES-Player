@@ -412,6 +412,16 @@ export const RULE_SECTIONS: RuleSection[] = [
         one source of additional strikes per round. (p. 43)</li>
         <li><b>Unique</b> — only one copy may be in play at a time. Vampires
         are unique by default. (p. 44)</li>
+        <li><b>Contested</b> — if two Methuselahs bring the same unique card
+        (or the same vampire) into play, every copy is turned <b>face down
+        and out of play</b>, and each holder pays <b>1 pool in every one of
+        their unlock phases</b> to keep contesting. Instead of paying you
+        may <b>yield</b>, which <b>burns</b> your copy along with anything
+        stacked on it; when everyone else has yielded, the survivor's copy
+        comes back unlocked at their next unlock phase. A <b>contested
+        title</b> works the same way but costs the <b>vampire 1 blood</b>,
+        they count as having <b>no title</b> meanwhile, and a vampire in
+        torpor or with no blood must yield — for good. (p. 17–18)</li>
         <li><b>Search</b> — you need not announce what you are looking for,
         and searching <b>may find nothing</b>. If you search your library or
         crypt you <b>must shuffle it afterwards</b>, whether or not you took

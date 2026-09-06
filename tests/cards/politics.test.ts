@@ -230,6 +230,7 @@ describe("Neonate Breach (101271)", () => {
 describe("Parity Shift (101353)", () => {
   it("requires a prince or justicar", () => {
     const state = threeSeatGame();
+    state.seats[1]!.pool = 14; // someone to take pool FROM (below)
     state.seats[0]!.hand.push({ id: "ps1", name: "Parity Shift" });
     const engine = new VtesEngine(state, testRegistry);
     const dp = engine.decision()!;
@@ -238,6 +239,30 @@ describe("Parity Shift (101353)", () => {
     state.seats[0]!.minions[0]!.title = "prince";
     const dp2 = engine.decision()!;
     expect(dp2.options.some((o) => o.id.startsWith("play:Parity Shift"))).toBe(true);
+  });
+
+  it("is NOT offered when no Methuselah is richer than the caller", () => {
+    // Owner-reported: played, and no allocation choice ever appeared. The
+    // engine was right and silent — "choose a Methuselah who has MORE
+    // pool than you do" has no legal answer, so the terms step is skipped
+    // and the referendum passes doing nothing, having cost a card, an
+    // action and the caller's lock. The futile-options reading
+    // (docs/futile-options-design.md) says do not offer it.
+    const state = threeSeatGame();
+    state.seats[0]!.minions[0]!.title = "prince";
+    state.seats[0]!.pool = 10;
+    state.seats[1]!.pool = 10; // equal is not "more"
+    state.seats[2]!.pool = 3;
+    state.seats[0]!.hand.push({ id: "ps1", name: "Parity Shift" });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some((o) => o.id.startsWith("play:Parity Shift"))).toBe(
+      false,
+    );
+
+    // One pool more on any opponent brings it straight back — the control,
+    // so this cannot pass because the card broke some other way.
+    state.seats[1]!.pool = 11;
+    expect(engine.decision()!.options.some((o) => o.id.startsWith("play:Parity Shift"))).toBe(true);
   });
 
   it("moves 3 pool from a richer Methuselah as allocated", () => {

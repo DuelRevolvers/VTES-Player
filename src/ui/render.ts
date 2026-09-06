@@ -22,8 +22,9 @@ import type {
 } from "../engine/index.ts";
 import type { DecisionPoint, LegalOption } from "../engine/index.ts";
 import { isFaceDown } from "../engine/index.ts";
-import { currentIntercept, currentStealth } from "../engine/index.ts";
+import { currentIntercept, currentStealth, predatorOf, preyOf } from "../engine/index.ts";
 import { cardText, imageFor } from "./cardinfo.ts";
+import { chatLines, MAX_CHAT_TEXT } from "./chat.ts";
 import { minionName, narrate, owned } from "./narrate.ts";
 import type { RuleSection } from "./rules.ts";
 import { CREDITS, RULE_SECTIONS, searchRules } from "./rules.ts";
@@ -312,6 +313,18 @@ function seatMat(
       <header>
         ${seatThumb(seat.id, face)}
         <span class="seatname">${esc(seat.id)}</span>
+        ${
+          // Who they bleed and who bleeds them, small and unbolded beside
+          // the name. Read through `preyOf`/`predatorOf` rather than the
+          // seat array, so an OUST moves it: "when your prey is ousted,
+          // the next Methuselah to your left becomes your new prey"
+          // (p. 15). A one-seat table names nobody.
+          seat.ousted || state.seats.filter((s) => !s.ousted).length < 2
+            ? ""
+            : `<span class="rel">prey ${esc(preyOf(state, seat.id))} &middot; predator ${esc(
+                predatorOf(state, seat.id),
+              )}</span>`
+        }
         ${state.edge === seat.id ? `<span class="badge edge">EDGE</span>` : ""}
         ${seat.ousted ? `<span class="badge out">ousted</span>` : ""}
         <span class="spacer"></span>
@@ -372,6 +385,19 @@ function seatMat(
                    title="ash heap — public, click to look">ASH ${
                      (seat.ashHeap ?? []).length
                    }</button>`
+        }
+        ${
+          // Cards held face down and out of play in a contest (p. 17).
+          // Shown because everyone watched them go down — the face-down
+          // turn marks them out of play, it does not hide which card it
+          // is — and because a pile that costs its holder 1 pool every
+          // unlock phase should be visible to the table.
+          (seat.contested ?? []).length > 0
+            ? `<span class="pile contested"
+                     title="contested — face down and out of play; 1 pool each unlock phase (p. 17): ${esc(
+                       (seat.contested ?? []).map((c) => c.card.name).join(", "),
+                     )}">CONTESTED ${(seat.contested ?? []).length}</span>`
+            : ""
         }
       </footer>
     </section>`;
@@ -769,8 +795,18 @@ function handStrip(
 
   return `
     <div class="${mine ? "hand" : "hand watching"}" id="hand">
+      <!--
+        SORTING WORKS OFF-TURN and always did (the slots are draggable
+        whichever seat is being asked, and hand order is a client
+        preference that never reaches the command log). What did not work
+        was SAYING so:
+        the label read "not your decision", which reads as "hands off".
+        Reported twice as a missing feature — the same shape as the
+        auto-pass report, where a feature that cannot be discovered is
+        indistinguishable from one that is absent.
+      -->
       <span class="hlabel">${esc(seat.id)}'s hand
-        <span class="dim">${mine ? "— drag to sort" : "— not your decision"}</span></span>
+        <span class="dim">${mine ? "— drag to sort" : "— drag to sort (not your decision)"}</span></span>
       ${hand.map(card).join("")}
       ${hand.length === 0 ? `<span class="dim">empty</span>` : ""}
     </div>`;
@@ -968,7 +1004,20 @@ function turnStatus(state: GameState): string {
  */
 function settingsPanel(input: RenderInput): string {
   if (!input.settingsOpen) return "";
-  const seats = input.state.seats.map((s) => s.id);
+  // WHAT A GUEST MAY SET, and why it is a shorter list.
+  //
+  // `canModerate` is this client being the AUTHORITY — a private table or
+  // the host of an online one. Everything cut here is something a guest
+  // has no business with rather than something merely unhelpful: auto-pass
+  // for ANOTHER seat would answer for a person who is sitting right there;
+  // the debug reveal would show them every hand at the table, which is the
+  // one setting that must never be reachable from a seat in a real game.
+  // The AI section is not cut but MOVED — it is in Moderation now, beside
+  // the other things the host does to seats (owner request).
+  const authority = input.canModerate;
+  const seats = authority
+    ? input.state.seats.map((s) => s.id)
+    : input.state.seats.map((s) => s.id).filter((id) => id === input.localSeat);
   const allOn = seats.length > 0 && seats.every((id) => input.autoPass[id]);
   // Marking your OWN seat matters: auto-pass is per seat and off by
   // default (nobody is ever skipped without asking), so a player looking
@@ -981,12 +1030,6 @@ function settingsPanel(input: RenderInput): string {
       <input type="checkbox" class="autopass-seat" data-seat="${esc(id)}"
              ${input.autoPass[id] ? "checked" : ""} /> ${esc(id)}${you(id)}
     </label>`;
-  const aiRow = (id: string): string => `
-    <label class="toggle">
-      <input type="checkbox" class="ai-seat" data-seat="${esc(id)}"
-             ${input.aiSeats[id] ? "checked" : ""} /> ${esc(id)}${you(id)}
-    </label>`;
-
   return `
     <div class="scrim" id="settings-scrim"></div>
     <div class="settings" id="settings" role="dialog" aria-label="Settings">
@@ -1005,39 +1048,15 @@ function settingsPanel(input: RenderInput): string {
           your name to stop being asked to pass when there is nothing you
           could do.
         </p>
-        <label class="toggle strong">
-          <input type="checkbox" id="autopass-all" ${allOn ? "checked" : ""} />
-          All seats
-        </label>
+        ${
+          authority
+            ? `<label class="toggle strong">
+                 <input type="checkbox" id="autopass-all" ${allOn ? "checked" : ""} />
+                 All seats
+               </label>`
+            : ""
+        }
         <div class="setseats">${seats.map(seatRow).join("")}</div>
-      </section>
-
-      <section>
-        <div class="sethead">AI players</div>
-        <p class="setnote">
-          Hand a seat to the computer. It sees only what that seat may
-          legitimately see — the same masked view a human gets — and plays
-          from the same list of legal moves. Take the seat back at any time.
-        </p>
-        <div class="setseats">${seats.map(aiRow).join("")}</div>
-        <label class="setrow">
-          <span>Pace</span>
-          <select id="aispeed">
-            ${AI_SPEEDS.map(
-              (s) =>
-                `<option value="${s.ms}" ${s.ms === input.aiDelayMs ? "selected" : ""}>${esc(
-                  s.label,
-                )}${s.ms > 0 ? ` — ${(s.ms / 1000).toFixed(1)}s` : ""}</option>`,
-            ).join("")}
-          </select>
-        </label>
-        <p class="setnote">
-          How long the table holds after each AI move you can see, so there
-          is time to read what happened. Passes are never paced — an impulse
-          cycle is mostly passes, and waiting on those would just be waiting.
-          Pacing is a preference, not a rule: it changes no decision and the
-          same game replays identically at any speed.
-        </p>
       </section>
 
       <section>
@@ -1059,7 +1078,9 @@ function settingsPanel(input: RenderInput): string {
         </p>
       </section>
 
-      <section>
+      ${
+        authority
+          ? `<section>
         <div class="sethead">Debug</div>
         <label class="toggle">
           <input type="checkbox" id="omni" ${input.omniscient ? "checked" : ""} />
@@ -1070,7 +1091,9 @@ function settingsPanel(input: RenderInput): string {
           log line with the engine event behind it, and shows the frame
           stack. For debugging the engine — not for playing.
         </p>
-      </section>
+      </section>`
+          : ""
+      }
     </div>`;
 }
 
@@ -1204,6 +1227,16 @@ export interface RenderInput {
   ashOpen: string | null;
   /** Whether to offer Leave — false when there is nowhere to go back to. */
   canLeave: boolean;
+  /** Whether to show the table chat — false when there is nobody to talk to
+   *  and nothing relaying it. */
+  canChat: boolean;
+  /** Whether to offer moderation — the HOST only. A guest cannot kick or
+   *  ban anybody, so the button is not drawn rather than drawn and
+   *  refused. */
+  canModerate: boolean;
+  /** The moderation panel, when it is open: who is here and who is
+   *  chat-banned. Null when closed. */
+  moderation: ModerationView | null;
 }
 
 export function render(input: RenderInput): string {
@@ -1253,16 +1286,50 @@ export function render(input: RenderInput): string {
           : ""
       }
       <button id="help-btn" class="gear" title="How to play">❔ How to Play</button>
+      ${
+        // Beside How to Play and Settings, not tucked into the chat panel
+        // (owner request). It is a peer of those two: a menu about the
+        // table, reached the same way, and a shield glyph on a chat
+        // header was not something anybody would find.
+        input.canModerate
+          ? `<button id="mod-btn" class="gear" title="Moderation">🛡 Moderation</button>`
+          : ""
+      }
       <button id="settings-btn" class="gear" title="Settings">⚙ Settings</button>
       ${input.canLeave ? `<button id="leave-btn" class="gear leave" title="Leave this game">⏻ Leave</button>` : ""}
     </div>
     ${actionStrip(state)}
     ${combatStrip(state)}
-    <div class="main">
-      <div class="table" style="--seat-cols:${seatColumns(state.seats.length)}">
-        ${state.seats
-          .map((s) => seatMat(state, s, dp, input.seatFaces[s.id], ctx))
-          .join("")}
+    <!--
+      THE SIDE COLUMN RUNS THE FULL HEIGHT, and the hand and action bar
+      sit beside it rather than under it (owner request 2026-09-06:
+      "extend the Table Chat down to the bottom, pushing aside the bar for
+      player hand and action bar. Keep the top of the table chat where
+      it's at"). So the table and the bottom bar are one column, and the
+      log and the chat are the other — which also means the chat gets the
+      height, not the log: the log keeps its size and the chat grows into
+      what used to be nothing.
+    -->
+    <div class="lower">
+      <div class="leftcol">
+        <div class="main">
+          <div class="table" style="--seat-cols:${seatColumns(state.seats.length)}">
+            ${state.seats
+              .map((s) => seatMat(state, s, dp, input.seatFaces[s.id], ctx))
+              .join("")}
+          </div>
+        </div>
+        <div class="bottom">
+          ${handStrip(
+            state,
+            dp,
+            input.selectedCard,
+            input.handOrder,
+            input.thinking,
+            input.localSeat,
+          )}
+          ${decisionBar(dp, input.thinking, onTable)}
+        </div>
       </div>
       <aside class="side">
         <div class="panel" ${input.omniscient ? "" : "hidden"}>
@@ -1271,23 +1338,14 @@ export function render(input: RenderInput): string {
             ${state.frames.map((f) => `<div class="frame">${frameLine(f)}</div>`).join("")}
           </div>
         </div>
-        <div class="panel grow">
+        <div class="panel log">
           <h3>Game log <input id="evfilter" placeholder="filter…" value="${esc(input.eventFilter)}" /></h3>
           <div class="events" id="events">${events}</div>
         </div>
+        ${input.canChat ? chatPanel() : ""}
       </aside>
     </div>
-    <div class="bottom">
-      ${handStrip(
-        state,
-        dp,
-        input.selectedCard,
-        input.handOrder,
-        input.thinking,
-        input.localSeat,
-      )}
-      ${decisionBar(dp, input.thinking, onTable)}
-    </div>
+    ${moderationPanel(input)}
     ${settingsPanel(input)}
     ${helpPanel(input)}
     ${ashPanel(state, input.ashOpen)}
@@ -1307,4 +1365,139 @@ export function render(input: RenderInput): string {
  */
 export function seatColumns(seats: number): number {
   return Math.max(1, Math.min(3, Math.ceil(seats / 2)));
+}
+
+/**
+ * The table's chat panel — the lobby's, in the side column.
+ *
+ * Deliberately the same markup and the same store (src/ui/chat.ts): the
+ * conversation is one conversation, and a player who agreed a house rule
+ * in the lobby should still be able to read it three turns in.
+ */
+function chatPanel(): string {
+  const lines = chatLines();
+  return `
+    <div class="panel chatbox tablechat">
+      <h3>Table chat</h3>
+      <div class="chatlines" id="chatlines">
+        ${
+          lines.length === 0
+            ? `<p class="note dim">Nothing said yet.</p>`
+            : lines
+                .map((l) =>
+                  l.system
+                    ? `<div class="chatline system">${esc(l.text)}</div>`
+                    : `<div class="chatline"><b>${esc(l.from)}</b> ${esc(l.text)}</div>`,
+                )
+                .join("")
+        }
+      </div>
+      <div class="row">
+        <input id="chatinput" maxlength="${MAX_CHAT_TEXT}" placeholder="Say something…" />
+        <button id="chatsend">Send</button>
+      </div>
+    </div>`;
+}
+
+/**
+ * The host's moderation panel: who is at the table, and what can be done
+ * about them.
+ *
+ * HOST ONLY, and not merely hidden from everyone else — a guest's client
+ * has nothing to kick anybody WITH. The host is the authority for the
+ * game already (it validates every intent against the legal-move
+ * generator), so it is the authority for the room too; there is no second
+ * mechanism here, only a second use of the one that exists.
+ *
+ * A kick and a chat ban are deliberately different. Kicking removes a
+ * PLAYER, and their seat is handed to a bot rather than left empty — a
+ * game of VTES cannot skip a Methuselah's turn. Banning silences someone
+ * who is still playing, which is the lighter thing to reach for and does
+ * not touch the game at all.
+ */
+export interface ModerationView {
+  people: Array<{ seat: string; name: string; remote: boolean; banned: boolean }>;
+}
+
+function moderationPanel(input: RenderInput): string {
+  const view = input.moderation;
+  if (!view) return "";
+  // ONE ROW PER SEAT AT THE TABLE (owner request), not one per connected
+  // peer. The seat list is the state's — every Methuselah in the game,
+  // bot or person — and `moderation.people` only adds what the network
+  // knows about them. Listing connections instead left the host and every
+  // bot off a panel whose whole subject is who answers for each seat.
+  const byId = new Map(view.people.map((p) => [p.seat, p]));
+  const row = (id: string): string => {
+    const p = byId.get(id);
+    const remote = p?.remote ?? false;
+    const you = id === input.localSeat;
+    // A bot cannot be handed to a bot, and neither can a seat somebody is
+    // sitting in: kick them first, which hands the seat over anyway. The
+    // box is DISABLED rather than absent so the row still lines up and
+    // still says what is true of that seat.
+    const aiLocked = remote || you;
+    const kind = you ? "you" : remote ? "player" : "bot";
+    return `
+      <div class="modrow">
+        <span class="lname">${esc(p?.name ?? id)}</span>
+        <span class="dim kind">${kind}</span>
+        <label class="toggle ${aiLocked ? "off" : ""}"
+               title="${
+                 you
+                   ? "your own seat — use Settings if you want to hand it over"
+                   : remote
+                     ? "somebody is playing this seat; kick them to hand it to a bot"
+                     : "hand this seat to the computer"
+               }">
+          <input type="checkbox" class="ai-seat" data-seat="${esc(id)}"
+                 ${input.aiSeats[id] ? "checked" : ""} ${aiLocked ? "disabled" : ""} /> AI
+        </label>
+        ${
+          remote
+            ? `<button class="mod-ban" data-seat="${esc(id)}">${
+                p?.banned ? "Unban" : "Ban"
+              }</button>
+               <button class="mod-kick danger" data-seat="${esc(id)}">Kick</button>`
+            : `<span class="dim">&mdash;</span>`
+        }
+      </div>`;
+  };
+
+  return `
+    <div class="modal" id="mod-panel">
+      <div class="modalcard">
+        <h2>Moderation</h2>
+        <p class="note">
+          Everything here is about WHO ANSWERS FOR A SEAT — a person, a
+          bot, or a person who is no longer welcome. Kicking a player hands
+          their seat to a bot, because a game of VTES cannot skip a
+          Methuselah's turn. A chat ban only silences them; they keep
+          playing. A bot sees only what its seat may legitimately see and
+          plays from the same list of legal moves a human does.
+        </p>
+
+        <div class="modrows">${input.state.seats.map((s) => row(s.id)).join("")}</div>
+
+        <label class="setrow">
+          <span>AI pace</span>
+          <select id="aispeed">
+            ${AI_SPEEDS.map(
+              (s) =>
+                `<option value="${s.ms}" ${s.ms === input.aiDelayMs ? "selected" : ""}>${esc(
+                  s.label,
+                )}${s.ms > 0 ? ` — ${(s.ms / 1000).toFixed(1)}s` : ""}</option>`,
+            ).join("")}
+          </select>
+        </label>
+        <p class="note">
+          How long the table holds after each AI move you can see, so there
+          is time to read what happened. Passes are never paced. Pacing
+          changes no decision: the same game replays identically at any
+          speed.
+        </p>
+
+        <div class="row"><button id="mod-close" class="primary">Close</button></div>
+      </div>
+    </div>`;
 }

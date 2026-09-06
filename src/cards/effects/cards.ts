@@ -11661,8 +11661,31 @@ const warGhoul: CardHandler = {
  *  required) plus bespoke terms: choose a Methuselah with more pool than
  *  you and allocate 3 of their pool among one or more OTHER Methuselahs
  *  (including you). */
+const parityShiftBase = compileSpec(specByName("Parity Shift"));
 const parityShift: CardHandler = {
-  ...compileSpec(specByName("Parity Shift")),
+  ...parityShiftBase,
+  /**
+   * Not offered when NO Methuselah has more pool than you.
+   *
+   * Owner-reported 2026-09-06: "it didn't give me a choice to allocate the
+   * pool". The engine was right and silent — the card's whole content is
+   * "choose a Methuselah who has MORE POOL THAN YOU DO and allocate 3 of
+   * their pool", so with nobody richer there is no legal term, the terms
+   * step is skipped, and the referendum passes doing nothing. Playing it
+   * still costs a card, an action and the caller's lock.
+   *
+   * That is exactly the futile-options reading (docs/futile-options-design
+   * .md): an option whose whole content cannot happen is not offered, and
+   * `canGainBlood` set the precedent. It is card-specific on purpose —
+   * a general "no legal terms" gate would change every terms card at once
+   * and wants its own pass.
+   */
+  options(card, ctx) {
+    const me = getSeat(ctx.state, ctx.seat);
+    const richer = ctx.state.seats.some((s) => !s.ousted && s.id !== ctx.seat && s.pool > me.pool);
+    if (!richer) return [];
+    return parityShiftBase.options?.(card, ctx) ?? [];
+  },
   referendumTerms(frame, state) {
     const standing = state.seats.filter((s) => !s.ousted);
     const caller = standing.find((s) => s.id === frame.caller);

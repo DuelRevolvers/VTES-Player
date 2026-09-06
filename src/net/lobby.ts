@@ -18,6 +18,7 @@
  */
 
 import { HeuristicAgent } from "../ai/heuristic.ts";
+import { addChat } from "../ui/chat.ts";
 import { DevServerSink, GameLog } from "../ui/gamelog.ts";
 import type { SeatConfig, TableConfig } from "../ui/newgame.ts";
 import { botSeats, buildTable, MAX_SEATS, seatDeckHash } from "../ui/newgame.ts";
@@ -91,11 +92,41 @@ export class LobbyHost {
     return this.guests.filter((g) => g.seat === null && g.channel.open).length;
   }
 
+  /**
+   * Tell the host's own screen that something changed.
+   *
+   * Every guest already learns through `broadcast`; the host learned
+   * nothing, so a player joining, renaming or choosing a deck updated the
+   * host's `TableConfig` and left the screen showing the state before it
+   * (owner-reported 2026-09-06, "the host lobby doesn't update"). The
+   * screen is a pure function of this object, so it only ever needed to
+   * be told to repaint.
+   */
+  onChanged(cb: () => void): () => void {
+    this.watchers.add(cb);
+    return () => this.watchers.delete(cb);
+  }
+
+  private readonly watchers = new Set<() => void>();
+
+  /** Say something as the host, and relay it to everyone. */
+  say(text: string, from: string, system = false): void {
+    const line = { type: "chatLine" as const, from, text, at: Date.now(), ...(system ? { system: true } : {}) };
+    addChat({ from, text, at: line.at, ...(system ? { system: true } : {}) });
+    for (const g of this.guests) if (g.channel.open) g.channel.send(line);
+  }
+
   private handle(channel: HostChannel, msg: PeerMessage, off: () => void): void {
     if (msg.type === "join") this.onJoin(channel, msg, off);
     else if (msg.type === "setDeck") this.onSetDeck(channel, msg);
     else if (msg.type === "setName") this.onSetName(channel, msg);
     else if (msg.type === "leave") this.onLeave(channel);
+    else if (msg.type === "chat") {
+      // The host is the only relay, so everybody lists the conversation in
+      // the same order — including the sender, who does not add it locally.
+      const guest = this.guests.find((g) => g.channel === channel);
+      this.say(msg.text, guest?.name ?? "someone");
+    }
     // Game-phase messages are the HostSession's business once it exists;
     // it has its own subscription on the same channel.
   }
@@ -246,6 +277,7 @@ export class LobbyHost {
   }
 
   private broadcast(): void {
+    for (const cb of this.watchers) cb();
     for (const guest of this.guests) {
       if (guest.channel.open) guest.channel.send(this.lobbyFor(guest));
     }
@@ -377,6 +409,12 @@ export class LobbyPeer {
     this.channel.close();
   }
 
+  /** Say something. Nothing is added locally: the host relays it back, so
+   *  every client lists one conversation in one order (src/ui/chat.ts). */
+  say(text: string): void {
+    if (this.channel.open) this.channel.send({ type: "chat", text });
+  }
+
   onChanged(cb: () => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
@@ -392,6 +430,13 @@ export class LobbyPeer {
         canStart: msg.canStart,
       };
       this.emit();
+    } else if (msg.type === "chatLine") {
+      addChat({
+        from: msg.from,
+        text: msg.text,
+        at: msg.at,
+        ...(msg.system ? { system: true } : {}),
+      });
     } else if (msg.type === "started") {
       this.onStarted();
     } else if (msg.type === "bye") {

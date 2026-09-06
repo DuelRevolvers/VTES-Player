@@ -241,8 +241,13 @@ function makeVampire(v: DeckVampire, id: string, seat: string, inCrypt: boolean)
   // Spread-in, because `path` is optional and an explicit `undefined` would
   // still create the key.
   const path = card.path !== undefined ? { path: card.path } : {};
+  // Same treatment, and for the same reason: the city is what a title
+  // contest keys on (p. 18), and an explicit `undefined` would still
+  // create the key. docs/contested-design.md §6
+  const titleCity = card.titleCity !== undefined ? { titleCity: card.titleCity } : {};
   return {
     ...path,
+    ...titleCity,
     id,
     name: card.name,
     kind: "vampire",

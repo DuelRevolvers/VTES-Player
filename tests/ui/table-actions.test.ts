@@ -46,6 +46,9 @@ function screen(t: LocalTransport, over: Partial<RenderInput> = {}): string {
     localSeat: null,
     ashOpen: null,
     canLeave: false,
+    canChat: false,
+    canModerate: false,
+    moderation: null,
     ...over,
   });
 }

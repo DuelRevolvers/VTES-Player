@@ -870,3 +870,40 @@ describe("Gostoso", () => {
     }
   });
 });
+
+describe("whose bleed it has to be", () => {
+  it("is NOT offered when a STABLEMATE is the one bleeding", () => {
+    // Owner-reported 2026-09-06. "During a bleed action, Larissa can
+    // discard … to get +1 BLEED" — the bonus is hers, so she has to be
+    // the one acting. The window gate asked only "is this a bleed", so
+    // any bleed by her controller offered the discard; `modifyBleed` is
+    // action-scoped, so taking it would have spent a card to raise
+    // somebody else's bleed.
+    const state = threeSeatGame();
+    asVampire(find(state, "V1"), "Larissa Moreira (G6)");
+    // A second vampire for Alice, who does the bleeding instead.
+    state.seats[0]!.minions.push(
+      makeMinion("V2", "Alice", { name: "Andi Liu (G6)", blood: 2 }),
+    );
+    state.seats[0]!.hand.push({ id: "h2", name: "Cats' Guidance" });
+    const engine = new VtesEngine(state, testRegistry);
+    if (!walkTo(engine, "bleed:V2")) throw new Error("no bleed");
+    runTrace(engine, [["Alice", "bleed:V2"]]);
+    expect(optionIds(engine).filter((o) => o.includes(":discardFor:"))).toEqual([]);
+  });
+
+  it("IS offered when Larissa bleeds — the control", () => {
+    // Same board, same hand, only the acting minion differs. Without this
+    // the test above would pass on a Larissa who never works at all.
+    const state = threeSeatGame();
+    asVampire(find(state, "V1"), "Larissa Moreira (G6)");
+    state.seats[0]!.minions.push(
+      makeMinion("V2", "Alice", { name: "Andi Liu (G6)", blood: 2 }),
+    );
+    state.seats[0]!.hand.push({ id: "h2", name: "Cats' Guidance" });
+    const engine = new VtesEngine(state, testRegistry);
+    if (!walkTo(engine, "bleed:V1")) throw new Error("no bleed");
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    expect(optionIds(engine).some((o) => o.includes(":discardFor:"))).toBe(true);
+  });
+});

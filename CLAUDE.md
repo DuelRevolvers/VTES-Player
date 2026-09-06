@@ -5071,18 +5071,257 @@ only `zlib` (kept in the scratchpad, not the repo) rather than adding
 `pdf-parse` as a dependency. Worth repeating — the contested-cards and
 withdrawal rules are quoted verbatim in `docs/old-gaps-closeout.md`.
 
-**STILL OPEN: contested cards and contested titles** (p. 17–18). The rules
-are now transcribed exactly, and the finding is that this is a real
-subsystem rather than a patch: contested cards are turned **face down and
-out of play**, cost **1 pool per unlock phase** to hold, and yielding
-**burns** the card; contested titles cost **1 blood**, are yielded
-automatically by a vampire in torpor or with no blood, and are keyed on the
-**CITY** for prince/baron/archbishop and on the **CLAN** for justicar and
-Inner Circle. **`MinionState` carries no title city** — the `path` lesson
-again: the data is in the crypt card text and the importer drops it. Not
-started.
+**CONTESTED CARDS AND CONTESTED TITLES — BUILT 2026-09-06
+(`docs/contested-design.md`). The last pre-existing rules gap is closed.**
+Two Methuselahs bringing the same unique card — or the same vampire, since
+"all crypt cards represent unique minions" (p. 17) — into play now contest
+it: every copy goes **face down and out of play**, costs **1 pool in each
+of its holder's unlock phases**, and can be **yielded**, which burns it
+along with anything stacked on it. The last claimant gets it back,
+unlocked, at their next unlock phase. A **title** contest is the same
+shape at **1 blood paid by the vampire**, with the vampires "treated as if
+they have no title" meanwhile, and a **forced yield** — permanent — for a
+vampire in torpor or with no blood.
 
-**Green baseline as of 2026-09-05: 170 test files, 1795 tests, typecheck and
+**"OUT OF PLAY" IS TAKEN AT ITS WORD, and that is the whole design.** The
+card is MOVED out of `permanents`/`minions` into `SeatState.contested`
+rather than flagged in place. A flag would have meant teaching several
+dozen reads (every static fold, every enumerator, every hook sweep) to
+skip it — and **a site that forgot would look exactly like a card that
+legitimately does nothing**, which is invisible to the typechecker and
+structurally invisible to the fuzz. Moving the object needs nobody to
+learn anything: **the entire suite outside the new file was unaffected**,
+and a test pins the consequence directly (Elder Library's hand-size static
+is simply not there while contested). The object is kept WHOLE because a
+contest ends by the card coming back with everything on it — and because
+"any cards or counters stacked on the yielded card are also burned" is
+only answerable if the stack is still there.
+
+**Detection is a SWEEP in `settle()`, not a hook.** A unique card reaches
+play down six paths and a title claim down three more; instrumenting each
+is exactly how `onAnyUnlock` missed attached cards, `onBleedSuccess`
+missed them again, and `onActionAnnounced` fired a step early for its
+whole life. `settleContests()` asks the board instead — the
+`drainOverCapacity` reading, *the invariant holds whenever it becomes
+false, whichever side moved* — and returns true only when it actually
+emitted something, or settle would loop. **The claimant is the
+CONTROLLER**, not the seat holding the card: p. 17 says "**control** of
+the card is being contested", and p. 16 puts a master played on another
+Methuselah's minion under the player who played it.
+
+**`CONTEST` is the third ENGINE-OWNED choice key** (after `handSizeDown`
+and `diablerieDiscipline`), and for one extra reason: a contest can be
+over a card whose handler knows nothing about contests, or over a
+**title**, where there is no card to ask at all. Repeated and
+non-optional, the `unlockToll` shape, with `TurnFrame.contestsHandled`
+recording how far the phase got — the cost is per unlock PHASE, not per
+settle.
+
+**THE TITLE CITY WAS THE `path` LESSON VERBATIM, AND MY OWN SURVEY OF IT
+WAS WRONG.** `MinionState.titleCity` is a printed crypt trait sitting in
+the card text ("Camarilla Prince of **Melbourne**"), and
+`importCryptCard` was stripping it off to find the title word — the same
+shape as `build-registry.mts` silently dropping KRCG's `path`. This file
+had it diagnosed correctly and costed too high ("the importer drops it");
+it was a parse, not a pipeline change. Then **a scratchpad survey reported
+25 city titles over 24 cities with one repeat, and the truth is 43 over 41
+with two** — the regex read only title lines ending in `:` and missed
+every one ending in `.`, which is about half the crypt. **Mannheim and
+Pittsburgh each have a prince, a baron AND an archbishop**, which is the
+designers building p. 39's "contested by another vampire who claims any
+title to the same city" into the pool on purpose. Pinned as a test, not a
+note.
+
+**Measured reachability, so this is not completeness for its own sake:**
+of the 496 precon pairs, **62 (12.5%) share a unique library card** and
+**14 share a crypt card**; **127 of the 444 library cards are unique**.
+Two players picking the same clan will contest a vampire.
+
+**One existing test changed, and it was the engine being right.**
+`diablerie.test.ts` asserted the equipment-take's own-duplicate guard on a
+board where two Methuselahs each controlled a Treasured Samadji — a board
+contest rules make **unreachable**. The guard stays as defence in depth
+and the test now pins the reason it no longer fires.
+
+**Readings on record:** a Methuselah is never "unable to pay" for a card
+contest (p. 17 puts no floor under it and a seat at 0 pool is already
+ousted, so spending your last pool is a legal bad choice — the Smiling
+Jack ruling); a yielding vampire loses its `titleCity` too, or the next
+sweep would re-enter it into the contest it just conceded; an attached
+card whose bearer is gone when its contest is won is burned, having
+nowhere to return to; the contested pile is shown to the table with names,
+because turning a card face down marks it out of play rather than hiding
+which card it is; and a **title** contest can be within one Methuselah
+(p. 17 forbids contesting a CARD with yourself and p. 18 says no such
+thing about titles).
+
+**THE LOBBY REWORK — 2026-09-06 (`docs/lobby-rework-2026-09-06.md`).**
+Fourteen owner items in one pass. **The lobby is ONE screen now**: there
+were two (a "new game" screen and a lobby you were thrown to when Start
+was pressed online) showing the same information, so they are one, and
+**the room opens when a seat is OPENED rather than when Start is
+pressed** — that inversion is what removes the second page, since the
+code has to exist while people are still arriving. Seats are a **3-column
+grid** matching the game table, each box avatar+name / kind / deck, with a
+red × and a dashed **+ box**. **The first box is always the host** and
+carries no kind dropdown and no × — they cannot hand their own seat away
+without ceasing to be the host, so the control is not offered rather than
+offered and refused; **a seat a guest joined on is not the host's to
+change** either.
+
+**TWO REPORTED BUGS WERE ONE BUG: `LobbyHost` had no `onChanged` at all.**
+Every guest learned through `broadcast`; the host learned nothing — so a
+guest joining, renaming or choosing a deck updated the host's
+`TableConfig` and left the screen showing the state before it, and from
+the guest's side a deck they had successfully sent appeared to do nothing.
+The screen is a pure function of that object; it only ever needed telling.
+
+**Table chat is a MODULE-LEVEL store** (`src/ui/chat.ts`), not screen
+state, because the lobby object and the table have two different lifetimes
+and the conversation belongs to neither. It is not game state and never
+reaches the command log. **The host is the only relay** and a sender does
+NOT add its own line locally — otherwise it would list the conversation in
+a different order from everybody else, and show its own messages twice.
+Its test therefore **watches the wire, not the store**: both ends share one
+module in a test process, so counting `chatLines()` would count the harness.
+
+**A player who leaves mid-game hands their seat to a BOT.**
+`PeerTransport.close()` sends `leave` first, and `HostSession` attaches a
+`HeuristicAgent`, writes a line to the game log via the new
+`LocalTransport.note()`, and says so in chat. A game of VTES cannot skip a
+Methuselah's turn, so one person closing a tab would otherwise stall the
+table for everyone.
+
+**Two live card bugs.** **Larissa Moreira** — "during a bleed action,
+Larissa can discard … to get +1 BLEED" — the window gate asked only "is
+this a bleed", so any bleed by her controller offered the discard;
+`modifyBleed` is ACTION-scoped, so taking it spent a card to raise a
+stablemate's bleed. And **Parity Shift**, where the engine was right and
+silent: with nobody richer than the caller there is no legal term, the
+terms step is skipped entirely and the referendum passes doing nothing,
+having cost a card, an action and the caller's lock. It is now not offered
+— the **futile-options** reading (`canGainBlood`'s precedent), kept
+card-specific because a general "no legal terms" gate would change every
+terms card at once and wants its own pass.
+
+**Two items were already working and needed to be made VISIBLE, not
+built.** Off-turn hand sorting worked all along (hand order is a client
+preference and `wireHand` attaches whoever is deciding) but `.hand.watching
+.handslot` showed a `default` cursor, so nobody tried — the auto-pass
+report of 2026-09-05 in a new costume: *a feature that works and cannot be
+discovered is indistinguishable from a broken one*. Also landed:
+`seatRelations` (prey/predator per p. 15, in `newgame.ts` because it is a
+rule not markup — a rotation, since the table is a cycle) and the **deck
+importer on the profile page**, which previously existed only inside a
+seat's deck panel, so building a collection meant starting a game you did
+not want.
+
+**A SECOND PASS THE SAME DAY (same doc, "The second pass"):** fields are
+one shade above their panel so an empty box reads as somewhere to type;
+**precon play-style lines** (`preconStyle`, keyed on the deck NAME so a
+New Blood half shares its clan's line) with a standing guard that every
+precon has one — and a test that each names a PLAN, which caught my own
+first draft writing atmosphere for Path of Death; the **side column now
+runs to the bottom** with the hand and action bar inside a `.leftcol`
+beside it (structural, not CSS — the bottom bar was a sibling of `.main`),
+and the CHAT takes the added height while the log keeps its own; **host-only
+moderation** (kick hands the seat to a bot through the same `takeOver` a
+voluntary leave uses; a chat ban is enforced AT THE RELAY, because a
+banned player's browser has no reason to cooperate); the **main menu
+centred with the title art replacing the h1**; and the **lobby sized from
+the viewport** rather than a fixed column.
+
+**The title art sits OUTSIDE the menu card** (owner, 2026-09-06, with a
+screenshot: *"the banner needs to be this big"*). It had been a child of
+the 520px card, so the card's width was deciding the picture's — backwards,
+since the buttons want a narrow column and the art wants the window. The
+menu is a `.menuwrap` column now: art at `min(1100px, 96vw)` above, card
+below. **1100px is the source image's own width halved** (2752 × 1184), so
+it is never upscaled. **Still flagged, but smaller: the file is 2.2 MB.**
+At 460px that was twenty times the pixels it needed; at 1100px it is about
+2.5×, which is what a high-DPI screen wants. Re-saving `art/VTES Banner 6
+edit.png` at ~2200px wide as JPEG (flat, dark, no transparency) would still
+cut it to a few hundred KB with no visible difference, and matters most on
+Pages, where every visitor downloads it. No image tooling on this machine.
+
+**A THIRD PASS THE SAME DAY (same doc, "The third pass") — nine items, and
+TWO OF THEM WERE REPORTED FOR THE SECOND TIME.** Both turned out to be the
+same failure, and it is now a rule worth stating: **a feature that cannot
+be discovered is indistinguishable from one that is absent, and the
+discoverability half is not a polish task to be done after.** *Prey and
+predator* were on the LOBBY's seat boxes and nowhere at the table, which is
+where a player actually needs them — they are orientation during a game,
+not information when picking seats; they are on the **seat mats** now, read
+through `preyOf`/`predatorOf` rather than off the seat array, so **an oust
+moves them** (p. 15), with a test that ousts the middle seat. *Off-turn
+hand sorting* worked all along and the label read **"— not your
+decision"**, which reads as *hands off*; it says "drag to sort" either way
+now, asserted beside `draggable="true"` so the two cannot drift.
+
+**THE MODERATION BUTTON WAS NOWHERE, and it was a scope error plus missing
+CSS.** It was given only to a host with a live `HostSession`, so on a
+**private table it did not exist at all** — and that became plainly wrong
+when the AI controls moved into it, since a private game is played entirely
+against bots and needs them most. The test is now whether this client **runs
+the engine** (`transport instanceof LocalTransport`), the same thing
+`canRewind` already means; kicking and banning still need a session and are
+simply absent without one. Separately, **`.modal`/`.modalcard` had never
+been written**, so even where the button did appear the panel rendered as
+an unstyled block at the foot of the page. It reuses the settings dialog's
+chrome now, and the deck picker reuses it in turn.
+
+**THE LINE THE AI MOVE DRAWS: Moderation is about WHO ANSWERS FOR A SEAT**
+(a person, a bot, or a person no longer welcome); **Settings is about this
+screen and this player.** Handing a seat to the computer and kicking
+somebody to a bot are the same kind of act. A **guest's** Settings menu is
+correspondingly shorter, and each cut is something they have no business
+with rather than something unhelpful: auto-pass for another seat answers
+for a person sitting right there, and the debug reveal shows every hand at
+the table. **Restart needed no work** — the undo/save/load/restart group
+hangs on `canRewind`, and `PeerTransport.history` is `null` by design; that
+property was written into the transport seam on 2026-08-29 and paid out
+here without a line of code.
+
+Also landed: the **deck picker is a pop-up** (it holds saved decks, 18
+precons and a paste box — several times a seat box tall, so unfolded inside
+one it stretched that column and left the others short); the lobby card is
+`min(1900px, 98vw)` with a **300px** seat-box minimum and the **chat in its
+own right-hand column** (`.lobbycols`, stacking under 900px); and the
+side-column split is **fixed rather than elastic** — the log was
+`flex: 0 1 auto; max-height: 42%`, so it was sized by how much had
+*happened* and the chat opened almost full height on an empty log;
+`flex: 0 0 33%` sizes it from the column instead.
+
+**A TRAP WORTH REMEMBERING: an HTML comment is part of the output.**
+`render()` returns a string, so the explanatory comments inside its
+template literals ship in the markup — a comment containing the phrase
+"whoever is deciding" broke
+`expect(playing).not.toContain("is deciding")`, a real assertion about the
+AI pause. Reworded rather than loosening the assertion: a substring check
+over rendered HTML is the right shape for "this must not appear anywhere".
+
+**A FOURTH PASS (same doc, "The fourth pass") — four items, both menus.**
+**Moderation is a top-bar button** (`🛡 Moderation`, beside How to Play and
+Settings) rather than a shield glyph on the chat panel's header — **the
+third discoverability failure in three passes**, and it also removes an
+accidental coupling: a table with chat off had no way to reach it. **The
+panel now lists one row per SEAT, not one per connection** — it had listed
+`moderation.people`, the connected peers, so **the host and every bot were
+missing from a panel whose whole subject is who answers for each seat**;
+rows come from `state.seats` and the network view only adds whether a
+person holds that seat and whether they are banned. Each row is name, kind,
+an **AI checkbox** (disabled for your own seat and for a seat somebody is
+playing — a bot cannot be handed to a bot, and a seat with a person in it
+is handed over by kicking them), then Kick and Ban. **Its test asserts a
+bot's box is NOT disabled**, without which the two positive assertions
+would pass on a panel that disabled everything. Also: precon buttons are a
+**grid** (`auto-fill, minmax(200px, 1fr)`) instead of a wrapped flex row
+whose widths tracked deck-name lengths; and the **seat grid is fixed at
+three columns** — `auto-fit` let six seats straighten into one row on a
+wide window, which is the shape the grid exists to avoid, since it is meant
+to look like the game table.
+
+**Green baseline as of 2026-09-06: 172 test files, 1858 tests, typecheck and
 `vite build` clean.** If a fresh session sees fewer, something regressed.
 
 **BLOCKED — THE LIST IS EMPTY (2026-09-03).** Every gate that was on it
@@ -5108,8 +5347,10 @@ Shield's immunity + cancel in the round-recurring wave, Meditative Grove
 in the blood-locations wave), and **Deep Song's superior is DONE**
 (2026-09-02 — the inversion was the two arguments to `pushCombat` in the
 other order).
-Still-open pre-existing gates: withdrawal + contested titles/cards,
-equipment-move (completes diablerie's equipment-take). **The ash-heap
+Still-open pre-existing gates: **none.** Withdrawal, contested
+cards/titles and the equipment-move that completes diablerie's
+equipment-take were all built on 2026-09-05/06
+(`docs/old-gaps-closeout.md`, `docs/contested-design.md`). **The ash-heap
 region is BUILT** (2026-09-01) — and note that diablerie's older-victim
 Discipline gain was deferred partly on it, so that deferral is now only
 waiting on the master-Discipline search, which the library-search gate
@@ -5202,11 +5443,11 @@ Sphinx. `PlayContext.turnSeat` now carries whose turn it is; gate any
 `tests/cards/own-unlock-phase.test.ts`.
 
 **Known deviations / non-invariants (intentional, revisit later):**
-cross-player uniqueness contests unmodeled (own-duplicate prevention
-only — so stealing a second copy of a unique location you already control
-is legal) — includes contested titles (p. 19), out of scope; titles are a
+**cross-player uniqueness contests are now MODELLED** (2026-09-06,
+docs/contested-design.md) — including contested titles, and stealing a
+copy you already control burns the incoming one (p. 17); titles are a
 `MinionState.title` field set by fixtures now, parsed from crypt text at
-deck import (phase 7) — same for `clan`/`sect`; clan-change and
+deck import (phase 7) — same for `clan`/`sect`/`titleCity`; clan-change and
 sect-change are out of scope; **Paths are a PRINTED CRYPT TRAIT and fully
 live** (`MinionState.path`, 2026-09-03) — set by fixtures today and by
 phase 7's importer from the crypt card, exactly like `clan`/`sect`/
@@ -5391,6 +5632,11 @@ cycle — §10 is the citation list), `choice-frames-design.md`,
 `retainer-wave-design.md`,
 `last-equipment-modifiers-design.md`, `last-buildable-design.md`,
 `cheap-tail-design.md`, `diablerie-design.md`,
+`contested-design.md` (contested cards and titles — why "out of play"
+means moving the card, why detection is a sweep, and the title city the
+importer had been dropping), `old-gaps-closeout.md` (the 2026-09-05 pass:
+the knowledge model, the leaderboard, the deck library, diablerie steps 2
+and 4, and withdrawal — with p. 38 quoted),
 `temporary-hand-size-design.md`, `wraith-zombie-design.md`,
 `token-vampire-design.md`, `path-cards-design.md`.
 
@@ -5407,7 +5653,7 @@ hides can still omit what a player needs), `richer-options-design.md`
 (options carrying what the engine already computed and dropped: block
 arithmetic and live play costs).
 
-**UI and reference:** `debug-ui-design.md`, `playtest-2026-09-05.md` (the third playtest pass: the seat grid, the play strip, an ash-heap count that had been meaningless, and the ally that pays its last life mid-action — why a derived read must be total), `lobby-design.md` (room codes, the lobby, the PeerJS adapter — and why a public room list needs a server), `shell-design.md` (profile, menu and new game — local-only profiles, and where the decisions live vs the screens), `multiplayer-design.md` (the host/peer core: the protocol above the carrier, masking per recipient, and why a choose names the decision it answers), `deck-import-design.md` (one parser for every site, precons derived from the KRCG snapshot, and what counts as fatal), `fresh-game-design.md` (dealing a real game from real decks — the p. 14 setup, and what it proved about starting the engine from an empty table), `game-log-design.md` (per-playthrough log files: the dev-server sink, and why the logger is an observer in the transport rather than a hook in the UI), `futile-options-design.md` (options that would do nothing, and where excess blood really goes), `cockatrice-lessons.md`.
+**UI and reference:** `debug-ui-design.md`, `playtest-2026-09-05.md` (the third playtest pass: the seat grid, the play strip, an ash-heap count that had been meaningless, and the ally that pays its last life mid-action — why a derived read must be total), `lobby-rework-2026-09-06.md` (the fourteen-item pass: one lobby screen, the seat grid, table chat, and the two reported bugs that were one missing `onChanged`), `lobby-design.md` (room codes, the lobby, the PeerJS adapter — and why a public room list needs a server), `shell-design.md` (profile, menu and new game — local-only profiles, and where the decisions live vs the screens), `multiplayer-design.md` (the host/peer core: the protocol above the carrier, masking per recipient, and why a choose names the decision it answers), `deck-import-design.md` (one parser for every site, precons derived from the KRCG snapshot, and what counts as fatal), `fresh-game-design.md` (dealing a real game from real decks — the p. 14 setup, and what it proved about starting the engine from an empty table), `game-log-design.md` (per-playthrough log files: the dev-server sink, and why the logger is an observer in the transport rather than a hook in the UI), `futile-options-design.md` (options that would do nothing, and where excess blood really goes), `cockatrice-lessons.md`.
 
 ## Commands
 

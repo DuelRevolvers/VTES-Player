@@ -304,20 +304,33 @@ describe("diablerie step 2 — taking the victim's equipment", () => {
     );
   });
 
-  it("does not hand over a UNIQUE the taker's Methuselah already controls", () => {
-    // The engine's own-duplicate rule. It burns with the victim instead.
+  it("never reaches a UNIQUE two Methuselahs both control — they CONTEST first", () => {
+    // This test used to assert the take's own-duplicate guard, on a board
+    // where Alice and Bob each controlled a Treasured Samadji. Contested
+    // cards (p. 17) make that board unreachable: "if more than one unique
+    // card with the same name is brought into play … all of the contested
+    // cards are turned face down and are out of play", so neither copy is
+    // on a vampire for the diablerie to take.
+    //
+    // The guard in `takeDiablerieEquipment` is kept as defence in depth,
+    // and this test now pins the reason it no longer fires.
     const state = game([gear("g1", "Treasured Samadji", ["equipment", "unique"])]);
     state.seats[0]!.minions[0]!.attached.push(
       gear("mine", "Treasured Samadji", ["equipment", "unique"]),
     );
     const engine = new VtesEngine(state, testRegistry);
-    runTrace(engine, commitAndSurvive);
 
+    // The contest is settled before the first decision is offered.
+    expect(engine.decision()).not.toBeNull();
+    expect(state.seats[0]!.contested?.map((c) => c.card.id)).toEqual(["mine"]);
+    expect(state.seats[1]!.contested?.map((c) => c.card.id)).toEqual(["g1"]);
     const v1 = state.seats[0]!.minions.find((m) => m.id === "V1")!;
-    expect(v1.attached.map((p) => p.card.id)).toEqual(["mine"]);
+    expect(v1.attached.map((p) => p.card.id)).toEqual([]);
+    // Out of play is not burned: a contest can still be won.
     expect(state.eventLog.some((e) => e.type === "PermanentBurned" && e.cardId === "g1")).toBe(
-      true,
+      false,
     );
+    expect(engine.decision()).not.toBeNull();
   });
 
   it("takes a unique the taker does NOT already control", () => {

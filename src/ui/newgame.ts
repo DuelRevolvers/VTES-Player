@@ -244,3 +244,25 @@ export function seatDeckHash(seat: SeatConfig): string | null {
 export function isOnlineTable(config: TableConfig): boolean {
   return config.seats.some((s) => s.kind === "open" || s.kind === "remote");
 }
+
+/**
+ * Who sits either side of a seat (p. 15).
+ *
+ * "Your prey is the Methuselah on your left; your predator is the one on
+ * your right." The table is a CYCLE, so this is a rotation of the seat
+ * list rather than a lookup with an edge case at each end — the same
+ * reading `firstSeat` takes when it rotates the array to choose who
+ * starts (docs/fresh-game-design.md).
+ *
+ * Here rather than in the screen because it is a rule, not markup.
+ */
+export function seatRelations(
+  names: string[],
+  i: number,
+): { prey: string; predator: string } | null {
+  if (names.length < 2 || i < 0 || i >= names.length) return null;
+  return {
+    prey: names[(i + 1) % names.length]!,
+    predator: names[(i - 1 + names.length) % names.length]!,
+  };
+}

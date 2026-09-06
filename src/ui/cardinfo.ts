@@ -11,6 +11,7 @@
 import registry from "../cards/registry.json";
 import type { CardRegistry, CryptCardDef } from "../cards/types.ts";
 import type { DisciplineLevel, Sect, VampireTitle } from "../engine/index.ts";
+import { CITY_TITLES } from "../engine/index.ts";
 
 const reg = registry as unknown as CardRegistry;
 
@@ -72,6 +73,10 @@ export interface CryptImport {
   disciplines: Record<string, DisciplineLevel>;
   sect: Sect | null;
   title: VampireTitle | null;
+  /** The city a prince/baron/archbishop holds their title in — "Camarilla
+   *  Prince of MELBOURNE". Undefined for every other title, and it is the
+   *  key a title contest turns on. docs/contested-design.md §6 */
+  titleCity?: string;
   /** The Path of Enlightenment, for the six library cards that filter on
    *  one. A PRINTED trait read straight off the card, exactly like clan and
    *  sect — undefined for every vampire outside the Sabbat V5 crypt, which
@@ -106,6 +111,7 @@ export function importCryptCard(id: number): CryptImport {
   const sect = prefix ? (SECTS[prefix[1]!] ?? null) : null;
 
   let title: VampireTitle | null = null;
+  let titleCity: string | undefined;
   if (prefix?.[2]) {
     // "Prince of Melbourne" / "bishop" / "Assamite Justicar" → the title word.
     const words = prefix[2].replace(/\s+of\s+.*$/i, "").trim().split(/\s+/);
@@ -115,6 +121,15 @@ export function importCryptCard(id: number): CryptImport {
         title = found;
         break;
       }
+    }
+    // "…of Melbourne" — the CITY, which is the whole key of a title
+    // contest (p. 18, p. 39–40): prince, baron and archbishop of the same
+    // city contest each other. A printed trait read straight off the card
+    // like clan, sect and path, and dropped here until 2026-09-06 — the
+    // same shape of gap as `path` (docs/contested-design.md §6).
+    const city = /\bof\s+(.+)$/i.exec(prefix[2].trim());
+    if (city && title !== null && CITY_TITLES.includes(title)) {
+      titleCity = city[1]!.trim();
     }
   }
 
@@ -140,5 +155,6 @@ export function importCryptCard(id: number): CryptImport {
     hasUnimplementedAbility,
   };
   if (card.path !== undefined) out.path = card.path;
+  if (titleCity !== undefined) out.titleCity = titleCity;
   return out;
 }

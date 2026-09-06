@@ -21,6 +21,7 @@
  */
 
 import type { DecisionPoint, GameState } from "../engine/index.ts";
+import { addChat } from "../ui/chat.ts";
 import type { GameHistory, GameTransport } from "../ui/transport.ts";
 import type { HostMessage, PeerChannel } from "./protocol.ts";
 import { PROTOCOL_VERSION } from "./protocol.ts";
@@ -116,9 +117,22 @@ export class PeerTransport implements GameTransport {
     return () => this.listeners.delete(cb);
   }
 
-  /** Leave the table. */
+  /** Say something to the table; the host relays it to everyone. */
+  say(text: string): void {
+    if (this.channel.open) this.channel.send({ type: "chat", text });
+  }
+
+  /**
+   * Leave the table.
+   *
+   * `leave` is SENT before the channel closes, so the host learns this was
+   * deliberate and hands the seat to a bot rather than leaving a seat
+   * nobody can answer — a game of VTES cannot skip a Methuselah's turn,
+   * so a silent disappearance would stall the table for everyone else.
+   */
   close(): void {
     this.failPending("left the table");
+    if (this.channel.open) this.channel.send({ type: "leave" });
     this.channel.close();
   }
 
@@ -140,6 +154,15 @@ export class PeerTransport implements GameTransport {
         else waiting.resolve();
         return;
       }
+      case "chatLine":
+        // Ordered by the host, like every other client (src/ui/chat.ts).
+        addChat({
+          from: msg.from,
+          text: msg.text,
+          at: msg.at,
+          ...(msg.system ? { system: true } : {}),
+        });
+        return;
       case "bye":
         this.goodbye = msg.reason;
         // Anything still in flight will never be answered now; failing it

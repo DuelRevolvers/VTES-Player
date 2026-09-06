@@ -41,6 +41,10 @@ function screen(
     localSeat?: string | null;
     ashOpen?: string | null;
     canLeave?: boolean;
+    /** This client runs the engine — a private table, or an online host.
+     *  A guest gets a shorter Settings menu and no Moderation at all. */
+    canModerate?: boolean;
+    moderation?: { people: Array<{ seat: string; name: string; remote: boolean; banned: boolean }> } | null;
   } = {},
 ): string {
   const t = new LocalTransport({ setup, ...(opts.omniscient ? { omniscient: true } : {}) });
@@ -51,6 +55,11 @@ function screen(
     localSeat: opts.localSeat ?? null,
     ashOpen: opts.ashOpen ?? null,
     canLeave: opts.canLeave ?? false,
+    canChat: false,
+    // The default is the ordinary case: one person playing bots on their
+    // own machine, who IS the authority.
+    canModerate: opts.canModerate ?? true,
+    moderation: opts.moderation ?? null,
     state: t.view(),
     dp: t.decision(),
     eventFilter: "",
@@ -204,15 +213,65 @@ describe("the settings menu", () => {
     expect(allBox(screen({ settingsOpen: true, autoPass: all }))).toContain("checked");
   });
 
+  it("holds the debug reveal, which is no longer a top-bar control", () => {
+    expect(screen()).not.toContain('id="omni"');
+    expect(screen({ settingsOpen: true })).toContain('id="omni"');
+  });
+
+  /**
+   * A GUEST at somebody else's table gets a shorter menu, and each cut is
+   * something they have no business with rather than something merely
+   * unhelpful: auto-pass for another seat answers for a person who is
+   * sitting right there, and the debug reveal would show them every hand
+   * at the table.
+   */
+  it("shows a guest only their own auto-pass row, and no debug reveal", () => {
+    const seats = config.decks.map((d) => d.seat);
+    const html = screen({ settingsOpen: true, canModerate: false, localSeat: seats[0]! });
+    expect(html).toContain(`class="autopass-seat" data-seat="${seats[0]}"`);
+    for (const id of seats.slice(1)) {
+      expect(html).not.toContain(`class="autopass-seat" data-seat="${id}"`);
+    }
+    // No "all seats", nothing to apply it to.
+    expect(html).not.toContain('id="autopass-all"');
+    expect(html).not.toContain('id="omni"');
+    // The AI controls are the host's, and they are not merely disabled.
+    expect(html).not.toContain("ai-seat");
+    expect(html).not.toContain('id="aispeed"');
+  });
+
+  it("keeps the whole menu for the authority", () => {
+    const html = screen({ settingsOpen: true, canModerate: true });
+    for (const deck of config.decks) {
+      expect(html).toContain(`class="autopass-seat" data-seat="${deck.seat}"`);
+    }
+    expect(html).toContain('id="autopass-all"');
+    expect(html).toContain('id="omni"');
+  });
+});
+
+/**
+ * THE AI CONTROLS LIVE IN MODERATION, not in Settings (owner request).
+ * Handing a seat to the computer is the same kind of act as kicking
+ * somebody to a bot — it changes who answers for that seat — where
+ * everything left in Settings is about this screen and this player.
+ */
+describe("moderation", () => {
+  const mod = { people: [] };
+
+  it("is closed until asked for", () => {
+    expect(screen()).not.toContain('id="mod-panel"');
+    expect(screen({ moderation: mod })).toContain('id="mod-panel"');
+  });
+
   it("offers an AI toggle per seat, checked for the seats an AI plays", () => {
     const seats = config.decks.map((d) => d.seat);
-    const html = screen({ settingsOpen: true, aiSeats: { [seats[1]!]: true } });
-    // One row per seat…
+    const html = screen({ moderation: mod, aiSeats: { [seats[1]!]: true } });
     for (const id of seats) {
       expect(html).toContain(`class="ai-seat" data-seat="${id}"`);
     }
-    // …and only the AI-driven one is checked. Sliced to that row, because
-    // the auto-pass rows carry the same seat names.
+    // Only the AI-driven one is checked. Sliced to that row, because the
+    // auto-pass rows carry the same seat names.
     const row = (id: string): string => {
       const at = html.indexOf(`class="ai-seat" data-seat="${id}"`);
       return html.slice(at, at + 90);
@@ -221,26 +280,88 @@ describe("the settings menu", () => {
     expect(row(seats[0]!)).not.toContain("checked");
   });
 
-  it("the AI toggles are inside the settings dialog, not the top bar", () => {
-    expect(screen()).not.toContain("ai-seat");
-    expect(screen({ settingsOpen: true })).toContain("ai-seat");
-  });
-
-  it("holds the debug reveal, which is no longer a top-bar control", () => {
-    expect(screen()).not.toContain('id="omni"');
-    expect(screen({ settingsOpen: true })).toContain('id="omni"');
-  });
-
   it("offers an AI pace, with the current one selected", () => {
-    const html = screen({ settingsOpen: true, aiDelayMs: 900 });
+    const html = screen({ moderation: mod, aiDelayMs: 900 });
     expect(html).toContain('id="aispeed"');
     for (const s of AI_SPEEDS) expect(html).toContain(`value="${s.ms}"`);
-    // Exactly the one in force, and no other.
     const chosen = (h: string, ms: number): boolean =>
       h.slice(h.indexOf(`value="${ms}"`), h.indexOf(`value="${ms}"`) + 30).includes("selected");
     expect(chosen(html, 900)).toBe(true);
     expect(chosen(html, 0)).toBe(false);
     expect(chosen(html, 1800)).toBe(false);
+  });
+
+  it("is not in the settings menu any more", () => {
+    const settings = screen({ settingsOpen: true });
+    expect(settings).not.toContain("ai-seat");
+    expect(settings).not.toContain('id="aispeed"');
+  });
+
+  it("is reached from the top bar, beside How to Play and Settings", () => {
+    const html = screen();
+    const top = html.slice(html.indexOf('class="top"'), html.indexOf('class="main"'));
+    expect(top).toContain('id="mod-btn"');
+    expect(top).toContain("Moderation");
+    // A guest has nothing to moderate WITH, so the button is absent
+    // rather than present and refusing.
+    const guest = screen({ canModerate: false });
+    expect(guest.slice(guest.indexOf('class="top"'), guest.indexOf('class="main"'))).not.toContain(
+      'id="mod-btn"',
+    );
+  });
+
+  /**
+   * ONE ROW PER SEAT, not one per connection: the panel's subject is who
+   * answers for each seat, and listing connections left the host and every
+   * bot off it entirely.
+   */
+  it("lists every seat at the table, bot or person", () => {
+    const seats = config.decks.map((d) => d.seat);
+    const html = screen({ moderation: mod });
+    const rows = html.match(/class="modrow"/g) ?? [];
+    expect(rows.length).toBe(seats.length);
+  });
+
+  it("greys out the AI box for the host's own seat and for an online player", () => {
+    const seats = config.decks.map((d) => d.seat);
+    const html = screen({
+      localSeat: seats[0]!,
+      moderation: {
+        people: [{ seat: seats[1]!, name: "Bea", remote: true, banned: false }],
+      },
+    });
+    const box = (id: string): string => {
+      const at = html.indexOf(`class="ai-seat" data-seat="${id}"`);
+      return html.slice(at, at + 120);
+    };
+    // Your own seat: you are sitting in it.
+    expect(box(seats[0]!)).toContain("disabled");
+    // A seat somebody is playing: kick them first, which hands it over.
+    expect(box(seats[1]!)).toContain("disabled");
+    // A bot seat is the case the box exists for — the control, without
+    // which the two above would pass on a panel that disabled everything.
+    expect(box(seats[2]!)).not.toContain("disabled");
+  });
+
+  it("offers kick and ban for an online player, and neither for a bot", () => {
+    const seats = config.decks.map((d) => d.seat);
+    const html = screen({
+      moderation: { people: [{ seat: seats[1]!, name: "Bea", remote: true, banned: false }] },
+    });
+    expect(html).toContain(`class="mod-kick danger" data-seat="${seats[1]}"`);
+    expect(html).toContain(`class="mod-ban" data-seat="${seats[1]}"`);
+    // Nothing to kick on a bot's row.
+    expect(html).not.toContain(`data-seat="${seats[2]}">Kick`);
+    expect(html).not.toContain(`class="mod-kick danger" data-seat="${seats[2]}"`);
+  });
+
+  it("says Unban for somebody already banned", () => {
+    const seats = config.decks.map((d) => d.seat);
+    const html = screen({
+      moderation: { people: [{ seat: seats[1]!, name: "Bea", remote: true, banned: true }] },
+    });
+    const at = html.indexOf(`class="mod-ban" data-seat="${seats[1]}"`);
+    expect(html.slice(at, at + 80)).toContain("Unban");
   });
 });
 
@@ -582,5 +703,71 @@ describe("the rules cover the vocabulary the CARDS use", () => {
     const cardWords = RULE_SECTIONS.find((s) => s.id === "cardwords");
     expect(cardWords).toBeDefined();
     expect(ruleText(cardWords!)).toContain("do not appear in it at all");
+  });
+});
+
+/**
+ * PREY AND PREDATOR ON THE MAT (owner request, twice).
+ *
+ * p. 15: your prey is on your left, your predator on your right — and it
+ * MOVES: "when your prey is ousted, the next Methuselah to your left
+ * becomes your new prey". So it is read through `preyOf`/`predatorOf`
+ * rather than off the seat array, and the oust case is what proves it.
+ */
+describe("who is whose prey", () => {
+  it("names each seat's prey and predator beside their name", () => {
+    const html = screen();
+    const seats = config.decks.map((d) => d.seat);
+    // Three seats in a cycle: the first bleeds the second, the third
+    // bleeds the first.
+    const mat = (id: string): string => {
+      const at = html.indexOf(`data-seat="${id}"`);
+      return html.slice(at, at + 600);
+    };
+    expect(mat(seats[0]!)).toContain(`prey ${seats[1]}`);
+    expect(mat(seats[0]!)).toContain(`predator ${seats[seats.length - 1]}`);
+  });
+
+  it("follows an oust rather than reading the seating order", () => {
+    const t = new LocalTransport({ setup });
+    const state = t.view();
+    const seats = state.seats.map((s) => s.id);
+    // Oust the middle seat: the first Methuselah's prey becomes the third.
+    const victim = state.seats.find((s) => s.id === seats[1]!)!;
+    victim.ousted = true;
+    const html = render({
+      cardTextPx: 15, seatFaces: {}, localSeat: null, ashOpen: null,
+      canLeave: false, canChat: false, canModerate: true, moderation: null,
+      state, dp: t.decision(), eventFilter: "", canUndo: false, canRewind: true,
+      omniscient: false, selectedCard: null, handOrder: [], settingsOpen: false,
+      helpOpen: false, helpOpenSections: [], helpQuery: "", autoPass: {},
+      aiSeats: {}, thinking: false, aiDelayMs: 0,
+    });
+    const at = html.indexOf(`data-seat="${seats[0]}"`);
+    expect(html.slice(at, at + 600)).toContain(`prey ${seats[2]}`);
+    // …and the ousted seat is named as nobody's neighbour on its own mat.
+    const out = html.indexOf(`data-seat="${seats[1]}"`);
+    expect(html.slice(out, out + 600)).not.toContain("predator");
+  });
+});
+
+/**
+ * Sorting your hand off-turn WORKS and always did; what was missing was
+ * any sign of it. Reported twice as a missing feature, which is the
+ * auto-pass shape: a feature that cannot be discovered is indistinguishable
+ * from one that is absent.
+ */
+describe("the hand while you are not being asked", () => {
+  it("says it can still be sorted", () => {
+    const seats = config.decks.map((d) => d.seat);
+    const other = seats.find((s) => s !== new LocalTransport({ setup }).decision()?.seat)!;
+    const html = screen({ localSeat: other });
+    const hand = html.slice(html.indexOf('class="hand watching"'));
+    expect(hand).toContain("drag to sort");
+    // …and the cards really are draggable, or the label would be a lie.
+    expect(hand).toContain('draggable="true"');
+    // The control: nothing in it is lit as playable.
+    const strip = hand.slice(0, hand.indexOf('id="ashheap"') + 1 || undefined);
+    expect(strip).not.toContain('handslot playable');
   });
 });

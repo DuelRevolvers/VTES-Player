@@ -9090,7 +9090,13 @@ function addCryptAbilities(
           open = ctx.window === "referendum.polling" && ctx.referendum !== null;
           break;
         case "bleedAction":
-          open = af !== null && af.actionKind === "bleed";
+          // "During a bleed action, <bearer> can discard … to get +1
+          // BLEED" — the bonus is the bearer's own, so the bearer has to
+          // be the one bleeding. Checking only "is this a bleed" offered
+          // it on a stablemate's bleed, where the discard bought nothing:
+          // `modifyBleed` is action-scoped, so it would have raised
+          // ANOTHER vampire's bleed. Owner-reported, 2026-09-06.
+          open = af !== null && af.actionKind === "bleed" && af.acting === bearer.id;
           break;
         case "anyAction":
           open = af !== null;

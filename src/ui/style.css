@@ -399,6 +399,9 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 .pile.crypt { background: #43301f; }
 .pile.library { background: #1f3a3a; }
 .pile.ash { background: #2a2a2a; color: var(--dim); }
+/* Contested: face down and out of play, and costing its holder pool every
+   unlock phase (p. 17) — worth standing out from the quiet piles. */
+.pile.contested { background: #4a2330; color: #ffc4d2; }
 
 /* --- hand -------------------------------------------------------------- */
 
@@ -658,9 +661,17 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
   border: 1px solid var(--line); border-left: 3px solid var(--gold);
   border-radius: 4px; padding: 12px 14px; margin: 2px 0 8px; background: var(--panel2);
 }
-.preconset { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-bottom: 6px; }
-.preconset > .dim { width: 100%; font-size: 11px; }
-.precon { font-size: 12px; padding: 4px 9px; }
+/* A GRID, not a wrapped row (owner request). Every deck button is the
+   same width whatever its name is, so a set reads as a set of choices
+   rather than a ragged paragraph — and the play-style line underneath has
+   a predictable column to wrap in. */
+.preconset {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px; align-items: stretch; margin-bottom: 10px;
+}
+/* The set name spans the whole grid rather than taking a cell. */
+.preconset > .dim { grid-column: 1 / -1; font-size: 11px; }
+.precon { font-size: 12px; padding: 6px 9px; height: 100%; }
 .pastebox {
   width: 100%; background: var(--bg); color: var(--ink);
   border: 1px solid var(--line); border-radius: 4px; padding: 8px;
@@ -756,7 +767,12 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 
 /* The hand while somebody else is deciding: still yours to read, but
    nothing on it is playable, so it does not invite a click. */
-.hand.watching .handslot { cursor: default; }
+/* Off-turn the hand cannot be PLAYED, but it can still be SORTED — the
+   order is a per-seat preference that never reaches the command log, so
+   rearranging while somebody else thinks is free. Show the grab cursor or
+   nobody discovers it (owner-reported 2026-09-06). */
+.hand.watching .handslot { cursor: grab; }
+.hand.watching .handslot:active { cursor: grabbing; }
 
 /* --- actions ON the table ---------------------------------------------- */
 
@@ -811,3 +827,227 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .lbtable td { padding: 5px 8px; border-bottom: 1px solid var(--line); }
 .lbtable tbody tr:first-child td { color: var(--gold); font-weight: 600; }
 .lbtable tr.isbot td { color: var(--dim); font-weight: 400; }
+
+/* --- the lobby grid ----------------------------------------------------- */
+
+/* The table, as a table: seats in a grid rather than a list, the same
+   shape the game screen uses so the seat you set up is the seat you sit
+   at (owner request 2026-09-06). Three across is the widest that keeps a
+   box readable, and the six-seat maximum lands as 3x2. */
+.seatgrid {
+  display: grid; gap: 10px; margin: 10px 0 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 780px) { .seatgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.seatbox {
+  position: relative; display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border: 1px solid var(--line); border-radius: 4px;
+  background: var(--panel2); min-height: 132px;
+}
+/* The host's own box, and a guest's own box, are the ones you may touch. */
+.seatbox.host, .seatbox.mine { border-color: var(--gold); }
+/* A seat somebody has joined on is theirs — they brought that deck. */
+.seatbox.remote { border-style: dashed; }
+
+.seatbox .seatx {
+  position: absolute; top: 4px; right: 4px; width: 20px; height: 20px;
+  line-height: 1; padding: 0; border-radius: 50%;
+  background: #5a1f28; color: #ffd7de; border: 1px solid #7c2b36;
+}
+.seatbox .seatx:hover { background: #7c2b36; }
+
+.sbhead { display: flex; gap: 8px; align-items: center; }
+.sbname { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sbname .lname { font-weight: 600; }
+.sbname .seatname { width: 100%; }
+/* Who sits either side (p. 15). Small and unbolded: orientation, not
+   identity. */
+.rel { font-size: 10px; color: var(--dim); font-weight: 400; }
+.sbkind { font-size: 11px; color: var(--dim); }
+.seatbox .deckbtn { text-align: left; }
+
+/* The + box is a seat-shaped button, so the grid reads as "and one more". */
+.seatbox.addbox {
+  align-items: center; justify-content: center; gap: 2px;
+  border-style: dashed; color: var(--dim); cursor: pointer;
+}
+.seatbox.addbox:hover { border-color: var(--gold); color: var(--fg); }
+.seatbox.addbox .plus { font-size: 28px; line-height: 1; }
+
+/* --- chat --------------------------------------------------------------- */
+
+/* One conversation, in the lobby and at the table (src/ui/chat.ts). */
+.chatbox {
+  border: 1px solid var(--line); border-radius: 4px; padding: 8px;
+  background: var(--panel2); margin: 10px 0;
+}
+.chatlines {
+  max-height: 150px; overflow-y: auto; display: flex;
+  flex-direction: column; gap: 3px; margin: 6px 0;
+}
+.chatline { font-size: 12px; }
+.chatline b { color: var(--gold); }
+.chatline.system { color: var(--dim); font-style: italic; }
+.chatbox .row { margin-top: 0; }
+.chatbox #chatinput { flex: 1 1 auto; }
+
+/* At the table it is a panel in the side column rather than a card. */
+.tablechat { margin-top: 8px; }
+.tablechat .chatlines { max-height: 120px; }
+
+/* --- 2026-09-06 pass ---------------------------------------------------- */
+
+/* TEXT ENTRIES AND DROPDOWNS read as fields, not as background. One shade
+   above the panel they sit on, so an empty box still looks like somewhere
+   to type (owner request). Applied by ELEMENT rather than by class, so a
+   box added later is styled by existing. */
+:root { --field: #2f2d3d; }
+.shell input, .shell select, .shell textarea,
+.chatbox input, .chatbox textarea {
+  background: var(--field); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 6px 9px; font: inherit;
+}
+.shell input:focus, .shell select:focus, .shell textarea:focus,
+.chatbox input:focus { outline: 1px solid var(--gold); }
+.shell input::placeholder, .chatbox input::placeholder { color: var(--dim); }
+/* A file picker is a button, not a field. */
+.shell input[type="file"] { background: none; border: none; padding: 0; }
+
+/* --- the lower half: side column runs to the bottom --------------------- */
+
+.lower { flex: 1; display: flex; gap: 8px; padding: 8px; overflow: hidden; }
+.leftcol { flex: 1; display: flex; flex-direction: column; min-width: 0; gap: 8px; }
+/* .main no longer holds the side column, so it is just the table. */
+.lower .main { flex: 1; padding: 0; gap: 0; overflow: hidden; }
+/* The hand and action bar are inside the left column now, so they stop
+   where the side column starts instead of running under it. */
+.lower .bottom { border-top: 2px solid var(--accent); border-radius: 4px; }
+.lower .side { height: 100%; }
+/* THE SPLIT IS FIXED, not elastic (owner: "the chat box starts too
+   tall … make the top of it fixed at about a third of the screen height,
+   and the Game Log fixed at the rest").
+   The log takes the top third and the chat the remaining two, whatever
+   either contains — with `flex: 0 1 auto` the log had been sized by how
+   much had HAPPENED, so the boundary moved as the game went on and the
+   chat opened almost full height on an empty log. A fixed share sizes it
+   from the column instead.
+   Halved again on the owner's second look: the CHAT takes the bottom
+   third and the log the two above it — the split the other way up, which
+   is the right way round, since a game log fills steadily all game and a
+   conversation does not. */
+.side .panel.log { flex: 1 1 auto; min-height: 140px; }
+.side .panel.tablechat { flex: 0 0 33%; min-height: 110px; }
+.side .panel.tablechat .chatlines { max-height: none; flex: 1 1 auto; }
+
+/* --- main menu ---------------------------------------------------------- */
+
+/* Centred in the window rather than pinned to the top: this is the front
+   door, and there is nothing else on the screen to align with. */
+.shell.centred { align-items: center; }
+.shell .card.menu { text-align: center; }
+/* The art is not inside the card: a 520px column is not the size this
+   picture wants to be read at, so the menu is a wrapper — art across the
+   window, buttons in their card underneath.
+   1100px is the source image's own width halved (2752 x 1184), so it is
+   never upscaled, and 96vw keeps it inside a narrow window. */
+.menuwrap {
+  display: flex; flex-direction: column; align-items: center;
+  width: min(1100px, 96vw);
+}
+.menuwrap .banner { width: 100%; height: auto; display: block; margin: 0 0 4px; }
+.shell .card.menu .menubuttons { align-items: stretch; max-width: 320px; margin: 18px auto; }
+
+/* --- precon buttons carry a play-style line ----------------------------- */
+
+.preconset .precon {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  text-align: left; max-width: 100%;
+}
+.precon .pname { font-weight: 600; }
+.precon .pstyle { font-size: 11px; color: var(--dim); line-height: 1.35; white-space: normal; }
+.precon:hover .pstyle { color: var(--ink); }
+
+/* --- moderation --------------------------------------------------------- */
+
+/* One row per seat: name, what kind of player, the AI box, and the two
+   things that can be done to a person. Fixed columns so the buttons line
+   up down the panel rather than tracking each name's length. */
+.modrows { margin: 10px 0 14px; }
+.modrow {
+  display: grid; grid-template-columns: 1fr 70px 60px auto auto;
+  gap: 8px; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid var(--line);
+}
+.modrow:last-child { border-bottom: none; }
+.modrow .lname { font-weight: 600; }
+.modrow .kind { font-size: 11px; }
+.modrow .toggle { margin: 0; font-size: 11px; }
+/* A disabled box still says what is true of that seat, so it is dimmed
+   rather than hidden — the row keeps its shape either way. */
+.modrow .toggle.off { opacity: .45; cursor: not-allowed; }
+.modrow button { font-size: 11px; padding: 3px 8px; }
+
+/* --- the lobby fills the window ----------------------------------------- */
+
+/* "Resize the entire lobby screen to fit the window at its current state.
+   It needs to be dynamic." So the card is sized from the VIEWPORT and
+   scrolls inside itself, rather than being a fixed-width column the page
+   scrolls past. Wider than the other cards because it holds a grid. */
+.shell .card.wide.fit {
+  width: min(1900px, 98vw);
+  max-height: calc(100vh - 32px);
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  padding: 18px 20px;
+}
+/* A seat box has to hold a face, a name, a kind and a deck without
+   reading as a narrow strip, so the minimum is generous: on a wide window
+   the grid gives each one room rather than squeezing six into a line. */
+/* THE SEAT GRID STAYS A GRID however wide the lobby gets (owner request).
+   `auto-fit` was letting six seats straighten into a single row on a wide
+   window, which is exactly the shape the grid exists to avoid — it is
+   meant to look like the game table (3 across, six seats as 3x2), and a
+   row of six looks like nothing at the table. The boxes get wider; the
+   layout does not change. */
+.card.fit .seatgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.card.fit .chatbox { flex: 1 1 auto; min-height: 0; }
+
+/* The table on the left, the conversation in its own column on the right. */
+.lobbycols { display: flex; gap: 16px; align-items: flex-start; }
+.lobbymain { flex: 1; min-width: 0; }
+.lobbychat { flex: 0 0 300px; display: flex; flex-direction: column; max-height: 60vh; }
+.lobbychat .chatbox { display: flex; flex-direction: column; height: 100%; }
+.lobbychat .chatlines { flex: 1 1 auto; min-height: 120px; }
+@media (max-width: 900px) {
+  .lobbycols { flex-direction: column; }
+  .lobbychat { flex: 1 1 auto; width: 100%; }
+}
+
+/* --- modals (moderation, the deck picker) -------------------------------- */
+
+/* The settings dialog's chrome, reused: a scrim over the screen and one
+   card in the middle of it. Anything that is too big to live inside the
+   thing that opened it belongs here. */
+.modal {
+  position: fixed; inset: 0; z-index: 41;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .55);
+}
+/* The deck picker brings its own scrim (so a click outside closes it), so
+   the modal itself must not paint a second one over it. */
+.modal.deckmodal { background: none; padding: 24px; pointer-events: none; }
+.modal.deckmodal .modalcard { pointer-events: auto; }
+.modalcard {
+  width: min(760px, 94vw); max-height: min(86vh, 900px); overflow-y: auto;
+  background: var(--panel); border: 1px solid var(--gold); border-radius: 6px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .8);
+  padding: 18px 20px;
+}
+.modalcard h2 { margin: 0 0 10px; font-size: 16px; color: var(--gold); font-weight: 600; }
+.modalcard .lobbyrow { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.modalcard .lobbyrow .lname { flex: 1; }
+/* Inside a modal the picker is the card, not a panel within one. */
+.modalcard .deckpanel { border: none; padding: 0; margin: 0; }

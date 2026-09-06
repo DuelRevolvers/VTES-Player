@@ -10,11 +10,12 @@ import { describe, expect, it } from "vitest";
 import registry from "../../src/cards/registry.json";
 import type { CardRegistry } from "../../src/cards/types.ts";
 import { buildGame } from "../../src/ui/decks.ts";
-import { preconDeck, supportedPrecons } from "../../src/ui/deckimport.ts";
+import { preconDeck, preconStyle, supportedPrecons } from "../../src/ui/deckimport.ts";
 import type { TableConfig } from "../../src/ui/newgame.ts";
 import {
   botSeats,
   buildTable,
+  seatRelations,
   defaultTable,
   isOnlineTable,
   MAX_SEATS,
@@ -223,5 +224,64 @@ describe("the local profile", () => {
     // The whole origin has a few megabytes, shared with the saved game.
     const huge = `data:image/png;base64,${"A".repeat(MAX_AVATAR_BYTES)}`;
     expect(avatarProblem(huge)).toContain("too large");
+  });
+});
+
+describe("who sits either side (p. 15)", () => {
+  // "Your prey is the Methuselah on your left; your predator is the one on
+  // your right." Shown in the lobby next to each name so a player can see
+  // the table they are about to sit at.
+  const four = ["Alice", "Bob", "Carol", "Dave"];
+
+  it("wraps, because the table is a cycle", () => {
+    expect(seatRelations(four, 0)).toEqual({ prey: "Bob", predator: "Dave" });
+    expect(seatRelations(four, 3)).toEqual({ prey: "Alice", predator: "Carol" });
+  });
+
+  it("is every other seat in a two-seat game", () => {
+    // Both directions land on the same person, which is correct rather
+    // than a degenerate case: with two Methuselahs each is the other's
+    // prey and predator.
+    expect(seatRelations(["Alice", "Bob"], 0)).toEqual({ prey: "Bob", predator: "Bob" });
+  });
+
+  it("answers null where there is nobody to relate to", () => {
+    // The negative space: one seat, and an index off the end. Without
+    // this the wrap arithmetic would quietly name the seat itself.
+    expect(seatRelations(["Alice"], 0)).toBeNull();
+    expect(seatRelations(four, 9)).toBeNull();
+    expect(seatRelations(four, -1)).toBeNull();
+  });
+});
+
+describe("precon play-style lines", () => {
+  it("every precon in the pool has one", () => {
+    // A standing guard, not a fixed list: the descriptors are keyed on the
+    // deck NAME so a New Blood starter shares its clan's line, and the day
+    // the pool widens this fails until the new decks are written up rather
+    // than letting the panel drift behind the sets.
+    const missing = supportedPrecons()
+      .filter((p) => preconStyle(p.name) === null)
+      .map((p) => `${p.set} / ${p.name}`);
+    expect(missing).toEqual([]);
+  });
+
+  it("says how the deck WINS, not what clan it is", () => {
+    // The point is telling a combat deck from a vote deck without reading
+    // 60 cards, so each line has to name a plan. Every one mentions at
+    // least one of the three things a Methuselah can actually do.
+    const verbs = /bleed|vote|referend|combat|fight|rush|block|burn|drain|pool/i;
+    for (const p of supportedPrecons()) {
+      expect(preconStyle(p.name), `${p.name} names no plan`).toMatch(verbs);
+    }
+  });
+
+  it("shares one line between a clan's full deck and its New Blood half", () => {
+    // Deliberate: they are the same clan and the same plan at half the
+    // size, and two lines that drifted apart would be worse than one.
+    expect(preconStyle("Malkavian")).toBe(preconStyle("Malkavian"));
+    const nb = supportedPrecons().find((p) => p.set.startsWith("New Blood") && p.name === "Ventrue");
+    const full = supportedPrecons().find((p) => p.set === "Fifth Edition" && p.name === "Ventrue");
+    expect(nb && full && preconStyle(nb.name) === preconStyle(full.name)).toBe(true);
   });
 });

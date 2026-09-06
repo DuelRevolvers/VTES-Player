@@ -16,13 +16,15 @@
 
 import { HeuristicAgent } from "../ai/heuristic.ts";
 import { LobbyHost, LobbyPeer } from "../net/lobby.ts";
+import type { HostSession } from "../net/host.ts";
 import { PeerTransport } from "../net/peer.ts";
 import type { RoomHandle } from "../net/peerjs.ts";
 import { hostRoom, joinRoom } from "../net/peerjs.ts";
-import type { PeerChannel } from "../net/protocol.ts";
+import type { LobbySeat, PeerChannel } from "../net/protocol.ts";
+import { addChat, chatLines, chatProblem, clearChat, MAX_CHAT_TEXT, onChat } from "./chat.ts";
 import { codeFromLink, isRoomCode, joinLink, newRoomCode, normaliseRoomCode } from "../net/room.ts";
 import type { PreconSummary } from "./deckimport.ts";
-import { supportedPrecons, supportedSets } from "./deckimport.ts";
+import { preconStyle, supportedPrecons, supportedSets } from "./deckimport.ts";
 import {
   deckSummary,
   deleteDeck,
@@ -35,7 +37,7 @@ import {
 import { DevServerSink, GameLog } from "./gamelog.ts";
 import { clearResults, loadResults, recordResult, standings } from "./results.ts";
 import { DebugApp } from "./loop.ts";
-import type { SeatFace } from "./render.ts";
+import type { ModerationView, SeatFace } from "./render.ts";
 import type { DeckSource, SeatConfig, TableConfig } from "./newgame.ts";
 import {
   botSeats,
@@ -43,6 +45,7 @@ import {
   defaultTable,
   isOnlineTable,
   seatDeckHash,
+  seatRelations,
   MAX_SEATS,
   MIN_SEATS,
   RECOMMENDED_SEATS,
@@ -56,6 +59,7 @@ import {
   newProfile,
   saveProfile,
 } from "./profile.ts";
+import bannerUrl from "../assets/banner.png";
 import { seatSeed } from "./settings.ts";
 import { LocalTransport } from "./transport.ts";
 
@@ -100,6 +104,11 @@ export class Shell {
     const invited = codeFromLink(location.href);
     if (invited) this.joinCode = invited;
     this.screen = !this.profile ? "profile" : invited ? "join" : "menu";
+    // A chat line can arrive at any moment from the network, and the
+    // screen is a pure function of state, so it only has to be told.
+    onChat(() => {
+      if (this.screen === "newgame" || this.screen === "lobby") this.paint();
+    });
     this.paint();
   }
 
@@ -111,7 +120,11 @@ export class Shell {
 
   private paint(): void {
     if (this.screen === "table") return; // the table owns the root now
-    this.root.innerHTML = `<div class="shell">${this.body()}</div>`;
+    // The menu is centred in the window (there is nothing else on screen
+    // to align with); the lobby is sized to fill it, because it is a table
+    // and a table should look like the room it is.
+    const cls = this.screen === "menu" ? "shell centred" : "shell";
+    this.root.innerHTML = `<div class="${cls}">${this.body()}</div>`;
     this.wire();
   }
 
@@ -121,8 +134,10 @@ export class Shell {
         return this.profileScreen();
       case "menu":
         return this.menuScreen();
+      // One screen, both cases. Building a table and waiting in a lobby
+      // show the same thing, so opening a seat adds a room code rather
+      // than throwing the host to a second page.
       case "newgame":
-        return this.newGameScreen();
       case "lobby":
         return this.lobbyScreen();
       case "join":
@@ -205,7 +220,36 @@ export class Shell {
                 })
                 .join("")}</div>`
         }
+        ${this.deckImporter()}
         ${this.deckError ? `<p class="err">${esc(this.deckError)}</p>` : ""}
+      </div>`;
+  }
+
+  /**
+   * Paste a deck list and keep it, without being in a game.
+   *
+   * The importer used to exist only inside the deck panel, which is only
+   * reachable from a seat — so building a collection meant starting a game
+   * you did not want (owner request 2026-09-06). It writes through the
+   * same `saveDeck` the panel uses, so a deck added here is the same
+   * object, in the same store, and appears at the top of every deck panel.
+   *
+   * `data-i="-1"` is deliberately not a seat: the save handler reads the
+   * boxes by that index and never touches `this.table`.
+   */
+  private deckImporter(): string {
+    return `
+      <div class="sethead">Add a deck</div>
+      <p class="note">
+        Paste a list from VDB, Amaranth, ARDB, JOL, Lackey or the TWD
+        archive. Unknown or unimplemented cards are reported, never dropped.
+      </p>
+      <textarea class="pastebox" data-i="-1" rows="6"
+                placeholder="2x Blood Doll&#10;..."></textarea>
+      <div class="row">
+        <input class="deckname" data-i="-1" maxlength="${MAX_DECK_NAME}"
+               placeholder="My Malkavian deck" />
+        <button class="decksave primary" data-i="-1">Save to my decks</button>
       </div>`;
   }
 
@@ -213,8 +257,19 @@ export class Shell {
 
   private menuScreen(): string {
     return `
+      <div class="menuwrap">
+        <!--
+          The title art replaces the <h1>, rather than sitting above it:
+          it says the same words, and two titles would be one too many.
+          Alt text carries the name for anyone the picture does not reach.
+
+          It sits OUTSIDE the card (owner: "the banner needs to be this
+          big"), because the card is a 520px column and the art wants the
+          window. So the menu is a wrapper: art at the full width above,
+          buttons in their card below.
+        -->
+        <img class="banner" src="${bannerUrl}" alt="Vampire: The Eternal Struggle" />
       <div class="card menu">
-        <h1>Vampire: The Eternal Struggle</h1>
         <p class="note">Playing as <b>${esc(this.profile?.name ?? "")}</b></p>
         <div class="menubuttons">
           <button id="m-host" class="primary">Host a game</button>
@@ -228,67 +283,263 @@ export class Shell {
           this machine, with bots. Open a seat and others can join with a
           room code.
         </p>
+      </div>
       </div>`;
   }
 
   // --- new game ------------------------------------------------------------
 
-  private newGameScreen(): string {
+  /**
+   * THE TABLE — one screen, whether the game is private or online.
+   *
+   * There used to be two: a "new game" screen where you built the table,
+   * and a separate lobby you were thrown to the moment a seat went online
+   * (owner-reported 2026-09-06, "it goes to a second page"). They showed
+   * the same thing — who is sitting where, with what deck, and why the
+   * game cannot start — so they are one screen now, and opening a seat
+   * adds a room code to it rather than replacing it.
+   *
+   * Three cases share it: a private table, a host's online table, and a
+   * guest's view of somebody else's. The difference is only ever WHICH
+   * BOX you may touch, which is the `mine` flag on each.
+   */
+  private lobbyScreen(): string {
+    const host = this.lobbyHost;
+    const guest = this.lobbyPeer?.state ?? null;
     const build = buildTable(this.table);
     const precons = supportedPrecons().filter((p) => p.playable);
+    const code = host?.code ?? guest?.code ?? "";
+    const online = code !== "" || isOnlineTable(this.table);
+    const problems = guest ? guest.problems : build.problems.map((p) => (p.seat ? `${p.seat}: ${p.problem}` : p.problem));
+    const canStart = guest ? false : build.setup !== null;
+
+    const boxes = guest
+      ? guest.seats.map((s, i) => this.guestBox(s, i, precons))
+      : this.table.seats.map((s, i) => this.seatBox(s, i, precons));
+
     return `
-      <div class="card wide">
-        <h1>New game</h1>
+      <div class="card wide fit">
+        <h1>${guest ? "Waiting to start" : "Your table"}</h1>
         <p class="note">
           The rulebook is written for <b>${RECOMMENDED_SEATS.join(" or ")} players</b>
           (p. 1); ${MIN_SEATS} to ${MAX_SEATS} will play.
         </p>
-        <div class="seats">
-          ${this.table.seats.map((s, i) => this.seatRow(s, i, precons)).join("")}
+        ${online ? this.roomBar(code) : `<p class="note">
+          Nobody is joining over the network yet. Set a seat to
+          <b>Open (online)</b> and a room code appears here.
+        </p>`}
+        ${this.error ? `<p class="err">${esc(this.error)}</p>` : ""}
+
+        <!--
+          TWO COLUMNS: the table on the left, the conversation on the right
+          in its own column (owner request). The chat was a full-width band
+          between the seats and the Start button, which put a scrolling
+          list in the middle of a form; beside it, it can be as tall as the
+          card without pushing anything down.
+        -->
+        <div class="lobbycols">
+          <div class="lobbymain">
+            <div class="seatgrid">
+              ${boxes.join("")}
+              ${
+                // The + box. Only the host adds seats, and only up to the
+                // engine's ceiling; a guest is a visitor at somebody's table.
+                !guest && this.table.seats.length < MAX_SEATS
+                  ? `<button class="seatbox addbox" id="seat-add" title="add a seat">
+                       <span class="plus">+</span><span class="note">add a player</span>
+                     </button>`
+                  : ""
+              }
+            </div>
+
+            ${
+              problems.length > 0
+                ? `<div class="problems"><b>Not ready to start:</b><ul>${problems
+                    .map((p) => `<li>${esc(p)}</li>`)
+                    .join("")}</ul></div>`
+                : `<p class="ok">Ready — ${(guest ? guest.seats.length : this.table.seats.length)} seats.</p>`
+            }
+            ${this.spectators > 0 ? `<p class="note">${this.spectators} watching.</p>` : ""}
+          </div>
+          <aside class="lobbychat">${this.chatPanel()}</aside>
         </div>
+
         <div class="row">
-          <button id="seat-add" ${this.table.seats.length >= MAX_SEATS ? "disabled" : ""}>Add seat</button>
-          <button id="seat-remove" ${this.table.seats.length <= MIN_SEATS ? "disabled" : ""}>Remove seat</button>
-        </div>
-        ${
-          build.problems.length > 0
-            ? `<div class="problems"><b>Not ready to start:</b><ul>${build.problems
-                .map(
-                  (p) =>
-                    `<li>${p.seat ? `<b>${esc(p.seat)}</b> — ` : ""}${esc(p.problem)}</li>`,
-                )
-                .join("")}</ul></div>`
-            : `<p class="ok">Ready — ${this.table.seats.length} seats.</p>`
-        }
-        <div class="row">
-          <button id="start" class="primary" ${build.setup ? "" : "disabled"}>Start game</button>
-          <button id="ng-back">Back</button>
+          ${guest ? "" : `<button id="start" class="primary" ${canStart ? "" : "disabled"}>Start game</button>`}
+          <button id="ng-back">${online ? (guest ? "Leave" : "Close table") : "Back"}</button>
         </div>
         ${this.setsNote()}
+      </div>
+      ${
+        // THE DECK PICKER IS A POP-UP (owner request), not a panel that
+        // unfolds inside a seat box. It carries your saved decks, 18
+        // precons across seven sets and a paste box, which is several
+        // times a seat box tall — inside one it stretched that column and
+        // left the others empty beside it. As a modal it is the size it
+        // wants to be and the grid never moves.
+        this.editingDeck !== null && this.editingDeck >= 0
+          ? this.deckModal(this.editingDeck, precons)
+          : ""
+      }`;
+  }
+
+  /** The deck picker, over the screen rather than inside a box. Same
+   *  chrome as the in-game settings dialog, which is what it is. */
+  private deckModal(i: number, precons: PreconSummary[]): string {
+    return `
+      <div class="scrim" id="deck-scrim"></div>
+      <div class="modal deckmodal" role="dialog" aria-label="Choose a deck">
+        <div class="modalcard">
+          <h2>Choose a deck</h2>
+          ${this.deckPanel(i, precons)}
+        </div>
       </div>`;
   }
 
-  private seatRow(seat: SeatConfig, i: number, precons: PreconSummary[]): string {
+  private roomBar(code: string): string {
+    const link = joinLink(code, location.href.split("#")[0] ?? location.href);
+    return `
+      <div class="roombox">
+        <div>
+          <div class="roomlabel">Room code</div>
+          <div class="roomcode">${esc(code || "…")}</div>
+        </div>
+        <div class="row">
+          <button id="copy-code" ${code ? "" : "disabled"}>Copy code</button>
+          <button id="copy-link" data-link="${esc(link)}" ${code ? "" : "disabled"}>Copy join link</button>
+        </div>
+      </div>
+      <p class="note">Send either one to the people you want to play with.</p>`;
+  }
+
+  /**
+   * Who sits either side of a seat (p. 15): your prey is on your left, your
+   * predator on your right, and the table is a CYCLE — so this is a
+   * rotation of the seat list, not a lookup with an edge case at each end.
+   * Shown small and unbolded next to the name because it is orientation,
+   * not identity.
+   */
+  private relations(names: string[], i: number): string {
+    const r = seatRelations(names, i);
+    if (!r) return "";
+    return `<span class="rel">prey ${esc(r.prey)} &middot; predator ${esc(r.predator)}</span>`;
+  }
+
+  /** One box on the host's (or a private table's) grid. */
+  private seatBox(seat: SeatConfig, i: number, precons: PreconSummary[]): string {
+    // THE FIRST BOX IS ALWAYS THE HOST. They cannot hand their own seat to
+    // a bot or open it to the network without ceasing to be the host, so
+    // the control is not offered rather than being offered and refused.
+    const isHost = i === 0;
+    // A seat a guest holds is theirs: they brought that deck and that name.
+    const remote = seat.kind === "remote";
     const deckLabel =
       seat.deck === null
-        ? "no deck"
+        ? "choose a deck"
         : seat.deck.kind === "precon"
           ? `${seat.deck.name} — ${seat.deck.set}`
           : "pasted deck list";
-    const open = this.editingDeck === i;
+    const names = this.table.seats.map((s) => s.name);
+    const hash = seatDeckHash(seat);
     return `
-      <div class="seatrow">
-        <input class="seatname" data-i="${i}" value="${esc(seat.name)}" maxlength="${MAX_NAME_LENGTH}" />
-        <select class="seatkind" data-i="${i}">
-          <option value="you" ${seat.kind === "you" ? "selected" : ""}>You</option>
-          <option value="ai" ${seat.kind === "ai" ? "selected" : ""}>Bot</option>
-          <option value="open" ${seat.kind === "open" ? "selected" : ""}>Open (online)</option>
-        </select>
-        <button class="deckbtn" data-i="${i}">${esc(deckLabel)}</button>
-      </div>
-      ${open ? this.deckPanel(i, precons) : ""}`;
+      <div class="seatbox ${isHost ? "host" : ""} ${remote ? "remote" : ""}" data-i="${i}">
+        ${
+          isHost || remote
+            ? ""
+            : `<button class="seatx" data-i="${i}" title="remove this seat">&times;</button>`
+        }
+        <div class="sbhead">
+          ${lobbyFace(seat.name, isHost ? (this.profile?.avatar ?? null) : (seat.avatar ?? null), seat.kind === "ai")}
+          <div class="sbname">
+            ${
+              isHost || remote
+                ? `<span class="lname">${esc(seat.name)}${isHost ? " (you)" : ""}</span>`
+                : `<input class="seatname" data-i="${i}" value="${esc(seat.name)}"
+                          maxlength="${MAX_NAME_LENGTH}" />`
+            }
+            ${this.relations(names, i)}
+          </div>
+        </div>
+        ${
+          isHost
+            ? `<div class="sbkind">Host</div>`
+            : remote
+              ? `<div class="sbkind">Player (joined)</div>`
+              : `<select class="seatkind" data-i="${i}">
+                   <option value="ai" ${seat.kind === "ai" ? "selected" : ""}>Bot</option>
+                   <option value="open" ${seat.kind === "open" ? "selected" : ""}>Open (online)</option>
+                 </select>`
+        }
+        ${
+          // The host owns their own deck and the bots'. A seat a person
+          // joined on is not the host's to change.
+          remote
+            ? `<span class="ldeck ${seat.deck ? "ready" : ""}">${esc(
+                seat.deck ? deckLabel : "no deck yet",
+              )}</span>`
+            : `<button class="deckbtn" data-i="${i}">${esc(deckLabel)}</button>`
+        }
+        ${hash ? `<span class="dhash" title="deck fingerprint">${esc(hash)}</span>` : ""}
+      </div>`;
   }
 
+  /** One box as a GUEST sees it: read-only, except their own. */
+  private guestBox(s: LobbySeat, i: number, precons: PreconSummary[]): string {
+    const names = this.lobbyPeer?.state?.seats.map((x) => x.name) ?? [];
+    return `
+      <div class="seatbox ${s.mine ? "mine" : ""}" data-i="${i}">
+        <div class="sbhead">
+          ${lobbyFace(s.name, s.avatar ?? null, s.kind === "ai")}
+          <div class="sbname">
+            ${
+              s.mine
+                ? `<input id="guest-name" value="${esc(s.name)}" maxlength="${MAX_NAME_LENGTH}" />`
+                : `<span class="lname">${esc(s.name)}</span>`
+            }
+            ${this.relations(names, i)}
+          </div>
+        </div>
+        <div class="sbkind">${
+          s.kind === "ai" ? "Bot" : s.kind === "open" ? "waiting for a player" : "Player"
+        }</div>
+        ${
+          s.mine
+            ? `<button class="deckbtn" data-i="0">${esc(s.deck ?? "choose a deck")}</button>`
+            : `<span class="ldeck ${s.deck ? "ready" : ""}">${esc(s.deck ?? "no deck yet")}</span>`
+        }
+        ${s.deckHash ? `<span class="dhash" title="deck fingerprint">${esc(s.deckHash)}</span>` : ""}
+      </div>`;
+  }
+
+  /**
+   * The conversation. Same panel in the lobby and at the table, reading
+   * one module-level store, which is what makes it survive the handover
+   * (src/ui/chat.ts).
+   */
+  private chatPanel(): string {
+    const lines = chatLines();
+    return `
+      <div class="chatbox">
+        <div class="sethead">Table chat</div>
+        <div class="chatlines" id="chatlines">
+          ${
+            lines.length === 0
+              ? `<p class="note dim">Nothing said yet.</p>`
+              : lines
+                  .map((l) =>
+                    l.system
+                      ? `<div class="chatline system">${esc(l.text)}</div>`
+                      : `<div class="chatline"><b>${esc(l.from)}</b> ${esc(l.text)}</div>`,
+                  )
+                  .join("")
+          }
+        </div>
+        <div class="row">
+          <input id="chatinput" maxlength="${MAX_CHAT_TEXT}" placeholder="Say something…" />
+          <button id="chatsend">Send</button>
+        </div>
+      </div>`;
+  }
   private deckPanel(i: number, precons: PreconSummary[]): string {
     const bySet = new Map<string, PreconSummary[]>();
     for (const p of precons) bySet.set(p.set, [...(bySet.get(p.set) ?? []), p]);
@@ -319,12 +570,18 @@ export class Shell {
           .map(
             ([set, list]) => `<div class="preconset"><span class="dim">${esc(set)}</span>
               ${list
-                .map(
-                  (p) =>
-                    `<button class="precon" data-i="${i}" data-set="${esc(p.set)}" data-name="${esc(
-                      p.name,
-                    )}">${esc(p.name)}</button>`,
-                )
+                .map((p) => {
+                  // The play-style line is the button's tooltip AND its
+                  // second line: a player choosing blind should be able
+                  // to tell a combat deck from a vote deck without
+                  // opening 60 cards.
+                  const style = preconStyle(p.name);
+                  return `<button class="precon" data-i="${i}" data-set="${esc(p.set)}"
+                                  data-name="${esc(p.name)}" title="${esc(style ?? p.name)}">
+                            <span class="pname">${esc(p.name)}</span>
+                            ${style ? `<span class="pstyle">${esc(style)}</span>` : ""}
+                          </button>`;
+                })
                 .join("")}</div>`,
           )
           .join("")}
@@ -376,121 +633,6 @@ export class Shell {
    * what is missing — is the same information, because it is the same
    * information (docs/lobby-design.md §3).
    */
-  private lobbyScreen(): string {
-    const host = this.lobbyHost;
-    const guest = this.lobbyPeer?.state ?? null;
-    const code = host?.code ?? guest?.code ?? "";
-    const problems = host ? host.problems : (guest?.problems ?? []);
-    const canStart = host ? host.canStart : false;
-    const link = joinLink(code, location.href.split("#")[0] ?? location.href);
-
-    const rows = host
-      ? host.seats.map((s, i) => ({
-          name: s.name,
-          kind: s.kind,
-          mine: s.kind === "you",
-          deck:
-            s.deck === null
-              ? null
-              : s.deck.kind === "precon"
-                ? `${s.deck.name} — ${s.deck.set}`
-                : "a pasted deck list",
-          deckHash: seatDeckHash(s),
-          avatar: s.kind === "you" ? (this.profile?.avatar ?? null) : (s.avatar ?? null),
-          index: i,
-        }))
-      : (guest?.seats ?? []).map((s, i) => ({ ...s, avatar: s.avatar ?? null, index: i }));
-
-    return `
-      <div class="card wide">
-        <h1>${host ? "Your table" : "Waiting to start"}</h1>
-        <div class="roombox">
-          <div>
-            <div class="roomlabel">Room code</div>
-            <div class="roomcode">${esc(code)}</div>
-          </div>
-          <div class="row">
-            <button id="copy-code">Copy code</button>
-            <button id="copy-link" data-link="${esc(link)}">Copy join link</button>
-          </div>
-        </div>
-        ${
-          this.error
-            ? `<p class="err">${esc(this.error)}</p>`
-            : `<p class="note">Send either one to the people you want to play with.</p>`
-        }
-
-        <div class="seats">
-          ${rows
-            .map(
-              (s) => `<div class="lobbyrow ${s.mine ? "mine" : ""}">
-                ${lobbyFace(s.name, s.avatar, s.kind === "ai")}
-                <span class="lname">${esc(s.name)}${s.mine ? " (you)" : ""}</span>
-                <span class="lkind">${
-                  s.kind === "ai"
-                    ? "bot"
-                    : s.kind === "open"
-                      ? "waiting for a player"
-                      : "player"
-                }</span>
-                ${
-                  // The host may still change a seat they own — a bot's
-                  // deck, or turning a bot into another open seat — right
-                  // up until the game starts.
-                  host && s.kind !== "remote"
-                    ? `<select class="seatkind" data-i="${s.index}">
-                         <option value="you" ${s.kind === "you" ? "selected" : ""}>You</option>
-                         <option value="ai" ${s.kind === "ai" ? "selected" : ""}>Bot</option>
-                         <option value="open" ${s.kind === "open" ? "selected" : ""}>Open</option>
-                       </select>
-                       <button class="deckbtn" data-i="${s.index}">${esc(s.deck ?? "choose a deck")}</button>`
-                    : `<span class="ldeck ${s.deck ? "ready" : ""}">${esc(
-                        s.deck ?? "no deck yet",
-                      )}</span>`
-                }
-                ${s.deckHash ? `<span class="dhash" title="deck fingerprint">${esc(s.deckHash)}</span>` : ""}
-              </div>
-              ${host && this.editingDeck === s.index ? this.deckPanel(s.index, supportedPrecons().filter((p) => p.playable)) : ""}`,
-            )
-            .join("")}
-        </div>
-        ${
-          this.spectators > 0
-            ? `<p class="note">${this.spectators} watching.</p>`
-            : ""
-        }
-
-        ${
-          guest
-            ? // A guest brings their own name and their own deck, and can
-              // change either while they wait. The name STARTS from their
-              // profile (sent on join) — this is for the clash the host
-              // numbered, or for simply wanting to be someone else today.
-              `<label class="field">
-                 <span>Your name at this table</span>
-                 <input id="guest-name" value="${esc(guest.you ?? "")}"
-                        maxlength="${MAX_NAME_LENGTH}" />
-               </label>
-               <div class="row"><button id="guest-deck" class="primary">Choose my deck</button></div>
-               ${this.editingDeck === 0 ? this.deckPanel(0, supportedPrecons().filter((p) => p.playable)) : ""}`
-            : ""
-        }
-
-        ${
-          problems.length > 0
-            ? `<div class="problems"><b>Not ready to start:</b><ul>${problems
-                .map((p) => `<li>${esc(p)}</li>`)
-                .join("")}</ul></div>`
-            : `<p class="ok">Everyone is ready.</p>`
-        }
-
-        <div class="row">
-          ${host ? `<button id="lobby-start" class="primary" ${canStart ? "" : "disabled"}>Start game</button>` : ""}
-          <button id="lobby-leave">${host ? "Close table" : "Leave"}</button>
-        </div>
-      </div>`;
-  }
-
   private joinScreen(): string {
     return `
       <div class="card">
@@ -586,7 +728,20 @@ export class Shell {
     this.on("#m-join", () => this.go("join"));
     this.on("#m-profile", () => this.go("profile"));
     this.on("#m-leaderboard", () => this.go("leaderboard"));
-    this.on("#lb-back, #ng-back, #pback, #join-back", () => this.go("menu"));
+    this.on("#lb-back, #pback, #join-back", () => this.go("menu"));
+    // Leaving the table screen has to hang up as well as navigate: an
+    // online table has a room on the broker and, possibly, people in it.
+    this.on("#ng-back", () => {
+      if (this.lobbyHost || this.lobbyPeer) {
+        if (!confirm("Leave this table?")) return;
+      }
+      this.closeRoom();
+      this.lobbyPeer?.leave();
+      this.lobbyPeer = null;
+      this.guestChannel = null;
+      clearChat();
+      this.go("menu");
+    });
     this.on("#lb-clear", () => {
       if (!confirm("Delete every recorded result? This cannot be undone.")) return;
       clearResults();
@@ -641,27 +796,28 @@ export class Shell {
     this.on("#copy-code", (el) => copy(this.lobbyHost?.code ?? this.lobbyPeer?.state?.code ?? "", el));
     this.on("#copy-link", (el) => copy(el.dataset["link"] ?? "", el));
 
-    this.on("#lobby-start", () => {
-      this.lobbyHost?.start();
+    // Chat. Send on the button or on Enter; a guest SENDS and the host
+    // relays, so nothing is added locally and everyone lists one
+    // conversation in one order (src/ui/chat.ts).
+    const chatBox = this.root.querySelector<HTMLInputElement>("#chatinput");
+    const send = (): void => {
+      const text = chatBox?.value ?? "";
+      if (!chatBox || chatProblem(text)) return;
+      chatBox.value = "";
+      const me = this.profile?.name ?? "You";
+      if (this.lobbyPeer) this.lobbyPeer.say(text);
+      else if (this.lobbyHost) this.lobbyHost.say(text, me);
+      // A private table has nobody to relay to; it is still a notepad.
+      else addChat({ from: me, text, at: Date.now() });
       this.paint();
+    };
+    this.on("#chatsend", () => send());
+    chatBox?.addEventListener("keydown", (ev) => {
+      if ((ev as KeyboardEvent).key === "Enter") send();
     });
-    this.on("#lobby-leave", () => {
-      this.lobbyHost?.close("the host closed the table");
-      this.room?.close();
-      this.lobbyPeer?.leave();
-      this.lobbyHost = null;
-      this.room = null;
-      this.lobbyPeer = null;
-      this.guestChannel = null;
-      this.go("menu");
-    });
-
-    // A guest choosing their deck reuses the new-game deck panel, and
-    // sends the choice rather than writing it into a local table.
-    this.on("#guest-deck", () => {
-      this.editingDeck = this.editingDeck === 0 ? null : 0;
-      this.paint();
-    });
+    // Keep the newest line in view after a repaint.
+    const lines = this.root.querySelector<HTMLElement>("#chatlines");
+    if (lines) lines.scrollTop = lines.scrollHeight;
 
     // Renaming yourself. On BLUR, not per keystroke: every repaint rebuilds
     // the markup, and re-rendering under the caret would throw the player
@@ -765,6 +921,10 @@ export class Shell {
       el.addEventListener("change", () => {
         const seat = this.table.seats[seatAt(el)];
         if (seat) seat.kind = el.value as SeatConfig["kind"];
+        // Opening a seat opens the ROOM, here and now — the code belongs
+        // on this screen, next to the seats, rather than on a page the
+        // host is thrown to when they press Start.
+        this.syncRoom();
         // In a lobby the change has to reach everyone waiting, not just
         // this screen — they are being told why the game cannot start.
         this.lobbyHost?.update(this.table);
@@ -778,6 +938,12 @@ export class Shell {
       this.paint();
     });
     this.on(".deckclose", () => {
+      this.editingDeck = null;
+      this.paint();
+    });
+    // Clicking away from a modal closes it — the settings dialog's own
+    // behaviour, and the reason the picker reuses its chrome.
+    this.on("#deck-scrim", () => {
       this.editingDeck = null;
       this.paint();
     });
@@ -831,14 +997,32 @@ export class Shell {
       this.paint();
     });
 
+    // The + box.
     this.on("#seat-add", () => {
-      const n = this.table.seats.length + 1;
-      this.table.seats.push({ name: `Bot ${n - 1}`, kind: "ai", deck: null });
+      if (this.table.seats.length >= MAX_SEATS) return;
+      const n = this.table.seats.length;
+      this.table.seats.push({ name: `Bot ${n}`, kind: "ai", deck: null });
+      this.lobbyHost?.update(this.table);
       this.paint();
     });
-    this.on("#seat-remove", () => {
-      this.table.seats.pop();
+    // The red × on a box. Never the host's (index 0) and never a seat a
+    // guest is sitting in — the markup does not draw it there, and this
+    // refuses it too, because a stale click should not be able to remove
+    // somebody who joined in between.
+    this.on(".seatx", (el) => {
+      const i = seatAt(el);
+      const seat = this.table.seats[i];
+      if (i <= 0 || !seat || seat.kind === "remote") return;
+      if (this.table.seats.length <= MIN_SEATS) {
+        this.error = `a table needs at least ${MIN_SEATS} seats`;
+        this.paint();
+        return;
+      }
+      this.table.seats.splice(i, 1);
       this.editingDeck = null;
+      this.error = "";
+      this.syncRoom();
+      this.lobbyHost?.update(this.table);
       this.paint();
     });
 
@@ -855,7 +1039,11 @@ export class Shell {
   private start(): void {
     this.table.privateGame = !isOnlineTable(this.table);
     if (!this.table.privateGame) {
-      void this.openRoom();
+      // The room is already open — it opened the moment a seat went online
+      // — so starting is just starting. This used to be where the host was
+      // sent to a second page.
+      this.lobbyHost?.start();
+      this.paint();
       return;
     }
     const build = buildTable(this.table);
@@ -874,26 +1062,52 @@ export class Shell {
     this.toTable(transport);
   }
 
-  /** Register a room with the broker and show the lobby. */
+  /**
+   * Register a room with the broker, ON THE SAME SCREEN.
+   *
+   * Called when a seat first goes online, not when Start is pressed: the
+   * code has to be there to be copied while people are still arriving,
+   * which is what made a second page look necessary in the first place.
+   * Idempotent — a second open seat does not open a second room.
+   */
   private async openRoom(): Promise<void> {
+    if (this.lobbyHost) return;
     const code = newRoomCode();
-    this.lobbyHost = new LobbyHost(code, this.table, (transport) => this.toTable(transport));
-    this.screen = "lobby";
+    this.lobbyHost = new LobbyHost(code, this.table, (transport, session) =>
+      this.toTable(transport, session),
+    );
+    // THE HOST'S OWN SCREEN HAD TO BE TOLD. Every guest already learned
+    // through `broadcast`; the host learned nothing, so someone joining,
+    // renaming or choosing a deck left this screen showing the state
+    // before it (owner-reported 2026-09-06).
+    this.lobbyHost.onChanged(() => this.paint());
     this.error = "";
     this.paint();
     try {
-      // Not shown until the broker confirms the id: a room code nobody can
-      // dial yet is worse than a moment's wait.
       this.room = await hostRoom(code, (channel) => {
         this.lobbyHost?.accept(channel);
         this.paint();
       });
+      this.paint(); // the code is real now, so the copy buttons come alive
     } catch (err) {
       this.error = `could not open a room: ${(err as Error).message}`;
       this.lobbyHost = null;
-      this.screen = "newgame";
       this.paint();
     }
+  }
+
+  /** Open or close the room to match the seats. */
+  private syncRoom(): void {
+    if (isOnlineTable(this.table)) void this.openRoom();
+    else this.closeRoom();
+  }
+
+  private closeRoom(): void {
+    if (!this.lobbyHost) return;
+    this.lobbyHost.close("the host closed the table");
+    this.room?.close();
+    this.lobbyHost = null;
+    this.room = null;
   }
 
   /** Dial a room and wait in its lobby. */
@@ -957,15 +1171,65 @@ export class Shell {
   }
 
   /** Hand the root over to the table. The shell paints nothing after this. */
-  private toTable(transport: LocalTransport | PeerTransport): void {
+  private toTable(transport: LocalTransport | PeerTransport, session?: HostSession): void {
     this.screen = "table";
     this.root.innerHTML = "";
+    if (session) this.hostSession = session;
+    const me = this.profile?.name ?? "You";
     new DebugApp(this.root, transport, {
       faces: this.seatFaces(),
       localSeat: this.mySeat(),
       onLeave: () => this.leaveTable(),
+      // The conversation carries on at the table. Who relays it depends on
+      // which end this client is, and the table does not need to know:
+      // it is handed one function that says something.
+      say: (text: string) => {
+        if (transport instanceof PeerTransport) transport.say(text);
+        else if (this.hostSession) this.hostSession.say(text, me);
+        else addChat({ from: me, text, at: Date.now() });
+      },
+      // MODERATION IS THE AUTHORITY'S PANEL, not the online host's.
+      //
+      // It was first given only to a host with a live `HostSession`, which
+      // meant it appeared nowhere on a private table — reported as "I
+      // don't see the Moderation button anywhere". That was too narrow the
+      // moment the AI-seat controls moved into it: a private game is
+      // played entirely against bots, so it is the table that needs them
+      // most. The test is whether this client RUNS the engine, which is
+      // exactly `transport instanceof LocalTransport`.
+      //
+      // Kicking and banning still need a session, and are simply absent
+      // without one: `people` is empty on a private table, because there
+      // is nobody connected to remove.
+      ...(transport instanceof LocalTransport
+        ? {
+            moderate: (): ModerationView => {
+              const banned = new Set(session?.bannedSeats ?? []);
+              const remote = new Set((session?.roster ?? []).map((r) => r.seat));
+              return {
+                people: session
+                  ? transport
+                      .view()
+                      .seats.filter((s) => s.id !== this.mySeat())
+                      .map((s) => ({
+                        seat: s.id,
+                        name: session.roster.find((r) => r.seat === s.id)?.name ?? s.id,
+                        remote: remote.has(s.id),
+                        banned: banned.has(s.id),
+                      }))
+                  : [],
+              };
+            },
+            kick: (seat: string) => session?.kick(seat),
+            setChatBan: (seat: string, ban: boolean) => session?.setChatBan(seat, ban),
+          }
+        : {}),
     });
   }
+
+  /** The game-phase session, when this client is the host. Kept so the
+   *  table can relay chat through it. */
+  private hostSession: HostSession | null = null;
 
   /**
    * Who is in each seat, for the thumbnail on their mat.

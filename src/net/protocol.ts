@@ -117,13 +117,26 @@ export interface LeaveMsg {
   type: "leave";
 }
 
+/**
+ * Something a player said, going UP to the host to be relayed.
+ *
+ * Carried on the same channel in BOTH phases, which is what lets one
+ * conversation span the lobby and the game (src/ui/chat.ts). The host is
+ * the only relay, so everyone lists it in the same order.
+ */
+export interface ChatMsg {
+  type: "chat";
+  text: string;
+}
+
 export type PeerMessage =
   | HelloMsg
   | ChooseMsg
   | JoinMsg
   | SetDeckMsg
   | SetNameMsg
-  | LeaveMsg;
+  | LeaveMsg
+  | ChatMsg;
 
 // --- host → peer -----------------------------------------------------------
 
@@ -207,7 +220,24 @@ export interface StartedMsg {
   type: "started";
 }
 
-export type HostMessage = WelcomeMsg | SyncMsg | AckMsg | ByeMsg | LobbyMsg | StartedMsg;
+/** A chat line going DOWN to everyone, the host having ordered it. */
+export interface ChatLineMsg {
+  type: "chatLine";
+  from: string;
+  text: string;
+  at: number;
+  /** A join, a leave, a bot taking over — nobody typed it. */
+  system?: boolean;
+}
+
+export type HostMessage =
+  | WelcomeMsg
+  | SyncMsg
+  | AckMsg
+  | ByeMsg
+  | LobbyMsg
+  | StartedMsg
+  | ChatLineMsg;
 
 /**
  * A two-way link carrying one side's messages to the other.

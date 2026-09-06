@@ -57,7 +57,8 @@ export type TurnPhase = "unlock" | "master" | "minion" | "influence" | "discard"
 export type MinionKind = "vampire" | "ally";
 
 /** Vote-bearing titles (p. 28): primogen 1, prince/baron 2, justicar 3,
- *  Inner Circle 4. Contested titles are out of scope (CLAUDE.md). */
+ *  Inner Circle 4. Which of these are UNIQUE, and so contestable, is
+ *  `titleContestKey` in derived.ts (docs/contested-design.md §1). */
 export type VampireTitle =
   | "primogen"
   | "prince"
@@ -196,6 +197,28 @@ export interface MinionState {
    *  the day the pool widens the three cut Path cards become ordinary
    *  work rather than a redesign. */
   path?: string;
+  /** The city a city title belongs to — "Camarilla Prince of MELBOURNE"
+   *  (p. 39–40). A printed crypt trait, read straight off the card text
+   *  like clan, sect and path, and set by the importer. It is the whole
+   *  key of a title contest: prince, baron and archbishop of the same
+   *  city contest each other. docs/contested-design.md §6 */
+  titleCity?: string;
+  /**
+   * The title claim this vampire is currently CONTESTING (p. 18).
+   *
+   * "While the title is being contested, the vampires involved in the
+   * contest are treated as if they have no title" — so `title` is set to
+   * null and the claim parks here. That means every one of the ~30 sites
+   * reading `title` is correct with no change and no derived accessor:
+   * the field already means "the title you have and benefit from".
+   * Winning restores it from here; yielding drops it for good.
+   */
+  titleContest?: { title: VampireTitle; city?: string };
+  /** A minion that is NOT a unique card, so it never contests: the two
+   *  token vampires, which print "non-unique" in as many words. Every
+   *  other vampire is a crypt card, and "all crypt cards represent unique
+   *  minions" (p. 17). docs/token-vampire-design.md, contested-design §3 */
+  nonUnique?: boolean;
   /** Clan (e.g. "Gangrel") and sect — static crypt facts for "Requires a
    *  …" gating and clan-locked cards. Null for allies and untagged. */
   clan: string | null;
@@ -924,6 +947,29 @@ export interface UncontrolledEntry {
   counters: number;
 }
 
+/**
+ * One copy of a unique card, held face down and out of play while its
+ * control is contested (p. 17).
+ *
+ * The whole object is kept, not just its name, because a contest ends by
+ * the card coming BACK — "the card is unlocked and turned face up during
+ * your next unlock phase" — with everything that was on it. Yielding
+ * burns it, and "any cards or counters stacked on the yielded card are
+ * also burned", which is what keeping the object whole makes possible.
+ */
+export interface ContestedCard {
+  card: CardInstance;
+  /** A card in play: a location, an equipment, a retainer, a master. */
+  permanent?: PermanentInPlay;
+  /** A minion: a crypt card, or a unique ally. Held whole — blood,
+   *  counters and every attached card travel with it. */
+  minion?: MinionState;
+  /** The minion an attached permanent came off, so it goes back where it
+   *  was. A bearer who is gone by then leaves the card nowhere to return
+   *  to, and it is burned (§5). */
+  bearer?: MinionId;
+}
+
 export interface SeatState {
   id: SeatId;
   pool: number;
@@ -943,6 +989,21 @@ export interface SeatState {
    *  command logs are untouched (the `idSeq` precedent).
    *  docs/ash-heap-design.md */
   ashHeap?: CardInstance[];
+  /**
+   * Cards this Methuselah holds in a CONTEST (p. 17).
+   *
+   * "For the duration of the contest, all of the contested cards are
+   * turned face down and are OUT OF PLAY." Out of play is taken at its
+   * word: the card is moved out of `permanents` / `minions` entirely, so
+   * no derived read, enumerator or hook has to learn to skip it. A flag
+   * left in place would have meant teaching several dozen sites a new
+   * rule, and one of them being missed reads exactly like a card that
+   * legitimately does nothing.
+   *
+   * Optional, the `ashHeap`/`idSeq` precedent: every existing fixture and
+   * saved command log is untouched. docs/contested-design.md §2
+   */
+  contested?: ContestedCard[];
   /**
    * This Methuselah has announced a withdrawal and it is still on track
    * (p. 38, "Withdrawing from the Game").
@@ -1168,6 +1229,32 @@ export type GameEvent =
    *  rather than burned; its equipment is still burned, which is what
    *  p. 16's own sentence says. docs/token-vampire-design.md §5 */
   | { type: "PermanentBurned"; cardId: CardInstanceId; name: string; removed?: boolean }
+  /** A unique card goes face down and out of play, its control contested
+   *  (p. 17). `minion` distinguishes a crypt card or unique ally, which
+   *  leaves the ready region, from a card in play. */
+  | {
+      type: "ContestBegan";
+      seat: SeatId;
+      cardId: CardInstanceId;
+      name: string;
+      minion?: MinionId;
+      bearer?: MinionId;
+    }
+  /** "The cost to contest a card is 1 pool, which you pay during each of
+   *  your unlock phases" — the pool itself moves via PoolBurned. */
+  | { type: "ContestPaid"; seat: SeatId; cardId: CardInstanceId; name: string }
+  /** "A yielded card is burned. Any cards or counters stacked on the
+   *  yielded card are also burned." */
+  | { type: "ContestYielded"; seat: SeatId; cardId: CardInstanceId; name: string }
+  /** "If all other cards contesting your unique card are yielded, then the
+   *  card is unlocked and turned face up during your next unlock phase." */
+  | { type: "ContestWon"; seat: SeatId; cardId: CardInstanceId; name: string }
+  /** A vampire's unique title claim is contested (p. 18): they are
+   *  "treated as if they have no title" until it resolves. */
+  | { type: "TitleContested"; minion: MinionId; title: VampireTitle; city?: string }
+  /** "The vampire yielding the title will now have no title and loses the
+   *  benefits of the title for the remainder of the game." */
+  | { type: "TitleYielded"; minion: MinionId; title: VampireTitle }
   /** A card in play shuffled back into a library (Aranthebes) — it leaves
    *  play and returns to its owner's library, which is then shuffled. */
   | { type: "PermanentShuffledIntoLibrary"; cardId: CardInstanceId; name: string; seat: SeatId }
@@ -1374,6 +1461,16 @@ export interface TurnFrame {
   /** Only one master phase action may be gained from trifles per master
    *  phase (p. 10). */
   trifleGained: boolean;
+  /** Contests settled for this unlock phase (p. 17–18): wins collected,
+   *  and every remaining contest paid for or yielded. Optional so old
+   *  fixtures and saved logs are untouched. */
+  contestsDone?: boolean;
+  /** Which contests have already been answered this unlock phase — card
+   *  instance ids and minion ids. The cost is paid "during EACH of your
+   *  unlock phases", i.e. once per phase per contest, and the questions
+   *  are asked one at a time (the `unlockToll` shape), so the loop needs
+   *  to know where it got to. */
+  contestsHandled?: string[];
   /** "In your discard phase you receive by default one discard phase
    *  action" (p. 37) — spent by a discard, and unused ones are lost.
    *  Effects may grant more (Powerbase: Los Angeles). Optional so old

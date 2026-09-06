@@ -780,6 +780,49 @@ export function isUndeadAlly(m: MinionState): boolean {
 }
 
 /**
+ * The key two vampires must share for their titles to contest (p. 18),
+ * or null for a title that is not unique.
+ *
+ * The rulebook names three different shapes of uniqueness and this is all
+ * three, which is why it is a key rather than a boolean:
+ *
+ *  - **city titles** — "the title of prince is associated with a
+ *    particular city and can be contested by another vampire who claims
+ *    ANY title to the same city" (p. 39), and archbishop is ruled the
+ *    same way (p. 41), with baron contested by "prince, archbishop, or
+ *    baron of the same city" (p. 40). All three therefore key on the CITY
+ *    alone, so a prince and a baron of one city do contest.
+ *  - **justicar and Inner Circle** — "each clan's justicar and Inner
+ *    Circle titles are unique … and can only be held by vampires of that
+ *    clan" (p. 41): the key is the title plus the clan.
+ *  - **regent** — "the title of regent is unique" (p. 42), full stop.
+ *
+ * "The title of primogen is not unique and cannot be contested" (p. 41),
+ * and the same is said of bishop, cardinal, priscus and magaji (p. 42) —
+ * those answer null and never contest.
+ */
+export function titleContestKey(m: MinionState): string | null {
+  const claim = m.titleContest ?? (m.title === null ? null : { title: m.title, city: m.titleCity });
+  if (!claim) return null;
+  switch (claim.title) {
+    case "prince":
+    case "baron":
+    case "archbishop":
+      // No city printed means nothing to contest OVER — the pool has no
+      // such card, but a fixture can build one and it must not collide
+      // with every other untitled-city claim.
+      return claim.city ? `city:${claim.city.toLowerCase()}` : null;
+    case "justicar":
+    case "innerCircle":
+      return m.clan ? `${claim.title}:${m.clan.toLowerCase()}` : null;
+    case "regent":
+      return "regent";
+    default:
+      return null;
+  }
+}
+
+/**
  * "Another copy of this ally you control" (Bone Shambler, Gravebound
  * Drone). A minion already knows its own name, so this is a QUERY over
  * state that exists rather than a new field — the same shape as game-wide
