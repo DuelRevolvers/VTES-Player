@@ -90,15 +90,17 @@ export interface Standing {
   wins: number;
   victoryPoints: number;
   bot: boolean;
-  /** Every deck label this name has played, most recent first and without
-   *  repeats. A leaderboard row is a person across many games, and what
-   *  they bring is one of the things worth knowing about them. */
-  decks: string[];
 }
 
 /**
  * The table: one row per name, ordered by wins, then victory points, then
  * name so the order is stable rather than dependent on insertion.
+ *
+ * DECKS ARE NOT IN HERE. A standing is a person across many games, and a
+ * person brings a different deck most games — so a deck column was a
+ * growing list stapled to a tally, and it made the tally harder to read
+ * (owner request 2026-09-07). Which deck was played WHEN is a fact about
+ * one game, and it is on the `SeatResult` where the games list reads it.
  *
  * A name is counted as a BOT only if it has never been played by a person.
  * The seat names in a private game are "Bot 1"…"Bot 3" and a human's is
@@ -116,12 +118,8 @@ export function standings(results: GameResult[]): Standing[] {
         wins: 0,
         victoryPoints: 0,
         bot: true,
-        decks: [],
       };
       row.games += 1;
-      // `results` is newest first, so the first label seen is the most
-      // recent deck this name played.
-      if (s.deck && !row.decks.includes(s.deck)) row.decks.push(s.deck);
       if (r.winner === s.name) row.wins += 1;
       row.victoryPoints += s.victoryPoints;
       if (!s.bot) row.bot = false;
@@ -173,4 +171,25 @@ export function clearResults(): void {
   } catch {
     // Nothing to do.
   }
+}
+
+/**
+ * The date a game finished, as a person would read it.
+ *
+ * `played` is an ISO string written by whoever recorded the game, so it
+ * can be anything — a row from a hand-edited store, or from a browser
+ * whose clock was wrong. An unreadable one falls back to the raw string
+ * rather than rendering "Invalid Date", which looks like a bug in the
+ * leaderboard rather than a bad row in it.
+ */
+export function playedOn(iso: string): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  return at.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

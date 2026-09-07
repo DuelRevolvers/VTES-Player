@@ -22,7 +22,7 @@
 
 import type { DecisionPoint, GameState } from "../engine/index.ts";
 import { addChat } from "../ui/chat.ts";
-import type { GameHistory, GameTransport } from "../ui/transport.ts";
+import type { GameHistory, GameTransport, LogNotice } from "../ui/transport.ts";
 import type { HostMessage, PeerChannel } from "./protocol.ts";
 import { PROTOCOL_VERSION } from "./protocol.ts";
 
@@ -89,7 +89,7 @@ export class PeerTransport implements GameTransport {
    *  without the options — see SyncMsg.deciding. */
   private deciding: string | null = null;
   /** Log lines the host sent that are not engine events. */
-  private uiNotices: string[] = [];
+  private uiNotices: LogNotice[] = [];
 
   decision(): DecisionPoint | null {
     return this.dp;
@@ -99,7 +99,7 @@ export class PeerTransport implements GameTransport {
     return this.deciding;
   }
 
-  notices(): string[] {
+  notices(): LogNotice[] {
     return [...this.uiNotices];
   }
 
@@ -146,6 +146,13 @@ export class PeerTransport implements GameTransport {
   /** Say something to the table; the host relays it to everyone. */
   say(text: string): void {
     if (this.channel.open) this.channel.send({ type: "chat", text });
+  }
+
+  /** Change the colour the host writes this player's name in. The host
+   *  stamps every relayed line from what IT recorded, so a colour picked
+   *  mid-game has to be sent — see SetColorMsg. */
+  setColor(color: string): void {
+    if (this.channel.open) this.channel.send({ type: "setColor", color });
   }
 
   /**

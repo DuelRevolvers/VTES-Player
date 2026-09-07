@@ -12,7 +12,14 @@ import type { DecisionPoint, GameState, LegalOption } from "../../src/engine/ind
 import type { DeckDef, GameSetup } from "../../src/ui/decks.ts";
 import { addChat, clearChat } from "../../src/ui/chat.ts";
 import { narrate } from "../../src/ui/narrate.ts";
-import { CHAT_EMOJI, describePlay, orderHand, playsByCard, render } from "../../src/ui/render.ts";
+import {
+  CHAT_EMOJI,
+  describePlay,
+  EMOJI_CATEGORIES,
+  orderHand,
+  playsByCard,
+  render,
+} from "../../src/ui/render.ts";
 import { RULE_SECTIONS, ruleText, searchRules } from "../../src/ui/rules.ts";
 import { AI_SPEEDS } from "../../src/ui/settings.ts";
 import { LocalTransport } from "../../src/ui/transport.ts";
@@ -41,7 +48,7 @@ function screen(
      *  peer is in on somebody else's turn, and the case a finished game
      *  is in — which is the pair this exists to tell apart. */
     dpOverride?: DecisionPoint | null;
-    notices?: string[];
+    notices?: import("../../src/ui/transport.ts").LogNotice[];
     finished?: import("../../src/ui/render.ts").FinishedView | null;
     aiDelayMs?: number;
     cardTextPx?: number;
@@ -57,9 +64,18 @@ function screen(
     chatColor?: string;
     chatSettingsOpen?: boolean;
     emojiOpen?: boolean;
+    emojiCategory?: string;
+    /** Play this many decisions before rendering, so the log has events in
+ *  it. A freshly dealt table has none at all. */
+    advance?: number;
   } = {},
 ): string {
   const t = new LocalTransport({ setup, ...(opts.omniscient ? { omniscient: true } : {}) });
+  for (let i = 0; i < (opts.advance ?? 0); i++) {
+    const dp = t.decision();
+    if (!dp) break;
+    void t.choose((dp.options.find((o) => o.kind === "pass") ?? dp.options[0]!).id);
+  }
   if (opts.localSeat !== undefined) t.setLocalSeat(opts.localSeat);
   return render({
     cardTextPx: opts.cardTextPx ?? 15,
@@ -75,6 +91,7 @@ function screen(
     chatColor: opts.chatColor ?? "#c9a227",
     chatSettingsOpen: opts.chatSettingsOpen ?? false,
     emojiOpen: opts.emojiOpen ?? false,
+    emojiCategory: opts.emojiCategory ?? "vtes",
     state: t.view(),
     dp: opts.dpOverride === undefined ? t.decision() : opts.dpOverride,
     eventFilter: "",
@@ -477,7 +494,7 @@ describe("the hand label", () => {
  */
 describe("log notices", () => {
   it("draws them in the log, marked as not being game events", () => {
-    const html = screen({ notices: ["Bea was removed by the host"] });
+    const html = screen({ notices: [{ text: "Bea was removed by the host", afterEvent: 0 }] });
     expect(html).toContain('class="ev notice"');
     expect(html).toContain("Bea was removed by the host");
   });
@@ -863,7 +880,7 @@ describe("who is whose prey", () => {
     const html = render({
       cardTextPx: 15, seatFaces: {}, localSeat: null, ashOpen: null,
       canLeave: false, canChat: false, canModerate: true, moderation: null,
-      chatColor: "#c9a227", chatSettingsOpen: false, emojiOpen: false,
+      chatColor: "#c9a227", chatSettingsOpen: false, emojiOpen: false, emojiCategory: "vtes",
       state, dp: t.decision(), eventFilter: "", canUndo: false, canRewind: true,
       omniscient: false, selectedCard: null, handOrder: [], settingsOpen: false,
       helpOpen: false, helpOpenSections: [], helpQuery: "", autoPass: {},
@@ -925,9 +942,63 @@ describe("chat settings and emoji", () => {
   it("hides the emoji pad until the button is pressed", () => {
     expect(screen(withChat)).toContain('id="chatemoji"');
     expect(screen(withChat)).not.toContain('id="emojipad"');
-    const open = screen({ ...withChat, emojiOpen: true });
-    expect(open).toContain('id="emojipad"');
-    for (const e of CHAT_EMOJI) expect(open).toContain(`data-emoji="${e}"`);
+    expect(screen({ ...withChat, emojiOpen: true })).toContain('id="emojipad"');
+  });
+
+  /**
+   * The categorised picker (owner request 2026-09-07: "the full range of
+   * emojis separated by categories … tabs at the bottom of the emoji
+   * picker for the separate categories").
+   */
+  describe("the emoji picker", () => {
+    it("draws one category's emoji, with a tab for every category", () => {
+      const open = screen({ ...withChat, emojiOpen: true, emojiCategory: "vtes" });
+      const vtes = EMOJI_CATEGORIES.find((c) => c.id === "vtes")!;
+      for (const e of vtes.emoji) expect(open).toContain(`data-emoji="${e}"`);
+      for (const c of EMOJI_CATEGORIES) expect(open).toContain(`data-emojicat="${c.id}"`);
+    });
+
+    it("shows the OTHER categories' emoji only when their tab is picked", () => {
+      // The negative space, and the whole point of tabs: a pad that drew
+      // every category at once would pass the test above and would not be
+      // a picker with categories at all.
+      const flags = EMOJI_CATEGORIES.find((c) => c.id === "flags")!;
+      const onVtes = screen({ ...withChat, emojiOpen: true, emojiCategory: "vtes" });
+      expect(onVtes).not.toContain(`data-emoji="${flags.emoji[0]!}"`);
+      const onFlags = screen({ ...withChat, emojiOpen: true, emojiCategory: "flags" });
+      expect(onFlags).toContain(`data-emoji="${flags.emoji[0]!}"`);
+    });
+
+    it("marks the open tab, and only that one", () => {
+      const open = screen({ ...withChat, emojiOpen: true, emojiCategory: "food" });
+      expect((open.match(/class="emojitab on"/g) ?? []).length).toBe(1);
+      expect(open).toMatch(/class="emojitab on"[^>]*data-emojicat="food"/);
+    });
+
+    it("puts the tabs BELOW the grid", () => {
+      const open = screen({ ...withChat, emojiOpen: true });
+      expect(open.indexOf("emojitabs")).toBeGreaterThan(open.indexOf("emojigrid"));
+    });
+
+    it("offers every emoji across the categories, with no duplicates", () => {
+      // CHAT_EMOJI is "what may be inserted", so it is the union of the
+      // tabs with the overlap removed — the Vampire tab is deliberately a
+      // shortcut to emoji that also live in Objects and Symbols, which is
+      // right for the tabs and meaningless in a set.
+      expect(CHAT_EMOJI.length).toBe(new Set(CHAT_EMOJI).size);
+      expect(CHAT_EMOJI.length).toBeGreaterThan(300);
+      for (const c of EMOJI_CATEGORIES) {
+        for (const e of c.emoji) expect(CHAT_EMOJI).toContain(e);
+      }
+    });
+
+    it("has no duplicate WITHIN a tab — two identical buttons side by side", () => {
+      // Across tabs the overlap is deliberate; inside one it is a typo,
+      // and it would draw two buttons that look and behave identically.
+      for (const c of EMOJI_CATEGORIES) {
+        expect(c.emoji.length, `${c.id} has a repeat`).toBe(new Set(c.emoji).size);
+      }
+    });
   });
 
   it("writes a name in its own colour, and leaves an uncoloured one alone", () => {
@@ -967,5 +1038,62 @@ describe("a seat a bot took over", () => {
     // The control: a seat with no label still shows its plain name.
     const other = html.indexOf(`data-seat="${seats[0]}"`);
     expect(html.slice(other, other + 400)).not.toContain("Bot");
+  });
+});
+
+/**
+ * The game log is EVENTS AND NOTICES, in order (owner report 2026-09-07:
+ * "the notification of a player getting kicked in the Game Log seems to be
+ * stuck at the bottom … it needs to be integrated into the game log as an
+ * entry").
+ *
+ * A notice is not an engine event — a seat changing hands changes nothing
+ * in the game — but it happened at a point in the game, and appending them
+ * after everything left them piled under newer events for ever.
+ */
+describe("notices in the game log", () => {
+  /** A table that has actually played, so the log has events to sit
+   *  among. A freshly dealt one has NONE, and a test written against it
+   *  would prove nothing about interleaving at all. */
+  const MOVES = 12;
+  const eventCount = (): number => {
+    const t = new LocalTransport({ setup });
+    for (let i = 0; i < MOVES; i++) {
+      const dp = t.decision();
+      if (!dp) break;
+      void t.choose((dp.options.find((o) => o.kind === "pass") ?? dp.options[0]!).id);
+    }
+    return t.view().eventLog.length;
+  };
+
+  it("puts a notice where it happened, not at the end", () => {
+    const events = eventCount();
+    expect(events, "the fixture has no events to interleave with").toBeGreaterThan(1);
+    const html = screen({ advance: MOVES, notices: [{ text: "MIDPOINT", afterEvent: 1 }] });
+    const at = html.indexOf("MIDPOINT");
+    expect(at).toBeGreaterThan(-1);
+    // THERE IS LOG AFTER IT. That is the whole claim: appended after
+    // everything, as it used to be, there would be none — which is
+    // exactly what "stuck at the bottom" described.
+    expect(html.lastIndexOf('class="ev ')).toBeGreaterThan(at);
+  });
+
+  it("still draws one written after the last event, at the end", () => {
+    // The control: "put it in the middle" must not become "never put it
+    // last", or a notice from the current moment would vanish upward.
+    const html = screen({ advance: MOVES, notices: [{ text: "LATEST", afterEvent: eventCount() }] });
+    expect(html).toContain("LATEST");
+  });
+
+  it("draws one written before anything happened, at the top", () => {
+    const html = screen({ advance: MOVES, notices: [{ text: "EARLIEST", afterEvent: 0 }] });
+    const at = html.indexOf("EARLIEST");
+    expect(at).toBeGreaterThan(-1);
+    expect(at).toBeLessThan(html.lastIndexOf('class="ev '));
+  });
+
+  it("marks it as a notice, so it does not read as something that happened", () => {
+    expect(screen({ advance: MOVES, notices: [{ text: "X", afterEvent: 0 }] })).toContain('class="ev notice"');
+    expect(screen()).not.toContain('class="ev notice"');
   });
 });

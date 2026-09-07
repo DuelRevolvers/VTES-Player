@@ -22,6 +22,7 @@ import { DevServerSink, GameLog } from "./gamelog.ts";
 import { downloadSave, loadFromStorage, readSaveFile, saveToStorage } from "./history.ts";
 import { DEFAULT_CHAT_COLOR } from "./profile.ts";
 import type { FinishedView, ModerationView, SeatFace } from "./render.ts";
+import { DEFAULT_EMOJI_CATEGORY } from "./render.ts";
 import { actionsByTableCard, orderHand, playsByCard, render } from "./render.ts";
 import type { UiSettings } from "./settings.ts";
 import { HeuristicAgent } from "../ai/heuristic.ts";
@@ -126,6 +127,8 @@ export class DebugApp {
   private modOpen = false;
   private chatSettingsOpen = false;
   private emojiOpen = false;
+  /** Which emoji tab is showing. View state, like the pad itself. */
+  private emojiCategory: string = DEFAULT_EMOJI_CATEGORY;
   private settings: UiSettings;
 
   constructor(
@@ -243,6 +246,9 @@ export class DebugApp {
   private dismissedEnding = false;
 
   private repaint(): void {
+    // Read the scroll positions BEFORE the markup that holds them is
+    // thrown away — see `saveScroll`.
+    this.saveScroll();
     const dp = this.transport.decision();
     this.root.innerHTML = render({
       state: this.transport.view(),
@@ -283,12 +289,49 @@ export class DebugApp {
       chatColor: this.table.chatColor?.() ?? DEFAULT_CHAT_COLOR,
       chatSettingsOpen: this.chatSettingsOpen,
       emojiOpen: this.emojiOpen,
+      emojiCategory: this.emojiCategory,
       moderation: this.modOpen ? (this.table.moderate?.() ?? null) : null,
     });
     this.wire();
+    this.restoreScroll();
     // Keep the event log pinned to the newest entry.
     const log = this.root.querySelector("#events");
     if (log) log.scrollTop = log.scrollHeight;
+  }
+
+  /**
+   * WHERE EACH SCROLLING PANEL WAS, kept across a repaint.
+   *
+   * The screen is re-rendered whole on every change — that is the model,
+   * and it is what removes stale-view bugs — but `innerHTML =` throws away
+   * the elements and every scroll position with them. On a table taller
+   * than the window that meant scrolling down, clicking anything at all,
+   * and being thrown back to the top by the repaint the click caused
+   * (owner report 2026-09-07).
+   *
+   * Keyed by element id, so a panel that is not on screen this time
+   * simply keeps its last position for when it comes back. The event log
+   * is deliberately NOT in here: it is pinned to the newest line, which is
+   * a different rule and the one it already had.
+   */
+  private readonly scrollTops: Record<string, { top: number; left: number }> = {};
+  private static readonly SCROLLED = ["table", "decision", "chatlines"];
+
+  private saveScroll(): void {
+    for (const id of DebugApp.SCROLLED) {
+      const el = this.root.querySelector<HTMLElement>(`#${id}`);
+      if (el) this.scrollTops[id] = { top: el.scrollTop, left: el.scrollLeft };
+    }
+  }
+
+  private restoreScroll(): void {
+    for (const id of DebugApp.SCROLLED) {
+      const el = this.root.querySelector<HTMLElement>(`#${id}`);
+      const at = this.scrollTops[id];
+      if (!el || !at) continue;
+      el.scrollTop = at.top;
+      el.scrollLeft = at.left;
+    }
   }
 
   /**
@@ -658,6 +701,11 @@ export class DebugApp {
       if (!chatBox || !say || chatProblem(chatBox.value)) return;
       const text = chatBox.value;
       chatBox.value = "";
+      // SENDING PUTS THE PICKER AWAY (owner request 2026-09-07). It is
+      // open because you were composing; once the line has gone there is
+      // nothing left to compose, and it was covering the conversation you
+      // had just added to.
+      this.emojiOpen = false;
       say(text);
       this.paint();
     };
@@ -710,6 +758,13 @@ export class DebugApp {
       this.emojiOpen = !this.emojiOpen;
       this.paint();
     });
+    // The category tabs under the grid. View state, like the pad itself.
+    for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".emojitab"))) {
+      el.addEventListener("click", () => {
+        this.emojiCategory = el.dataset["emojicat"] ?? DEFAULT_EMOJI_CATEGORY;
+        this.paint();
+      });
+    }
     for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".emoji"))) {
       el.addEventListener("click", () => {
         const box = this.root.querySelector<HTMLInputElement>("#chatinput");

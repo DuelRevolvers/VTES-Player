@@ -79,6 +79,7 @@ function screen(state: unknown, dp: DecisionPoint | null): string {
     chatColor: "#c9a227",
     chatSettingsOpen: false,
     emojiOpen: false,
+    emojiCategory: "vtes",
   } as RenderInput);
 }
 

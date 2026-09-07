@@ -73,6 +73,7 @@ function screen(state: GameState, engine: VtesEngine, over: Partial<RenderInput>
     chatColor: "#c9a227",
     chatSettingsOpen: false,
     emojiOpen: false,
+    emojiCategory: "vtes",
     ...over,
   });
 }

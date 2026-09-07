@@ -1039,16 +1039,37 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
   width: 46px; height: 26px; padding: 1px; cursor: pointer;
 }
 /* A grid, so the faces line up rather than reflowing per row width. */
+/* The picker: a scrolling grid with its category tabs UNDER it (owner
+   request). Capped in height so a category of a hundred emoji scrolls
+   inside the pad instead of pushing the composer off the screen. */
 .emojipad {
-  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  display: flex; flex-direction: column;
   padding: 6px; margin: 4px 0;
   border: 1px solid var(--line); border-radius: 4px; background: var(--field);
+}
+.emojigrid {
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  max-height: 180px; overflow-y: auto;
 }
 .emojipad .emoji {
   background: none; border: none; cursor: pointer;
   font-size: 16px; line-height: 1; padding: 3px 0; border-radius: 3px;
 }
 .emojipad .emoji:hover { background: var(--line); }
+/* Tabs at the FOOT of the pad, next to the button that opened it. They
+   wrap rather than scroll sideways: a tab you cannot see is a category
+   nobody will find. */
+.emojitabs {
+  display: flex; flex-wrap: wrap; gap: 2px;
+  margin-top: 6px; padding-top: 5px; border-top: 1px solid var(--line);
+}
+.emojitab {
+  background: none; border: 1px solid transparent; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 3px 5px; border-radius: 3px;
+  opacity: .55;
+}
+.emojitab:hover { background: var(--line); opacity: 1; }
+.emojitab.on { opacity: 1; border-color: var(--gold); background: var(--panel); }
 /* The host's own words, quoted back to a player who was removed. */
 .quoted {
   border-left: 3px solid var(--blood); padding-left: 10px;
@@ -1132,7 +1153,39 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 #over-scrim { z-index: 59; }
 
 .card.removed { border-color: var(--accent); }
-.lbdecks { color: var(--dim); font-size: 12px; }
+
+/* --- the games list, under the standings -------------------------------- */
+
+/* The standings answer "who wins"; this answers "what happened". One block
+   per game, newest first, and it scrolls on its own so a long history does
+   not push the buttons off the bottom of the card. */
+.lbhead {
+  margin: 18px 0 2px; font-size: 14px; color: var(--gold); font-weight: 600;
+  border-top: 1px solid var(--line); padding-top: 14px;
+}
+.gamelist { max-height: 46vh; overflow-y: auto; margin: 6px 0 2px; }
+.gamerow {
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 6px 8px; margin-bottom: 6px; background: var(--panel);
+}
+.gamehead {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 8px; font-size: 11px; margin-bottom: 2px;
+}
+.gamedate { color: var(--dim); }
+.gamewinner { color: var(--gold); font-weight: 600; }
+/* Tighter than the standings above it — these are many small tables, and
+   the default row padding turns one game into a screenful. */
+.gseats { margin: 0; }
+.gseats td { padding: 2px 6px; border-bottom: none; font-size: 12px; }
+.gseats tbody tr:first-child td { color: inherit; font-weight: 400; }
+.gseats tr.won td { color: var(--gold); font-weight: 600; }
+.gseats tr.isbot .gname { color: var(--dim); }
+.gname { white-space: nowrap; }
+.gname .dim { font-size: 10px; margin-left: 3px; }
+.gdeck { color: var(--dim); width: 99%; }
+.gvp { text-align: right; white-space: nowrap; }
+.gout { text-align: right; white-space: nowrap; font-size: 10px; }
 
 .modal.deckmodal { background: none; padding: 24px; pointer-events: none; }
 .modal.deckmodal .modalcard { pointer-events: auto; }

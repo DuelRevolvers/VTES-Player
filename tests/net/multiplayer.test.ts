@@ -358,12 +358,16 @@ describe("whose decision it is", () => {
  */
 describe("log notices on the wire", () => {
   it("carries a seat changing hands to the other players", async () => {
-    const { session, peers } = await table();
+    const { host, session, peers } = await table();
     expect(peers["Carol"]!.notices()).toEqual([]);
     session.kick("Bob", "afk");
     await settle();
     const seen = peers["Carol"]!.notices();
-    expect(seen.some((n) => n.includes("Bob"))).toBe(true);
+    expect(seen.some((n) => n.text.includes("Bob"))).toBe(true);
+    // …and it knows WHERE in the log it belongs, so it is drawn as an
+    // entry among the events rather than pinned under all of them
+    // (owner report 2026-09-07: "stuck at the bottom").
+    expect(seen[0]!.afterEvent).toBe(host.view().eventLog.length);
   });
 });
 
@@ -423,5 +427,58 @@ describe("relabelling a seat a bot took over", () => {
     await settle();
     expect(late.botNames()["Bob"]).toBe("Bob Bot");
     expect(late.botNames()).toEqual(host.botNames());
+  });
+});
+
+/**
+ * Changing your chat colour mid-session (owner report 2026-09-07: "the
+ * colors for player's chat names are not changing immediately … in the
+ * lobby or in game").
+ *
+ * The colour travels with the join and the hello, but that is only what
+ * the player had ON ARRIVAL. The host stamps every line it relays from
+ * what IT recorded — a guest must not be able to paint somebody else's
+ * name — so a colour picked later has to be SENT, or it never takes.
+ */
+describe("changing your chat colour", () => {
+  it("repaints the sender's later lines in the new colour", async () => {
+    const { session, peers } = await table();
+    const seen: Array<{ from: string; color?: string }> = [];
+    const { host: hostSide, peer: peerSide } = loopback();
+    session.accept(hostSide);
+    const watcher = new PeerTransport(peerSide, null, "Watcher");
+    peerSide.onMessage((m) => {
+      if (m.type === "chatLine") seen.push({ from: m.from, ...(m.color ? { color: m.color } : {}) });
+    });
+    await settle();
+    expect(watcher.spectating).toBe(true);
+
+    peers["Bob"]!.say("before");
+    await settle();
+    // Nothing was ever set, so nothing is stamped — the control that
+    // stops "always red" passing the assertion below.
+    expect(seen.at(-1)?.color).toBeUndefined();
+
+    peers["Bob"]!.setColor("#00ff00");
+    peers["Bob"]!.say("after");
+    await settle();
+    expect(seen.at(-1)?.color).toBe("#00ff00");
+  });
+
+  it("refuses a colour that is not a colour — it ends up in a style attribute", async () => {
+    const { session, peers } = await table();
+    const seen: string[] = [];
+    const { host: hostSide, peer: peerSide } = loopback();
+    session.accept(hostSide);
+    new PeerTransport(peerSide, null, "Watcher");
+    peerSide.onMessage((m) => {
+      if (m.type === "chatLine" && m.color) seen.push(m.color);
+    });
+    await settle();
+
+    peers["Bob"]!.setColor('" onload="alert(1)');
+    peers["Bob"]!.say("hello");
+    await settle();
+    expect(seen).toEqual([]);
   });
 });

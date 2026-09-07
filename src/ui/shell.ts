@@ -36,10 +36,17 @@ import {
 } from "./decklibrary.ts";
 import { DevServerSink, GameLog } from "./gamelog.ts";
 import type { GameResult } from "./results.ts";
-import { clearResults, loadResults, recordResult, resultFrom, standings } from "./results.ts";
+import {
+  clearResults,
+  loadResults,
+  playedOn,
+  recordResult,
+  resultFrom,
+  standings,
+} from "./results.ts";
 import { DebugApp } from "./loop.ts";
 import type { ModerationView, SeatFace } from "./render.ts";
-import { CHAT_EMOJI, chatLinesMarkup } from "./render.ts";
+import { chatLinesMarkup, DEFAULT_EMOJI_CATEGORY, emojiPad } from "./render.ts";
 import type { DeckSource, SeatConfig, TableConfig } from "./newgame.ts";
 import {
   botSeats,
@@ -155,6 +162,29 @@ export class Shell {
       default:
         return "";
     }
+  }
+
+  /**
+   * Change this player's chat colour, everywhere at once.
+   *
+   * ONE PLACE, because there are four things to tell and three screens
+   * that can start the change (the profile page, the lobby's gear, the
+   * table's gear). The colour is a property of the PERSON, so it goes to
+   * the profile first — and then to whoever is relaying, because the HOST
+   * stamps every line from what IT recorded about a player, not from what
+   * the line says. Without that last step a guest could pick a colour and
+   * go on being written in the old one for the rest of the session, which
+   * is exactly what was reported (2026-09-07).
+   */
+  private applyChatColor(color: string): void {
+    if (!this.profile || colorProblem(color) || this.profile.chatColor === color) return;
+    this.profile = { ...this.profile, chatColor: color };
+    saveProfile(this.profile);
+    // Whichever end this client is. A private table relays through
+    // nobody, and reads the profile directly when it says something.
+    this.lobbyPeer?.setColor(color);
+    if (this.tableTransport instanceof PeerTransport) this.tableTransport.setColor(color);
+    this.paint();
   }
 
   /** Why this client was shown the door, if it was. Cleared when they
@@ -635,15 +665,12 @@ export class Shell {
             : ""
         }
         ${chatLinesMarkup()}
-        ${
-          this.emojiOpen
-            ? `<div class="emojipad" id="emojipad">
-                 ${CHAT_EMOJI.map(
-                   (e) => `<button class="emoji" data-emoji="${esc(e)}">${e}</button>`,
-                 ).join("")}
-               </div>`
-            : ""
-        }
+        <!--
+          THE SAME PICKER THE TABLE DRAWS, not a second copy of it. Both
+          screens had their own inline copy of a flat emoji list, which is
+          how a control ends up different in two places nobody compares.
+        -->
+        ${this.emojiOpen ? emojiPad(this.emojiCategory) : ""}
         <div class="row">
           <input id="chatinput" maxlength="${MAX_CHAT_TEXT}" placeholder="Say something…" />
           <button id="chatemoji" title="Emoji">🙂</button>
@@ -656,6 +683,8 @@ export class Shell {
    *  other client preference: never in the command log. */
   private chatSettingsOpen = false;
   private emojiOpen = false;
+  /** Which emoji tab is showing. View state, like the pad itself. */
+  private emojiCategory: string = DEFAULT_EMOJI_CATEGORY;
   private deckPanel(i: number, precons: PreconSummary[]): string {
     const bySet = new Map<string, PreconSummary[]>();
     for (const p of precons) bySet.set(p.set, [...(bySet.get(p.set) ?? []), p]);
@@ -801,24 +830,23 @@ export class Shell {
                  last Methuselah standing, or the turn cap.
                </p>`
             : `<table class="lbtable">
+                 <!--
+                   THE STANDINGS ARE A TALLY, and a tally is one row per
+                   person. The decks came out of here (owner request) —
+                   a player brings a different deck most games, so the
+                   column was a growing list stapled to a number, and it
+                   made the one thing this table is for harder to read.
+                   Which deck was played WHEN is a fact about a game, and
+                   it lives in the log below.
+                 -->
                  <thead><tr>
-                   <th>Player</th><th>Decks</th><th>Games</th><th>Wins</th><th>VP</th>
+                   <th>Player</th><th>Games</th><th>Wins</th><th>VP</th>
                  </tr></thead>
                  <tbody>
                    ${table
                      .map(
                        (r) => `<tr class="${r.bot ? "isbot" : ""}">
                          <td>${esc(r.name)}${r.bot ? ` <span class="dim">bot</span>` : ""}</td>
-                         <!--
-                           WHAT THEY BROUGHT (owner request). Most recent
-                           first, and a row from before decks were recorded
-                           simply has none rather than claiming something.
-                         -->
-                         <td class="lbdecks">${
-                           r.decks.length === 0
-                             ? `<span class="dim">—</span>`
-                             : r.decks.map((d) => esc(d)).join("<br />")
-                         }</td>
                          <td>${r.games}</td>
                          <td>${r.wins}</td>
                          <td>${r.victoryPoints}</td>
@@ -827,14 +855,73 @@ export class Shell {
                      .join("")}
                  </tbody>
                </table>
-               <p class="note dim">${results.length} game${
-                 results.length === 1 ? "" : "s"
-               } recorded.</p>`
+               ${this.gameHistory(results)}`
         }
         <div class="row">
           <button id="lb-back">Back</button>
           ${results.length > 0 ? `<button id="lb-clear" class="danger">Clear history</button>` : ""}
         </div>
+      </div>`;
+  }
+
+  /**
+   * Every finished game, newest first (owner request 2026-09-07).
+   *
+   * The standings above answer "who wins"; this answers "what happened" —
+   * who was at that table, what each of them brought, and how it ended.
+   * They are different questions and the same rows: `loadResults()` has
+   * carried all of it since the deck labels were added, and nothing was
+   * showing it.
+   *
+   * Seats are listed in VP order rather than seating order, because the
+   * result is the thing being read here. The winner is marked rather than
+   * merely being first: a draw has no winner, and top-of-the-list would
+   * quietly claim one.
+   */
+  private gameHistory(results: GameResult[]): string {
+    if (results.length === 0) return "";
+    return `
+      <h2 class="lbhead">Games played</h2>
+      <p class="note dim">${results.length} game${results.length === 1 ? "" : "s"} recorded, newest first.</p>
+      <div class="gamelist">
+        ${results.map((r) => this.gameRow(r)).join("")}
+      </div>`;
+  }
+
+  private gameRow(r: GameResult): string {
+    const seats = [...r.seats].sort(
+      (a, b) => b.victoryPoints - a.victoryPoints || a.name.localeCompare(b.name),
+    );
+    return `
+      <div class="gamerow">
+        <div class="gamehead">
+          <span class="gamedate">${esc(playedOn(r.played))}</span>
+          <span class="gamewinner">${
+            r.winner ? `${esc(r.winner)} won` : `<span class="dim">a draw</span>`
+          }</span>
+        </div>
+        <table class="lbtable gseats">
+          <tbody>
+            ${seats
+              .map(
+                (s) => `<tr class="${s.name === r.winner ? "won" : ""} ${s.bot ? "isbot" : ""}">
+                  <td class="gname">
+                    ${esc(s.name)}
+                    ${s.bot ? `<span class="dim">bot</span>` : ""}
+                    ${s.name === r.you ? `<span class="dim">(you)</span>` : ""}
+                  </td>
+                  <!-- A game recorded before decks were kept has none,
+                       and says so rather than claiming something. -->
+                  <td class="gdeck">${
+                    s.deck ? esc(s.deck) : `<span class="dim">deck not recorded</span>`
+                  }</td>
+                  <td class="gvp">${s.victoryPoints} VP</td>
+                  <td class="gout">${s.ousted ? `<span class="dim">ousted</span>` : ""}</td>
+                </tr>`,
+              )
+              .join("")}
+          </tbody>
+        </table>
       </div>`;
   }
 
@@ -941,6 +1028,8 @@ export class Shell {
       const text = chatBox?.value ?? "";
       if (!chatBox || chatProblem(text)) return;
       chatBox.value = "";
+      // SENDING PUTS THE PICKER AWAY (owner request 2026-09-07).
+      this.emojiOpen = false;
       const me = this.profile?.name ?? "You";
       const mine = this.profile?.chatColor ?? null;
       if (this.lobbyPeer) this.lobbyPeer.say(text);
@@ -971,6 +1060,12 @@ export class Shell {
       this.emojiOpen = !this.emojiOpen;
       this.paint();
     });
+    for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".emojitab"))) {
+      el.addEventListener("click", () => {
+        this.emojiCategory = el.dataset["emojicat"] ?? DEFAULT_EMOJI_CATEGORY;
+        this.paint();
+      });
+    }
     for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".emoji"))) {
       el.addEventListener("click", () => {
         if (!chatBox) return;
@@ -985,12 +1080,12 @@ export class Shell {
       });
     }
     const colorBox = this.root.querySelector<HTMLInputElement>("#chatcolor");
-    colorBox?.addEventListener("change", () => {
-      if (!this.profile || colorProblem(colorBox.value)) return;
-      this.profile = { ...this.profile, chatColor: colorBox.value };
-      saveProfile(this.profile);
-      this.paint();
-    });
+    // `input` as well as `change`: a colour well fires `change` only when
+    // its dialog closes, so the swatch and the conversation disagreed for
+    // as long as the picker stayed open (owner report 2026-09-07).
+    for (const ev of ["input", "change"]) {
+      colorBox?.addEventListener(ev, () => this.applyChatColor(colorBox.value));
+    }
 
     // Keep the newest line in view after a repaint.
     const lines = this.root.querySelector<HTMLElement>("#chatlines");
@@ -1425,9 +1520,15 @@ export class Shell {
       // which end this client is, and the table does not need to know:
       // it is handed one function that says something.
       say: (text: string) => {
+        // READ THE COLOUR NOW, not when the table was built. `mine` was
+        // captured once at handover, so changing colour mid-game left
+        // every later line painted in the old one (owner report
+        // 2026-09-07) — the same shape of bug as a snapshot of the seat
+        // faces, one screen along.
+        const colour = this.profile?.chatColor ?? null;
         if (transport instanceof PeerTransport) transport.say(text);
-        else if (this.hostSession) this.hostSession.say(text, me, false, mine);
-        else addChat({ from: me, text, at: Date.now(), ...(mine ? { color: mine } : {}) });
+        else if (this.hostSession) this.hostSession.say(text, me, false, colour);
+        else addChat({ from: me, text, at: Date.now(), ...(colour ? { color: colour } : {}) });
       },
       // MODERATION IS THE AUTHORITY'S PANEL, not the online host's.
       //
@@ -1470,11 +1571,10 @@ export class Shell {
       // the table is what makes the chat's gear and the profile page the
       // same setting rather than two.
       chatColor: () => this.profile?.chatColor ?? DEFAULT_CHAT_COLOR,
-      setChatColor: (color: string) => {
-        if (!this.profile || colorProblem(color)) return;
-        this.profile = { ...this.profile, chatColor: color };
-        saveProfile(this.profile);
-      },
+      // One place, so the table's gear, the lobby's gear and the profile
+      // page cannot disagree — and so a colour change actually reaches
+      // the host, which is what stamps it onto the lines (applyChatColor).
+      setChatColor: (color: string) => this.applyChatColor(color),
     });
 
     // BEING REMOVED HAS TO BE SAID OUT LOUD, and this has to be wired

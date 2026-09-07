@@ -55,6 +55,7 @@ function screen(t: LocalTransport, over: Partial<RenderInput> = {}): string {
     chatColor: "#c9a227",
     chatSettingsOpen: false,
     emojiOpen: false,
+    emojiCategory: "vtes",
     ...over,
   });
 }

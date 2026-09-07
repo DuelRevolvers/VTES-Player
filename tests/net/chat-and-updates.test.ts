@@ -205,7 +205,7 @@ describe("a player who leaves mid-game", () => {
     // that seat and that is a fact about the table rather than a remark
     // (owner request 2026-09-07: "it needs to display in the Game Log,
     // not the Table Chat").
-    expect(transport.notices().some((n) => n.includes("Bea"))).toBe(true);
+    expect(transport.notices().some((n) => n.text.includes("Bea"))).toBe(true);
     // …and the negative space, which is the half of this the owner
     // actually reported: it must NOT also land in the conversation.
     expect(chatLines().some((l) => l.text.includes("Bea"))).toBe(false);
@@ -266,7 +266,7 @@ describe("moderation, which only the host has", () => {
     await settle();
     expect(transport.agentSeats["Bea"]).toBe(true);
     // The GAME LOG, not the chat — see the departure test above.
-    expect(transport.notices().some((n) => n.includes("removed"))).toBe(true);
+    expect(transport.notices().some((n) => n.text.includes("removed"))).toBe(true);
     expect(chatLines().some((l) => l.text.includes("removed"))).toBe(false);
   });
 });

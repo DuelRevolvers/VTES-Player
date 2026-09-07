@@ -27,6 +27,7 @@
  */
 
 import type { DecisionPoint, GameState, SeatId } from "../engine/index.ts";
+import type { LogNotice } from "../ui/transport.ts";
 
 /** The protocol version. A peer on a different one is turned away with a
  *  message rather than left to fail in a confusing way later. */
@@ -120,6 +121,22 @@ export interface SetDeckMsg {
  * Refused once the game has started: the name is the seat id by then, and
  * renaming it would rewrite the command log's subject halfway through.
  */
+/**
+ * "Write my name in this colour from now on."
+ *
+ * Sent when a player changes their colour, in the lobby or at the table.
+ * The colour arrives with the `join` / `hello` too, but that is only the
+ * value they had ON ARRIVAL — the host stamps every relayed line from
+ * what IT recorded, so without this a guest could pick a colour and go on
+ * being written in the old one for the rest of the session (owner report
+ * 2026-09-07). Validated by the host like any other value off the wire:
+ * it ends up in a `style` attribute.
+ */
+export interface SetColorMsg {
+  type: "setColor";
+  color: string;
+}
+
 export interface SetNameMsg {
   type: "setName";
   name: string;
@@ -148,6 +165,7 @@ export type PeerMessage =
   | JoinMsg
   | SetDeckMsg
   | SetNameMsg
+  | SetColorMsg
   | LeaveMsg
   | ChatMsg;
 
@@ -192,7 +210,7 @@ export interface SyncMsg {
    * Sent whole rather than as a delta: a game produces a handful, and a
    * reconnecting peer needs the ones it missed.
    */
-  notices?: string[];
+  notices?: LogNotice[];
   /**
    * Seat id → what to CALL it, when a bot has taken it over ("Bea Bot").
    *

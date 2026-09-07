@@ -150,6 +150,13 @@ export class LobbyHost {
     if (msg.type === "join") this.onJoin(channel, msg, off);
     else if (msg.type === "setDeck") this.onSetDeck(channel, msg);
     else if (msg.type === "setName") this.onSetName(channel, msg);
+    else if (msg.type === "setColor") {
+      // The colour the host stamps on this player's lines from now on.
+      // Validated here, like the one that came with the join: it is data
+      // off the wire and it ends up in a `style` attribute.
+      const guest = this.guests.find((g) => g.channel === channel);
+      if (guest) guest.chatColor = cleanColor(msg.color);
+    }
     else if (msg.type === "leave") this.onLeave(channel);
     else if (msg.type === "chat") {
       // The host is the only relay, so everybody lists the conversation in
@@ -480,6 +487,12 @@ export class LobbyPeer {
    *  back in the next lobby broadcast, not from here. */
   setName(name: string): void {
     this.channel.send({ type: "setName", name });
+  }
+
+  /** Change the colour the host writes this player's name in. Sent rather
+   *  than assumed: the host stamps every line from what IT recorded. */
+  setColor(color: string): void {
+    if (this.channel.open) this.channel.send({ type: "setColor", color });
   }
 
   leave(): void {

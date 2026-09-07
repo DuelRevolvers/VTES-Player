@@ -28,6 +28,7 @@ import { chatLines, MAX_CHAT_TEXT } from "./chat.ts";
 import { minionName, narrate, owned } from "./narrate.ts";
 import type { RuleSection } from "./rules.ts";
 import { CREDITS, RULE_SECTIONS, searchRules } from "./rules.ts";
+import type { LogNotice } from "./transport.ts";
 import { AI_SPEEDS, CARD_TEXT_SIZES } from "./settings.ts";
 
 /**
@@ -609,21 +610,21 @@ function decisionBar(
   // this is not your decision, here is who it belongs to.
   if (waitingFor) {
     return `
-      <div class="decision thinking">
+      <div class="decision thinking" id="decision">
         <span class="tdots"><i></i><i></i><i></i></span>
         <b>${esc(waitingFor)}</b> is deciding…
         ${dp ? `<span class="dim">${esc(dp.window)}</span>` : ""}
       </div>`;
   }
   if (!dp) {
-    return `<div class="decision over"><b>Game over</b> — no decision pending.</div>`;
+    return `<div class="decision over" id="decision"><b>Game over</b> — no decision pending.</div>`;
   }
   // An AI's move is being held back so it can be watched. The decision on
   // the table is THEIRS, so its options must not appear as buttons — a
   // human at the same screen would be answering for the computer.
   if (thinking) {
     return `
-      <div class="decision thinking">
+      <div class="decision thinking" id="decision">
         <span class="tdots"><i></i><i></i><i></i></span>
         <b>${esc(dp.seat)}</b> is deciding…
         <span class="dim">${esc(dp.window)}</span>
@@ -637,7 +638,7 @@ function decisionBar(
   if (picks.length > 0) {
     const rest = dp.options.filter((o) => !(o.kind === "answerChoice" && o.card));
     return `
-      <div class="decision">
+      <div class="decision" id="decision">
         <div class="dhead">
           <span class="dseat">${esc(dp.seat)}</span>
           <span class="dwindow">${esc(dp.window)}</span>
@@ -729,7 +730,7 @@ function decisionBar(
     )
     .join("");
   return `
-    <div class="decision">
+    <div class="decision" id="decision">
       <div class="dhead">
         <span class="dseat">${esc(dp.seat)}</span>
         <span class="dwindow">${esc(dp.window)}</span>
@@ -1258,7 +1259,7 @@ export interface RenderInput {
   waitingFor: string | null;
   /** Log lines that are not engine events (a seat changing hands). Drawn
    *  under the event log, which is where players look for them. */
-  notices: string[];
+  notices: LogNotice[];
   /**
    * The finished game, when it is over and this client has somewhere to
    * go afterwards — the leaderboard prompt. Null while the game runs, and
@@ -1294,6 +1295,9 @@ export interface RenderInput {
   /** Whether the chat's gear panel and emoji pad are open. View state. */
   chatSettingsOpen: boolean;
   emojiOpen: boolean;
+  /** Which emoji category tab is showing. View state, like the rest of
+   *  the panel: it never reaches the command log. */
+  emojiCategory: string;
   /** The moderation panel, when it is open: who is here and who is
    *  chat-banned. Null when closed. */
   moderation: ModerationView | null;
@@ -1315,9 +1319,33 @@ export function render(input: RenderInput): string {
   const onTable = new Set<LegalOption>();
   for (const list of ctx?.actions.values() ?? []) for (const o of list) onTable.add(o);
 
-  const events = state.eventLog
+  // THE LOG IS EVENTS AND NOTICES, IN ORDER. A notice is not an engine
+  // event — a seat changing hands changes nothing in the game — but it
+  // happened at a point in the game, and appending them after everything
+  // left them piled at the foot of the log with newer events above
+  // (owner: "stuck at the bottom"). Each carries the event count at the
+  // time it was written, which is exactly where it goes back.
+  //
+  // The window is applied AFTER interleaving, so a notice cannot be
+  // dropped by the 400-event trim while the events around it survive.
+  const noticeAt = new Map<number, string[]>();
+  for (const n of input.notices) {
+    noticeAt.set(n.afterEvent, [...(noticeAt.get(n.afterEvent) ?? []), n.text]);
+  }
+  const noticeLines = (afterEvent: number): string =>
+    (noticeAt.get(afterEvent) ?? [])
+      .map((t) => `<div class="ev notice">${esc(t)}</div>`)
+      .join("");
+  const lines: string[] = [];
+  // Anything written before the first event still belongs at the top.
+  lines.push(noticeLines(0));
+  state.eventLog.forEach((ev, i) => {
+    lines.push(eventLine(ev, state, input.omniscient));
+    lines.push(noticeLines(i + 1));
+  });
+  const events = lines
+    .filter((line) => line !== "")
     .slice(-400)
-    .map((ev) => eventLine(ev, state, input.omniscient))
     .filter((line) =>
       input.eventFilter
         ? line.toLowerCase().includes(input.eventFilter.toLowerCase())
@@ -1374,7 +1402,7 @@ export function render(input: RenderInput): string {
     <div class="lower">
       <div class="leftcol">
         <div class="main">
-          <div class="table" style="--seat-cols:${seatColumns(state.seats.length)}">
+          <div class="table" id="table" style="--seat-cols:${seatColumns(state.seats.length)}">
             ${state.seats
               .map((s) => seatMat(state, s, dp, input.seatFaces[s.id], ctx))
               .join("")}
@@ -1401,19 +1429,10 @@ export function render(input: RenderInput): string {
         </div>
         <div class="panel log">
           <h3>Game log <input id="evfilter" placeholder="filter…" value="${esc(input.eventFilter)}" /></h3>
-          <!--
-            NOTICES ARE LOG LINES, not chat. A seat changing hands is not
-            an engine event — nothing in the game changed — but it changes
-            who is answering, so it belongs where the players are already
-            reading rather than in a conversation that scrolls away
-            (owner request). They sit at the end, which is where the log
-            is scrolled to.
-          -->
-          <div class="events" id="events">${events}${input.notices
-            .map((n) => `<div class="ev notice">${esc(n)}</div>`)
-            .join("")}</div>
+          <!-- Events and notices are interleaved above, in order. -->
+          <div class="events" id="events">${events}</div>
         </div>
-        ${input.canChat ? chatPanel(input.chatColor, input.chatSettingsOpen, input.emojiOpen) : ""}
+        ${input.canChat ? chatPanel(input.chatColor, input.chatSettingsOpen, input.emojiOpen, input.emojiCategory) : ""}
       </aside>
     </div>
     ${moderationPanel(input)}
@@ -1508,7 +1527,12 @@ export function seatColumns(seats: number): number {
  * conversation is one conversation, and a player who agreed a house rule
  * in the lobby should still be able to read it three turns in.
  */
-function chatPanel(color: string, settingsOpen: boolean, emojiOpen: boolean): string {
+function chatPanel(
+  color: string,
+  settingsOpen: boolean,
+  emojiOpen: boolean,
+  emojiCategory: string,
+): string {
   return `
     <div class="panel chatbox tablechat">
       <h3>Table chat
@@ -1516,7 +1540,7 @@ function chatPanel(color: string, settingsOpen: boolean, emojiOpen: boolean): st
       </h3>
       ${chatSettings(color, settingsOpen)}
       ${chatLinesMarkup()}
-      ${chatComposer(emojiOpen)}
+      ${chatComposer(emojiOpen, emojiCategory)}
     </div>`;
 }
 
@@ -1552,24 +1576,213 @@ export function chatLinesMarkup(): string {
  * that inserts a character at the caret, which is the whole of what was
  * asked for, and it adds no dependency to a project that has exactly one.
  */
-export const CHAT_EMOJI = [
-  "🙂", "😄", "😂", "😉", "😍", "😎", "🤔", "😐",
-  "😢", "😡", "😱", "🎉", "👍", "👎", "👏", "🙏",
-  "🩸", "🧛", "🦇", "⚰️", "💀", "🔥", "⚔️", "🛡",
-  "🃏", "🎲", "👑", "💰", "⏳", "❤️", "💔", "✨",
+/**
+ * The emoji picker, by category (owner request 2026-09-07).
+ *
+ * WRITTEN OUT RATHER THAN GENERATED FROM UNICODE RANGES. A range is the
+ * obvious way to get "all of them" and it is the wrong way: the blocks are
+ * not contiguous, they carry unassigned codepoints and modifier bases that
+ * render as tofu or as a stray skin tone, and the result is a grid with
+ * holes in it that looks broken rather than complete. Every character
+ * here is one that draws.
+ *
+ * The VTES row comes first because it is the one a player at this table
+ * actually reaches for; the rest follow the order every other picker uses,
+ * so the tabs are where the hand expects them.
+ */
+export const EMOJI_CATEGORIES: Array<{ id: string; tab: string; name: string; emoji: string[] }> = [
+  {
+    id: "vtes",
+    tab: "🩸",
+    name: "Vampire",
+    emoji: [
+      "🩸", "🧛", "🧛‍♂️", "🧛‍♀️", "🦇", "⚰️", "💀", "☠️", "👻", "🧟", "🧟‍♂️", "🧟‍♀️",
+      "🧙", "🧝", "👹", "👺", "😈", "👿", "🕯️", "🔮", "⛧", "🕸️", "🕷️", "🐺",
+      "🌙", "🌚", "🌑", "🦉", "🗝️", "⛓️", "🏰", "⚱️", "🪦", "🥀", "🌹", "🍷",
+      "⚔️", "🗡️", "🛡️", "🏹", "🔥", "💥", "👑", "🃏", "🎲", "💰", "⏳", "📜",
+    ],
+  },
+  {
+    id: "smileys",
+    tab: "🙂",
+    name: "Smileys",
+    emoji: [
+      "😀", "😃", "😄", "😁", "😆", "😅", "🤣", "😂", "🙂", "🙃", "😉", "😊",
+      "😇", "🥰", "😍", "🤩", "😘", "😗", "😚", "😙", "🥲", "😋", "😛", "😜",
+      "🤪", "😝", "🤑", "🤗", "🤭", "🤫", "🤔", "🤐", "🤨", "😐", "😑", "😶",
+      "😏", "😒", "🙄", "😬", "🤥", "😌", "😔", "😪", "🤤", "😴", "😷", "🤒",
+      "🤕", "🤢", "🤮", "🤧", "🥵", "🥶", "🥴", "😵", "🤯", "🤠", "🥳", "😎",
+      "🤓", "🧐", "😕", "😟", "🙁", "😮", "😯", "😲", "😳", "🥺", "😦", "😧",
+      "😨", "😰", "😥", "😢", "😭", "😱", "😖", "😣", "😞", "😓", "😩", "😫",
+      "🥱", "😤", "😡", "😠", "🤬", "😈", "💩", "🤡", "👽", "🤖", "🎃", "😺",
+    ],
+  },
+  {
+    id: "people",
+    tab: "👍",
+    name: "People",
+    emoji: [
+      "👍", "👎", "👌", "🤌", "🤏", "✌️", "🤞", "🤟", "🤘", "🤙", "👈", "👉",
+      "👆", "👇", "☝️", "✋", "🤚", "🖐️", "🖖", "👋", "🤝", "👏", "🙌", "👐",
+      "🤲", "🙏", "✍️", "💅", "💪", "🦾", "🦵", "🦶", "👂", "👃", "🧠", "🦷",
+      "👀", "👁️", "👅", "👄", "💋", "🧑", "👶", "🧒", "👦", "👧", "👨", "👩",
+      "🧓", "👴", "👵", "🙅", "🙆", "💁", "🙋", "🧏", "🙇", "🤦", "🤷", "👮",
+      "🕵️", "💂", "👷", "🤴", "👸", "👳", "👲", "🧕", "🤵", "👰", "🤰", "🎅",
+      "🦸", "🦹", "🧚", "🧜", "🧞", "💃", "🕺", "👯", "🧖", "🧘", "🛌", "👥",
+    ],
+  },
+  {
+    id: "nature",
+    tab: "🐺",
+    name: "Nature",
+    emoji: [
+      "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮",
+      "🐷", "🐸", "🐵", "🙈", "🙉", "🙊", "🐔", "🐧", "🐦", "🐤", "🦆", "🦅",
+      "🦇", "🐺", "🐗", "🐴", "🦄", "🐝", "🐛", "🦋", "🐌", "🐞", "🐜", "🦂",
+      "🕷️", "🐢", "🐍", "🦎", "🦖", "🐙", "🦑", "🦐", "🦀", "🐡", "🐠", "🐟",
+      "🐬", "🐳", "🦈", "🐊", "🐅", "🐆", "🦓", "🦍", "🐘", "🦏", "🐪", "🦒",
+      "🐃", "🐎", "🐖", "🐑", "🐐", "🦌", "🐕", "🐈", "🐓", "🕊️", "🐇", "🐁",
+      "🌵", "🎄", "🌲", "🌳", "🌴", "🌱", "🌿", "☘️", "🍀", "🎍", "🍃", "🍂",
+      "🍁", "🌺", "🌻", "🌹", "🥀", "🌷", "🌸", "💐", "🍄", "🌰", "🌍", "🌕",
+    ],
+  },
+  {
+    id: "food",
+    tab: "🍷",
+    name: "Food",
+    emoji: [
+      "🍏", "🍎", "🍐", "🍊", "🍋", "🍌", "🍉", "🍇", "🍓", "🫐", "🍈", "🍒",
+      "🍑", "🥭", "🍍", "🥥", "🥝", "🍅", "🍆", "🥑", "🥦", "🥬", "🥒", "🌶️",
+      "🌽", "🥕", "🧄", "🧅", "🥔", "🍠", "🥐", "🥯", "🍞", "🥖", "🧀", "🥚",
+      "🍳", "🥞", "🥓", "🍔", "🍟", "🍕", "🌭", "🥪", "🌮", "🌯", "🥗", "🍝",
+      "🍜", "🍲", "🍛", "🍣", "🍱", "🥟", "🍤", "🍙", "🍚", "🍥", "🥠", "🍢",
+      "🍡", "🍦", "🍰", "🎂", "🧁", "🥧", "🍫", "🍬", "🍭", "🍯", "🍼", "🥛",
+      "☕", "🍵", "🍶", "🍾", "🍷", "🍸", "🍹", "🍺", "🍻", "🥂", "🥃", "🧊",
+    ],
+  },
+  {
+    id: "activity",
+    tab: "🎲",
+    name: "Activity",
+    emoji: [
+      "⚽", "🏀", "🏈", "⚾", "🥎", "🎾", "🏐", "🏉", "🥏", "🎱", "🪀", "🏓",
+      "🏸", "🏒", "🏑", "🥍", "🏏", "🥅", "⛳", "🪁", "🏹", "🎣", "🤿", "🥊",
+      "🥋", "🎽", "🛹", "🛷", "⛸️", "🥌", "🎿", "⛷️", "🏂", "🏋️", "🤼", "🤸",
+      "⛹️", "🤺", "🤾", "🏌️", "🏇", "🧗", "🏊", "🚴", "🚵", "🏆", "🥇", "🥈",
+      "🥉", "🏅", "🎖️", "🎫", "🎪", "🎭", "🎨", "🎬", "🎤", "🎧", "🎼", "🎹",
+      "🥁", "🎷", "🎺", "🎸", "🎻", "🎲", "♟️", "🎯", "🎳", "🎮", "🕹️", "🎰",
+      "🃏", "🀄", "🎴", "🧩", "🪄", "🎁", "🎉", "🎊", "🎈", "✨", "🎇", "🎆",
+    ],
+  },
+  {
+    id: "travel",
+    tab: "🏰",
+    name: "Places",
+    emoji: [
+      "🚗", "🚕", "🚙", "🚌", "🚎", "🏎️", "🚓", "🚑", "🚒", "🚐", "🚚", "🚛",
+      "🚜", "🛵", "🏍️", "🚲", "🛴", "🚨", "🚔", "🚍", "🚝", "🚄", "🚅", "🚈",
+      "🚂", "🚆", "🚇", "🚊", "🚉", "✈️", "🛫", "🛬", "🚀", "🛸", "🚁", "⛵",
+      "🚤", "🛥️", "🛳️", "⚓", "⛽", "🚧", "🗺️", "🗿", "🗽", "🗼", "🏰", "🏯",
+      "🏟️", "🎡", "🎢", "🎠", "⛲", "⛱️", "🏖️", "🏝️", "🏜️", "🌋", "⛰️", "🏔️",
+      "🗻", "🏕️", "⛺", "🏠", "🏡", "🏘️", "🏚️", "🏗️", "🏭", "🏢", "🏬", "🏣",
+      "🏥", "🏦", "🏨", "🏪", "🏫", "🏩", "💒", "⛪", "🕌", "🕍", "🛕", "⛩️",
+      "🌃", "🌆", "🌇", "🌉", "🌌", "🌁", "🌫️", "🌊", "🔥", "❄️", "⭐", "🌟",
+    ],
+  },
+  {
+    id: "objects",
+    tab: "💡",
+    name: "Objects",
+    emoji: [
+      "⌚", "📱", "💻", "⌨️", "🖥️", "🖨️", "🖱️", "💽", "💾", "💿", "📀", "📷",
+      "📸", "📹", "🎥", "📽️", "📺", "📻", "🎙️", "⏱️", "⏲️", "⏰", "🕰️", "⌛",
+      "⏳", "📡", "🔋", "🔌", "💡", "🔦", "🕯️", "🪔", "🧯", "🛢️", "💸", "💵",
+      "💴", "💶", "💷", "🪙", "💰", "💳", "💎", "⚖️", "🪜", "🧰", "🔧", "🔨",
+      "⚒️", "🛠️", "⛏️", "🔩", "⚙️", "🧱", "⛓️", "🧲", "🔫", "💣", "🧨", "🪓",
+      "🔪", "🗡️", "⚔️", "🛡️", "🚬", "⚰️", "🪦", "⚱️", "🏺", "🔮", "📿", "🧿",
+      "💈", "⚗️", "🔭", "🔬", "🕳️", "💊", "💉", "🩸", "🩹", "🩺", "🚪", "🪞",
+      "🪟", "🛏️", "🛋️", "🪑", "🚽", "🧹", "🧺", "🔑", "🗝️", "🗄️", "📋", "📌",
+      "📎", "✂️", "🖊️", "✏️", "📝", "📖", "📚", "📕", "📜", "📄", "📰", "🔖",
+    ],
+  },
+  {
+    id: "symbols",
+    tab: "❤️",
+    name: "Symbols",
+    emoji: [
+      "❤️", "🧡", "💛", "💚", "💙", "💜", "🖤", "🤍", "🤎", "💔", "❣️", "💕",
+      "💞", "💓", "💗", "💖", "💘", "💝", "☮️", "✝️", "☪️", "🕉️", "☸️", "✡️",
+      "🔯", "🕎", "☯️", "☦️", "⛎", "♈", "♉", "♊", "♋", "♌", "♍", "♎",
+      "♏", "♐", "♑", "♒", "♓", "🆔", "⚛️", "🉑", "☢️", "☣️", "📴", "📳",
+      "🈶", "🈚", "🈸", "🈺", "🈷️", "✴️", "🆚", "💮", "🉐", "㊙️", "㊗️", "🈴",
+      "❗", "❓", "❕", "❔", "‼️", "⁉️", "💯", "🔅", "🔆", "〽️", "⚠️", "🚸",
+      "🔱", "⚜️", "🔰", "♻️", "✅", "🈯", "💹", "❇️", "✳️", "❎", "🌐", "💠",
+      "Ⓜ️", "🌀", "💤", "🏧", "🚾", "♿", "🅿️", "🈳", "🈂️", "🛂", "🛃", "🛄",
+      "🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫", "⚪", "🟤", "🔶", "🔷", "🔺",
+    ],
+  },
+  {
+    id: "flags",
+    tab: "🏁",
+    name: "Flags",
+    emoji: [
+      "🏁", "🚩", "🎌", "🏴", "🏳️", "🏳️‍🌈", "🏳️‍⚧️", "🏴‍☠️", "🇦🇷", "🇦🇺", "🇦🇹", "🇧🇪",
+      "🇧🇷", "🇨🇦", "🇨🇱", "🇨🇳", "🇨🇿", "🇩🇰", "🇪🇬", "🇫🇮", "🇫🇷", "🇩🇪", "🇬🇷", "🇭🇰",
+      "🇭🇺", "🇮🇸", "🇮🇳", "🇮🇩", "🇮🇪", "🇮🇱", "🇮🇹", "🇯🇵", "🇰🇷", "🇲🇽", "🇳🇱", "🇳🇿",
+      "🇳🇴", "🇵🇭", "🇵🇱", "🇵🇹", "🇷🇴", "🇷🇺", "🇸🇦", "🇷🇸", "🇸🇬", "🇸🇰", "🇿🇦", "🇪🇸",
+      "🇸🇪", "🇨🇭", "🇹🇭", "🇹🇷", "🇺🇦", "🇦🇪", "🇬🇧", "🇺🇸", "🇻🇪", "🇻🇳", "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+    ],
+  },
 ];
 
-function chatComposer(emojiOpen: boolean): string {
+/** The tab shown when nobody has picked one. */
+export const DEFAULT_EMOJI_CATEGORY = EMOJI_CATEGORIES[0]!.id;
+
+/**
+ * Every emoji the picker offers, flattened.
+ *
+ * Kept because "what can be inserted" is one question and the answer must
+ * not depend on which tab happens to be open — the click handler validates
+ * against this, not against the visible grid.
+ */
+export const CHAT_EMOJI: string[] = [
+  // DEDUPED, because the categories deliberately overlap: the Vampire tab
+  // is a shortcut to the ones a player at this table actually reaches for,
+  // and several of those live in Objects or Symbols as well. That is right
+  // for the tabs and wrong for a set of "what may be inserted".
+  ...new Set(EMOJI_CATEGORIES.flatMap((c) => c.emoji)),
+];
+
+/**
+ * The pad: one category's grid, with the tabs UNDER it (owner request).
+ *
+ * Shared by the lobby and the table rather than copied into each. The two
+ * had their own inline copies of the old flat list, which is how a picker
+ * ends up different in two places nobody compares side by side.
+ */
+export function emojiPad(active: string): string {
+  const cat = EMOJI_CATEGORIES.find((c) => c.id === active) ?? EMOJI_CATEGORIES[0]!;
   return `
-    ${
-      emojiOpen
-        ? `<div class="emojipad" id="emojipad">
-             ${CHAT_EMOJI.map(
-               (e) => `<button class="emoji" data-emoji="${esc(e)}">${e}</button>`,
-             ).join("")}
-           </div>`
-        : ""
-    }
+    <div class="emojipad" id="emojipad">
+      <div class="emojigrid">
+        ${cat.emoji
+          .map((e) => `<button class="emoji" data-emoji="${esc(e)}" title="${esc(e)}">${e}</button>`)
+          .join("")}
+      </div>
+      <div class="emojitabs" role="tablist">
+        ${EMOJI_CATEGORIES.map(
+          (c) => `<button class="emojitab ${c.id === cat.id ? "on" : ""}"
+                          data-emojicat="${esc(c.id)}" role="tab"
+                          aria-selected="${c.id === cat.id}"
+                          title="${esc(c.name)}">${c.tab}</button>`,
+        ).join("")}
+      </div>
+    </div>`;
+}
+
+function chatComposer(emojiOpen: boolean, emojiCategory: string): string {
+  return `
+    ${emojiOpen ? emojiPad(emojiCategory) : ""}
     <div class="row">
       <input id="chatinput" maxlength="${MAX_CHAT_TEXT}" placeholder="Say something…" />
       <button id="chatemoji" title="Emoji">🙂</button>

@@ -95,6 +95,13 @@ export class HostSession {
       if (who && this.chatBanned.has(who.seat)) return;
       this.say(msg.text, who?.name ?? "someone", false, who?.chatColor ?? null);
     }
+    else if (msg.type === "setColor") {
+      // The colour this player is written in from now on. The host stamps
+      // every relayed line from what IT recorded, so a colour picked
+      // mid-game has to be sent — see SetColorMsg.
+      const who = [...this.peers.values()].find((p) => p.channel === channel);
+      if (who) who.chatColor = msg.color && !colorProblem(msg.color) ? msg.color : null;
+    }
     // A peer that says goodbye mid-game leaves its seat to a bot rather
     // than to nobody — see `onLeave`.
     else if (msg.type === "leave") this.onLeave(channel);
