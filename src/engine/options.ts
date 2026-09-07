@@ -44,6 +44,43 @@ export type WindowId =
   /** A card asking one Methuselah a question (docs/choice-frames-design.md). */
   | "choice";
 
+/**
+ * The family of thing a play does — a coarse summary, not a description
+ * (docs/richer-options-design.md §5).
+ *
+ * The vocabulary is deliberately small: it is what a player reads off a
+ * card at a glance, and what a scoring policy can actually weigh. The
+ * mapping from the card vocabulary onto these lives in the cards layer
+ * (`src/cards/effects/summary.ts`), because that is where the primitives
+ * are defined; the type lives here because an option is the engine's.
+ */
+export type PlayEffectTag =
+  | "bleed"
+  | "stealth"
+  | "intercept"
+  | "poolGain"
+  | "poolDrain"
+  | "bloodGain"
+  | "damage"
+  | "prevent"
+  | "combat"
+  | "votes"
+  | "unlock"
+  | "wake"
+  | "deny"
+  | "steal"
+  | "board"
+  | "search";
+
+/** One family of effect, with its size when it has one. An ABSENT amount
+ *  means the effect is not counted in units (a cancel, a wake) — it does
+ *  NOT mean zero, and a reader that defaults it to zero will price every
+ *  such card as doing nothing. */
+export interface PlayEffect {
+  tag: PlayEffectTag;
+  amount?: number;
+}
+
 export type LegalOption =
   | { id: string; kind: "pass"; label: string }
   | {
@@ -52,6 +89,31 @@ export type LegalOption =
       label: string;
       minion: MinionId;
       action: ActionKind;
+      /**
+       * A BLEED's live value, if this is one — the number the action would
+       * announce at, with every static, aura and conditional already in
+       * it, not the minion's printed `bleedAmount`.
+       *
+       * The engine computed it to build this option; leaving it out meant
+       * every reader guessed. The AI guessed with the printed field and so
+       * could not see that a card in play had made a bleed worth three,
+       * and the screen could not say so either
+       * (docs/richer-options-design.md).
+       */
+      bleed?: number;
+      /**
+       * A HUNT's live gain — what this vampire would actually put on
+       * itself, which is the hunt amount capped by what it can still hold
+       * (p. 6: excess goes to the blood bank, not to the Methuselah).
+       *
+       * ZERO IS A REAL ANSWER and the useful one: a vampire at capacity
+       * gains nothing by hunting, and the option is still legal because
+       * hunting triggers cards that care (docs/futile-options-design.md
+       * keeps the hunt deliberately ungated for exactly that reason). The
+       * enumerator knows the number; without it a reader has to re-derive
+       * capacity, auras and all.
+       */
+      gain?: number;
       /** Torpor target for diablerize/rescue (rush-style targeting). */
       targetMinion?: MinionId;
       /** Rescue only: blood paid by the acting vampire (0/1/2), the rest
@@ -83,6 +145,11 @@ export type LegalOption =
        *  Optional because a hand-rolled handler may not supply one; every
        *  spec-compiled card does. */
       cost?: { blood: number; pool: number };
+      /** What this play would DO, in families
+       *  (docs/richer-options-design.md §5). Empty for a card whose whole
+       *  content is outside the summary vocabulary — which is a real
+       *  answer, not a missing one. */
+      effects?: PlayEffect[];
     }
   /** An answer to a ChoiceFrame;  carries the picked value(s). */
   | {

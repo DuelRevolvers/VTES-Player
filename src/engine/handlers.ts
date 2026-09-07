@@ -5,7 +5,7 @@
  * the card's as-played window closes uncanceled.
  */
 
-import type { WindowId, LegalOption } from "./options.ts";
+import type { WindowId, LegalOption, PlayEffect } from "./options.ts";
 import type {
   ActionFrame,
   ActionId,
@@ -931,6 +931,17 @@ export interface CardHandler {
    *  `compileSpec` from `spec.cardType`, so no card author maintains it.
    *  docs/play-cost-design.md §2 */
   costTypes?(mode: DisciplineLevel | null, variant?: string): PlayCostCardType[];
+  /** What playing this MODE would do, in families — the summary every
+   *  `playCard` option carries (docs/richer-options-design.md §5). Added
+   *  centrally by `compileSpec` from the mode's own effects, so no card
+   *  author maintains it, and defaulted by `backfillCentralQueries` for a
+   *  hand-rolled handler — which is the gap that left `costTypes`
+   *  undefined on Blood Doll and .44 Magnum.
+   *
+   *  Per MODE, because the answer differs by mode: a handler-level lookup
+   *  cannot answer a question whose answer differs by mode (the Wall of
+   *  Filth bug, docs/combat-attachments-design.md §3). */
+  playEffects?(mode: DisciplineLevel | null, variant?: string): PlayEffect[];
   /** Clans this card's "Requires a …" line names, if any — the clan
    *  sibling of `requiresDisciplines`, added centrally by `compileSpec`
    *  from `spec.requiresClan` for the same reason: a hand-rolled handler

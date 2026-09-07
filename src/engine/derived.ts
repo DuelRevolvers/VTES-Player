@@ -8,6 +8,7 @@
 import type {
   ActionFrame,
   ActionId,
+  ActionKind,
   CombatFrame,
   ConditionalStatic,
   DisciplineLevel,
@@ -208,6 +209,40 @@ export function currentBleed(state: GameState, af: ActionFrame): number {
   // bonuses TO a bleed, and there is no longer a bleed to add them to.
   const acting = findMinion(state, af.acting);
   if (!acting) return 0;
+  return bleedOf(state, acting, af.actionKind, af.target, af.actionId);
+}
+
+/**
+ * What a bleed by this minion WOULD be worth, announced right now.
+ *
+ * The same computation as `currentBleed`, against an announcement that has
+ * not happened yet — so the option list can say what a bleed is actually
+ * worth instead of leaving every reader to guess from the minion's printed
+ * `bleedAmount` (docs/richer-options-design.md). The AI was doing exactly
+ * that guessing, and a bleed is its most common real decision.
+ *
+ * Everything the calculation needs is fixed at announcement anyway (p. 25)
+ * — the kind, the target, the actor — so synthesizing it is not a second
+ * model. `actionId` is null, which correctly contributes nothing from the
+ * event-log fold: no modifier has been played on an action that does not
+ * exist.
+ */
+export function prospectiveBleed(
+  state: GameState,
+  minion: MinionState,
+  target: SeatId | null,
+): number {
+  return bleedOf(state, minion, "bleed", target, null);
+}
+
+function bleedOf(
+  state: GameState,
+  acting: MinionState,
+  actionKind: ActionKind,
+  target: SeatId | null,
+  actionId: ActionId | null,
+): number {
+  const af = { actionKind, target } as const;
   let bleed = acting.bleedAmount;
   // Persistent +bleed statics from attached cards (Heart of the City).
   for (const p of acting.attached) bleed += p.statics.bleed ?? 0;
@@ -255,10 +290,42 @@ export function currentBleed(state: GameState, af: ActionFrame): number {
   bleed += auraBonus(state, acting, "bleed");
   // "While your prey has 10 or fewer pool, Üresség gets +1 bleed" — a
   // crypt card's own conditional static, read against this action.
-  bleed += conditionalStatic(state, af.actionId, acting, "bleed");
-  for (const ev of state.eventLog) {
-    if (ev.type === "BleedAmountModified" && ev.actionId === af.actionId) {
-      bleed += ev.delta;
+  //
+  // For a PROSPECTIVE bleed there is no announcement to look up, so one is
+  // synthesized from what announcing would fix (p. 25). A built-in bleed
+  // plays no card, so it requires no card types, and a bleed is directed.
+  bleed += conditionalStaticFor(
+    state,
+    actionId === null
+      ? {
+          type: "ActionAnnounced",
+          actionId: "",
+          seat: acting.controller,
+          acting: acting.id,
+          actionKind,
+          target,
+          directed: true,
+        }
+      : ((state.eventLog.find(
+          (ev) => ev.type === "ActionAnnounced" && ev.actionId === actionId,
+        ) as Extract<GameEvent, { type: "ActionAnnounced" }> | undefined) ?? {
+          type: "ActionAnnounced",
+          actionId,
+          seat: acting.controller,
+          acting: acting.id,
+          actionKind,
+          target,
+          directed: target !== null,
+        }),
+    acting,
+    "bleed",
+  );
+  // Only a real action has modifiers played on it.
+  if (actionId !== null) {
+    for (const ev of state.eventLog) {
+      if (ev.type === "BleedAmountModified" && ev.actionId === actionId) {
+        bleed += ev.delta;
+      }
     }
   }
   // "Vampires with capacity 4 or less get -1 bleed against you".
@@ -505,6 +572,21 @@ export function huntAmountFor(state: GameState, minion: MinionState): number {
   return 1 + auraBonus(state, minion, "hunt");
 }
 
+/**
+ * What a hunt would ACTUALLY put on this vampire — the hunt amount capped
+ * by what they can still hold.
+ *
+ * p. 6 is the reason the cap belongs here: excess blood goes to the BLOOD
+ * BANK, not to the Methuselah's pool, so hunting at capacity gains
+ * nobody anything. **Zero is a real answer**, and the option stays legal
+ * with it — a full vampire hunting still triggers cards that care about a
+ * successful hunt, which is why the hunt is deliberately not gated by
+ * `canGainBlood` (docs/futile-options-design.md).
+ */
+export function huntGain(state: GameState, minion: MinionState): number {
+  return Math.max(0, Math.min(huntAmountFor(state, minion), capacityOf(minion) - minion.blood));
+}
+
 /** Inherent stealth (e.g. hunt's +1, p. 21) is emitted as a
  *  StealthModified event at announcement, so one fold covers everything.
  *  Stealth may go below 0 (p. 26). */
@@ -636,6 +718,24 @@ export function conditionalStatic(
     (ev) => ev.type === "ActionAnnounced" && ev.actionId === actionId,
   );
   if (!announced || announced.type !== "ActionAnnounced") return 0;
+  return conditionalStaticFor(state, announced, minion, field);
+}
+
+/**
+ * The same sum against an announcement handed in rather than looked up.
+ *
+ * It exists so a PROSPECTIVE action can be priced — "what would this bleed
+ * be worth if announced now" — without a second copy of these rules. The
+ * caller synthesizes the announcement it is about to make, which is honest
+ * because everything read here (kind, directedness, target, actor) is
+ * fixed at announcement anyway (p. 25).
+ */
+export function conditionalStaticFor(
+  state: GameState,
+  announced: Extract<GameEvent, { type: "ActionAnnounced" }>,
+  minion: MinionState,
+  field: "stealth" | "intercept" | "bleed" | "strength" | "votes",
+): number {
   let total = 0;
   for (const p of minion.attached) {
     for (const c of p.statics.conditional ?? []) {

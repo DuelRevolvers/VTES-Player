@@ -5388,7 +5388,392 @@ identifier** and every option id, the command log and every saved game are
 written in terms of it. Its test pins both halves: the mat says "Bea Bot"
 and `state.seats` still holds `Bea` and not `Bea Bot`.
 
-**Green baseline as of 2026-09-06: 172 test files, 1871 tests, typecheck and
+**THE AI FAIR-MATCH HARNESS — BUILT 2026-09-06 (`docs/ai-bench-design.md`),
+in answer to "how do we make the AI better?". The honest first answer was
+THAT WE COULD NOT TELL.** `npm run simulate` plays the playtest snapshot,
+where the seats hold different decks and different pools — so any tuning
+against it measures the DECKS. `npm run bench` is a **mirror match**: the
+same precon in every seat, dealt fresh (p. 14), with the policy assignment
+**rotated** so each policy sits in each seat the same number of times
+against the same shuffle. Both halves only became possible after the
+fresh-game deal and `preconDeck()` landed. The metric is **victory points,
+not wins** — VTES is multiplayer, a win is one seat in four, and VPs are
+the game's own measure (p. 43).
+
+**TWO BUGS IN THE HARNESS, BOTH FOUND BY ITS OWN CONTROLS.** (1) The
+rotation ALTERNATED (`[0,1,0,1]`), which rotated to `[1,0,1,0]` and back —
+**two** distinct seatings on a four-seat table, each played twice, so half
+the games were exact duplicates and **the margin thought it had twice the
+sample it had**. A block (`[0,0,1,1]`) gives four. Spotted because the
+control returned *exactly* 0.000. (2) The margin was computed as
+`sqrt(seA² + seB²)` — as if the two samples were independent, when both
+come from the **same game** and the VPs in a game are near a fixed total,
+so they are strongly NEGATIVELY correlated. `Var(A−B) = Var(A) + Var(B) −
+2Cov`, and a negative Cov makes the truth **larger** than that formula —
+so the margins were too **NARROW**, the dangerous direction. It is a
+**per-game paired difference** now.
+
+**BOTH CONTROLS ARE PINNED, AND THE POSITIVE ONE IS THE HALF THAT IS EASY
+TO SKIP:** a policy against itself must show no difference (negative), AND
+a crippled policy must lose by a margin (positive) — without the second,
+the first passes just as happily on a harness that always answers zero.
+`--weights bleedPrey=-100` loses by 0.96 VP against ±0.20. **A measuring
+instrument has to be measured first**; this is the "empty for the wrong
+reason" shape applied to a measurement. Calibration: **320 games in 10s
+resolve ±0.17 VP** (~17% of a seat's mean), and the margin narrows with
+the square root.
+
+**AND IT FOUND A LIVE ENGINE BUG ON ITS FIRST REAL RUN** — 4 games in 160
+died on `card not in hand` from the **ash-heap exchange** (Garibaldi-Meucci
+Museum, Lenelle). Both cards are named **at announcement** (p. 25) and
+moved **at resolution**, and the hand card can be played in between;
+`stealEquipment`, four cases up in the **same switch**, had guarded against
+exactly this since it was written. **Neither the fuzz nor `npm run
+simulate` could have seen it — both play the mid-game snapshot**, and it
+took a fresh precon deal for a full hand and that ability to meet. Reading
+on record: it is **one exchange with one cost**, so a missing give-card
+cancels both halves rather than handing over a free retrieval. The
+regression was checked against the unfixed code.
+
+**INFLUENCE TARGETING — the first change measured (`docs/ai-bench-design.md`
+§8).** Every `transferToVampire` scored a flat weight, so ties broke on the
+seeded stream and **the AI chose which vampire to bring into play by coin
+flip**. Nothing had to be plumbed: a seat's own uncontrolled region is
+readable to its owner (p. 14), so `PlayerView` already carried capacity and
+counters. The score is now `influenceTransfer + influenceProgress /
+remaining + influenceCapacity × capacity`, and the first term does two jobs
+— **finish what you started** (spent counters buy nothing until the vampire
+is in play) and **cheap first** (a 4-cap arrives four turns before an 11).
+It is always a bonus, never a penalty, so influencing can never score below
+passing — a policy that stopped influencing would never build a board.
+
+**THE RESULT IS NOT THE HEADLINE IT LOOKED LIKE, AND THAT IS THE LESSON:
+MEASURE ON MORE THAN ONE DECK.** Four mirror matches at 800 games each —
+Hecata **+0.471 VP** (±0.107, a seat averages 1.0, wins 328→458),
+Nosferatu +0.081, Toreador **0.000**, Brujah −0.040, the last three all
+inside their margins. Shipped because it is **never measurably worse and
+sometimes much better**, but the honest claim is "helps on some decks", not
+"+0.47". The mechanism is unexplained — capacity spread does NOT account
+for it (Toreador's 3–8 is close to Hecata's 2–9, and Brujah also has a
+2-drop) — and is worth understanding before the next change is tuned
+against Hecata alone. **Had the first run been the only one taken, this
+would have been written up as a 47% improvement.**
+
+**TWO OF MY OWN CHANGES DID NOT EARN THEIR PLACE, and the bench said so.**
+`influenceOut: 12 → 30` looked obviously right (moving a finished vampire
+costs no transfer) and returned an **exactly identical** result over 240
+games — the order does not matter, since the AI adds the last counter and
+then moves BOTH out in the same phase. **Reverted**: a weight that provably
+does nothing is noise in a table whose purpose is to be argued with, and my
+own first draft of its test asserted the preference I had already measured
+away. `influenceCapacity` is **unproven and kept knowingly** — +0.033 then
++0.049, both inside ±0.113, so proving it would take ~4,000 games; kept for
+its reasoning (same price, more vampire) and because a deterministic
+tie-break beats a random one, not claimed as an improvement.
+
+**WHY HECATA — ANSWERED, and the answer moves the bottleneck
+(`docs/ai-bench-design.md` §9).** A behavioural probe shows the influence
+change works **equally well on both decks**: first vampire in play goes
+from turn 7.2 → **3.0** on Hecata and 8.3 → **3.6** on Toreador, minions at
+turn 10 from ~0.9 → ~2.9 on both. So the deck-specific part is not the
+influence, it is **what the policy does with the vampires once they are
+out** — on Hecata that converts into ousts and on Toreador it does not.
+**A property of the metric worth knowing: in a mirror match total VPs are
+CONSERVED** (an oust each plus one for last standing, p. 43), so mean VP
+per seat is 1.0 by construction and the bench can only show how a fixed pie
+is SPLIT. It is the right tool for "is A better than B" and **blind to
+"both got better"** — absolute gains need behavioural probes.
+
+**THE DECISION PROFILE — the map that should drive the next work
+(§10).** Over 30 Hecata games, 26,048 decisions, **72.4% of them FORCED**
+(one legal option, no policy involved). Of the 7,189 real choices:
+**transferToVampire 39.6%**, pass 17.5%, **takeAction 12.6%**, **playCard
+11.7%**, influenceOut 6.5%, answerChoice 5.3%, declareBlock **2.3%**,
+chooseStrike 1.8%. Influence was 40% of every real choice — the right first
+target, and more luck than judgement. **Blocking is 2.3%**, so the effort
+spent on it was mostly wasted, and now provably so.
+
+**TWO MORE CHANGES, BOTH CORRECT AND NEITHER MEASURABLE (§11)** — kept
+because they are right, reported honestly because they moved nothing.
+*Blocking by action kind*: one `blockOther` priced stopping a **diablerie**
+(a vampire gone for good, blood and a Discipline to the eater, p. 34) the
+same as stopping a **hunt** (one blood, and a lock plus a combat to
+prevent). Three exact zeros and one +0.030 across four decks — a probe
+explains it: a block is offered in **256 of 26,048** decisions, of which
+201 bleeds, 33 hunts, 22 card effects, and **diablerie/rescue blocks never
+came up at all**. *Optional choices were all declined*: `answerChoice`
+scored 0 against `pass` 0.5, and declining an optional ChoiceFrame IS a
+pass — the diagnosis was right and the frequency guess wrong (~0.01 VP),
+because the frames that arise are the **mandatory** ones (unlock tolls, the
+p. 7 discard-down, a search's "find nothing"), which have no pass to lose
+to. Both are pinned as **weight ORDERINGS rather than values**, since the
+relation is what matters.
+
+**A TEST WHOSE PREMISE WAS WRONG, not whose subject was.** Pricing hunts
+below `pass` broke the existing "…and TAKES the block when its intercept is
+enough" control — which used a *hunt* only because a hunt's +1 inherent
+stealth makes intercept meaningful, and so depended on hunts being worth
+blocking. It uses a stealthed **bleed** now, which is what it always meant
+to test.
+
+**A BLEED NOW SAYS WHAT IT IS WORTH — the first richer-options item
+(`docs/richer-options-design.md` §4), chosen because the profile put
+`takeAction` at 12.6% of real choices.** `LegalOption.takeAction` carries
+`bleed`, the number the action would announce at with every static, aura
+and conditional in it; the AI had been scoring its biggest term off
+`MinionState.bleedAmount`, the **printed** field, so a card in play that
+made a bleed worth three looked like one worth one.
+
+**Pricing an action that has not happened yet, WITHOUT a second model.**
+`currentBleed` needs an `ActionFrame` and there is none before
+announcement, so it was **factored, not copied**: the body is `bleedOf`,
+and `prospectiveBleed(state, minion, target)` calls it with the
+announcement **synthesized rather than looked up** — honest because
+everything read (kind, target, actor, directedness) is fixed at
+announcement anyway (p. 25). `conditionalStatic` gained a sibling taking
+the announcement instead of finding it, so the condition rules stay in one
+place. `actionId` is null, which correctly contributes nothing from the
+event-log fold — no modifier has been played on an action that does not
+exist. **The test that matters asserts the offered number equals
+`currentBleed` after announcement**, so no card can make them disagree.
+Measured: the live value differs from the printed one in **2.4–7.6%** of
+bleed options, always by 1 — small, but the score moves by 4, enough to
+change which minion bleeds. **Not A/B-measurable** (a code path, not a
+weight) so it ships as a correctness fix with a measured frequency, the
+`influenceCapacity` standard. **The UI got it free:** the button now reads
+"Andi Liu: bleed Bob for 3".
+
+**`PlayerView.combat` — THE BLOCKING GAP, ONE FRAME ALONG
+(`docs/ai-v1-design.md` §9).** `PlayerView.action` exists because an agent
+asked to block had no numbers; a seat asked to choose a **strike**, spend a
+**press** or use a prevention credit was told *nothing about the fight* —
+not who it was against, not their blood, not the range. The policy scored
+strikes on KIND alone and approximated "are we losing" from its own
+**weakest ready minion**, a guess about the wrong minion. The view now
+carries round, step, range, both combatants, which side the viewer is on
+and their opponent — **all open information** (both combatants face up, the
+range known to the table, p. 29), the same argument that made `action`
+safe. **`side: null` is a real case**: p. 28 lets any Methuselah's minion
+play into a combat it is not in, and **573 of 2,341 combat decisions** are
+taken by seats that are not fighting. **Verified live and not measurable**
+— populated at all 2,341, but strike/press decisions are only 252 of them
+with ~40 in the changed cases; four mirrors at 600 games each gave 0.000,
+0.005, −0.001, −0.018. Ships as correctness with a measured frequency. **It
+is also the first piece of sequencing state to cross into `PlayerView`
+without leaking**, which is evidence that §8's "widen the view" route to
+v2 is workable.
+
+**THE PATTERN, worth stating: FOUR policy changes in a row have come out
+correct, live and UNMEASURABLE** (block kinds, optional-choice ordering,
+the live bleed, combat awareness). Not four failures — three of them fixed
+the AI reasoning from the wrong number entirely. It is evidence about where
+the value is left: **not in what the policy does with a decision, but in
+how many decisions it can see far enough ahead to get right.** That is v2.
+
+**AI v2 — THE PREREQUISITE IS MEASURED, AND IT WAS THE WRONG PREREQUISITE
+(`docs/ai-v1-design.md` §8).** The queue said a search agent needs cheap
+cloning, and that `replay` should be measured before designing anything
+faster. Measured mid-game: **replay 4.99 ms, `structuredClone` 0.50 ms,
+JSON round trip 0.34 ms**, and — the number that decides it — **a full
+1-ply lookahead costs 3.11 ms** (mean 6.9 options per real choice, worst
+case 45 ms) with **zero options failing on a clone**. Cloning is solved,
+and those zero failures verify principle 2's "fully serializable" rather
+than assuming it.
+
+**THE REAL BLOCKER IS THAT AN AGENT CANNOT LEGITIMATELY HAVE A STATE.**
+`Agent.decide(dp, options, view)` is handed a `PlayerView` and never a
+`GameState` — principle 5 working as designed, since an AI that cloned the
+real state would be reading every opponent's hand. So a search agent needs
+**determinization**, and two things make that harder here than usual: (1)
+**`PlayerView` carries no frame stack** — it has the board but nothing
+about the impulse cycle, the action in flight or the combat, so a state
+rebuilt from it could not be handed to the engine to apply a move at all;
+(2) **deck lists are private in VTES**, so even a full determinization
+cannot draw a plausible opponent hand.
+
+**OWNER RULING 2026-09-06, binding: "The AI should work like a player and
+only work off of the information a normal player would possibly know or can
+see/read from the table."** That settles the route question — **the
+privileged-state path is OUT, permanently**, not "for now": it is a ruling
+about what an AI opponent *is*, not about convenience. The live routes are
+**widen `PlayerView`** so it can be replayed from, or **stay with a
+policy**. A search agent must therefore **DETERMINIZE**, and that is what
+the ruling asks for rather than a workaround — a player at the table
+reasons about what an opponent *probably* holds, and deck lists are private
+in VTES, so even a perfect determinization is a guess. An agent that
+guesses well is playing the game; one that reads the hand is not.
+
+**THE STANDING GUARD IS `tests/ai/information-boundary.test.ts`**, because
+widening the view is now the risky half of v2 — every field added for
+replayability is a chance to leak. It walks **real dealt games** with AI
+seats and checks, at **every decision**, the view handed to the agent
+against the instances that seat may not read (other hands p. 7; every draw
+pile *including your own* p. 14; other uncontrolled regions p. 14/p. 36;
+face-down stores), less the two legitimate exceptions, which it asks the
+engine for rather than assuming away — an **open hand** (Owl Companion,
+Revelations superior) and a card the seat has been **shown**. Three
+properties, each a choice: it matches **per card INSTANCE, never by name**
+(the same card can sit in a hidden hand and face up on the table at once,
+so only the id tells a leak from a legitimate appearance); the walk is
+**field-blind**, recursing for any `{id, name}` pair, so it catches a field
+that does not exist yet; and **the positive control is the load-bearing
+half** — measured, one walk checks ~306,000 hidden instances and **none
+reaches the view at all**, since `viewFor` collapses a hidden zone to a
+count rather than to masked cards, so a test that only walked would be
+*empty for the wrong reason*. The control feeds it another seat's hand and
+the viewer's **own** library and requires both to be caught.
+
+Two existing tests cover the halves either side of it: `heuristic.test.ts`
+reads the policy's **import lines** (it may not import `GameState` or
+`redactFor`), and `player-view.test.ts` checks each zone against its
+citation. Note the type system already blocks the crudest violation —
+`GameState` is not assignable to `PlayerView` — so the danger was never a
+call site passing the wrong object; it is `PlayerView` itself growing a
+field.
+
+**A PLAY NOW SAYS WHAT IT WOULD DO — 2026-09-06
+(`docs/richer-options-design.md` §5). The largest item the decision
+profile named:** `playCard` is **11.7% of every real choice**, and the
+policy scored a play by its live cost and its window and nothing else — a
+4-pool master that wins the game and a 4-pool master that does nothing
+scored the same, so the AI's card play was "prefer the cheapest thing in
+hand". `LegalOption.playCard.effects` is now a list of `{tag, amount?}`
+over sixteen families (bleed / poolDrain / poolGain / steal / deny /
+board / bloodGain / damage / votes / unlock / combat / stealth /
+intercept / prevent / search / wake). **Teaching the policy to read card
+text was never on the table** — it would be a second model of the pool,
+drifting from the first from the day it was written.
+
+**One half of the mapping is EXHAUSTIVE BY TYPE and the other is
+deliberately partial, and the asymmetry is the whole design.**
+`EFFECT_TAGS` is `Record<EffectPrimitive["kind"], PlayEffectTag | null>`,
+so TypeScript refuses to compile when a 136th primitive lands
+unclassified — a `default:` case would let a new primitive be silently
+worth nothing, which is *empty for the wrong reason* again. **It caught
+`playFromHand` on the first compile**, which my survey grep had missed
+because it is spelled as an intersection. The permanent-side maps are
+partial because their default (`board`) is already TRUE — a missing entry
+there loses precision, where a missing entry in the other loses the card.
+
+**Coverage was measured at each step, and the last stretch was the
+hand-rolled tail for the third time.** Primitives alone: **63.8%**, the
+gap dominated by masters/allies/retainers, whose work is done *from play*
+and so has no effects to summarise. Reading `spec.permanent`/`ally`/
+`weapon`/`rush`: **88.6%**. The remainder was bespoke handlers with no
+spec to derive from (**Vessel alone was 463 of 642**), which now state
+their own summary exactly as they had to state their own `costTypes`:
+**98.7%**. Attachment is in the ONE place that already attaches the live
+cost — forty `makeOption` sites are forty chances to forget, and a
+summary on some cards and not others is worse than none.
+
+**THE MEASUREMENT DID NOT SAY WHAT I EXPECTED, and the first version
+FAILED this project's own bar.** Pricing all sixteen families on plausible
+reasoning was **+0.115 VP on Hecata and −0.169 on Toreador** — and the
+Toreador loss **replicated** on a fresh 200 deals (−0.141), so it was a
+deck and not noise. Pricing only what moves **pool** — the currency the
+game is won in (p. 43) — clears the bar: Toreador **+0.106 ±0.105**,
+Hecata +0.056, Brujah +0.045, Nosferatu −0.099, the last three inside
+their margins. So `bleed`/`poolDrain`/`poolGain`/`steal` are priced and
+**the other twelve ship at ZERO**. Those zeroes are a RESULT, not an
+omission — but the honest limit is that the twelve were only measured
+*together*, so "board and combat are harmful" would be over-claiming; the
+plausible reading is that this policy has no way to CONVERT board
+presence or combat advantage into pool. Isolating them is one bench run
+each (`--weights effectValue.<family>=N`).
+
+**AND THE BENCH FOUND A LIVE ENGINE BUG ON THE FIRST FOUR-DECK RUN:
+5 errors in 800 Brujah games, `unknown minion: C-lib-62`** — a LIBRARY
+card id looked up as a minion, **which is what an ALLY is** (its
+`MinionId` is the id of the card that became it). The ally was burned
+while the block attempt it had declared was still on the stack, and
+**FOUR** places read `ba.blocker` with `getMinion`. That is the engine's
+own rule broken four times over: *a minion can leave play at any point, so
+read it with `findMinion`*. Three of the four are option enumerators,
+which must be **total** — a throw there is the frozen table of the
+2026-09-05 playtest, not an error anybody can act on. **The timing is the
+part to remember:** `resolveBlockAttempt` already fails an attempt whose
+blocker is gone, so the dangerous window is BEFORE it — the attempt's own
+impulse cycle, where every seat is asked and every card in hand is
+enumerated against a blocker that is no longer there. Pinned in
+`tests/engine/blocker-left-play.test.ts` and **verified against the
+unfixed code**. My first regression **passed on the unfixed code** (it
+used a leave-torpor, whose gone-blocker case fails the attempt before
+reaching the branch) — *empty for the wrong reason, in a test rather than
+a card*. Neither the fuzz nor `npm run simulate` could have found it:
+both play the mid-game snapshot, which has no allies blocking.
+
+**A stale assertion it shook out:** `tests/ui/table-view.test.ts` asserted
+`CardBurned` fires **exactly zero** times in a whole game — true when
+written, and a fact about the AI of the day rather than the code under
+test. The effect-aware policy burns one. The test's real subject is that
+the ash-heap count reads the ZONE and not the events, so it says that
+now. *An assertion about a total is a hostage to every future change.*
+
+**ACTIONS BEYOND THE BLEED — 2026-09-06
+(`docs/richer-options-design.md` §6). SURVEYING THE ITEM CHANGED WHAT THE
+ITEM WAS**, which is the lesson. The queue said "`takeAction` is 12.6% of
+real choices and only the bleed says what it is worth; hunts, rushes,
+diablerie and political actions are scored by kind alone". Measured over
+32 games on four precons, options OFFERED: **hunt 1184, bleed 1093, rescue
+56, diablerize 51, leaveTorpor 4, and `cardEffect` ZERO** — an action card
+announces through a `playCard` option, so §5 already covered it and the
+queue entry naming it was simply wrong. Rescue/diablerie/politics are
+**111 offers across 32 games, taken three times**. So `takeAction` is in
+practice **hunt versus bleed**, and the bleed half was done in §4.
+
+**THE REAL FIND WAS NEXT DOOR: the BLOCK decision was still reading the
+PRINTED bleed.** §4 put the live value on the option, so the seat choosing
+to bleed scores it right; `scoreBlock` — the seat deciding whether to
+**stop** it — still read `MinionState.bleedAmount`, because
+`PlayerView.action` carried stealth and not bleed. The same wrong number
+one decision along, and in the place it matters more: choosing which
+minion bleeds is a preference, choosing whether to block is where pool is
+defended. Measured: **236 of 269 block decisions are against a bleed, and
+17.8% of them face a live value differing from the printed one.**
+`PlayerView.action.bleed` closes it — present only for a bleed (a `0` on a
+hunt would read as "a bleed worth nothing"), and open information on the
+same argument as the stealth beside it.
+
+**`LegalOption.takeAction.gain` — what a hunt would actually put on the
+vampire**, via `huntGain` in derived.ts: the hunt amount capped by what
+they can still hold. **p. 6 is why the cap belongs in the engine** —
+excess blood goes to the BLOOD BANK, not to the Methuselah's pool — and
+**zero is a real answer, true of 43.9% of hunt options**. The option stays
+legal (hunting triggers cards that care, so it is deliberately not
+`canGainBlood`-gated); it is the SCORE that changes, because acting
+**locks** the vampire (p. 25) and a futile hunt trades blocking for
+nothing.
+
+**AND THAT FIX IS INERT — the bench said so and a probe explained why.**
+`huntFutile` is a weight rather than a hard-coded rule precisely so the
+claim could be falsified, and it was: 0.000 / 0.000 / 0.007 / 0.000 across
+four decks. Three exact zeros is a signal, not a result, so the probe
+asked the obvious question — **a futile hunt is offered 425 times and
+CHOSEN ONCE**, because in 419 of those decisions a bleed was also on the
+table at four times the score. The other weights were already preventing
+the mistake. Kept on the `influenceCapacity` standard (correct, cheap, a
+guard for when bleeding is unattractive) and **not claimed as an
+improvement**.
+
+**What the entry is evidence of:** three of the four action kinds the
+queue named are too rare to enrich, and the one behavioural fix available
+was already being made by accident. **The profile counts DECISIONS; it
+cannot see which of them were already being got right.** Frequency picks
+the place to look; only reading tells you whether anything is there.
+
+**Next on the AI: WEIGHT-TWEAKING IS CLOSE TO EXHAUSTED.** Three changes
+gave one large behavioural win and two unmeasurables. The remaining big
+classes — `takeAction` and `playCard`, **24% of real choices between them**
+— are limited by the same thing: **an option does not say what it is
+worth.** The AI scores a bleed by the minion's printed `bleedAmount`
+instead of the live value, and a card by its cost alone. That is the
+**richer-options** step (`docs/richer-options-design.md`), and the profile
+is now the argument for it rather than a hunch. AI v2 (search) still wants
+its cloning cost measured first. **And measure on four decks from the
+start** — one deck told a story three others contradicted, twice in one
+session.
+
+**Green baseline as of 2026-09-06: 176 test files, 1913 tests, typecheck and
 `vite build` clean.** If a fresh session sees fewer, something regressed.
 
 **BLOCKED — THE LIST IS EMPTY (2026-09-03).** Every gate that was on it

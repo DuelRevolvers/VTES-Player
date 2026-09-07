@@ -10683,6 +10683,9 @@ const anarchTroublemaker: CardHandler = {
 const theCoven: CardHandler = {
   ...compileSpec(specByName("The Coven")),
   isTrifle: true,
+  // The spec is a stub whose modes carry no effects, so the compiled
+  // summary is correctly empty and the overlay states the real one.
+  playEffects: () => [{ tag: "board" }, { tag: "bloodGain", amount: 2 }],
   options(card, ctx) {
     if (ctx.window !== "turn.master") return [];
     if (seatControlsCopy(ctx.state, ctx.seat, this.name)) return [];
@@ -10748,6 +10751,7 @@ const theCoven: CardHandler = {
 
 const suddenReversal: CardHandler = {
   name: "Sudden Reversal",
+  playEffects: () => [{ tag: "deny" }],
   bloodCost: 0,
   isMasterCard: true,
   isOutOfTurnMaster: true,
@@ -10871,6 +10875,9 @@ const hideTheMind: CardHandler = {
  */
 const theBarrens: CardHandler = {
   name: "The Barrens",
+  // "Lock to discard a card (draw up afterward)" — a cycling engine. It
+  // reaches the library, which is what `search` names here.
+  playEffects: () => [{ tag: "board" }, { tag: "search" }],
   bloodCost: 0,
   poolCost: 0,
   isMasterCard: true,
@@ -10995,6 +11002,12 @@ const bloodDoll: CardHandler = {
   bloodCost: 0,
   poolCost: 0,
   isMasterCard: true,
+  // A hand-rolled handler has no spec to derive a summary from, so it
+  // states one — the same reason these cards state their `costTypes`
+  // (docs/richer-options-design.md §5). "Move 1 blood from this vampire to
+  // their pool or from their pool to this vampire" is an engine in both
+  // directions, which is exactly what the AI is choosing between.
+  playEffects: () => [{ tag: "board" }, { tag: "poolGain", amount: 1 }, { tag: "bloodGain", amount: 1 }],
   options(card, ctx) {
     if (ctx.window !== "turn.master") return [];
     return getSeat(ctx.state, ctx.seat).minions.map(
@@ -11033,6 +11046,7 @@ const vessel: CardHandler = {
   poolCost: 1,
   isMasterCard: true,
   isTrifle: true,
+  playEffects: () => [{ tag: "board" }, { tag: "poolGain", amount: 1 }, { tag: "bloodGain", amount: 1 }],
   options(card, ctx) {
     if (ctx.window !== "turn.master") return [];
     if (getSeat(ctx.state, ctx.seat).pool <= 1) return [];
@@ -11664,6 +11678,10 @@ const warGhoul: CardHandler = {
 const parityShiftBase = compileSpec(specByName("Parity Shift"));
 const parityShift: CardHandler = {
   ...parityShiftBase,
+  // "Allocate 3 of their pool among 1 or more other Methuselahs
+  // (including you)" — it takes from one seat and can give to yours, so
+  // it is both, and the spec's terms are bespoke.
+  playEffects: () => [{ tag: "poolDrain", amount: 3 }, { tag: "poolGain" }],
   /**
    * Not offered when NO Methuselah has more pool than you.
    *
@@ -11874,6 +11892,9 @@ const dreamsOfTheSphinx: CardHandler = {
   bloodCost: 0,
   poolCost: 1,
   isMasterCard: true,
+  // Hand size is not in the summary vocabulary, so the two clauses that
+  // are in it are what this reports.
+  playEffects: () => [{ tag: "board" }, { tag: "poolGain", amount: 1 }, { tag: "bloodGain", amount: 1 }],
   options(card, ctx) {
     if (ctx.window !== "turn.master") return [];
     if (seatControlsCopy(ctx.state, ctx.seat, this.name)) return [];
@@ -12055,8 +12076,13 @@ const organizedResistance: CardHandler = {
     // Use 1: +1 intercept to the currently-blocking Anarch you control.
     const ba = ctx.blockAttempt;
     if (ba && ba.blockerSeat === ctx.seat) {
-      const blocker = getMinion(ctx.state, ba.blocker);
+      // A minion can leave play at any point, so the blocker is read with
+      // `findMinion` — an ALLY that paid its last life is gone while its
+      // block attempt is still on the stack, and an option enumerator that
+      // throws surfaces as a game nobody can answer.
+      const blocker = findMinion(ctx.state, ba.blocker);
       if (
+        blocker &&
         blocker.sect === "anarch" &&
         currentIntercept(ctx.state, af.actionId, ba.blocker) <
           currentStealth(ctx.state, af.actionId)
@@ -15005,14 +15031,25 @@ function backfillCentralQueries(h: CardHandler): void {
   // which for a bespoke card is right in the absence of a modifier. A
   // cost that appears on some cards and not others is worse than none, so
   // this exists to make sure the field is ALWAYS there.
+  // And what it would DO (docs/richer-options-design.md §5), attached in
+  // the same one place and for the same reason: forty `makeOption` call
+  // sites are forty chances to forget, and a summary that appears on some
+  // cards and not others is worse than none — an agent would read the
+  // unsummarised half as doing nothing at all.
+  //
+  // A hand-rolled handler answers `undefined` here, and gets an empty
+  // list. That is honest rather than wrong: the summary is derived from
+  // the SPEC vocabulary, and a bespoke card has no spec to derive it from.
+  // Such a card scores as it did before this existed.
   const inner = h.options?.bind(h);
   if (inner) {
     h.options = (card, ctx) =>
-      inner(card, ctx).map((o) =>
-        o.kind === "playCard" && o.cost === undefined
-          ? { ...o, cost: { blood: h.bloodCost ?? 0, pool: h.poolCost ?? 0 } }
-          : o,
-      );
+      inner(card, ctx).map((o) => {
+        if (o.kind !== "playCard") return o;
+        const cost = o.cost ?? { blood: h.bloodCost ?? 0, pool: h.poolCost ?? 0 };
+        const effects = o.effects ?? h.playEffects?.(o.mode, o.params["variant"]) ?? [];
+        return { ...o, cost, effects };
+      });
   }
   if (!h.requiresSects) h.requiresSects = () => [];
   // A title-granting political action holds its card until the referendum

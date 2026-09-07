@@ -24,7 +24,7 @@
  */
 
 import type { Agent, PlayerView } from "../engine/agent.ts";
-import type { DecisionPoint, LegalOption, WindowId } from "../engine/options.ts";
+import type { DecisionPoint, LegalOption, PlayEffect, PlayEffectTag, WindowId } from "../engine/options.ts";
 import type { MinionState, SeatId } from "../engine/state.ts";
 
 /**
@@ -43,8 +43,46 @@ export interface Weights {
    *  about to be useless. */
   huntWhenEmpty: number;
   hunt: number;
+  /**
+   * A hunt that would put NO blood on the vampire — 43.9% of the hunt
+   * options in real games, because the vampire is already at capacity and
+   * p. 6 sends the excess to the blood bank rather than to the
+   * Methuselah's pool.
+   *
+   * It is not free: acting LOCKS the vampire (p. 25), so a futile hunt
+   * trades the ability to block for nothing. Hence below `pass`. Kept as
+   * a weight rather than written into the code so the claim is
+   * falsifiable — `--weights huntFutile=1` restores the old behaviour of
+   * pricing it like any other hunt.
+   */
+  huntFutile: number;
   /** Getting vampires out is the whole early game. */
   influenceTransfer: number;
+  /**
+   * WHICH vampire the counter goes on, which the policy used not to ask
+   * at all: every transfer scored the same, so ties broke on the random
+   * stream and the AI chose by coin flip.
+   *
+   * Divided by the counters still needed, so it is worth most on a
+   * vampire that is nearly out. That one term does both jobs — **finish
+   * what you started**, because counters already spent do nothing until
+   * the vampire is in play, and **cheap first**, because a 4-capacity
+   * body arrives four turns before an 11.
+   */
+  influenceProgress: number;
+  /**
+   * Among vampires needing the SAME number of counters, prefer the bigger
+   * one: same price, more vampire. Deliberately small, so it breaks ties
+   * without ever outweighing being closer to done.
+   *
+   * **Unproven, and kept knowingly.** Two bench runs put it at +0.033 and
+   * +0.049 VP — consistently positive and consistently inside the margin
+   * (±0.113 over 800 games), so showing it would take some 4,000. Kept
+   * because the reasoning stands on its own and because a deterministic
+   * tie-break is better hygiene than the random one it replaces; not
+   * claimed as an improvement.
+   */
+  influenceCapacity: number;
   cryptDraw: number;
   influenceOut: number;
   /** Rescuing and diablerising are situational but usually good. */
@@ -53,6 +91,24 @@ export interface Weights {
   /** Blocking: worth roughly what the action would have cost you. */
   blockBleed: number;
   blockPerBleedPoint: number;
+  /**
+   * Blocking something that is not a bleed, BY WHAT THE ACTION IS.
+   *
+   * This was a single `blockOther` for every one of them, which put
+   * stopping a **diablerie** — a vampire destroyed for good, its blood and
+   * a Discipline handed to the eater (p. 34) — at the same price as
+   * stopping a **hunt**, which gains its actor a point of blood and costs
+   * the blocker a lock and a combat to prevent.
+   */
+  blockDiablerize: number;
+  blockHunt: number;
+  /** Rescuing a vampire out of torpor, or walking one out (p. 23): a body
+   *  the table is about to get back. */
+  blockRescue: number;
+  /** An action card — unknown in detail, but it cost them a card and an
+   *  action, which is a floor on what it was worth to them. */
+  blockCardEffect: number;
+  /** Anything `ActionKind` grows later. */
   blockOther: number;
   /** Blocking with a minion that will lose the fight badly. */
   blockOutmatched: number;
@@ -60,6 +116,22 @@ export interface Weights {
    *  scaled by how much pool it costs. */
   playCard: number;
   poolCost: number;
+  /**
+   * What the card DOES, per family, per point
+   * (docs/richer-options-design.md §5).
+   *
+   * Until these existed the policy scored every play by its cost and the
+   * window alone, so a master that wins the game and a master that does
+   * nothing were worth the same. The engine now reports the families on
+   * the option, so this is a price list rather than a second model of the
+   * card pool.
+   *
+   * The ordering is the claim, not the exact numbers: pool moves the game
+   * (VTES is won by ousting), a bleed is how pool moves, denial is worth
+   * about what it denies, and a card on the table is worth having but
+   * pays out later than any of them.
+   */
+  effectValue: Record<PlayEffectTag, number>;
   /** Never oust yourself. Dominates everything. */
   selfOustGuard: number;
   /** Combat. */
@@ -79,6 +151,14 @@ export interface Weights {
   withdraw: number;
   /** Discarding: shed the least useful card, but discarding is a cost. */
   discard: number;
+  /**
+   * Answering a card's question rather than declining it.
+   *
+   * Must stay above `pass`: declining an OPTIONAL ChoiceFrame is a plain
+   * pass, so anything lower makes the AI refuse every optional payoff in
+   * the game. Which answer it picks is still offered order.
+   */
+  answerChoice: number;
   /** A tiny bias toward passing, so the AI does not take pointless
    *  actions purely because they scored 0.001. */
   pass: number;
@@ -89,18 +169,87 @@ export const DEFAULT_WEIGHTS: Weights = {
   bleedPerPoint: 4,
   bleedNonPrey: -6,
   huntWhenEmpty: 20,
+  // Below `pass` (0.5): a hunt that gains nothing still locks the vampire.
+  huntFutile: -0.5,
   hunt: 1,
   influenceTransfer: 6,
+  influenceProgress: 6,
+  influenceCapacity: 0.1,
   cryptDraw: 3,
+  /**
+   * Left at 12, and MEASURED rather than assumed.
+   *
+   * Raising it to 30 looked obviously right — moving a finished vampire
+   * into play costs no transfer, where a transfer that would finish a
+   * different one now scores up to ~12.4 and could outrank it. The bench
+   * says it changes **nothing**: 240 games, an exactly identical result,
+   * because the ordering does not matter — the AI adds the last counter
+   * first and then moves BOTH vampires out in the same phase.
+   *
+   * Reverted rather than shipped, because a weight that provably does
+   * nothing is noise in a table whose whole purpose is to be argued with.
+   */
   influenceOut: 12,
   rescue: 5,
   diablerize: 9,
   blockBleed: 3,
   blockPerBleedPoint: 3,
+  // A vampire eaten is gone for good and its eater is stronger for it, so
+  // this is worth a bad combat.
+  blockDiablerize: 25,
+  // A hunt gains its actor 1 blood. Blocking costs a lock, a combat, and
+  // the chance to block something that matters — so it is deliberately
+  // BELOW `pass`, and the AI lets hunts through.
+  blockHunt: 0,
+  blockRescue: 4,
+  blockCardEffect: 3,
   blockOther: 1,
   blockOutmatched: -6,
   playCard: 2,
   poolCost: -2,
+  /**
+   * MEASURED, and the result was not the one I expected.
+   *
+   * The first version priced all sixteen families on plausible reasoning
+   * (a card on the table is worth having, combat advantage is worth
+   * having, denial is worth about what it denies). Four mirror matches of
+   * 800 games said that policy was **better on Hecata (+0.115 ±0.112) and
+   * WORSE on Toreador (−0.155, replicated on fresh deals)** — which fails
+   * this project's own bar of "never measurably worse".
+   *
+   * Pricing only what moves POOL — the currency the game is actually won
+   * in (p. 43) — clears the bar: Toreador **+0.106 ±0.105**, Hecata
+   * +0.056, Brujah +0.045, Nosferatu −0.099, the last three inside their
+   * margins. So that is what ships.
+   *
+   * THE ZEROES ARE A RESULT, NOT AN OMISSION. What is NOT established is
+   * which of the twelve is responsible: they were only ever measured
+   * together, and "board and combat are harmful" would be over-claiming
+   * from the runs actually made. The plausible reading is that this policy
+   * has no way to CONVERT board presence or combat advantage into pool, so
+   * paying for them only diverts it from bleeding — but that is a
+   * hypothesis, and isolating the twelve is a measurement someone can
+   * make. The tags stay in the vocabulary because they are correct facts
+   * about the option, wanted by the UI and by any search agent.
+   */
+  effectValue: {
+    bleed: 3,
+    poolDrain: 3,
+    poolGain: 2.5,
+    steal: 3,
+    deny: 0,
+    board: 0,
+    bloodGain: 0,
+    damage: 0,
+    votes: 0,
+    unlock: 0,
+    combat: 0,
+    stealth: 0,
+    intercept: 0,
+    prevent: 0,
+    search: 0,
+    wake: 0,
+  },
   selfOustGuard: -1000,
   strikeLethal: 12,
   strikeDamage: 2,
@@ -112,6 +261,7 @@ export const DEFAULT_WEIGHTS: Weights = {
   gainEdge: 5,
   withdraw: 12,
   discard: -1,
+  answerChoice: 2,
   pass: 0.5,
 };
 
@@ -254,7 +404,7 @@ export class HeuristicAgent implements Agent {
         return w.discard;
 
       case "transferToVampire":
-        return w.influenceTransfer;
+        return this.scoreInfluence(o, view, me);
       case "influenceOut":
         return w.influenceOut;
       case "cryptDraw":
@@ -289,11 +439,65 @@ export class HeuristicAgent implements Agent {
 
       case "answerChoice":
       case "chooseTerms":
-        // The engine has already restricted these to legal answers, and
-        // reading them means parsing card text. Take them in offered
-        // order, deterministically.
-        return 0;
+        // WHICH answer still goes in offered order — reading them means
+        // parsing card text, which would be a second model of the pool.
+        //
+        // But whether to answer AT ALL was decided wrongly and in one
+        // direction: this scored 0 against `pass` at 0.5, and declining an
+        // optional ChoiceFrame IS a plain pass — so the AI turned down
+        // **every optional payoff in the game**. Those frames are how a
+        // long list of cards deliver what they are for (Cave of Apples,
+        // Dead Pool, Hunting the Beast, the rush-outcome riders), and they
+        // are raised by a card their own controller has already paid for.
+        //
+        // A frame that is NOT optional has no pass to lose to, so this
+        // changes nothing there — including the ones that are a cost
+        // addressed to a victim (an unlock toll, the p. 7 discard-down),
+        // where every answer is bad and one must be taken anyway.
+        return w.answerChoice;
     }
+  }
+
+  /**
+   * WHICH uncontrolled vampire gets the counter.
+   *
+   * The policy used not to ask: every transfer scored a flat
+   * `influenceTransfer`, so the ties broke on the tie-breaking stream and
+   * the AI decided by coin flip — spreading counters thinly across its
+   * whole uncontrolled region and taking far longer to put anything on
+   * the table. The data was in `PlayerView` the whole time: a seat's own
+   * uncontrolled region is readable to its owner (p. 14).
+   *
+   * Two terms, and the first does most of the work:
+   *
+   *  - **`influenceProgress / remaining`.** Counters already spent buy
+   *    nothing until the vampire is actually in play, so finishing one is
+   *    worth more than starting two — and the same term prefers a cheap
+   *    vampire over an expensive one, which is the right early-game
+   *    instinct for the same reason.
+   *  - **`influenceCapacity × capacity`**, a tie-break: among vampires
+   *    needing the same number of counters, take the bigger one. Small
+   *    enough that it never beats being closer to done.
+   *
+   * Capacity is read through the view's own `MinionState`, so a granted
+   * point of capacity counts, and the score can never fall to where
+   * passing the influence phase would win — a policy that stopped
+   * influencing would never build a board at all.
+   */
+  private scoreInfluence(
+    o: Extract<LegalOption, { kind: "transferToVampire" }>,
+    view: PlayerView,
+    me: SeatId,
+  ): number {
+    const w = this.w;
+    const seat = seatOf(view, me);
+    const entry = seat?.uncontrolled.find((u) => u.card?.id === o.minion);
+    // A vampire the view will not show us (it cannot be one of ours) —
+    // score it as an ordinary transfer rather than guessing.
+    if (!entry?.card) return w.influenceTransfer;
+    const capacity = entry.card.capacity;
+    const remaining = Math.max(1, capacity - entry.counters);
+    return w.influenceTransfer + w.influenceProgress / remaining + w.influenceCapacity * capacity;
   }
 
   private scoreAction(
@@ -306,10 +510,17 @@ export class HeuristicAgent implements Agent {
     const actor = findMinion(view, o.minion)?.m;
     switch (o.action) {
       case "bleed": {
-        // The engine offers a bleed at the prey by default (p. 21). The
-        // bleed amount is the minion's own, plus whatever its cards give
-        // it — the view carries both.
-        const amount = actor ? actor.bleedAmount : 1;
+        // The engine offers a bleed at the prey by default (p. 21), and
+        // now says what it is WORTH — every static, aura and conditional
+        // already in the number.
+        //
+        // This used to read `bleedAmount`, the minion's PRINTED field, so
+        // a card in play that made a bleed worth three looked like a
+        // bleed worth one and the AI scored its most common decision on
+        // the wrong number. Falling back to the printed value keeps old
+        // fixtures working rather than assuming 1
+        // (docs/richer-options-design.md).
+        const amount = o.bleed ?? actor?.bleedAmount ?? 1;
         // A bleed the target can absorb forever is still progress; a
         // bleed that can OUST them is the whole game.
         const target = prey ? seatOf(view, prey) : null;
@@ -318,9 +529,20 @@ export class HeuristicAgent implements Agent {
       }
       case "hunt": {
         if (!actor) return 0;
+        // A vampire at 0 blood MUST hunt (p. 21) and is offered nothing
+        // else, so this is really about the vampire that MAY.
         if (actor.blood === 0) return w.huntWhenEmpty;
-        // Hunting is a wasted action for a vampire that can act.
-        return actor.blood <= 1 ? w.hunt + 2 : w.hunt;
+        // What the hunt would actually put on them, which the engine now
+        // says. A vampire at capacity gains NOTHING — p. 6 sends the
+        // excess to the blood bank, not to the Methuselah's pool — so
+        // that hunt is a minion phase spent on nothing and should lose to
+        // passing. The option stays legal because hunting triggers cards
+        // that care (docs/futile-options-design.md).
+        const gain = o.gain ?? 1;
+        if (gain === 0) return w.huntFutile;
+        // Hunting is otherwise a wasted action for a vampire that can act,
+        // and worth more the emptier they are.
+        return (actor.blood <= 1 ? w.hunt + 2 : w.hunt) + (gain - 1);
       }
       case "leaveTorpor":
         return w.rescue;
@@ -364,13 +586,38 @@ export class HeuristicAgent implements Agent {
 
     // What is the action worth stopping? A bleed at us is pool; anything
     // else is worth less.
+    // The LIVE value, which the view now reports. This read the acting
+    // minion's PRINTED `bleedAmount` — the same wrong number the bleed
+    // option itself used to carry, surviving one decision along, and in
+    // the place it matters most: 236 of 269 block decisions in real games
+    // are against a bleed. Falling back to the printed field keeps old
+    // fixtures working rather than assuming 1.
     const bleedAtMe =
       act.kind === "bleed" && act.target === me
-        ? (findMinion(view, act.acting)?.m.bleedAmount ?? 1)
+        ? (act.bleed ?? findMinion(view, act.acting)?.m.bleedAmount ?? 1)
         : 0;
-    let score =
-      (bleedAtMe > 0 ? w.blockBleed + bleedAtMe * w.blockPerBleedPoint : w.blockOther) -
-      toll;
+    // What is this action worth stopping? A bleed is pool off our own
+    // total; everything else is worth what it would have DONE, which
+    // varies enormously — see the weights.
+    const worthStopping = (): number => {
+      if (bleedAtMe > 0) return w.blockBleed + bleedAtMe * w.blockPerBleedPoint;
+      switch (act.kind) {
+        case "diablerize":
+          return w.blockDiablerize;
+        case "hunt":
+          return w.blockHunt;
+        case "rescue":
+        case "leaveTorpor":
+          return w.blockRescue;
+        case "cardEffect":
+          return w.blockCardEffect;
+        // A bleed aimed at somebody else. Stopping it protects a player
+        // we are not trying to protect, and costs us the blocker.
+        case "bleed":
+          return w.blockOther;
+      }
+    };
+    let score = worthStopping() - toll;
 
     // A bleed that would oust us must be stopped almost regardless of
     // what the combat costs.
@@ -392,18 +639,29 @@ export class HeuristicAgent implements Agent {
     me: SeatId,
   ): number {
     const w = this.w;
-    // The view does not expose the combat frame, so the policy scores by
-    // strike KIND — which is the part that generalises anyway.
+    // WHO WE ARE FIGHTING, which the view now says. The policy used to
+    // score strikes on kind alone and approximate "are we losing" from our
+    // own weakest ready minion — a guess about the wrong minion, since the
+    // one in the fight may be neither the weakest nor even in danger.
+    const c = view.combat;
+    const mine = c?.side ? findMinion(view, c.side === "acting" ? c.acting : c.opposing)?.m : null;
+    const foe = c?.opponent ? findMinion(view, c.opponent)?.m : null;
+    // "A vampire with no blood left to mend goes to torpor" (p. 31), so a
+    // strike that meets their remaining blood is the one that ends it.
+    const lethal = foe !== null && foe !== undefined && power(mine ?? foe) >= foe.blood;
+    // Losing is about THIS combat: their strength against our blood.
+    const losing =
+      mine && foe ? power(foe) >= mine.blood : this.fragile(view, me);
+
     switch (o.strike) {
       case "hand":
-        return w.strikeDamage;
+        return w.strikeDamage + (lethal ? w.strikeLethal : 0);
       case "dodge":
-        // Dodging is right when our combatants are fragile. Approximated
-        // by our own weakest ready minion's blood, which is the resource
-        // that pays for damage (p. 31).
-        return this.fragile(view, me) ? w.dodgeWhenLosing : 0;
+        // Dodging is right when the minion in the fight is the one at
+        // risk — and pointless when our own strike would end it first.
+        return losing && !lethal ? w.dodgeWhenLosing : 0;
       case "combatEnds":
-        return this.fragile(view, me) ? w.dodgeWhenLosing + 1 : 1;
+        return losing && !lethal ? w.dodgeWhenLosing + 1 : 1;
       case "burnEquipment":
         return w.strikeDamage + 1;
       case "stealBlood":
@@ -427,7 +685,16 @@ export class HeuristicAgent implements Agent {
   ): number {
     const w = this.w;
     if (!o.toContinue) return 0;
-    return this.fragile(view, me) ? w.pressWhenLosing : w.pressToFinish;
+    // Pressing keeps a combat going, so it is worth it exactly when we
+    // are winning THIS one — measured against the minion we are actually
+    // fighting rather than against our own weakest vampire elsewhere.
+    const c = view.combat;
+    const mine = c?.side ? findMinion(view, c.side === "acting" ? c.acting : c.opposing)?.m : null;
+    const foe = c?.opponent ? findMinion(view, c.opponent)?.m : null;
+    if (!mine || !foe) return this.fragile(view, me) ? w.pressWhenLosing : w.pressToFinish;
+    // Close to finishing them, and not close to being finished.
+    if (foe.blood <= power(mine)) return w.pressToFinish + 3;
+    return power(foe) >= mine.blood ? w.pressWhenLosing : w.pressToFinish;
   }
 
   private scorePlay(
@@ -455,9 +722,32 @@ export class HeuristicAgent implements Agent {
     if (payer && cost.blood > 0 && payer.blood - cost.blood <= 0) return w.selfOustGuard;
 
     let score = w.playCard + cost.pool * w.poolCost - cost.blood * 0.5;
+    // What the card actually does. Before this, everything a card did was
+    // invisible here and only its price was not — so the policy reliably
+    // preferred the cheapest card in hand, which is the opposite of how
+    // the game is played.
+    score += this.effectValue(o.effects);
     // Prefer using cards during our own actions over speculative ones.
     if (windowIsOurAction(dp.window)) score += 1;
     return score;
+  }
+
+  /**
+   * Price a play's effect summary.
+   *
+   * An ABSENT amount counts as ONE, not as zero: a cancel, a wake or a
+   * card put into play has no natural size, and treating "no number" as
+   * "no value" would price exactly the cards whose whole point is not
+   * numeric — which is the trap the summary's own doc warns about.
+   *
+   * A negative amount is a REDUCTION (a card that takes a bleed away),
+   * and it keeps its sign: taking two bleed off an opponent's action is
+   * worth about what adding two to your own is.
+   */
+  private effectValue(effects: PlayEffect[] | undefined): number {
+    let total = 0;
+    for (const e of effects ?? []) total += (this.w.effectValue[e.tag] ?? 0) * (e.amount ?? 1);
+    return total;
   }
 }
 

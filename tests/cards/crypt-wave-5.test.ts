@@ -256,6 +256,45 @@ describe("Lenelle", () => {
     walkTo(engine, "end");
     expect(optionIds(engine).some((o) => o.includes("swap:"))).toBe(false);
   });
+
+  /**
+   * THE CRASH THE FAIR-MATCH HARNESS FOUND (2026-09-06).
+   *
+   * Both cards are named AT ANNOUNCEMENT (p. 25) and moved AT RESOLUTION,
+   * and the hand card can be gone in between — the action's own impulse
+   * cycle is a window in which its owner may play it. The engine threw
+   * `card not in hand`, which is a crash rather than a rules outcome:
+   * four games in 160 died on it.
+   *
+   * `stealEquipment`, four cases up in the same switch, had guarded
+   * against exactly this since it was written. This one had not — the
+   * drift this project keeps finding between two clauses that share a
+   * shape.
+   *
+   * Neither the fuzz nor `npm run simulate` could see it: both play the
+   * mid-game playtest snapshot, and it took games dealt fresh from a real
+   * precon for a full hand and this ability to meet.
+   */
+  it("survives the named hand card leaving between announcement and resolution", () => {
+    const { state, engine } = withCrypt("Lenelle, Mambo of Birmingham (G6)", (s) => {
+      s.seats[0]!.hand.push({ id: "give1", name: "Aire of Elation" });
+      s.seats[0]!.ashHeap = [{ id: "take1", name: "Cats' Guidance" }];
+    });
+    expect(walkTo(engine, "act:Lenelle")).toBe(true);
+    const opt = optionIds(engine).find((o) => o.includes("swap:give1:take1"))!;
+    expect(opt).toBeDefined();
+
+    // ANNOUNCE, then take the card away before the action resolves — the
+    // shape the crash had.
+    runTrace(engine, [["Alice", opt]]);
+    state.seats[0]!.hand = state.seats[0]!.hand.filter((c) => c.id !== "give1");
+
+    expect(() => resolve(engine, state)).not.toThrow();
+    // ONE exchange with one cost, so no give means no take: the ash-heap
+    // card stays where it is rather than being handed over free.
+    expect(state.seats[0]!.hand.some((c) => c.id === "take1")).toBe(false);
+    expect((state.seats[0]!.ashHeap ?? []).some((c) => c.id === "take1")).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

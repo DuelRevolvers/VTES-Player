@@ -26,6 +26,7 @@ import {
   blockWouldSucceed,
   capacityOf,
   huntAmountFor,
+  huntGain,
   libraryBlockToll,
   currentBleed,
   currentIntercept,
@@ -41,6 +42,7 @@ import {
   playCostModApplies,
   predatorOf,
   preyOf,
+  prospectiveBleed,
   sequencingOrder,
   startingLifeBonus,
   titleContestKey,
@@ -2864,8 +2866,10 @@ export class VtesEngine implements EngineOps {
     if (seat !== ba.blockerSeat) return [];
     const af = this.action();
     if (!af || !af.interceptBurnGrants.includes(ba.blocker)) return [];
-    const m = getMinion(this.state, ba.blocker);
-    if (m.blood < 1) return [];
+    // The blocker can have left play since the attempt began (an ally that
+    // paid its last life), and an option enumerator must be total.
+    const m = findMinion(this.state, ba.blocker);
+    if (!m || m.blood < 1) return [];
     if (
       currentIntercept(this.state, ba.actionId, ba.blocker) >=
       currentStealth(this.state, ba.actionId)
@@ -3303,8 +3307,16 @@ export class VtesEngine implements EngineOps {
         // cannot fight (p. 24). If the blocker is a vampire, its
         // controller may diablerise the acting torpor vampire; either way
         // the action then fails (settle resolves af.step "blocked").
-        const blocker = getMinion(this.state, ba.blocker);
-        if (blocker.kind === "vampire") {
+        // A blocker that has left play offers no diablerie — and reading
+        // it with `getMinion` would throw out of settle (p. 24 only gives
+        // the opportunity to a blocking VAMPIRE, which a gone one is not).
+        // A blocker that has left play offers no diablerie. Defence in
+        // depth rather than a fixed live bug: `resolveBlockAttempt`
+        // already fails an attempt whose blocker is gone, so the success
+        // path below is not reached today — but p. 24 gives the
+        // opportunity to a blocking VAMPIRE, and a gone one is not that.
+        const blocker = findMinion(this.state, ba.blocker);
+        if (blocker?.kind === "vampire") {
           this.state.frames.push({
             kind: "diablerieOffer",
             diablerist: ba.blocker,
@@ -6720,6 +6732,7 @@ export class VtesEngine implements EngineOps {
           label: `${m.name}: hunt (mandatory)`,
           minion: m.id,
           action: "hunt",
+          gain: huntGain(this.state, m),
         });
       }
       return options;
@@ -6739,26 +6752,35 @@ export class VtesEngine implements EngineOps {
           (p) => p.statics.mustBleed && (!p.statics.mustBleed.whileControlsLocked || controlsLocked),
         ),
     );
+    // A bleed goes at the prey unless something redirects it later
+    // (p. 21), so that is the target its value is computed against.
+    const preySeat = preyOf(this.state, tf.seat);
+    const bleedValue = (m: MinionState): number =>
+      prospectiveBleed(this.state, m, preySeat);
     if (mustBleed.length > 0) {
       for (const m of mustBleed) {
+        const amount = bleedValue(m);
         options.push({
           id: `bleed:${m.id}`,
           kind: "takeAction",
-          label: `${m.name}: bleed (mandatory)`,
+          label: `${m.name}: bleed ${preySeat} for ${amount} (mandatory)`,
           minion: m.id,
           action: "bleed",
+          bleed: amount,
         });
       }
       return options;
     }
     for (const m of actors) {
       if (!m.bledThisTurn && canRepeatAction(this.state, m, "bleed")) {
+        const amount = bleedValue(m);
         options.push({
           id: `bleed:${m.id}`,
           kind: "takeAction",
-          label: `${m.name}: bleed`,
+          label: `${m.name}: bleed ${preySeat} for ${amount}`,
           minion: m.id,
           action: "bleed",
+          bleed: amount,
         });
       }
       // Hunting is legal for any ready vampire, even at full capacity
@@ -6776,6 +6798,7 @@ export class VtesEngine implements EngineOps {
           label: `${m.name}: hunt`,
           minion: m.id,
           action: "hunt",
+          gain: huntGain(this.state, m),
         });
       }
     }

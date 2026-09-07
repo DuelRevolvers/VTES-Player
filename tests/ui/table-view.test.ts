@@ -105,16 +105,22 @@ describe("the ash heap", () => {
     return t;
   }
 
-  it("counts the real zone — CardBurned never fires at all", () => {
+  it("counts the real zone, not CardBurned events", () => {
     // The count used to be `CardBurned` events divided by the number of
-    // seats, and read 0 all game. This is why: burning is one of FOUR ways
-    // into the heap and, across an entire game, the one that never
-    // happens. `seat.ashHeap` is the zone itself.
+    // seats. Burning is one of FOUR ways into the heap and much the
+    // rarest, so that derivation was wrong by a wide margin; `seat.ashHeap`
+    // is the zone itself.
+    //
+    // This first asserted that `CardBurned` fires EXACTLY zero times, which
+    // was true of the AI of the day and went stale the moment the policy
+    // learned what cards do — an assertion about a total is a hostage to
+    // every future change. What the test is really about is that the two
+    // numbers are not the same one, so that is what it now says.
     const t = playedOut();
     const state = t.view();
-    expect(state.eventLog.filter((e) => e.type === "CardBurned")).toHaveLength(0);
-
     const total = state.seats.reduce((n, s) => n + (s.ashHeap ?? []).length, 0);
+    const burned = state.eventLog.filter((e) => e.type === "CardBurned").length;
+    expect(burned).toBeLessThan(total);
     expect(total, "no card reached an ash heap — the fixture is wrong").toBeGreaterThan(0);
 
     const html = screen(t);

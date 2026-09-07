@@ -67,6 +67,7 @@ import type {
   PlayFromHandFilter,
   UsabilityRule,
 } from "./spec.ts";
+import { summariseMode } from "./summary.ts";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -3057,7 +3058,10 @@ function effectsLegal(
         // seat's corruption.
         const ba = ctx.blockAttempt;
         if (!ba) return false;
-        const blocker = getMinion(ctx.state, ba.blocker);
+        // `findMinion`: the blocker may already have left play (an ally
+        // that paid its last life), and a usability test must be total.
+        const blocker = findMinion(ctx.state, ba.blocker);
+        if (!blocker) return false;
         if ((blocker.corruption?.[af.actingSeat] ?? 0) < 1) return false;
         break;
       }
@@ -6432,6 +6436,13 @@ export function compileSpec(spec: CardSpec): CardHandler {
     }
     return types;
   };
+  // What this mode would DO, in families — so an agent can weigh one play
+  // against another without reading card text, and the screen could one
+  // day say (docs/richer-options-design.md §5). Per MODE, because the
+  // answer differs by mode: a card whose superior bleeds and whose
+  // inferior only adds stealth must not report the same summary for both.
+  handler.playEffects = (mode, variant) =>
+    summariseMode(spec, spec.modes.length === 0 ? [] : modeOf(spec, mode, variant).effects);
   // "The blocking minion's controller can burn 1 pool to cancel this card
   // as it is played" (True Love's Face). Computed from the STATE, not the
   // option's params: "the blocking minion" is a fact about the live block
@@ -8450,9 +8461,23 @@ function addCryptAbilities(
           return;
         }
         case "ashExchange": {
-          // An EXCHANGE, so no replacement draw either way.
-          if (p["give"]) ops.discardFromHand(seat, p["give"], false);
-          if (p["take"]) ops.takeFromAshHeap(seat, p["take"]);
+          // BOTH CARDS ARE CHOSEN AT ANNOUNCEMENT (p. 25) AND MOVED AT
+          // RESOLUTION, so either can be gone by the time we get here —
+          // the hand card most easily of all, since the action's own
+          // impulse cycle is a window in which its owner can play it.
+          // `stealEquipment`, four cases up in this same switch, has
+          // guarded against exactly this since it was written; this one
+          // did not, and threw `card not in hand` instead.
+          //
+          // It is ONE exchange with one cost, so a missing give-card
+          // cancels both halves rather than handing over a free retrieval
+          // (docs/cheap-tail-design.md). No replacement draw either way,
+          // because an exchange is not a discard.
+          const give = p["give"];
+          const take = p["take"];
+          if (!give || !getSeat(ops.state, seat).hand.some((c) => c.id === give)) return;
+          ops.discardFromHand(seat, give, false);
+          if (take) ops.takeFromAshHeap(seat, take);
           return;
         }
         case "reviveAlly": {
@@ -11235,8 +11260,17 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       ops.emit({ type: "PoolBurned", seat: controller, amount: exchange.poolCost });
       // The hand card goes to the ash heap and the ash-heap card comes
       // back: an EXCHANGE, so no replacement draw either way.
-      ops.discardFromHand(controller, choice.params["give"]!, false);
-      ops.takeFromAshHeap(controller, choice.params["take"]!);
+      //
+      // Guarded like the granted-action path above, and for the same
+      // reason: `raiseChoice` QUEUES while an action resolves and flushes
+      // afterwards, so even a choice frame has a gap in which the named
+      // card can leave the hand. A guard on one path and not on its twin
+      // is how these two would drift apart.
+      const give = choice.params["give"];
+      if (!give || !getSeat(ops.state, controller).hand.some((c) => c.id === give)) return;
+      ops.discardFromHand(controller, give, false);
+      const take = choice.params["take"];
+      if (take) ops.takeFromAshHeap(controller, take);
     };
   }
   if (rescue) {

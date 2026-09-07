@@ -6,8 +6,8 @@
  */
 
 import type { DecisionPoint, LegalOption } from "./options.ts";
-import type { ActionKind, CardInstance, GameState, MinionId, MinionState, PermanentInPlay, SeatId } from "./state.ts";
-import { currentIntercept, currentStealth, openHandsFor } from "./derived.ts";
+import type { ActionKind, CardInstance, CombatStep, GameState, MinionId, MinionState, PermanentInPlay, Range, SeatId } from "./state.ts";
+import { currentBleed, currentIntercept, currentStealth, openHandsFor } from "./derived.ts";
 
 export interface PlayerView {
   you: SeatId;
@@ -76,11 +76,61 @@ export interface PlayerView {
     directed: boolean;
     /** The acting minion's stealth as it stands. */
     stealth: number;
+    /**
+     * A BLEED's live value, if this action is one — every static, aura,
+     * conditional and modifier already played folded in.
+     *
+     * The same gap the option's own `bleed` closed one decision earlier
+     * (docs/richer-options-design.md §4), and it survived there: a seat
+     * deciding whether to BLOCK was reading the acting minion's PRINTED
+     * `bleedAmount`, so a card in play or a modifier that made the bleed
+     * worth three looked like a bleed worth one — and blocking is exactly
+     * where that number decides whether pool is defended. Measured, 236 of
+     * 269 block decisions in real games are against a bleed.
+     *
+     * Open information like the stealth beside it: the amount is a fold
+     * over face-up cards, and it is what every seat at the table can see
+     * they are about to lose.
+     */
+    bleed?: number;
     /** Intercept each of the VIEWER's own minions currently has against
      *  this action — what a block attempt would be worth right now. */
     intercept: Record<MinionId, number>;
     /** Set once a block has succeeded. */
     blockedBy: MinionId | null;
+  };
+  /**
+   * The combat in progress, if there is one.
+   *
+   * THE SAME GAP THE BLOCKING NUMBERS FILLED, one frame along. `action`
+   * exists because a seat asked to block was given no numbers to judge it
+   * with; a seat asked to choose a strike, press, or spend a prevention
+   * credit was given nothing at all — not who it was fighting, not their
+   * blood, not the range, not the round. The policy compensated by
+   * scoring strikes on kind alone and approximating "are we losing" from
+   * its own weakest minion, which is a guess about the wrong minion.
+   *
+   * Every field is OPEN INFORMATION: both combatants are face up, the
+   * range is known to the table (p. 29), and the round is something
+   * everyone has been watching. Exposing it leaks nothing, and phase 6's
+   * remote seat needs exactly the same to play its own combats.
+   */
+  combat?: {
+    round: number;
+    step: CombatStep;
+    range: Range;
+    /** The two combatants, and which side the VIEWER is on. `null` when
+     *  the viewer controls neither — a bystander may still act (p. 28). */
+    acting: MinionId;
+    actingSeat: SeatId;
+    opposing: MinionId;
+    opposingSeat: SeatId;
+    side: "acting" | "opposing" | null;
+    /** The minion opposing the VIEWER, when they are in this combat —
+     *  the one their strike would land on. */
+    opponent: MinionId | null;
+    /** True when this combat came from a successful block. */
+    fromBlock: boolean;
   };
 }
 
@@ -216,6 +266,9 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
           target: af.target,
           directed: af.directed,
           stealth: currentStealth(state, af.actionId),
+          // Only for a bleed: every other action kind has no such number,
+          // and reporting a 0 would read as "a bleed worth nothing".
+          ...(af.actionKind === "bleed" ? { bleed: currentBleed(state, af) } : {}),
           intercept: Object.fromEntries(
             (state.seats.find((s) => s.id === seat)?.minions ?? []).map((m) => [
               m.id,
@@ -223,6 +276,33 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
             ]),
           ),
           blockedBy: af.blockedBy,
+        }
+      : null;
+  // The combat in progress, same treatment and the same argument: every
+  // field is face up at a real table, so none of it is a leak.
+  const cf = [...state.frames].reverse().find((f) => f.kind === "combat");
+  const combat =
+    cf && cf.kind === "combat"
+      ? {
+          round: cf.round,
+          step: cf.step,
+          range: cf.range,
+          acting: cf.acting,
+          actingSeat: cf.actingSeat,
+          opposing: cf.opposing,
+          opposingSeat: cf.opposingSeat,
+          // Which side the viewer is on, and null for a BYSTANDER — who
+          // is not a mistake to handle: p. 28 lets a minion controlled by
+          // any Methuselah play into a combat it is not in.
+          side:
+            cf.actingSeat === seat
+              ? ("acting" as const)
+              : cf.opposingSeat === seat
+                ? ("opposing" as const)
+                : null,
+          opponent:
+            cf.actingSeat === seat ? cf.opposing : cf.opposingSeat === seat ? cf.acting : null,
+          fromBlock: cf.fromBlock,
         }
       : null;
   // The count/array split has to agree with the masking above, so it asks
@@ -258,6 +338,7 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
       ashHeap: [...(s.ashHeap ?? [])],
     })),
     ...(action ? { action } : {}),
+    ...(combat ? { combat } : {}),
   };
 }
 

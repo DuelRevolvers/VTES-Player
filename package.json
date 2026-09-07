@@ -15,7 +15,8 @@
     "cards:fetch": "tsx scripts/fetch-cards.mts",
     "cards:sets": "tsx scripts/list-sets.mts",
     "cards:registry": "tsx scripts/build-registry.mts",
-    "simulate": "tsx scripts/simulate.mts"
+    "simulate": "tsx scripts/simulate.mts",
+    "bench": "tsx scripts/aibench.mts"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
