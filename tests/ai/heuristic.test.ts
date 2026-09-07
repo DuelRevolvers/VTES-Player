@@ -753,3 +753,61 @@ describe("a hunt says what it would gain", () => {
     expect(ai.decide(dp2 as never, dp2.options, viewFor(engine.state, "Alice"))).toBe("hunt:V1");
   });
 });
+
+describe("an influence transfer says what the vampire would unlock", () => {
+  /** Two uncontrolled vampires, one with the Discipline the card in hand
+   *  requires and one without. */
+  function twoCandidates(): GameState {
+    const state = threeSeatGame();
+    const alice = state.seats[0]!;
+    alice.uncontrolled = [
+      { card: makeMinion("U1", "Alice", { disciplines: { dom: "superior" } }), counters: 0 },
+      { card: makeMinion("U2", "Alice", { disciplines: {} }), counters: 0 },
+    ];
+    // Alice's hand already holds Conditioning, which requires Dominate.
+    return state;
+  }
+
+  function transfers(state: GameState): LegalOption[] {
+    const engine = new VtesEngine(state, testRegistry);
+    // Walk to the influence phase, preferring pass so the walker does not
+    // play the board.
+    for (let i = 0; i < 60; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      const adds = dp.options.filter((o) => o.kind === "transferToVampire");
+      if (adds.length > 0) return adds;
+      const pass = dp.options.find((o) => o.kind === "pass");
+      const end = dp.options.find((o) => o.kind === "endMinionPhase");
+      engine.choose((pass ?? end ?? dp.options[0]!).id);
+    }
+    return [];
+  }
+
+  it("counts the cards in hand that vampire could play", () => {
+    const opts = transfers(twoCandidates());
+    const withDom = opts.find((o) => o.id === "inf:add:U1");
+    const without = opts.find((o) => o.id === "inf:add:U2");
+    expect(withDom?.kind === "transferToVampire" && withDom.playableCards).toBeGreaterThan(
+      without?.kind === "transferToVampire" ? (without.playableCards ?? 0) : 0,
+    );
+  });
+
+  it("is present on every transfer option, not just the interesting ones", () => {
+    // A count that appears on some options and not others is worse than
+    // none: a reader prices the unreported half as unlocking nothing.
+    const opts = transfers(twoCandidates());
+    expect(opts.length).toBeGreaterThan(1);
+    for (const o of opts) {
+      expect(o.kind === "transferToVampire" && o.playableCards).toBeDefined();
+    }
+  });
+
+  it("is NOT used by the policy — a measured negative result", () => {
+    // Weighting it delays the first vampire into play (turn 6.46 vs 5.08)
+    // because it diverts counters from FINISHING one, and costs 0.177 VP
+    // on Hecata at weight 2. The field stays, the weight is zero, and this
+    // test exists so raising it is a deliberate act rather than a tidy-up.
+    expect(DEFAULT_WEIGHTS.influenceUnlocks).toBe(0);
+  });
+});

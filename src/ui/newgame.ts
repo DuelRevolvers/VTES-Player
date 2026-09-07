@@ -205,6 +205,10 @@ export function buildTable(config: TableConfig): TableBuild {
       // recorded in the setup, so the game stays reproducible from its save.
       seed: config.seed ?? Math.floor(Math.random() * 0x7fffffff),
       maxTurns: config.maxTurns,
+      // WHO SITS WHERE IS NOT DECIDED UNTIL THE DEAL (owner request). A
+      // lobby row is a place in a queue, not a place at the table, so
+      // this table is shuffled by `buildGame` with the seeded RNG.
+      randomSeating: true,
     },
     problems,
     reports,

@@ -29,7 +29,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { FACE_DOWN, viewFor } from "../../src/engine/agent.ts";
+import { FACE_DOWN, redactFor, viewFor } from "../../src/engine/agent.ts";
 import { openHandsFor } from "../../src/engine/derived.ts";
 import { VtesEngine } from "../../src/engine/engine.ts";
 import type { GameState, SeatId } from "../../src/engine/state.ts";
@@ -163,6 +163,66 @@ describe("the AI sees only what a player at the table can see", () => {
     expect(a.decisions).toBeGreaterThan(200);
     expect(b.decisions).toBeGreaterThan(200);
     expect(a.hiddenSeen).toBeGreaterThan(1000);
+  });
+
+  it("holds for the MASKED STATE too, which is what a search agent gets", () => {
+    // `redactFor(state, seat)` is handed to a search agent so it can apply
+    // a candidate move (docs/ai-v2-design.md §2), and it is the same
+    // object multiplayer sends a remote player. It carries the FRAME
+    // STACK, which `PlayerView` does not — so it is the wider surface, and
+    // the one that needs watching as v2 grows.
+    const engine = new VtesEngine(buildGame({ decks, seed: 31, maxTurns: 40 }), registry);
+    const agents: Record<SeatId, HeuristicAgent> = {};
+    for (const s of SEATS) agents[s] = new HeuristicAgent({ seed: s.charCodeAt(0) });
+    let checked = 0;
+    for (let i = 0; i < 1500; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      const masked = redactFor(engine.state, dp.seat);
+      const bad = leaks(masked, hiddenFrom(engine.state, dp.seat));
+      expect(bad, `${dp.seat} @ ${dp.window}: ${bad.join(", ")}`).toEqual([]);
+      checked++;
+      // The policy takes no masked state — it is checked here as data,
+      // not as an argument.
+      engine.choose(agents[dp.seat]!.decide(dp, dp.options, viewFor(engine.state, dp.seat)));
+    }
+    expect(checked).toBeGreaterThan(200);
+  });
+
+  it("gives a seat its OWN deck list and nobody else's", () => {
+    // Owner ruling, 2026-09-06: the AI should know what is in its own
+    // deck. A player built theirs, so they know it; deck lists are
+    // private in VTES, so they know only theirs.
+    const engine = new VtesEngine(buildGame({ decks, seed: 41, maxTurns: 40 }), registry);
+    const me = SEATS[0]!;
+    const view = viewFor(engine.state, me);
+    const own = view.seats.find((s) => s.id === me);
+    expect(own?.deckList?.library.length).toBeGreaterThan(50);
+    expect(own?.deckList?.crypt.length).toBeGreaterThanOrEqual(12);
+    for (const s of view.seats) {
+      if (s.id === me) continue;
+      expect(s.deckList, `${s.id}'s deck list is not ours to read`).toBeUndefined();
+    }
+    // The key is genuinely ABSENT, not present-and-undefined: anything
+    // walking the object would otherwise still be told the seat has one.
+    const masked = redactFor(engine.state, me);
+    for (const s of masked.seats) {
+      if (s.id === me) continue;
+      expect(Object.prototype.hasOwnProperty.call(s, "deckList")).toBe(false);
+    }
+  });
+
+  it("knowing your deck does NOT tell you its order (p. 14)", () => {
+    // The distinction the ruling turns on. Composition is yours;
+    // the library stays face down even to its owner, so the ORDER — which
+    // is what would let you know your next draw — is still hidden.
+    const engine = new VtesEngine(buildGame({ decks, seed: 43, maxTurns: 40 }), registry);
+    const me = SEATS[0]!;
+    const masked = redactFor(engine.state, me);
+    const mine = masked.seats.find((s) => s.id === me)!;
+    expect(mine.deckList).toBeDefined();
+    expect(mine.library.length).toBeGreaterThan(30);
+    for (const c of mine.library) expect(c.name).toBe(FACE_DOWN);
   });
 
   it("catches a leak when there is one — the positive control", () => {

@@ -35,7 +35,8 @@ import {
   saveDeck,
 } from "./decklibrary.ts";
 import { DevServerSink, GameLog } from "./gamelog.ts";
-import { clearResults, loadResults, recordResult, standings } from "./results.ts";
+import type { GameResult } from "./results.ts";
+import { clearResults, loadResults, recordResult, resultFrom, standings } from "./results.ts";
 import { DebugApp } from "./loop.ts";
 import type { ModerationView, SeatFace } from "./render.ts";
 import { CHAT_EMOJI, chatLinesMarkup } from "./render.ts";
@@ -46,7 +47,6 @@ import {
   defaultTable,
   isOnlineTable,
   seatDeckHash,
-  seatRelations,
   MAX_SEATS,
   MIN_SEATS,
   RECOMMENDED_SEATS,
@@ -63,13 +63,14 @@ import {
   saveProfile,
 } from "./profile.ts";
 import bannerUrl from "../assets/banner.png";
-import { seatSeed } from "./settings.ts";
+import { PLATFORM_VERSION_LABEL } from "../version.ts";
+import { loadSettings, OPENING_DELAY_MS, seatSeed } from "./settings.ts";
 import { LocalTransport } from "./transport.ts";
 
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-type Screen = "profile" | "menu" | "newgame" | "lobby" | "join" | "leaderboard" | "table" | "removed";
+type Screen = "profile" | "menu" | "newgame" | "lobby" | "join" | "leaderboard" | "table";
 
 export class Shell {
   private screen: Screen;
@@ -118,6 +119,10 @@ export class Shell {
   private go(screen: Screen): void {
     this.screen = screen;
     this.error = "";
+    // A deliberate move somewhere else acknowledges the "you were removed"
+    // banner. `leaveTable` does NOT go through here, which is what leaves
+    // it on screen for the player who has just been shown the door.
+    this.removedReason = "";
     this.paint();
   }
 
@@ -147,38 +152,37 @@ export class Shell {
         return this.joinScreen();
       case "leaderboard":
         return this.leaderboardScreen();
-      case "removed":
-        return this.removedScreen();
       default:
         return "";
     }
   }
 
-  /** Why this client was shown the door, if it was. */
+  /** Why this client was shown the door, if it was. Cleared when they
+   *  acknowledge it or go anywhere else. */
   private removedReason = "";
 
   /**
-   * Removed from a table, and TOLD WHY.
+   * Removed from a table, and TOLD WHY, back on the MAIN MENU.
    *
    * The reason is the host's own words, typed into the kick prompt and
-   * carried in the `bye` the protocol already had. Without a screen for
-   * it, being kicked was indistinguishable from the connection dropping —
-   * and those two deserve very different reactions from the player.
+   * carried in the `bye` the protocol already had. This used to be a
+   * screen of its own, and it never appeared: the shell painted it into
+   * the root and the table — which had subscribed to the same transport
+   * afterwards — painted straight over it, so being kicked looked exactly
+   * like the connection dropping (owner report). The banner rides on the
+   * menu instead, which is where a player with no table left belongs.
    */
-  private removedScreen(): string {
+  private removedBanner(): string {
+    if (!this.removedReason) return "";
     return `
-      <div class="card">
-        <h1>You were removed from the table</h1>
+      <div class="card removed">
+        <h2>You were removed from the table</h2>
         <p class="note">The host gave this reason:</p>
         <p class="err quoted">${esc(this.removedReason)}</p>
         <p class="note">
-          A bot is playing your seat, so the game goes on without you. You
-          can join another table whenever you like.
+          A bot is playing your seat, so the game goes on without you.
         </p>
-        <div class="row">
-          <button id="m-join" class="primary">Join another game</button>
-          <button id="pback">Main menu</button>
-        </div>
+        <div class="row"><button id="removed-ok">OK</button></div>
       </div>`;
   }
 
@@ -315,6 +319,7 @@ export class Shell {
           buttons in their card below.
         -->
         <img class="banner" src="${bannerUrl}" alt="Vampire: The Eternal Struggle" />
+      ${this.removedBanner()}
       <div class="card menu">
         <p class="note">Playing as <b>${esc(this.profile?.name ?? "")}</b></p>
         <div class="menubuttons">
@@ -330,6 +335,30 @@ export class Shell {
           room code.
         </p>
       </div>
+      <!--
+        THE DARK PACK LINE, on the first screen everybody sees.
+
+        The full notice has always been in How to Play, which is a modal a
+        visitor has to go looking for. That was fine while this ran on the
+        owner's machine; published, the attribution should be where it can
+        be read without hunting for it — this is a non-commercial fan work
+        under Paradox's Dark Pack, and the card data and scans are KRCG's.
+        The long form stays in the panel, with the full copyright text.
+      -->
+      <p class="attribution">
+        A non-commercial fan project under the <b>Dark Pack</b> agreement.
+        Portions are the copyrights and trademarks of Paradox Interactive AB,
+        used with permission — <b>worldofdarkness.com</b>.
+        Card data and scans from <b>KRCG</b>. Full credits in
+        <b>❔ How to Play</b>.
+      </p>
+      <!--
+        The build people can point at in a bug report (owner request
+        2026-09-07). Under the copyright line and smaller than it: it is
+        the least important thing on the screen and should look it, but a
+        report that names a version is worth several that do not.
+      -->
+      <p class="version">${esc(PLATFORM_VERSION_LABEL)}</p>
       </div>`;
   }
 
@@ -416,6 +445,7 @@ export class Shell {
                 : `<p class="ok">Ready — ${(guest ? guest.seats.length : this.table.seats.length)} seats.</p>`
             }
             ${this.spectators > 0 ? `<p class="note">${this.spectators} watching.</p>` : ""}
+            ${this.seatingNote()}
           </div>
           <aside class="lobbychat">${this.chatPanel()}</aside>
         </div>
@@ -475,10 +505,24 @@ export class Shell {
    * Shown small and unbolded next to the name because it is orientation,
    * not identity.
    */
-  private relations(names: string[], i: number): string {
-    const r = seatRelations(names, i);
-    if (!r) return "";
-    return `<span class="rel">prey ${esc(r.prey)} &middot; predator ${esc(r.predator)}</span>`;
+  /**
+   * SEATING IS NOT DECIDED HERE (owner request).
+   *
+   * This used to name each seat's prey and predator from its row in the
+   * lobby, which quietly made the lobby the seating chart: taking the
+   * third box meant choosing your predator, and people could see who
+   * they were about to be fed to before anybody had committed to a deck.
+   * Who sits where is now shuffled when the game is dealt
+   * (`GameSetup.randomSeating`), so there is nothing true to say until
+   * then — and saying nothing would look like an omission, so the lobby
+   * says so instead.
+   */
+  private seatingNote(): string {
+    return `<p class="note dim">
+      Seating is drawn at random when the game starts — the order of these
+      boxes is not the order of the table, and nobody's prey or predator
+      is decided until then.
+    </p>`;
   }
 
   /** One box on the host's (or a private table's) grid. */
@@ -495,7 +539,6 @@ export class Shell {
         : seat.deck.kind === "precon"
           ? `${seat.deck.name} — ${seat.deck.set}`
           : "pasted deck list";
-    const names = this.table.seats.map((s) => s.name);
     const hash = seatDeckHash(seat);
     return `
       <div class="seatbox ${isHost ? "host" : ""} ${remote ? "remote" : ""}" data-i="${i}">
@@ -513,7 +556,6 @@ export class Shell {
                 : `<input class="seatname" data-i="${i}" value="${esc(seat.name)}"
                           maxlength="${MAX_NAME_LENGTH}" />`
             }
-            ${this.relations(names, i)}
           </div>
         </div>
         ${
@@ -541,7 +583,6 @@ export class Shell {
 
   /** One box as a GUEST sees it: read-only, except their own. */
   private guestBox(s: LobbySeat, i: number, precons: PreconSummary[]): string {
-    const names = this.lobbyPeer?.state?.seats.map((x) => x.name) ?? [];
     return `
       <div class="seatbox ${s.mine ? "mine" : ""}" data-i="${i}">
         <div class="sbhead">
@@ -552,7 +593,6 @@ export class Shell {
                 ? `<input id="guest-name" value="${esc(s.name)}" maxlength="${MAX_NAME_LENGTH}" />`
                 : `<span class="lname">${esc(s.name)}</span>`
             }
-            ${this.relations(names, i)}
           </div>
         </div>
         <div class="sbkind">${
@@ -762,13 +802,23 @@ export class Shell {
                </p>`
             : `<table class="lbtable">
                  <thead><tr>
-                   <th>Player</th><th>Games</th><th>Wins</th><th>VP</th>
+                   <th>Player</th><th>Decks</th><th>Games</th><th>Wins</th><th>VP</th>
                  </tr></thead>
                  <tbody>
                    ${table
                      .map(
                        (r) => `<tr class="${r.bot ? "isbot" : ""}">
                          <td>${esc(r.name)}${r.bot ? ` <span class="dim">bot</span>` : ""}</td>
+                         <!--
+                           WHAT THEY BROUGHT (owner request). Most recent
+                           first, and a row from before decks were recorded
+                           simply has none rather than claiming something.
+                         -->
+                         <td class="lbdecks">${
+                           r.decks.length === 0
+                             ? `<span class="dim">—</span>`
+                             : r.decks.map((d) => esc(d)).join("<br />")
+                         }</td>
                          <td>${r.games}</td>
                          <td>${r.wins}</td>
                          <td>${r.victoryPoints}</td>
@@ -797,8 +847,19 @@ export class Shell {
   }
 
   private wire(): void {
+    this.on("#removed-ok", () => {
+      this.removedReason = "";
+      this.paint();
+    });
     this.on("#m-host", () => {
       this.table = defaultTable(this.profile?.name ?? "You");
+      // A NEW TABLE STARTS A NEW CONVERSATION (owner request). The chat is
+      // a module-level store so that it survives the lobby→table handover
+      // (src/ui/chat.ts); the price of that is that it also survives
+      // everything else, so the last game's talk was still sitting in the
+      // new lobby.
+      clearChat();
+      this.removedReason = "";
       this.go("newgame");
     });
     this.on("#m-join", () => this.go("join"));
@@ -1186,7 +1247,23 @@ export class Shell {
     const transport = new LocalTransport({
       setup: build.setup,
       log: new GameLog(new DevServerSink(), build.setup),
-      onResult: recordResult,
+      // HELD, NOT RECORDED. The row is computed here because this is the
+      // only side that sees a game bots finish; whether it counts is the
+      // player's answer to the end-of-game prompt (owner request).
+      onResult: (r) => {
+        this.pendingResult = r;
+      },
+      deckLabels: this.deckLabels(),
+      // THE PACING HAS TO BE LIVE BEFORE THE AGENTS ARE, and it was not.
+      // `DebugApp` calls `setAiDelay` — its comment even says "before the
+      // agents are attached, so the first AI move is already paced" — but
+      // the shell attaches them on the line below, which is BEFORE the
+      // table is built. So every bot turn ahead of the first human
+      // decision was answered at zero delay, and the game opened on a
+      // board they had already played (owner report 2026-09-07). Setting
+      // it here is what makes that comment true on this path too.
+      aiDelayMs: loadSettings().aiDelayMs,
+      openingDelayMs: OPENING_DELAY_MS,
     });
     for (const seat of botSeats(this.table)) {
       transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
@@ -1205,8 +1282,15 @@ export class Shell {
   private async openRoom(): Promise<void> {
     if (this.lobbyHost) return;
     const code = newRoomCode();
-    this.lobbyHost = new LobbyHost(code, this.table, (transport, session) =>
-      this.toTable(transport, session),
+    this.lobbyHost = new LobbyHost(
+      code,
+      this.table,
+      (transport, session) => this.toTable(transport, session),
+      // Held until the end-of-game prompt is answered, exactly as on a
+      // private table — see `finishGame`.
+      (r) => {
+        this.pendingResult = r;
+      },
     );
     // THE HOST'S OWN SCREEN HAD TO BE TOLD. Every guest already learned
     // through `broadcast`; the host learned nothing, so someone joining,
@@ -1286,6 +1370,15 @@ export class Shell {
     // A spectator has no seat by definition, so "no seat" is only a
     // problem for someone who came to play.
     if (!channel || (!seat && !spectating)) return;
+    // WHAT THE LOBBY KNEW, KEPT. The lobby is about to be dropped, and it
+    // is the only thing on this side that ever learned which seats are
+    // bots and what deck each one brought — a guest's own leaderboard row
+    // needs both, and the game state carries neither.
+    this.guestSeats = this.lobbyPeer?.state?.seats ?? [];
+    for (const s of this.guestSeats) {
+      if (s.kind === "ai") this.guestBots[s.name] = true;
+      if (s.deck) this.guestDecks[s.name] = s.deck;
+    }
     // The lobby stops reading the stream before the transport starts, or
     // two objects would be listening to one connection.
     this.lobbyPeer?.detach();
@@ -1307,30 +1400,27 @@ export class Shell {
   /** Hand the root over to the table. The shell paints nothing after this. */
   private toTable(transport: LocalTransport | PeerTransport, session?: HostSession): void {
     this.screen = "table";
+    this.tableTransport = transport;
     this.root.innerHTML = "";
     if (session) this.hostSession = session;
-    // BEING REMOVED HAS TO BE SAID OUT LOUD. The host sends a `bye` with
-    // the reason it was given; without this the table simply stopped
-    // answering, which looks like the connection dropping rather than a
-    // decision somebody made about you. The shell takes the root back.
-    if (transport instanceof PeerTransport) {
-      const offBye = transport.onChanged(() => {
-        const reason = transport.closedReason;
-        if (!reason) return;
-        offBye();
-        this.removedReason = reason;
-        this.guestChannel = null;
-        clearChat();
-        this.screen = "removed";
-        this.paint();
-      });
-    }
     const me = this.profile?.name ?? "You";
     const mine = this.profile?.chatColor ?? null;
     new DebugApp(this.root, transport, {
-      faces: this.seatFaces(),
+      // A FUNCTION, not a snapshot: a kicked player's seat gains its
+      // "Bot" label mid-game, and a value read once when the table opened
+      // could never show it (owner report).
+      faces: () => this.seatFaces(),
       localSeat: this.mySeat(),
       onLeave: () => this.leaveTable(),
+      // THE HOST MAY NOT PLAY OTHER PEOPLE'S TURNS (owner report). The
+      // host runs the engine, so it holds a live option list for every
+      // seat at the table; these are the ones that are not its to answer.
+      // A guest has no session and needs none — it is only ever sent its
+      // own decisions.
+      remoteSeats: () => (session?.roster ?? []).map((r) => r.seat),
+      // THE END OF THE GAME. Both answers leave; the difference is only
+      // whether it goes on this device's leaderboard (owner request).
+      onFinished: (save: boolean) => this.finishGame(transport, save),
       // The conversation carries on at the table. Who relays it depends on
       // which end this client is, and the table does not need to know:
       // it is handed one function that says something.
@@ -1386,6 +1476,89 @@ export class Shell {
         saveProfile(this.profile);
       },
     });
+
+    // BEING REMOVED HAS TO BE SAID OUT LOUD, and this has to be wired
+    // AFTER the table is (owner report: no reason, and no way back).
+    // Listeners fire in the order they subscribed: registered first, the
+    // shell painted the menu into the root and the table — subscribed to
+    // the same transport a moment later — painted the game straight back
+    // over it. So the kicked player saw the table freeze, which is what
+    // a dropped connection looks like.
+    if (transport instanceof PeerTransport) {
+      const offBye = transport.onChanged(() => {
+        const reason = transport.closedReason;
+        if (!reason) return;
+        offBye();
+        this.removedReason = reason;
+        this.guestChannel = null;
+        clearChat();
+        // BACK TO THE MAIN MENU (owner request), with the reason on it.
+        // `leaveTable` is the one place that hangs everything up.
+        this.leaveTable();
+      });
+    }
+  }
+
+  /**
+   * The game is over and the player has answered the prompt.
+   *
+   * SAVING IS THE PLAYER'S CALL (owner request). It used to be automatic:
+   * `LocalTransport` was handed `recordResult` and wrote the row the
+   * moment the engine stopped. The transport still computes the row — it
+   * is the only side that sees a game bots finish — but it now hands it
+   * here to be held, and this decides.
+   *
+   * A PEER computes its own: it has the final masked state, which carries
+   * every seat's victory points, and it kept the lobby's bot list and
+   * deck labels for exactly this. Its leaderboard therefore counts the
+   * games it played, not only the ones it hosted.
+   */
+  private finishGame(transport: LocalTransport | PeerTransport, save: boolean): void {
+    if (save) {
+      const result =
+        this.pendingResult ??
+        resultFrom(transport.view(), {
+          bots: this.guestBots,
+          you: this.mySeat(),
+          decks: this.guestDecks,
+        });
+      if (result) recordResult(result);
+    }
+    this.pendingResult = null;
+    this.leaveTable();
+  }
+
+  /** The finished game the host's transport computed, held until the
+   *  player says whether to keep it. */
+  private pendingResult: GameResult | null = null;
+  /** What the lobby told a GUEST before it was dropped: which seats are
+   *  bots, and what deck each one brought. Neither is in the game state,
+   *  and both belong on a leaderboard row. */
+  private guestBots: Record<string, boolean> = {};
+  private guestDecks: Record<string, string> = {};
+  /** The lobby's last seat list, kept by a GUEST for the same reason: at
+   *  the table the lobby is gone, and this client's own `table` describes
+   *  a table it is not sitting at. */
+  private guestSeats: LobbySeat[] = [];
+  /** The transport the table is running on, so the shell can ask it what
+   *  it knows — the bot labels, and a peer's final state. */
+  private tableTransport: LocalTransport | PeerTransport | null = null;
+
+  /**
+   * Seat id → the deck label they brought, for the leaderboard.
+   *
+   * A LABEL, never the list: what is in a deck is its owner's business,
+   * and a result is kept for ever. Read from the same `SeatConfig` the
+   * game is dealt from, so it cannot describe a deck nobody played.
+   */
+  private deckLabels(): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const s of this.lobbyHost?.seats ?? this.table.seats) {
+      if (!s.deck) continue;
+      out[s.name] =
+        s.deck.kind === "precon" ? `${s.deck.name} — ${s.deck.set}` : "a pasted deck list";
+    }
+    return out;
   }
 
   /** The game-phase session, when this client is the host. Kept so the
@@ -1401,24 +1574,39 @@ export class Shell {
    */
   private seatFaces(): Record<string, SeatFace> {
     const faces: Record<string, SeatFace> = {};
-    const remote = this.lobbyPeer?.state?.seats;
-    if (remote) {
-      for (const s of remote) {
-        faces[s.name] = { avatar: s.avatar ?? null, bot: s.kind === "ai" };
-      }
-      return faces;
-    }
-    const seats = this.lobbyHost?.seats ?? this.table.seats;
     // A seat a bot took over mid-game is RELABELLED, never renamed: the
     // seat name is the engine's id for it, so "Bea Bot" is a label the mat
     // draws and nothing else ever sees.
-    const botNames = this.hostSession?.botSeatNames ?? {};
-    for (const s of seats) {
-      const label = botNames[s.name];
+    //
+    // ONE PLACE, BOTH ENDS. The labels are read off the transport, which
+    // is the only object a host and a guest both have — the host writes
+    // them there and every sync carries them out, so the relabelled mat
+    // looks the same on all four screens (owner request 2026-09-07). Read
+    // from the host session instead, they were a fact only the host knew.
+    const botNames = this.tableTransport?.botNames?.() ?? {};
+    const label = (seat: string): { label?: string } =>
+      botNames[seat] ? { label: botNames[seat] } : {};
+
+    // A GUEST'S ROSTER is what the lobby last told them — their own
+    // `table` describes a table they are not at, and looking there gave
+    // every seat the wrong name, so nothing matched and no mat had a face.
+    const guests = this.lobbyPeer?.state?.seats ?? this.guestSeats;
+    if (guests.length > 0) {
+      for (const s of guests) {
+        faces[s.name] = {
+          avatar: s.avatar ?? null,
+          bot: s.kind === "ai" || botNames[s.name] !== undefined,
+          ...label(s.name),
+        };
+      }
+      return faces;
+    }
+
+    for (const s of this.lobbyHost?.seats ?? this.table.seats) {
       faces[s.name] = {
         avatar: s.kind === "you" ? (this.profile?.avatar ?? null) : (s.avatar ?? null),
-        bot: s.kind === "ai" || label !== undefined,
-        ...(label ? { label } : {}),
+        bot: s.kind === "ai" || botNames[s.name] !== undefined,
+        ...label(s.name),
       };
     }
     return faces;
@@ -1455,6 +1643,12 @@ export class Shell {
     this.lobbyPeer = null;
     this.guestChannel?.close();
     this.guestChannel = null;
+    this.hostSession = null;
+    this.pendingResult = null;
+    this.guestBots = {};
+    this.guestDecks = {};
+    this.guestSeats = [];
+    this.tableTransport = null;
     this.spectators = 0;
     this.screen = "menu";
     this.error = "";

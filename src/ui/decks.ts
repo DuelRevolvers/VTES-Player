@@ -324,6 +324,21 @@ export interface GameSetup {
    * are taken.
    */
   firstSeat?: string;
+  /**
+   * Shuffle who sits where before the first turn (owner request).
+   *
+   * WHO STARTS and WHO SITS WHERE are two different questions, and only
+   * the first was ever randomised: `firstSeat` rotates the cycle, so
+   * everybody keeps the same prey and predator. Seating is the one that
+   * decides your neighbours, and taking a lobby row meant taking a known
+   * predator — so the lobby now shows no relations at all and this
+   * decides them, with the seeded RNG, at the moment the game is dealt.
+   *
+   * OPT-IN, because every hand-authored snapshot and saved game is
+   * written in seat order and must keep replaying identically. Only
+   * `buildTable` sets it.
+   */
+  randomSeating?: boolean;
 }
 
 /**
@@ -373,6 +388,14 @@ function dealSeat(deck: DeckList, rng: { rngState: number }): SeatState {
     outOfTurnMasterUsed: false,
     permanents: [],
     autoPassWhenOnlyPass: false,
+    // What this player brought: composition, not order. They built the
+    // deck, so they know it (owner ruling 2026-09-06); the library itself
+    // stays face down, so the ORDER is still hidden from them (p. 14).
+    // Crypt by NAME, not by the KRCG id the deck list is written in, so
+    // both halves speak the same vocabulary as everything else the agent
+    // reads. Taken off the shuffled cards because a composition has no
+    // order to preserve.
+    deckList: { crypt: crypt.map((c) => c.name), library: [...deck.library] },
   };
 }
 
@@ -383,7 +406,7 @@ function dealSeat(deck: DeckList, rng: { rngState: number }): SeatState {
  */
 export function buildGame(setup: GameSetup): GameState {
   const rng = { rngState: setup.seed };
-  const seats: SeatState[] = setup.decks.map((deck) => {
+  const dealt: SeatState[] = setup.decks.map((deck) => {
     // A real deck is DEALT (p. 14); a snapshot is placed as written.
     if (isDeckList(deck)) return dealSeat(deck, rng);
     const shuffled = shuffle(
@@ -409,6 +432,13 @@ export function buildGame(setup: GameSetup): GameState {
       autoPassWhenOnlyPass: false,
     };
   });
+
+  // WHO SITS WHERE, decided here and nowhere earlier. The lobby lists
+  // seats in the order people arrived and says nothing about prey or
+  // predator, because until this line there is nothing true to say: the
+  // deal shuffles the seating with the same seeded RNG that shuffles the
+  // decks, so the game is still reproducible from its seed.
+  const seats = setup.randomSeating ? shuffle(dealt, rng) : dealt;
 
   // "Randomly determine a Methuselah to act as first Methuselah" (p. 14).
   // Rotating the seat array is the whole of it: the table is a cycle, so

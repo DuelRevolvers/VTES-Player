@@ -308,3 +308,120 @@ describe("playing a whole game across the table", () => {
     await expect(inFlight).rejects.toThrow(/host left/);
   });
 });
+
+/**
+ * OWNER REPORT 2026-09-07: "During the off-turns of non-host online
+ * players, the action bar says Game over — no decision pending."
+ *
+ * The options are withheld from a peer whose decision it is not — they
+ * say what is in somebody's hand — but the NAME is public: everybody at a
+ * real table can see who is being waited on. Without it, "not your
+ * decision" and "the game has ended" were the same value on the wire.
+ */
+describe("whose decision it is", () => {
+  it("tells a peer who is being asked, without telling it what they may do", async () => {
+    const { host, peers } = await table();
+    const asked = host.decision()!.seat;
+    // Somebody is being asked, and it is not both of these peers.
+    const watcher = Object.values(peers).find((p) => p.seat !== asked)!;
+    expect(watcher.decision()).toBeNull();
+    expect(watcher.decidingSeat()).toBe(asked);
+    // The negative space, and the whole reason the options are withheld:
+    // the name travels, the option list does not.
+    expect(JSON.stringify(watcher.decision())).not.toContain("options");
+  });
+
+  it("is DERIVED on every read, so it cannot be left naming a stale seat", async () => {
+    // The control the bar depends on. If this were latched, the first
+    // seat asked would be named for the rest of the game — a live-looking
+    // bar on a table that had moved on, which is the same class of bug as
+    // the one being fixed. Play a few decisions and watch it follow.
+    const { host, peers } = await table();
+    for (let i = 0; i < 6 && host.decision(); i++) {
+      expect(host.decidingSeat()).toBe(host.decision()!.seat);
+      const dp = host.decision()!;
+      const pick = dp.options.find((o) => o.kind === "pass") ?? dp.options[0]!;
+      await host.choose(pick.id);
+    }
+    await settle();
+    // …and every peer agrees with the authority about who is being asked.
+    for (const p of Object.values(peers)) {
+      expect(p.decidingSeat()).toBe(host.decidingSeat());
+    }
+  });
+});
+
+/**
+ * A seat changing hands is announced in the GAME LOG, and the log reaches
+ * every peer (owner request 2026-09-07). Nothing about it is an engine
+ * event — the game did not change — so it travels beside the state.
+ */
+describe("log notices on the wire", () => {
+  it("carries a seat changing hands to the other players", async () => {
+    const { session, peers } = await table();
+    expect(peers["Carol"]!.notices()).toEqual([]);
+    session.kick("Bob", "afk");
+    await settle();
+    const seen = peers["Carol"]!.notices();
+    expect(seen.some((n) => n.includes("Bob"))).toBe(true);
+  });
+});
+
+/**
+ * The label a mat draws for a seat a bot took over, seen BY EVERYONE
+ * (owner request 2026-09-07: "I want the bot name change to be seen by
+ * everyone").
+ *
+ * It used to live on the `HostSession`, privately — so it was a fact only
+ * the host's screen could know, and the other players went on watching
+ * "Bob" play himself. It lives on the transport now, which is the one
+ * object both ends have.
+ */
+describe("relabelling a seat a bot took over", () => {
+  it("reaches the other players, not only the host", async () => {
+    const { host, session, peers } = await table();
+    // Nobody is labelled before it happens — the negative control, or
+    // "everything is always labelled" would pass the assertion below.
+    expect(host.botNames()).toEqual({});
+    expect(peers["Carol"]!.botNames()).toEqual({});
+
+    session.kick("Bob", "afk");
+    await settle();
+
+    expect(host.botNames()["Bob"]).toBe("Bob Bot");
+    expect(session.botSeatNames["Bob"]).toBe("Bob Bot");
+    // The point of the change: a seat Carol is watching, on Carol's copy.
+    expect(peers["Carol"]!.botNames()["Bob"]).toBe("Bob Bot");
+  });
+
+  it("is DISPLAY ONLY — the seat id every option is written in terms of is untouched", () => {
+    // The invariant this whole mechanism exists to protect. Renaming the
+    // seat would invalidate every option id, the command log and every
+    // saved game, so the label must never appear as a seat.
+    return table().then(async ({ host, session, peers }) => {
+      session.kick("Bob", "afk");
+      await settle();
+      for (const state of [host.view(), peers["Carol"]!.view()]) {
+        expect(state.seats.map((s) => s.id)).toContain("Bob");
+        expect(state.seats.map((s) => s.id)).not.toContain("Bob Bot");
+      }
+    });
+  });
+
+  it("reaches somebody who arrives AFTER the seat changed hands", async () => {
+    // Sent whole on every sync rather than as an event, for the same
+    // reason the state is — so a client that was not there when it
+    // happened needs no catch-up machinery. A spectator is the arrival
+    // this can test: a seated peer's own channel is still open, and the
+    // host rightly refuses a second claim on a taken seat.
+    const { session, host } = await table();
+    session.kick("Bob", "afk");
+    await settle();
+    const { host: hostSide, peer: peerSide } = loopback();
+    session.accept(hostSide);
+    const late = new PeerTransport(peerSide, null, "Watcher");
+    await settle();
+    expect(late.botNames()["Bob"]).toBe("Bob Bot");
+    expect(late.botNames()).toEqual(host.botNames());
+  });
+});

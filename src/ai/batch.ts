@@ -13,7 +13,7 @@
  */
 
 import type { Agent } from "../engine/agent.ts";
-import { viewFor } from "../engine/agent.ts";
+import { redactFor, viewFor } from "../engine/agent.ts";
 import { VtesEngine } from "../engine/engine.ts";
 import type { HandlerRegistry } from "../engine/handlers.ts";
 import type { GameState, SeatId } from "../engine/state.ts";
@@ -90,7 +90,15 @@ export function runGame(
       if (!agent) throw new Error(`no agent for seat ${dp.seat}`);
       // The agent sees the MASKED view, never the state. This is the one
       // line that makes the AI honest (principle 5).
-      const choice = agent.decide(dp, dp.options, viewFor(engine.state, dp.seat));
+      // The masked state is the SAME information as the view, in the form
+      // a search agent can apply a move to — and is exactly what a peer is
+      // sent (docs/ai-v2-design.md §2). A policy agent ignores it.
+      const choice = agent.decide(
+        dp,
+        dp.options,
+        viewFor(engine.state, dp.seat),
+        redactFor(engine.state, dp.seat),
+      );
       if (!dp.options.some((o) => o.id === choice)) {
         throw new Error(`agent for ${dp.seat} chose "${choice}", which was not offered`);
       }

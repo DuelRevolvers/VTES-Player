@@ -3,7 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VTES Player</title>
+    <title>VTES Player — Vampire: The Eternal Struggle</title>
+    <meta
+      name="description"
+      content="Play Vampire: The Eternal Struggle (Fifth Edition) in your browser, against AI opponents or friends. A non-commercial fan project under the Dark Pack agreement."
+    />
+    <!--
+      An INLINE favicon, as a data URI.
+
+      Without one every visitor's browser requests /favicon.ico and takes a
+      404, and the tab shows a blank page icon. A data URI fetches nothing,
+      cannot 404, and — the reason it is not a file in a folder — works
+      unchanged from a subdirectory, which is where GitHub Pages serves
+      this from (`base: "./"` in vite.config.ts).
+    -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23140a0d'/%3E%3Cpath d='M16 25c-4.5-3.2-7-6.4-7-10.2A5.3 5.3 0 0 1 16 10a5.3 5.3 0 0 1 7 4.8c0 3.8-2.5 7-7 10.2z' fill='%238b1a1a'/%3E%3C/svg%3E"
+    />
+    <meta name="theme-color" content="#140a0d" />
   </head>
   <body>
     <div id="app"></div>

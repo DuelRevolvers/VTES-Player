@@ -27,6 +27,8 @@ import {
   validateDecks,
 } from "../../src/ui/decks.ts";
 import { LocalTransport } from "../../src/ui/transport.ts";
+import { buildTable } from "../../src/ui/newgame.ts";
+import { supportedPrecons } from "../../src/ui/deckimport.ts";
 
 const reg = registry as unknown as CardRegistry;
 
@@ -147,6 +149,69 @@ describe("who goes first", () => {
       ],
     };
     expect(buildGame(snap).seats[0]!.id).toBe("A");
+  });
+});
+
+/**
+ * WHO SITS WHERE, decided at the deal (owner request 2026-09-07: "make it
+ * random who sits where … don't pre-set who will be everyone's prey and
+ * predator until the game starts").
+ *
+ * This is a different question from `firstSeat`, and that is the whole
+ * point of it: rotating the cycle changes who leads and nobody's
+ * neighbours, so a lobby row was still a seating chart. Shuffling the
+ * seats is what makes the lobby order mean nothing.
+ */
+describe("random seating", () => {
+  /** Six seats, so a shuffle that did nothing is a 1-in-720 coincidence
+   *  rather than a coin flip — a two-seat table cannot tell the two
+   *  apart, and neither could a test built on one. */
+  const six = ["A", "B", "C", "D", "E", "F"].map((s, i) => deckFor(s, i));
+  const order = (setup: GameSetup): string[] => buildGame(setup).seats.map((s) => s.id);
+
+  it("shuffles the table when asked, and keeps the seed reproducible", () => {
+    const base: GameSetup = { decks: six, seed: 99, maxTurns: 60, randomSeating: true };
+    const dealt = order(base);
+    expect([...dealt].sort()).toEqual(["A", "B", "C", "D", "E", "F"]);
+    // Not the order it was handed. `firstSeat` is pinned so this cannot
+    // pass on the rotation alone — the ROTATION was already random, and a
+    // test that let it in would prove nothing about seating.
+    const pinned = order({ ...base, firstSeat: "A" });
+    expect(pinned[0]).toBe("A");
+    expect(pinned).not.toEqual(["A", "B", "C", "D", "E", "F"]);
+    // Same seed, same table: this is still a replay, not a coin toss.
+    expect(order(base)).toEqual(dealt);
+  });
+
+  it("leaves the order alone when it is not asked for", () => {
+    // The negative control, and the reason the flag is opt-in: every
+    // hand-authored snapshot and saved game is written in seat order and
+    // must keep replaying identically.
+    expect(order({ decks: six, seed: 99, maxTurns: 60 })).toEqual([
+      "A",
+      "B",
+      "C",
+      "D",
+      "E",
+      "F",
+    ]);
+  });
+
+  it("is what a table built from the lobby asks for", () => {
+    // A deferral is a claim about the code as it was: this pins that the
+    // flag is actually SET on the path the game is really dealt from,
+    // not merely honoured by `buildGame`.
+    const precon = supportedPrecons().find((p) => p.playable)!;
+    const built = buildTable({
+      seats: [
+        { name: "Alice", kind: "you", deck: { kind: "precon", set: precon.set, name: precon.name } },
+        { name: "Bob", kind: "ai", deck: { kind: "precon", set: precon.set, name: precon.name } },
+      ],
+      seed: 5,
+      maxTurns: null,
+      privateGame: true,
+    });
+    expect(built.setup?.randomSeating).toBe(true);
   });
 });
 

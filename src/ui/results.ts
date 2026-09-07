@@ -29,6 +29,16 @@ export interface SeatResult {
   /** An AI played this seat. Kept so the standings can separate people
    *  from the computer — a table of bot win rates is not a leaderboard. */
   bot: boolean;
+  /**
+   * The deck this seat brought, as the label the lobby showed ("Hecata —
+   * Fifth Edition", "a pasted deck list"), or null when the recorder did
+   * not know it.
+   *
+   * A LABEL, never the list: what is in a deck is its owner's business,
+   * and a result is kept for ever. Optional because rows recorded before
+   * this existed have none, and the leaderboard must still read them.
+   */
+  deck?: string | null;
 }
 
 export interface GameResult {
@@ -51,7 +61,12 @@ export interface GameResult {
  */
 export function resultFrom(
   state: GameState,
-  meta: { bots: Record<string, boolean>; you: string | null },
+  meta: {
+    bots: Record<string, boolean>;
+    you: string | null;
+    /** Seat id → the deck label they brought. A seat with none records null. */
+    decks?: Record<string, string>;
+  },
 ): GameResult | null {
   const ended = [...state.eventLog].reverse().find((e) => e.type === "GameEnded");
   if (!ended || ended.type !== "GameEnded") return null;
@@ -62,6 +77,7 @@ export function resultFrom(
       victoryPoints: s.victoryPoints,
       ousted: s.ousted,
       bot: meta.bots[s.id] ?? false,
+      deck: meta.decks?.[s.id] ?? null,
     })),
     winner: ended.winner,
     you: meta.you,
@@ -74,6 +90,10 @@ export interface Standing {
   wins: number;
   victoryPoints: number;
   bot: boolean;
+  /** Every deck label this name has played, most recent first and without
+   *  repeats. A leaderboard row is a person across many games, and what
+   *  they bring is one of the things worth knowing about them. */
+  decks: string[];
 }
 
 /**
@@ -96,8 +116,12 @@ export function standings(results: GameResult[]): Standing[] {
         wins: 0,
         victoryPoints: 0,
         bot: true,
+        decks: [],
       };
       row.games += 1;
+      // `results` is newest first, so the first label seen is the most
+      // recent deck this name played.
+      if (s.deck && !row.decks.includes(s.deck)) row.decks.push(s.deck);
       if (r.winner === s.name) row.wins += 1;
       row.victoryPoints += s.victoryPoints;
       if (!s.bot) row.bot = false;

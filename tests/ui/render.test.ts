@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import playtestDecks from "../../config/playtest-decks.json";
 import registry from "../../src/cards/registry.json";
-import type { GameState, LegalOption } from "../../src/engine/index.ts";
+import type { DecisionPoint, GameState, LegalOption } from "../../src/engine/index.ts";
 import type { DeckDef, GameSetup } from "../../src/ui/decks.ts";
 import { addChat, clearChat } from "../../src/ui/chat.ts";
 import { narrate } from "../../src/ui/narrate.ts";
@@ -36,6 +36,13 @@ function screen(
     helpOpen?: boolean;
     helpOpenSections?: string[];
     thinking?: boolean;
+    waitingFor?: string | null;
+    /** Force the decision the bar is drawn against. `null` is the case a
+     *  peer is in on somebody else's turn, and the case a finished game
+     *  is in — which is the pair this exists to tell apart. */
+    dpOverride?: DecisionPoint | null;
+    notices?: string[];
+    finished?: import("../../src/ui/render.ts").FinishedView | null;
     aiDelayMs?: number;
     cardTextPx?: number;
     seatFaces?: Record<string, { avatar: string | null; bot: boolean; label?: string }>;
@@ -69,7 +76,7 @@ function screen(
     chatSettingsOpen: opts.chatSettingsOpen ?? false,
     emojiOpen: opts.emojiOpen ?? false,
     state: t.view(),
-    dp: t.decision(),
+    dp: opts.dpOverride === undefined ? t.decision() : opts.dpOverride,
     eventFilter: "",
     canUndo: false,
     canRewind: true,
@@ -80,6 +87,9 @@ function screen(
     autoPass: opts.autoPass ?? {},
     aiSeats: opts.aiSeats ?? {},
     thinking: opts.thinking ?? false,
+    waitingFor: opts.waitingFor ?? null,
+    notices: opts.notices ?? [],
+    finished: opts.finished ?? null,
     aiDelayMs: opts.aiDelayMs ?? 0,
     helpQuery: opts.helpQuery ?? "",
     helpOpen: opts.helpOpen ?? false,
@@ -401,6 +411,113 @@ describe("an AI's turn to think", () => {
     const t = new LocalTransport({ setup });
     const seat = t.decision()!.seat;
     expect(screen({ thinking: true })).toContain(seat);
+  });
+});
+
+/**
+ * SOMEBODY ELSE'S DECISION (owner reports 2026-09-07, two of them, and
+ * one statement).
+ *
+ *  - "The Host player still has action buttons during other player's
+ *    turns … It's allowing the host to progress other player's turn
+ *    phases." The host RUNS the engine, so it holds a live option list
+ *    for every seat at the table, its guests' included.
+ *  - "During the off-turns of non-host online players, the action bar
+ *    says Game over — no decision pending." A peer is sent no
+ *    DecisionPoint unless the decision is theirs, so `dp` is null through
+ *    everybody else's turn — indistinguishable, to the bar, from a game
+ *    that has actually ended.
+ */
+describe("a decision this client may not answer", () => {
+  it("names who is deciding and offers nothing, exactly as an AI pause does", () => {
+    const waiting = screen({ waitingFor: "Bob" });
+    expect(waiting).toContain("Bob");
+    expect(waiting).toContain("is deciding");
+    // The whole of the host's half of the bug: no buttons, in the bar or
+    // on the table.
+    expect(waiting).not.toContain('class="opt ');
+    expect(waiting).not.toContain('class="handslot playable');
+  });
+
+  it("does NOT say the game is over — the peer's half of the bug", () => {
+    // With no decision at all, which is exactly the peer's case.
+    const off = screen({ dpOverride: null, waitingFor: "Bob" });
+    expect(off).not.toContain("Game over");
+    expect(off).toContain("is deciding");
+  });
+
+  it("still says Game over when the game really is over", () => {
+    // The control. Without this the fix could be "never say game over",
+    // which reads identically on every screenshot of a live game.
+    const over = screen({ dpOverride: null });
+    expect(over).toContain("Game over");
+    expect(over).not.toContain("is deciding");
+  });
+});
+
+/**
+ * The hand's label: the seat's name, and the sorting hint UNDER it rather
+ * than beside it, with no em dash (owner request 2026-09-07).
+ */
+describe("the hand label", () => {
+  it("puts the hint in its own element and drops the dash", () => {
+    const html = screen();
+    expect(html).toContain('class="hname"');
+    expect(html).toContain('class="dim hhint"');
+    // The dash is what was actually asked about, so pin its absence
+    // rather than the presence of the words around it.
+    expect(html).not.toContain("hand\n        <span class=\"dim\">—");
+    expect(/hhint">\s*—/.test(html)).toBe(false);
+  });
+});
+
+/**
+ * A line in the log that is not an engine event — a seat changing hands.
+ * In the GAME LOG, not the table chat (owner request 2026-09-07).
+ */
+describe("log notices", () => {
+  it("draws them in the log, marked as not being game events", () => {
+    const html = screen({ notices: ["Bea was removed by the host"] });
+    expect(html).toContain('class="ev notice"');
+    expect(html).toContain("Bea was removed by the host");
+  });
+
+  it("draws nothing when there are none", () => {
+    // A filter that matches nothing and a filter that is broken look
+    // identical; this is the negative space for the one above.
+    expect(screen()).not.toContain('class="ev notice"');
+  });
+});
+
+/**
+ * The end-of-game prompt (owner request 2026-09-07): every player is asked
+ * whether the game goes on their leaderboard, and either answer takes them
+ * back to the main menu.
+ */
+describe("the end-of-game prompt", () => {
+  const finished = {
+    winner: "Alice",
+    standings: [
+      { seat: "Alice", victoryPoints: 2, ousted: false },
+      { seat: "Bob", victoryPoints: 0, ousted: true },
+    ],
+  };
+
+  it("offers both answers and names the winner", () => {
+    const html = screen({ finished });
+    expect(html).toContain('id="over-save"');
+    expect(html).toContain('id="over-discard"');
+    expect(html).toContain("Alice wins");
+  });
+
+  it("says A DRAW rather than naming nobody as the winner", () => {
+    // The turn cap is an engine safeguard, not a rule, and it produces a
+    // real draw — which must not render as "  wins".
+    expect(screen({ finished: { ...finished, winner: null } })).toContain("A draw");
+  });
+
+  it("is absent while the game is running", () => {
+    expect(screen()).not.toContain('id="over-save"');
   });
 });
 
@@ -750,7 +867,7 @@ describe("who is whose prey", () => {
       state, dp: t.decision(), eventFilter: "", canUndo: false, canRewind: true,
       omniscient: false, selectedCard: null, handOrder: [], settingsOpen: false,
       helpOpen: false, helpOpenSections: [], helpQuery: "", autoPass: {},
-      aiSeats: {}, thinking: false, aiDelayMs: 0,
+      aiSeats: {}, thinking: false, waitingFor: null, notices: [], finished: null, aiDelayMs: 0,
     });
     const at = html.indexOf(`data-seat="${seats[0]}"`);
     expect(html.slice(at, at + 600)).toContain(`prey ${seats[2]}`);

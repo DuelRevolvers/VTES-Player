@@ -23,8 +23,9 @@ import { DevServerSink, GameLog } from "../ui/gamelog.ts";
 import type { SeatConfig, TableConfig } from "../ui/newgame.ts";
 import { botSeats, buildTable, MAX_SEATS, seatDeckHash } from "../ui/newgame.ts";
 import { avatarProblem, colorProblem, nameProblem } from "../ui/profile.ts";
+import type { GameResult } from "../ui/results.ts";
 import { recordResult } from "../ui/results.ts";
-import { seatSeed } from "../ui/settings.ts";
+import { loadSettings, OPENING_DELAY_MS, seatSeed } from "../ui/settings.ts";
 import { LocalTransport } from "../ui/transport.ts";
 import { HostSession } from "./host.ts";
 import type {
@@ -66,6 +67,15 @@ export class LobbyHost {
     /** Called when the game starts, so the host's own screen can hand over
      *  to the table. */
     private readonly onStart: (t: LocalTransport, s: HostSession) => void,
+    /**
+     * The finished game, when there is one.
+     *
+     * HELD RATHER THAN RECORDED: the leaderboard row is the player's to
+     * accept at the end-of-game prompt (owner request), so this hands it
+     * over rather than writing it. Defaults to `recordResult` so a caller
+     * that has no prompt — a test — keeps the old behaviour.
+     */
+    private readonly onResult: (r: GameResult) => void = recordResult,
   ) {}
 
   /** The lobby as the host's own screen shows it. */
@@ -338,11 +348,34 @@ export class LobbyHost {
     const transport = new LocalTransport({
       setup: build.setup,
       log: new GameLog(new DevServerSink(), build.setup),
-      // The HOST records the result: it is the only side that sees the
-      // game end, since a peer is simply told the final state. A guest's
-      // own leaderboard therefore counts the games they hosted, which is
-      // the honest limit of a per-device record.
-      onResult: recordResult,
+      // The HOST computes the result: it is the only side that sees the
+      // game end, since a peer is simply told the final state. What is
+      // done with it is the caller's — see `onResult`.
+      onResult: this.onResult,
+      // The pacing has to be live BEFORE the agents are attached below,
+      // or every bot turn ahead of the first human decision is answered
+      // instantly and the game opens on a board they already played
+      // (owner report 2026-09-07). The host runs the agents, so this is
+      // the one side that has to know — a peer only ever sees the result,
+      // and sees it paced because the host paced it.
+      aiDelayMs: loadSettings().aiDelayMs,
+      openingDelayMs: OPENING_DELAY_MS,
+      // What each seat brought, for the leaderboard row. A label, never a
+      // list; resolved from the same seats the game is dealt from.
+      deckLabels: Object.fromEntries(
+        this.table.seats.flatMap((s) =>
+          s.deck === null
+            ? []
+            : [
+                [
+                  s.name,
+                  s.deck.kind === "precon"
+                    ? `${s.deck.name} — ${s.deck.set}`
+                    : "a pasted deck list",
+                ] as const,
+              ],
+        ),
+      ),
     });
     for (const seat of botSeats(this.table)) {
       transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));

@@ -49,6 +49,21 @@ export interface PlayerView {
      *  zone this projection never masks.
      *  docs/ash-heap-design.md */
     ashHeap: CardInstance[];
+    /**
+     * The deck this Methuselah brought, one entry per copy — present ONLY
+     * for the viewer's own seat, because deck lists are private in VTES.
+     *
+     * Owner ruling, 2026-09-06: the AI should know what is in its own
+     * deck. That is what a player knows, having built it, and it is the
+     * half of the information model that was missing — masking could say
+     * what you may not SEE and had no way to say what you already KNOW.
+     *
+     * Composition, never order: the library is still face down to
+     * everyone including its owner (p. 14). Subtract what you have drawn
+     * and played, and what is left is what remains in the deck — which is
+     * arithmetic a player at a table does all the time.
+     */
+    deckList?: { crypt: string[]; library: string[] };
   }>;
   /**
    * The action in progress, if any — its PUBLIC facts.
@@ -196,8 +211,14 @@ export function redactFor(state: GameState, seat: SeatId): GameState {
   const known = new Set(state.knowledge?.[seat] ?? []);
   return {
     ...state,
-    seats: state.seats.map((s) => {
-      const mine = s.id === seat;
+    seats: state.seats.map((seatState) => {
+      const mine = seatState.id === seat;
+      // Taken OUT of the spread rather than overwritten with undefined:
+      // `exactOptionalPropertyTypes` makes those different things, and
+      // the field must be genuinely absent for another Methuselah — a
+      // present-but-undefined key would still say "this seat has a deck
+      // list" to anything walking the object.
+      const { deckList, ...s } = seatState;
       const handOpen = mine || openHands.includes(s.id);
       return {
         ...s,
@@ -210,6 +231,15 @@ export function redactFor(state: GameState, seat: SeatId): GameState {
         // your own, since you may not read your own deck.
         library: s.library.map((c) => ({ ...c, name: FACE_DOWN })),
         crypt: s.crypt.map(faceDownMinion),
+        // YOUR OWN deck list is yours to know — you built it (owner
+        // ruling 2026-09-06). Another Methuselah's is not: deck lists are
+        // private in VTES, which is the whole reason a search agent has
+        // to GUESS at their hand rather than deduce it.
+        //
+        // Note this does not weaken the line above. The library stays
+        // face down for everyone including its owner (p. 14), so what the
+        // owner gains is the COMPOSITION and never the order.
+        ...(mine && deckList ? { deckList } : {}),
         // A card this viewer has been SHOWN stays readable even in
         // somebody else's hand — they saw it, and a rule that made them
         // forget would be modelling a worse memory than a person has
@@ -336,6 +366,10 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
       libraryCount: s.library.length,
       cryptCount: s.crypt.length,
       ashHeap: [...(s.ashHeap ?? [])],
+      // `redacted` has already stripped this from every seat but the
+      // viewer's, so this carries no rule of its own — the same reason
+      // `viewFor` is defined in terms of `redactFor` at all.
+      ...(s.deckList ? { deckList: s.deckList } : {}),
     })),
     ...(action ? { action } : {}),
     ...(combat ? { combat } : {}),
@@ -343,7 +377,27 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
 }
 
 export interface Agent {
-  decide(dp: DecisionPoint, options: LegalOption[], view: PlayerView): string;
+  /**
+   * `masked` is the SAME information as `view`, in the form the engine
+   * itself uses — `redactFor(state, seat)`, which is a real `GameState`
+   * with everything this seat may not see already blanked.
+   *
+   * It exists for a SEARCH agent, which needs to apply a candidate move
+   * and look at the result, and cannot do that with a `PlayerView`
+   * (a projection, not a game). It is not extra knowledge: it is exactly
+   * the object multiplayer already sends to a remote player, so anything
+   * readable in it is readable by a person playing that seat from another
+   * machine (docs/ai-v2-design.md §2).
+   *
+   * Optional, so every existing agent, test and fixture is unchanged, and
+   * so an agent that does not want it cannot accidentally depend on it.
+   */
+  decide(
+    dp: DecisionPoint,
+    options: LegalOption[],
+    view: PlayerView,
+    masked?: GameState,
+  ): string;
 }
 
 /** Always passes when possible; otherwise takes the first option. Useful

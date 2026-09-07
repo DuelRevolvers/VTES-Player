@@ -79,6 +79,7 @@ import type {
   MinionId,
   RushRiders,
   MinionState,
+  SeatState,
   PermanentAura,
   PermanentInPlay,
   PermanentCostSource,
@@ -6664,6 +6665,30 @@ export class VtesEngine implements EngineOps {
     return options;
   }
 
+  /**
+   * How many cards in this Methuselah's hand the given vampire could
+   * play — Disciplines, clan, sect, title and capacity against every
+   * card's own requirements (docs/richer-options-design.md §7).
+   *
+   * `modesPlayableBy` is the central query that already answers this per
+   * card, added in `compileSpec` and backfilled for hand-rolled handlers,
+   * so this is a count over an answer the engine already gives rather
+   * than a second reading of the requirement lines.
+   *
+   * A card with no registered handler is not counted: an unimplemented
+   * card cannot be played by anybody, so counting it would make every
+   * candidate look equally good — empty for the wrong reason.
+   */
+  private playableFromHand(seat: SeatState, vampire: MinionState): number {
+    let n = 0;
+    for (const c of seat.hand) {
+      const h = this.registry[c.name];
+      if (!h) continue;
+      if ((h.modesPlayableBy?.(vampire) ?? []).length > 0) n++;
+    }
+    return n;
+  }
+
   /** Transfer spends per rulebook p. 36; influencing a full vampire out is
    *  free and available "at any time during this phase". */
   private influenceOptions(tf: TurnFrame): LegalOption[] {
@@ -6680,6 +6705,7 @@ export class VtesEngine implements EngineOps {
           kind: "transferToVampire",
           label: `Move 1 pool onto ${u.card.name} (1 transfer)`,
           minion: u.card.id,
+          playableCards: this.playableFromHand(seat, u.card),
         });
       }
       if (tf.transfersLeft >= 2 && u.counters >= 1) {

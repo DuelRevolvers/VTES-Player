@@ -130,7 +130,15 @@ export class HostSession {
       // already being sent — being removed with no explanation is the
       // thing worth avoiding here, and the field existed all along.
       peer.channel.send({ type: "bye", reason });
-      peer.channel.close();
+      // HANG UP ON THE NEXT TICK, not in the same breath. `close()` tears
+      // the data channel down, and a message written and then closed over
+      // in one synchronous run can go out with it — which is how a kicked
+      // player got dropped without ever seeing the reason. The task queue
+      // is enough: the send has already been handed to the channel.
+      const { channel } = peer;
+      setTimeout(() => {
+        if (channel.open) channel.close();
+      }, 0);
     }
     this.takeOver(peer.seat, peer.name, `was removed by the host: ${reason}`);
   }
@@ -161,9 +169,10 @@ export class HostSession {
    * start, so nothing about the game changes shape; `stepAutomatic` picks
    * it up on the next decision.
    *
-   * It is announced in the chat AND in the game log, because it changes
-   * who is answering for that seat and every other player is entitled to
-   * know that the person is gone.
+   * It is announced in the GAME LOG, not the chat (owner request). The
+   * chat is a conversation and scrolls away; a seat changing hands is a
+   * fact about the table that every player is entitled to find later,
+   * which is what the log is for.
    */
   private onLeave(channel: HostChannel): void {
     const peer = [...this.peers.values()].find((p) => p.channel === channel);
@@ -180,25 +189,37 @@ export class HostSession {
     this.transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
     // MARK THE SEAT AS A BOT'S, but only for display. The seat name IS the
     // engine's seat id — renaming it would invalidate every option id, the
-    // command log and every saved game — so the suffix lives in
-    // `botSeats`, which the table reads when it labels a mat.
-    this.botNames.set(seat, `${seat} Bot`);
-    this.transport.note(`${seat} ${how}; a bot is playing that seat now.`);
-    this.say(`${name} ${how} — a bot is playing ${seat} now.`, "", true);
+    // command log and every saved game — so the suffix is a label the mat
+    // draws and nothing else ever sees.
+    //
+    // It is kept on the TRANSPORT, not here, because everybody at the
+    // table has to see it: the labels ride along with each sync, so a
+    // guest's mat is relabelled by the same fact that relabels the host's
+    // (owner request 2026-09-07). This class holding them privately meant
+    // one screen out of four told the truth.
+    this.transport.setBotName(seat, `${seat} Bot`);
+    // ONE ANNOUNCEMENT, IN THE GAME LOG. `note` writes the log file and
+    // the on-screen panel, and the panel's contents reach every peer in
+    // the next sync — so the host and the guests read the same line in
+    // the same place. It is deliberately NOT in the table chat.
+    this.transport.note(
+      `${name} ${how} — ${seat} is played by a bot from now on, as "${seat} Bot".`,
+    );
+    // `note` emits on the transport, so every screen — the host's and, via
+    // the next sync, every peer's — repaints and picks up the new label
+    // without this class knowing anything about a screen.
   }
 
   /**
    * Seats a bot took over, and what to CALL them.
    *
-   * Display only, and that distinction is the whole of it: a seat's name
-   * is the engine's identifier for it, so this never reaches the engine,
-   * the command log or a saved game — it is read where a mat is labelled,
-   * exactly like an avatar.
+   * Delegated to the transport, which is where they now live so that
+   * every client sees them — see `takeOver`. Kept as a getter because
+   * this is the name the moderation panel and the tests ask by, and one
+   * question asked in two places will drift.
    */
-  private readonly botNames = new Map<SeatId, string>();
-
   get botSeatNames(): Record<string, string> {
-    return Object.fromEntries(this.botNames);
+    return this.transport.botNames();
   }
 
   /** How many people are watching without a seat. */
@@ -313,6 +334,9 @@ export class HostSession {
       type: "sync",
       state: this.transport.spectatorState(),
       decision: null,
+      deciding: this.transport.decision()?.seat ?? null,
+      notices: this.transport.notices(),
+      botNames: this.transport.botNames(),
     });
   }
 
@@ -326,6 +350,12 @@ export class HostSession {
       // Theirs, or nothing. A DecisionPoint carries that seat's legal
       // options, and another seat's options say what is in their hand.
       decision: dp && dp.seat === seat ? dp : null,
+      // …but WHO is being asked is public, exactly as it is at a real
+      // table. This is the whole of the fix for an off-turn peer drawing
+      // "Game over" (see SyncMsg.deciding).
+      deciding: dp?.seat ?? null,
+      notices: this.transport.notices(),
+      botNames: this.transport.botNames(),
     });
   }
 

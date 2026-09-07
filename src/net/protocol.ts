@@ -176,6 +176,32 @@ export interface SyncMsg {
   type: "sync";
   state: GameState;
   decision: DecisionPoint | null;
+  /**
+   * WHOSE decision it is, when it is not this peer's.
+   *
+   * The options are withheld — they say what is in somebody's hand — but
+   * the NAME is public: everyone at a real table can see who is being
+   * waited on. Without it an off-turn peer had `decision: null` and
+   * nothing to tell it apart from a finished game, which is exactly what
+   * it drew (owner report: "it says Game over on other players' turns").
+   * Null when the game really is over.
+   */
+  deciding?: SeatId | null;
+  /**
+   * Log lines that are not engine events — a seat changing hands, say.
+   * Sent whole rather than as a delta: a game produces a handful, and a
+   * reconnecting peer needs the ones it missed.
+   */
+  notices?: string[];
+  /**
+   * Seat id → what to CALL it, when a bot has taken it over ("Bea Bot").
+   *
+   * DISPLAY ONLY: the seat id in `state` is untouched, because it is the
+   * engine's identifier and every option id is written in terms of it.
+   * Sent whole on every sync rather than as an event, for the same reason
+   * the state is — a reconnecting peer then needs no catch-up.
+   */
+  botNames?: Record<string, string>;
 }
 
 /** The answer to one `choose`. `error` means the host refused it. */

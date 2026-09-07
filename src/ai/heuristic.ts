@@ -83,6 +83,31 @@ export interface Weights {
    * claimed as an improvement.
    */
   influenceCapacity: number;
+  /**
+   * Per card in hand this vampire could actually play — and **ZERO, as a
+   * MEASURED NEGATIVE RESULT.** Do not raise it without reading this.
+   *
+   * The idea is obvious and wrong: a vampire whose Disciplines unlock six
+   * cards you are holding looks worth more than one that unlocks none.
+   * The engine reports the count (`LegalOption.playableCards`), the
+   * candidates really do differ on it in **28.1%** of the influence
+   * choices with more than one candidate, and at a weight of 0.5 it
+   * changes **9.0%** of those decisions — so it is live, not inert.
+   *
+   * It just does not help, and at strength it HURTS: weight 2 is
+   * **−0.177 VP on Hecata** (margin ±0.110), with the other three decks
+   * neutral. A behavioural probe says exactly why — the first vampire
+   * reaches play at turn **6.46 instead of 5.08**, because preferring a
+   * *better* vampire diverts counters from *finishing* a nearly-done one.
+   * That works directly against the one change that has produced a large
+   * measured win (bodies out fast, turn 8 → 3), and getting a body onto
+   * the table beats getting the right body onto it.
+   *
+   * Kept at 0, with the option field left in place, so the experiment is
+   * one flag away and nobody re-derives a dead end
+   * (docs/richer-options-design.md §7).
+   */
+  influenceUnlocks: number;
   cryptDraw: number;
   influenceOut: number;
   /** Rescuing and diablerising are situational but usually good. */
@@ -175,6 +200,8 @@ export const DEFAULT_WEIGHTS: Weights = {
   influenceTransfer: 6,
   influenceProgress: 6,
   influenceCapacity: 0.1,
+  // ZERO by measurement, not by omission — see the Weights comment.
+  influenceUnlocks: 0,
   cryptDraw: 3,
   /**
    * Left at 12, and MEASURED rather than assumed.
@@ -355,7 +382,10 @@ export class HeuristicAgent implements Agent {
   }
 
   /** The whole policy. One score per option; no side effects. */
-  private score(o: LegalOption, dp: DecisionPoint, view: PlayerView): number {
+  /** PUBLIC so a search agent can blend this opinion with a lookahead and
+   *  use it to order candidates (docs/ai-v2-design.md §4). Reading a score
+   *  changes nothing, so exposing it costs no invariant. */
+  score(o: LegalOption, dp: DecisionPoint, view: PlayerView): number {
     const w = this.w;
     const me = view.you;
     const prey = preyOf(view, me);
@@ -497,7 +527,18 @@ export class HeuristicAgent implements Agent {
     if (!entry?.card) return w.influenceTransfer;
     const capacity = entry.card.capacity;
     const remaining = Math.max(1, capacity - entry.counters);
-    return w.influenceTransfer + w.influenceProgress / remaining + w.influenceCapacity * capacity;
+    // WHICH vampire unlocks the hand you are actually holding. A card's
+    // requirements live in the handler registry, which this policy has no
+    // access to and should not — so the engine counts them and says
+    // (docs/richer-options-design.md §7). Absent on an old fixture's
+    // option, which then scores exactly as it did before.
+    const unlocks = o.playableCards ?? 0;
+    return (
+      w.influenceTransfer +
+      w.influenceProgress / remaining +
+      w.influenceCapacity * capacity +
+      w.influenceUnlocks * unlocks
+    );
   }
 
   private scoreAction(
@@ -524,6 +565,12 @@ export class HeuristicAgent implements Agent {
         // A bleed the target can absorb forever is still progress; a
         // bleed that can OUST them is the whole game.
         const target = prey ? seatOf(view, prey) : null;
+        // NOTE: between "ousts them" and "does not" there is nothing — a
+        // bleed at a prey on 4 scores exactly like one at a prey on 25.
+        // A pressure GRADIENT was built here and measured: it flips 0 of
+        // 7361 decisions even at 5x strength, because the prey's pool is
+        // the same for every bleed option in a decision and so cannot
+        // change an argmax (docs/richer-options-design.md §8).
         const lethal = target && amount >= target.pool ? 25 : 0;
         return w.bleedPrey + amount * w.bleedPerPoint + lethal;
       }
@@ -623,6 +670,12 @@ export class HeuristicAgent implements Agent {
     // what the combat costs.
     const myPool = seatOf(view, me)?.pool ?? 0;
     if (bleedAtMe >= myPool) score += 50;
+    // Below that cliff there is NO gradient, and that was measured rather
+    // than overlooked: a term scaling with "this bleed as a fraction of
+    // the pool I have left" flips 0 of 7361 decisions even at 5x
+    // strength, because it is identical for every blocker in the
+    // decision and blocking already beats passing whenever it is legal
+    // (docs/richer-options-design.md §8).
 
     // Blocking with someone who will be flattened is usually a mistake —
     // unless the bleed is lethal, which the bonus above outweighs.

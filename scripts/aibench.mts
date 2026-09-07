@@ -17,6 +17,7 @@
  */
 
 import { formatMatch, runMatch, type PolicySpec } from "../src/ai/bench.ts";
+import { DEFAULT_SEARCH_WEIGHTS, SearchAgent, type SearchWeights } from "../src/ai/search.ts";
 import { DEFAULT_WEIGHTS, HeuristicAgent, type Weights } from "../src/ai/heuristic.ts";
 import { buildHandlerRegistry } from "../src/cards/effects/cards.ts";
 import { preconDeck, supportedPrecons } from "../src/ui/deckimport.ts";
@@ -71,6 +72,25 @@ function parseWeights(spec: string): Partial<Weights> {
   return out;
 }
 
+/** `--search lookahead=1,pool=4` → the search agent's value weights. A
+ *  bare `--search 1` means "defaults", which is the common case. */
+function parseSearchWeights(spec: string): Partial<SearchWeights> {
+  const out: Partial<SearchWeights> = {};
+  if (spec === "" || spec === "1" || spec === "on") return out;
+  for (const pair of spec.split(",")) {
+    const [k, v] = pair.split("=");
+    if (!k || v === undefined) throw new Error(`bad --search entry: "${pair}"`);
+    if (!(k in DEFAULT_SEARCH_WEIGHTS)) {
+      const known = Object.keys(DEFAULT_SEARCH_WEIGHTS).join(", ");
+      throw new Error(`unknown search weight "${k}"; known: ${known}`);
+    }
+    const n = Number(v);
+    if (!Number.isFinite(n)) throw new Error(`search weight "${k}" is not a number: "${v}"`);
+    (out as Record<string, number>)[k] = n;
+  }
+  return out;
+}
+
 function main(): void {
   const deals = num("deals", 40);
   const seed = num("seed", 1);
@@ -112,12 +132,27 @@ function main(): void {
   // DEFAULT better than the old one", which needs the baseline turned
   // back rather than the challenger turned forward.
   const againstSpec = str("against");
-  const challenger: PolicySpec = weightSpec
+  // `--search` puts the LOOKAHEAD agent in the challenger seat. It is much
+  // slower per decision than a policy (it plays every candidate move), so
+  // expect to want fewer `--deals` and a wider margin.
+  const searchSpec = str("search");
+  const challenger: PolicySpec = searchSpec
     ? {
-        name: "challenger",
-        make: (s) => new HeuristicAgent({ seed: s, weights: parseWeights(weightSpec) }),
+        name: `search(${searchSpec})`,
+        make: (s) =>
+          new SearchAgent({
+            registry: buildHandlerRegistry(),
+            seed: s,
+            weights: parseSearchWeights(searchSpec),
+            ...(weightSpec ? { policyWeights: parseWeights(weightSpec) } : {}),
+          }),
       }
-    : { name: "current default", make: (s) => new HeuristicAgent({ seed: s }) };
+    : weightSpec
+      ? {
+          name: "challenger",
+          make: (s) => new HeuristicAgent({ seed: s, weights: parseWeights(weightSpec) }),
+        }
+      : { name: "current default", make: (s) => new HeuristicAgent({ seed: s }) };
   const baseline: PolicySpec = againstSpec
     ? {
         name: "against",
@@ -132,9 +167,12 @@ function main(): void {
       // challenger was left at its default, which was wrong the moment
       // `--against` existed — and a run labelled as its own opposite is
       // exactly the sort of thing that poisons a reading weeks later.
-      (weightSpec ? `\nchallenger: ${weightSpec}` : "") +
+      (searchSpec ? `\nchallenger: SEARCH agent (${searchSpec})` : "") +
+      (weightSpec ? `\nchallenger weights: ${weightSpec}` : "") +
       (againstSpec ? `\nagainst:    ${againstSpec}` : "") +
-      (weightSpec || againstSpec ? "" : `\nCONTROL RUN: both sides are the default policy`),
+      (weightSpec || againstSpec || searchSpec
+        ? ""
+        : `\nCONTROL RUN: both sides are the default policy`),
   );
 
   const started = Date.now();

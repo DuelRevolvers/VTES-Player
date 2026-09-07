@@ -115,6 +115,13 @@ the wraith/zombie gate (2026-09-02) and the token-vampire gate
 unsupported is four Path cards, and Paths are out of scope by the scope
 lock rather than by a per-card decision, so they live under Blocked below.
 
+> **Superseded the same day (2026-09-03).** The sentence above was true
+> for a few hours and is kept only so the correction is legible: the four
+> Path cards were built, because a Path is a PRINTED CRYPT TRAIT that all
+> 48 Sabbat V5 vampires already carry — the scope lock never needed
+> breaking (`docs/path-cards-design.md` §0). **Nothing in the library is
+> cut or blocked.**
+
 **Two more left it on 2026-09-02** (`docs/last-buildable-design.md`): **Deep
 Song** superior and **Revolutionary Council** shipped. Deep Song's row said
 "it INVERTS combat roles" — the inversion is the two arguments to

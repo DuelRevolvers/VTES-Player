@@ -85,8 +85,30 @@ export class PeerTransport implements GameTransport {
     return this.goodbye;
   }
 
+  /** Whose decision it is, when it is not ours. The host sends the NAME
+   *  without the options — see SyncMsg.deciding. */
+  private deciding: string | null = null;
+  /** Log lines the host sent that are not engine events. */
+  private uiNotices: string[] = [];
+
   decision(): DecisionPoint | null {
     return this.dp;
+  }
+
+  decidingSeat(): string | null {
+    return this.deciding;
+  }
+
+  notices(): string[] {
+    return [...this.uiNotices];
+  }
+
+  /** Seat id → what to call it, when a bot has taken it over. Display
+   *  only: the ids in `view()` are untouched. */
+  private labels: Record<string, string> = {};
+
+  botNames(): Record<string, string> {
+    return { ...this.labels };
   }
 
   /**
@@ -148,6 +170,9 @@ export class PeerTransport implements GameTransport {
       case "sync":
         this.state = msg.state;
         this.dp = msg.decision;
+        this.deciding = msg.deciding ?? null;
+        this.uiNotices = msg.notices ?? [];
+        this.labels = msg.botNames ?? {};
         this.emit();
         return;
       case "ack": {

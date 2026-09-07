@@ -60,6 +60,19 @@ export const AI_SPEEDS: { ms: number; label: string }[] = [
   { ms: 3000, label: "Very slow" },
 ];
 
+/**
+ * The beat between the deal and the first bot move (owner request
+ * 2026-09-07: "give it a few seconds before the bots start their first
+ * plays … it appears as though the game starts with the first bots
+ * already having done their turns").
+ *
+ * NOT a setting — it happens once, at the start of a game, and a control
+ * for it would be a control almost nobody would ever find a reason to
+ * touch. The per-move rhythm IS a setting, and it is a separate one:
+ * `aiDelayMs`, above.
+ */
+export const OPENING_DELAY_MS = 2500;
+
 export const DEFAULT_SETTINGS: UiSettings = {
   autoPass: {},
   aiSeats: {},

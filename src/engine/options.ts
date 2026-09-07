@@ -280,7 +280,28 @@ export type LegalOption =
    *  after a blocked leave-torpor (p. 24). */
   | { id: string; kind: "diablerizeOffer"; label: string }
   // Influence phase (p. 35–36).
-  | { id: string; kind: "transferToVampire"; label: string; minion: MinionId }
+  | {
+      id: string;
+      kind: "transferToVampire";
+      label: string;
+      minion: MinionId;
+      /**
+       * How many cards in this Methuselah's HAND this vampire could
+       * actually play — its Disciplines, clan, sect, title and capacity
+       * against every card's requirements
+       * (docs/richer-options-design.md §7).
+       *
+       * Influence is the single largest class of real choice in a game
+       * (39.6%), and the policy could not ask this: a card's requirements
+       * live in the handler registry, which an agent has no access to and
+       * should not — re-deriving them would be a second model of the pool.
+       * The engine already answers it centrally with `modesPlayableBy`.
+       *
+       * Measured: the candidates differ on this in 28.1% of the influence
+       * choices that have more than one candidate.
+       */
+      playableCards?: number;
+    }
   | { id: string; kind: "transferToPool"; label: string; minion: MinionId }
   | { id: string; kind: "cryptDraw"; label: string }
   | { id: string; kind: "influenceOut"; label: string; minion: MinionId };

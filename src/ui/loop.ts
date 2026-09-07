@@ -13,7 +13,7 @@
  * the far side of the seam.
  */
 
-import type { LegalOption } from "../engine/index.ts";
+import type { DecisionPoint, LegalOption } from "../engine/index.ts";
 import type { DeckDef, GameSetup } from "./decks.ts";
 import { validateDecks } from "./decks.ts";
 import { cardText } from "./cardinfo.ts";
@@ -21,7 +21,7 @@ import { chatProblem, onChat } from "./chat.ts";
 import { DevServerSink, GameLog } from "./gamelog.ts";
 import { downloadSave, loadFromStorage, readSaveFile, saveToStorage } from "./history.ts";
 import { DEFAULT_CHAT_COLOR } from "./profile.ts";
-import type { ModerationView, SeatFace } from "./render.ts";
+import type { FinishedView, ModerationView, SeatFace } from "./render.ts";
 import { actionsByTableCard, orderHand, playsByCard, render } from "./render.ts";
 import type { UiSettings } from "./settings.ts";
 import { HeuristicAgent } from "../ai/heuristic.ts";
@@ -37,8 +37,32 @@ import { LocalTransport } from "./transport.ts";
  * game without it.
  */
 export interface TableIdentity {
-  /** Seat id → the face on their mat. */
-  faces?: Record<string, SeatFace>;
+  /**
+   * Seat id → the face on their mat.
+   *
+   * ASKED FOR ON EVERY REPAINT, not handed over once. A seat changes
+   * hands mid-game — somebody is kicked, or leaves, and a bot takes over
+   * — and the label on the mat has to change with it; a snapshot taken
+   * when the table opened could not, which is why a kicked player's mat
+   * never gained its "Bot" suffix.
+   */
+  faces?: () => Record<string, SeatFace>;
+  /**
+   * The seats a REMOTE player is sitting in, from the host's side.
+   *
+   * The host runs the engine, so it holds the real DecisionPoint for
+   * every seat including theirs — and drew live buttons for it, which
+   * let the host play other people's turns (owner report). Absent for a
+   * guest and for a private table, where there is nobody else here.
+   */
+  remoteSeats?: () => string[];
+  /**
+   * The game is over and the player has answered the leaderboard prompt.
+   * `save` is their answer; either way the caller takes the screen back.
+   * Absent for a table with no shell behind it (the playtest snapshot),
+   * where there is nowhere to go and nothing to record.
+   */
+  onFinished?: (save: boolean) => void;
   /** The seat the person at this client holds, if exactly one. */
   localSeat?: string | null;
   /** Called when they leave the game, if there is anywhere to go back to. */
@@ -66,6 +90,10 @@ export interface TableIdentity {
   chatColor?: () => string;
   setChatColor?: (color: string) => void;
 }
+
+/** The decision on the table, or none. Named because `waitingFor` reads
+ *  better with it than with the union spelled out. */
+type LegalDecision = DecisionPoint | null;
 
 const escapeText = (s: string): string =>
   s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
@@ -116,7 +144,13 @@ export class DebugApp {
       // One human here means the view is masked to THEM, not to whoever is
       // being asked — so their hand stays readable while a bot thinks.
       this.transport.setLocalSeat(this.table.localSeat ?? null);
-      // Before the agents are attached, so the first AI move is already paced.
+      // Hotseat and the playtest snapshot build their transport without a
+      // delay, so this is where those get one. The SHELL sets it on the
+      // transport it constructs instead: it attaches the bots before it
+      // ever builds this table, so by the time we got here the opening
+      // round had already been played at zero delay (owner report
+      // 2026-09-07). Setting it twice is harmless — same value, and the
+      // opening beat is latched until its timer fires.
       this.transport.setAiDelay(this.settings.aiDelayMs);
       for (const [seat, on] of Object.entries(this.settings.autoPass)) {
         if (on) this.transport.setAutoPass(seat, true);
@@ -158,6 +192,56 @@ export class DebugApp {
     }
   }
 
+  /**
+   * Whose decision it is when this client may not answer it.
+   *
+   * Two ways that happens, and they are the same statement:
+   *
+   *  - A PEER is sent no DecisionPoint unless the decision is theirs, so
+   *    `dp` is null through everybody else's turn. The host now names the
+   *    seat in the sync, and without that the bar read "Game over".
+   *  - The HOST holds the real decision for every seat, because it runs
+   *    the engine. A seat a remote player is sitting in is not the host's
+   *    to answer, however live the option list looks.
+   *
+   * A bot's seat is NOT here: it is nobody's to answer, and the existing
+   * `thinking` pause already covers it.
+   */
+  private waitingFor(dp: LegalDecision): string | null {
+    if (dp) {
+      const remote = this.table.remoteSeats?.() ?? [];
+      return remote.includes(dp.seat) ? dp.seat : null;
+    }
+    // No decision here. Either the game is over — and then the transport
+    // names nobody — or it is somebody else's and we were not told the
+    // options, only the name.
+    return this.transport.decidingSeat?.() ?? null;
+  }
+
+  /**
+   * The finished game, or null while it runs.
+   *
+   * `GameEnded` rather than "no decision pending": a peer between syncs
+   * also has no decision, and the two must not look alike — that is the
+   * whole of the bug this replaces.
+   */
+  private finished(): FinishedView | null {
+    if (!this.table.onFinished || this.dismissedEnding) return null;
+    const state = this.transport.view();
+    const ended = [...state.eventLog].reverse().find((e) => e.type === "GameEnded");
+    if (!ended || ended.type !== "GameEnded") return null;
+    return {
+      winner: ended.winner,
+      standings: [...state.seats]
+        .map((s) => ({ seat: s.id, victoryPoints: s.victoryPoints, ousted: s.ousted }))
+        .sort((a, b) => b.victoryPoints - a.victoryPoints || a.seat.localeCompare(b.seat)),
+    };
+  }
+
+  /** Answered once. Guards against a late repaint re-opening the prompt
+   *  between the answer and the shell taking the screen back. */
+  private dismissedEnding = false;
+
   private repaint(): void {
     const dp = this.transport.decision();
     this.root.innerHTML = render({
@@ -182,12 +266,15 @@ export class DebugApp {
           ? this.transport.agentSeats
           : this.settings.aiSeats,
       thinking: this.isThinking(),
+      waitingFor: this.waitingFor(dp),
+      notices: this.transport.notices?.() ?? [],
+      finished: this.finished(),
       aiDelayMs:
         this.transport instanceof LocalTransport
           ? this.transport.aiDelay
           : this.settings.aiDelayMs,
       cardTextPx: this.settings.cardTextPx,
-      seatFaces: this.table.faces ?? {},
+      seatFaces: this.table.faces?.() ?? {},
       localSeat: this.table.localSeat ?? null,
       ashOpen: this.ashOpen,
       canLeave: this.table.onLeave !== undefined,
@@ -241,15 +328,33 @@ export class DebugApp {
       if (!target || !p || this.holding) return;
       const img = p.querySelector("img");
       const text = p.querySelector<HTMLDivElement>(".zoomtext");
+      const name = p.querySelector<HTMLDivElement>(".zoomname");
       if (!img || !text) return;
       img.src = target.dataset["zoom"] ?? "";
       text.textContent = cardText(target.alt) ?? "";
+      // THE NAME FADES (owner request). It answers "what is this?" in the
+      // first second and is clutter after that — the scan underneath says
+      // the same thing permanently. Removing and re-adding the class
+      // restarts the CSS animation, which is what makes it fade again for
+      // the NEXT card rather than only for the first one hovered; the
+      // reflow read between the two is what forces that restart.
+      if (name && name.textContent !== target.alt) {
+        name.textContent = target.alt;
+        name.classList.remove("fading");
+        void name.offsetWidth;
+        name.classList.add("fading");
+      }
       p.hidden = false;
     });
     this.root.addEventListener("mouseout", (ev) => {
       const target = (ev.target as HTMLElement).closest("img[data-zoom]");
       const p = panel();
-      if (target && p) p.hidden = true;
+      if (!target || !p) return;
+      p.hidden = true;
+      // Forget which card it was, so coming BACK to the same one shows
+      // its name again rather than a label that has already faded.
+      const name = p.querySelector<HTMLDivElement>(".zoomname");
+      if (name) name.textContent = "";
     });
     // Follow the pointer, but keep the panel on screen.
     this.root.addEventListener("mousemove", (ev) => {
@@ -557,6 +662,17 @@ export class DebugApp {
       this.paint();
     };
     on("#chatsend", () => sayIt());
+
+    // THE END OF THE GAME, answered once. Both answers leave the table —
+    // there is nothing left to do at a finished one — and the difference
+    // is only whether it goes on this device's leaderboard.
+    const finish = (save: boolean): void => {
+      if (this.dismissedEnding) return;
+      this.dismissedEnding = true;
+      this.table.onFinished?.(save);
+    };
+    on("#over-save", () => finish(true));
+    on("#over-discard", () => finish(false));
 
     // Moderation — host only, and the buttons only exist there.
     on("#mod-btn", () => {

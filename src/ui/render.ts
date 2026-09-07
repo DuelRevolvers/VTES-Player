@@ -70,6 +70,13 @@ const esc = (s: string): string =>
  * than an empty box.
  *
  * `data-zoom` marks it for the hover magnifier.
+ *
+ * NO `title` ATTRIBUTE. The browser's own tooltip is the card name, and it
+ * sits over the table for as long as the pointer rests there — which on a
+ * board made entirely of cards means a name permanently in the way (owner
+ * request: it should fade away after a few seconds). The name is drawn by
+ * the magnifier instead, where it can be told to go (see `.zoomname`), and
+ * `alt` still carries it for a failed scan and for a screen reader.
  */
 function cardImage(name: string, cls: string, locked = false): string {
   // A card this viewer may not see renders as a card BACK, the way it sits
@@ -86,7 +93,7 @@ function cardImage(name: string, cls: string, locked = false): string {
   if (!src) return `<div class="scanwrap ${cls} ${locked ? "locked" : ""}">${fallback}</div>`;
   return `<div class="scanwrap ${cls} ${locked ? "locked" : ""}">
     ${fallback}
-    <img class="scan" src="${esc(src)}" alt="${label}" title="${label}"
+    <img class="scan" src="${esc(src)}" alt="${label}"
          loading="lazy" data-zoom="${esc(src)}"
          onerror="this.classList.add('failed')" />
   </div>`;
@@ -589,7 +596,25 @@ function decisionBar(
   dp: DecisionPoint | null,
   thinking: boolean,
   onTable: Set<LegalOption>,
+  waitingFor: string | null,
 ): string {
+  // SOMEBODY ELSE IS BEING ASKED, and this client may not answer for them.
+  //
+  // Two cases, one bar. A peer is sent no DecisionPoint at all when the
+  // decision is not theirs, so `dp` is null and the bar used to read "Game
+  // over" through every one of another player's turns (owner report). The
+  // host has the real `dp` for every seat — it runs the engine — and was
+  // therefore drawing live buttons for seats a remote player was sitting
+  // in, and could press them (owner report). Both are the same statement:
+  // this is not your decision, here is who it belongs to.
+  if (waitingFor) {
+    return `
+      <div class="decision thinking">
+        <span class="tdots"><i></i><i></i><i></i></span>
+        <b>${esc(waitingFor)}</b> is deciding…
+        ${dp ? `<span class="dim">${esc(dp.window)}</span>` : ""}
+      </div>`;
+  }
   if (!dp) {
     return `<div class="decision over"><b>Game over</b> — no decision pending.</div>`;
   }
@@ -813,8 +838,14 @@ function handStrip(
         auto-pass report, where a feature that cannot be discovered is
         indistinguishable from one that is absent.
       -->
-      <span class="hlabel">${esc(seat.id)}'s hand
-        <span class="dim">${mine ? "— drag to sort" : "— drag to sort (not your decision)"}</span></span>
+      <!--
+        The hint sits UNDER the name rather than beside it, and without
+        the em dash (owner request): the label is two lines of different
+        weight, not one sentence, and next to the name it pushed the first
+        card along.
+      -->
+      <span class="hlabel"><span class="hname">${esc(seat.id)}'s hand</span>
+        <span class="dim hhint">${mine ? "drag to sort" : "drag to sort (not your decision)"}</span></span>
       ${hand.map(card).join("")}
       ${hand.length === 0 ? `<span class="dim">empty</span>` : ""}
     </div>`;
@@ -1218,6 +1249,22 @@ export interface RenderInput {
    *  decision on the table belongs to that AI, so nothing on screen may
    *  offer to answer it (docs/debug-ui-design.md §10). */
   thinking: boolean;
+  /**
+   * A seat this client may NOT answer for is being asked — a remote
+   * player's seat on the host's screen, or anybody else's seat on a
+   * peer's. Null when the decision (if there is one) is ours to make.
+   * Suppresses every button, exactly as `thinking` does.
+   */
+  waitingFor: string | null;
+  /** Log lines that are not engine events (a seat changing hands). Drawn
+   *  under the event log, which is where players look for them. */
+  notices: string[];
+  /**
+   * The finished game, when it is over and this client has somewhere to
+   * go afterwards — the leaderboard prompt. Null while the game runs, and
+   * on a table with no shell behind it (the playtest snapshot).
+   */
+  finished: FinishedView | null;
   /** The pause after each visible AI move, in ms — the Settings control. */
   aiDelayMs: number;
   /** Point size for the rules text under a magnified card. */
@@ -1255,9 +1302,10 @@ export interface RenderInput {
 export function render(input: RenderInput): string {
   const { state, dp } = input;
 
-  // While an AI's move is paced, the decision on the table is THEIRS —
+  // While an AI's move is paced — or while the seat being asked belongs to
+  // somebody else entirely — the decision on the table is THEIRS, and
   // nothing on screen may offer to answer it, the table included.
-  const ctx: TableCtx | null = input.thinking
+  const ctx: TableCtx | null = input.thinking || input.waitingFor
     ? null
     : {
         actions: actionsByTableCard(dp, state),
@@ -1338,10 +1386,10 @@ export function render(input: RenderInput): string {
             dp,
             input.selectedCard,
             input.handOrder,
-            input.thinking,
+            input.thinking || input.waitingFor !== null,
             input.localSeat,
           )}
-          ${decisionBar(dp, input.thinking, onTable)}
+          ${decisionBar(dp, input.thinking, onTable, input.waitingFor)}
         </div>
       </div>
       <aside class="side">
@@ -1353,7 +1401,17 @@ export function render(input: RenderInput): string {
         </div>
         <div class="panel log">
           <h3>Game log <input id="evfilter" placeholder="filter…" value="${esc(input.eventFilter)}" /></h3>
-          <div class="events" id="events">${events}</div>
+          <!--
+            NOTICES ARE LOG LINES, not chat. A seat changing hands is not
+            an engine event — nothing in the game changed — but it changes
+            who is answering, so it belongs where the players are already
+            reading rather than in a conversation that scrolls away
+            (owner request). They sit at the end, which is where the log
+            is scrolled to.
+          -->
+          <div class="events" id="events">${events}${input.notices
+            .map((n) => `<div class="ev notice">${esc(n)}</div>`)
+            .join("")}</div>
         </div>
         ${input.canChat ? chatPanel(input.chatColor, input.chatSettingsOpen, input.emojiOpen) : ""}
       </aside>
@@ -1363,8 +1421,13 @@ export function render(input: RenderInput): string {
     ${helpPanel(input)}
     ${ashPanel(state, input.ashOpen)}
     <div id="zoom" class="zoom" hidden style="--cardtext:${input.cardTextPx}px">
+      <!-- The card's name, which FADES (owner request): it is what you
+           need in the first second of a hover and clutter after that. The
+           scan below it says the same thing permanently. -->
+      <div class="zoomname"></div>
       <img alt="" /><div class="zoomtext"></div>
     </div>
+    ${gameOverDialog(input)}
   `;
 }
 
@@ -1376,6 +1439,64 @@ export function render(input: RenderInput): string {
  * off the side of the screen. Two rows means half the seats each, capped
  * at three across so a mat never gets too narrow to read.
  */
+/**
+ * The finished game, as the end-of-game prompt needs it.
+ *
+ * Built by the table from the state it already has, so a peer and the
+ * host draw the same dialog from their own copy of the result rather than
+ * one of them being told.
+ */
+export interface FinishedView {
+  /** The seat that won, or null for a draw (the engine's turn cap). */
+  winner: string | null;
+  /** Every seat, best first, for the final tally. */
+  standings: Array<{ seat: string; victoryPoints: number; ousted: boolean }>;
+}
+
+/**
+ * "The game is over — keep it?" (owner request.)
+ *
+ * ONE DIALOG, BOTH ANSWERS LEAVE. Saving is the only choice on offer: the
+ * leaderboard is per device (docs/shell-design.md §6), so this is the one
+ * moment the person at this screen decides whether this game counts, and
+ * either way there is nothing left to do at a finished table. It is modal
+ * because a table nobody can act on that still looks playable is the
+ * worse of the two failures.
+ */
+function gameOverDialog(input: RenderInput): string {
+  const f = input.finished;
+  if (!f) return "";
+  const rows = f.standings
+    .map(
+      (s) => `<tr class="${s.seat === f.winner ? "won" : ""}">
+        <td>${esc(s.seat)}</td>
+        <td>${s.victoryPoints} VP</td>
+        <td class="dim">${s.ousted ? "ousted" : ""}</td>
+      </tr>`,
+    )
+    .join("");
+  return `
+    <div class="scrim" id="over-scrim"></div>
+    <div class="modal overmodal" role="dialog" aria-label="The game is over">
+      <div class="modalcard">
+        <h2>${f.winner ? `${esc(f.winner)} wins` : "A draw"}</h2>
+        <table class="lbtable">
+          <thead><tr><th>Player</th><th>VP</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <p class="note">
+          Add this game to your leaderboard? It is kept
+          <b>in this browser only</b> — there is no server to share it
+          with. Either way, this takes you back to the main menu.
+        </p>
+        <div class="row">
+          <button id="over-save" class="primary">Save to my leaderboard</button>
+          <button id="over-discard">Don't save</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 export function seatColumns(seats: number): number {
   return Math.max(1, Math.min(3, Math.ceil(seats / 2)));
 }

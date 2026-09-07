@@ -498,3 +498,95 @@ describe("LocalTransport AI pacing", () => {
     expect(t.view().commandLog).toHaveLength(after);
   });
 });
+
+/**
+ * THE OPENING BEAT (owner report 2026-09-07: "when a game starts and there
+ * are bots before a player, give it a few seconds before the bots start
+ * their first plays … it appears as though the game starts with the first
+ * bots already having done their turns").
+ *
+ * The per-move pacing was never broken. What was missing was a pause
+ * before the FIRST move — and, underneath that, the fact that the shell
+ * attaches its bots before anything sets a delay, so the whole opening
+ * round was answered at zero pacing before the table was ever drawn.
+ */
+describe("the pause before the first bot move", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const bot = (seed: number): HeuristicAgent => new HeuristicAgent({ seed });
+
+  /** Which seat leads, so a test can put a bot in front of the human. */
+  const first = (): string => new LocalTransport({ setup }).decision()!.seat;
+
+  it("holds before anything moves, and plays on when the beat is up", () => {
+    const lead = first();
+    const t = new LocalTransport({
+      setup,
+      agents: { [lead]: bot(11) },
+      openingDelayMs: 2500,
+    });
+    // Nothing has happened yet: the table is exactly as it was dealt.
+    expect(t.isThinking).toBe(true);
+    expect(t.view().commandLog).toHaveLength(0);
+    expect(t.decision()!.seat).toBe(lead);
+
+    // Not yet…
+    vi.advanceTimersByTime(2000);
+    expect(t.isThinking).toBe(true);
+    // …and now.
+    vi.advanceTimersByTime(600);
+    expect(t.isThinking).toBe(false);
+  });
+
+  it("is not owed when the game opens on a human — nobody is kept waiting", () => {
+    // The negative control. A hold that fires whether or not a bot is
+    // about to move is a two-and-a-half second freeze on every game, and
+    // it would look identical in a screenshot of the test above.
+    const t = new LocalTransport({ setup, agents: {}, openingDelayMs: 2500 });
+    expect(t.isThinking).toBe(false);
+    expect(t.decision()).not.toBeNull();
+  });
+
+  it("costs nothing when it is not asked for", () => {
+    // The fuzz, the batch harness and every other test finish thousands
+    // of games and must never wait — so the default is no beat at all.
+    const lead = first();
+    const t = new LocalTransport({ setup, agents: { [lead]: bot(11) } });
+    expect(t.isThinking).toBe(false);
+  });
+
+  it("SURVIVES the bots being attached one at a time", () => {
+    // The bug underneath the bug. `setAgent` calls `stepAutomatic`, which
+    // cancels any pending pump — and the shell attaches every bot in a
+    // row. Arming the hold on the first and then treating it as spent
+    // would let the second cancel it and step straight through, which is
+    // exactly the "bots already had their turns" the owner saw.
+    const lead = first();
+    const t = new LocalTransport({ setup, openingDelayMs: 2500 });
+    t.setAgent(lead, bot(11));
+    for (const seat of t.view().seats.map((s) => s.id)) {
+      if (seat !== lead) t.setAgent(seat, bot(seat.length));
+    }
+    expect(t.isThinking).toBe(true);
+    expect(t.view().commandLog).toHaveLength(0);
+    vi.advanceTimersByTime(2600);
+    expect(t.isThinking).toBe(false);
+  });
+
+  it("is owed ONCE, not before every move", () => {
+    // Otherwise it is not an opening beat, it is a very slow game.
+    const lead = first();
+    const t = new LocalTransport({
+      setup,
+      agents: { [lead]: bot(11) },
+      aiDelayMs: 100,
+      openingDelayMs: 2500,
+    });
+    vi.advanceTimersByTime(2600);
+    // From here on the rhythm is the ordinary one. If the opening beat
+    // were re-armed, 100ms would never be enough to advance anything.
+    for (let i = 0; i < 40 && t.isThinking; i++) vi.advanceTimersByTime(100);
+    expect(t.isThinking).toBe(false);
+  });
+});

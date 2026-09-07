@@ -448,3 +448,209 @@ the profile that named the item.
 The profile counts DECISIONS; it cannot see which of them were already
 being got right. Frequency picks the place to look, and only reading tells
 you whether there is anything there.
+
+---
+
+# 7. Which vampire to influence — a MEASURED NEGATIVE RESULT (2026-09-06)
+
+Influence is the largest class of real choice in a game — **39.6%** — and
+the one large behavioural win so far came from it (`influenceProgress`:
+first vampire in play at turn 8 → 3). The queue's next item was the
+obvious extension: the policy still ignores **which** vampire it is
+bringing out, in particular whether that vampire can play the cards
+actually in hand.
+
+**It does not work, it is worse at strength, and the reason is
+instructive.** This entry exists so that nobody builds it again.
+
+## The signal is real
+
+A card's requirements live in the handler registry, which an agent has no
+access to and should not — re-deriving them would be a second model of the
+pool, the thing §5 refused. So the engine counts them:
+`LegalOption.transferToVampire.playableCards`, from `modesPlayableBy`, the
+central query that already answers "could this minion play this card".
+
+Measured over 32 games on four precons:
+
+- 3196 influence decisions offered a transfer; **2348 had more than one
+  candidate**;
+- the candidates **differ** on playable-hand-cards in **660 of them
+  (28.1%)**, mean spread 0.45 cards, 1–3 when they differ at all;
+- weighting it at 0.5 **changes 9.0%** of those decisions (212), rising to
+  27% at weight 2 and saturating near 31.5%.
+
+So this is not an inert knob like `huntFutile` (§6). It is live, it moves
+real decisions, and the information is genuine.
+
+## It still does not help — and at strength it hurts
+
+Four mirror matches of 800 games, weighted against unweighted:
+
+| deck | weight 0.5 | weight 2 |
+| --- | --- | --- |
+| Hecata | +0.004 | **−0.177** (±0.110) |
+| Toreador | −0.040 | −0.060 |
+| Brujah | −0.060 | −0.074 |
+| Nosferatu | +0.052 | +0.020 |
+
+At 0.5 it is neutral everywhere; at 2 it is **measurably worse on the deck
+where influence matters most**, and negative-leaning on two others. Turning
+the weight up makes it worse, which is the shape of a criterion that is
+actively wrong rather than merely weak.
+
+## Why, measured rather than guessed
+
+A behavioural probe on Hecata, 24 games, weight 0 versus weight 2:
+
+| | first vampire in play | minions per seat at turn 10 |
+| --- | --- | --- |
+| weight 0 | turn **5.08** | 0.79 |
+| weight 2 | turn **6.46** | 0.73 |
+
+**Preferring a better vampire diverts counters from FINISHING a
+nearly-done one**, and a vampire that is half-influenced does nothing at
+all. That is precisely the mechanism `influenceProgress` was built to
+exploit, and this pulls against it. **Getting a body onto the table beats
+getting the right body onto it** — by more than a whole turn, in a game
+where the early turns decide who is bleeding whom.
+
+## What ships
+
+`influenceUnlocks` stays in the weights at **0**, and `playableCards`
+stays on the option. The field is currently **unconsumed by the policy**,
+which is worth stating plainly rather than leaving to be discovered:
+
+- the experiment is one flag away (`--weights influenceUnlocks=2`), so the
+  dead end does not have to be re-derived — *a deferral is a claim about
+  the code as it was*, and so is a negative result;
+- it is a correct fact about the option and the UI has an obvious use for
+  it (an influence button that says how much of your hand this vampire
+  turns on);
+- a search agent evaluating by lookahead would get this right for free,
+  because it would SEE the cards being played rather than guessing that
+  they would be.
+
+A test pins the zero, so raising it is a deliberate act rather than a
+tidy-up.
+
+## The pattern across §5–§7
+
+Three items in a row from the decision profile, and the profile chose the
+place to look correctly each time:
+
+- **§5 `playCard`**: a real gap, a real fix, a measurable gain — but only
+  for four of sixteen effect families, and the obvious full version was
+  measurably worse.
+- **§6 `takeAction`**: mostly a mirage; the fix that mattered was a bug in
+  the *blocking* decision found by reading the code next door.
+- **§7 influence**: the information was real and the criterion was wrong.
+
+**Frequency tells you where to look; it does not tell you there is
+anything there.** All three entries needed a behavioural probe to explain
+a bench number, and in two of the three the probe overturned the reading
+the number invited.
+
+---
+
+# 8. "The policy has no plan" — and why weights cannot give it one (2026-09-06)
+
+The item said: the policy has no notion of being ahead or behind, of
+predator pressure, or of when to stop building and start bleeding. That is
+true, and it has a concrete shape. Both of the places where pressure
+should matter had a **CLIFF and no gradient**:
+
+- a bleed that would OUST you is worth +50 to block, and every other bleed
+  is worth the same whether you sit on 25 pool or on 4;
+- a bleed that would oust your PREY is worth +25, and every other bleed is
+  worth the same whether they hold 4 pool or 25.
+
+The variance is real, so this is not a distribution problem. Measured over
+32 games: the blocker's own pool at a block-vs-bleed decision is 7% at 0–3,
+22% at 4–7, 35% at 13–20, 20% at 21+; the prey's pool when a bleed is
+offered is 34% at 0–3 and 24% at 13–20.
+
+## The result: nothing, and then nothing again
+
+Two gradient terms were added — `blockPressure` (this bleed as a fraction
+of the pool I have left) and `bleedPressure` (as a fraction of the prey's)
+— and measured separately, the §5 lesson applied before it could bite.
+
+| deck | blockPressure alone | bleedPressure alone |
+| --- | --- | --- |
+| Hecata | 0.000 | 0.000 |
+| Toreador | 0.000 | −0.015 |
+| Brujah | 0.000 | 0.000 |
+| Nosferatu | −0.003 | 0.000 |
+
+Six exact zeros. As in §6, that is a signal rather than a result, so the
+next question was whether the terms change any decision at all:
+
+| variant | decisions flipped, of 7361 |
+| --- | --- |
+| `blockPressure=12` | **0** |
+| `blockPressure=60` (5x) | **0** |
+| `bleedPressure=8` | **0** |
+| `bleedPressure=40` (5x) | **2** |
+
+## THE LAW THIS ESTABLISHES
+
+**A policy is an argmax over one option list. A term that does not VARY
+across that list cannot change the choice — and a term that varies only by
+enlarging an already-winning margin cannot either.**
+
+Both terms fail on both counts, and the reasons are structural rather than
+about tuning:
+
+- **The prey's pool is the same for every bleed option in a decision.**
+  Choosing *which of my vampires bleeds* cannot depend on it. Where a bleed
+  competes with something else at all (737 decisions), it already wins by a
+  mile: 12 against a hunt's 1 and a pass's 0.5.
+- **My own pool is the same for every blocker in a decision**, and blocking
+  already beats passing whenever it is legal — `blockBleed + perPoint` is
+  6 against 0.5 — so adding urgency to the winner changes nothing.
+
+A stronger test makes the point from the other side. A **drastically
+different blocking policy** — decline small bleeds at high pool to keep the
+vampire unlocked, `blockBleed=-2, blockPerBleedPoint=0, blockPressure=20`,
+which genuinely does flip decisions — is *also* neutral on all four decks
+(−0.050, −0.065, +0.031, +0.011). Two quite different answers to "when
+should I block" produce statistically identical games.
+
+## What that means for the AI
+
+**This is the precise, measured statement of why item #5 is not reachable
+by weights.** A plan is not about which option you take from a list you
+have been handed; it is about arranging to face a different list later —
+holding a vampire back so it can block next turn, spending a turn building
+so the turn after can bleed for four. A per-option score is evaluated
+*after* the list exists, so it cannot express any of that.
+
+Nothing ships from this entry. `blockPressure` and `bleedPressure` were
+**removed rather than left at zero**, on the `influenceOut` precedent — a
+weight that provably does nothing is noise in a table whose whole purpose
+is to be argued with. The measurement is recorded here, and in comments at
+both cliffs, so the absence of a gradient reads as a finding rather than an
+oversight.
+
+`influenceUnlocks` (§7) is kept at zero and this pair is deleted, and the
+difference is exactly the one that matters: that one **flips 9% of
+decisions** and is a live experiment one flag away; these flip nothing at
+five times strength.
+
+## Where the remaining value is
+
+Across §5–§8 the decision profile chose four places to look, and the
+outcome each time was:
+
+| item | share of real choices | outcome |
+| --- | --- | --- |
+| §5 `playCard` | 11.7% | real gain, but only 4 of 16 effect families; the obvious version was worse |
+| §6 `takeAction` | 12.6% | mostly a mirage; the real fix was a bug in the *blocking* decision |
+| §7 influence | 39.6% | information real, criterion wrong, measurably harmful at strength |
+| §8 pressure | — | structurally invisible |
+
+**Weight-tweaking is exhausted, and now demonstrably rather than by
+impression.** What is left is search (AI v2), whose whole nature is to
+evaluate a move by the position it leads to rather than by a price list —
+which is the one thing every entry above could not do.

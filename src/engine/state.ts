@@ -1043,6 +1043,28 @@ export interface SeatState {
    * Honored by the runner layer (nextDecision), never by the engine core.
    */
   autoPassWhenOnlyPass: boolean;
+  /**
+   * WHAT THIS METHUSELAH BROUGHT TO THE TABLE — the deck's composition,
+   * one entry per copy, fixed at the deal and never changed afterwards.
+   *
+   * Owner ruling, 2026-09-06: "The AI should know what cards they have in
+   * their deck, their hand, and whatever is out on the table and is
+   * face-up." That is what a real player knows, because they built the
+   * deck — and it is the missing half of the hidden-information model,
+   * which until now could say what you may not SEE but had no way to say
+   * what you already KNOW.
+   *
+   * IT IS COMPOSITION, NEVER ORDER. p. 14 keeps the library face down
+   * even from its owner ("you may not read your own deck"), and that
+   * stays true: `library` is still masked to everyone. Knowing what is in
+   * the deck and what has already been drawn tells you what REMAINS, and
+   * a player at a table can do exactly that arithmetic.
+   *
+   * Optional — a scenario snapshot has no decklist, and every existing
+   * fixture and saved log is untouched (the `idSeq` precedent).
+   * docs/ai-v2-design.md §6
+   */
+  deckList?: { crypt: string[]; library: string[] };
   /** Play-cost modifiers this Methuselah is holding that belong to no
    *  frame and no card in play — "burn this retainer to reduce the cost
    *  of the next \<card\> you play" (Szlachta Assistant). Optional, so
