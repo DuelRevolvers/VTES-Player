@@ -46,7 +46,7 @@ import {
 } from "./results.ts";
 import { DebugApp } from "./loop.ts";
 import type { ModerationView, SeatFace } from "./render.ts";
-import { chatLinesMarkup, DEFAULT_EMOJI_CATEGORY, emojiPad } from "./render.ts";
+import { chatLinesMarkup, chatSettings, DEFAULT_EMOJI_CATEGORY, emojiPad } from "./render.ts";
 import type { DeckSource, SeatConfig, TableConfig } from "./newgame.ts";
 import {
   botSeats,
@@ -652,18 +652,10 @@ export class Shell {
         <div class="sethead">Table chat
           <button id="chat-gear" class="chatgear" title="Chat settings">⚙</button>
         </div>
-        ${
-          this.chatSettingsOpen
-            ? `<div class="chatsettings">
-                 <label class="setrow">
-                   <span>Your name colour</span>
-                   <input type="color" id="chatcolor"
-                          value="${esc(this.profile?.chatColor ?? DEFAULT_CHAT_COLOR)}" />
-                 </label>
-                 <p class="note">Saved to your profile — it follows you to every table.</p>
-               </div>`
-            : ""
-        }
+        <!-- THE SAME CONTROL THE TABLE DRAWS, with its OK/Cancel. The
+             lobby had its own copy, which is how one of the two ends up
+             fixed and the other does not. -->
+        ${chatSettings(this.profile?.chatColor ?? DEFAULT_CHAT_COLOR, this.chatSettingsOpen)}
         ${chatLinesMarkup()}
         <!--
           THE SAME PICKER THE TABLE DRAWS, not a second copy of it. Both
@@ -1079,13 +1071,22 @@ export class Shell {
         chatBox.setSelectionRange(at + emoji.length, at + emoji.length);
       });
     }
+    // THE COLOUR IS COMMITTED BY A BUTTON, and nothing repaints before
+    // that. Chrome's colour well is a popover anchored to the input, and
+    // repainting on `input` — as the player drags around the colour field
+    // — tore that element out from under it, so the picker shut the
+    // moment it was touched (owner report 2026-09-07).
     const colorBox = this.root.querySelector<HTMLInputElement>("#chatcolor");
-    // `input` as well as `change`: a colour well fires `change` only when
-    // its dialog closes, so the swatch and the conversation disagreed for
-    // as long as the picker stayed open (owner report 2026-09-07).
-    for (const ev of ["input", "change"]) {
-      colorBox?.addEventListener(ev, () => this.applyChatColor(colorBox.value));
-    }
+    this.on("#chatcolor-ok", () => {
+      if (colorBox) this.applyChatColor(colorBox.value);
+      this.chatSettingsOpen = false;
+      this.paint();
+    });
+    this.on("#chatcolor-cancel", () => {
+      // Nothing was applied on the way in, so cancelling is just closing.
+      this.chatSettingsOpen = false;
+      this.paint();
+    });
 
     // Keep the newest line in view after a repaint.
     const lines = this.root.querySelector<HTMLElement>("#chatlines");

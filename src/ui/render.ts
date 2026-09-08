@@ -1798,7 +1798,22 @@ function chatComposer(emojiOpen: boolean, emojiCategory: string): string {
  * with them to a table and everyone sees them in it. That is why the same
  * control appears on the profile page — one value, two ways in.
  */
-function chatSettings(color: string, open: boolean): string {
+/**
+ * The chat's colour control — OK and Cancel, and NOTHING that repaints
+ * while it is open (owner report 2026-09-07: "the color picker on Chrome
+ * closes when I click on it").
+ *
+ * Chrome's colour well is a native popover ANCHORED TO THE INPUT ELEMENT.
+ * The screen re-renders whole on every change, so listening for `input`
+ * — which fires as the player drags around the colour field — tore that
+ * element out from under the popover and Chrome closed it. The value is
+ * therefore held in the input until the player commits it, which is what
+ * the two buttons are for: nothing here calls back into the app until OK.
+ *
+ * Shared by the lobby and the table so the control cannot end up
+ * different in two places (see `emojiPad`).
+ */
+export function chatSettings(color: string, open: boolean): string {
   if (!open) return "";
   return `
     <div class="chatsettings">
@@ -1810,6 +1825,10 @@ function chatSettings(color: string, open: boolean): string {
         Saved to your profile, so it follows you to every table — and
         everyone at the table sees you in it.
       </p>
+      <div class="row setbuttons">
+        <button id="chatcolor-ok" class="primary">OK</button>
+        <button id="chatcolor-cancel">Cancel</button>
+      </div>
     </div>`;
 }
 

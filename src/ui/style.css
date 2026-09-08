@@ -1200,3 +1200,8 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .modalcard .lobbyrow .lname { flex: 1; }
 /* Inside a modal the picker is the card, not a panel within one. */
 .modalcard .deckpanel { border: none; padding: 0; margin: 0; }
+
+/* The colour control's OK/Cancel. Nothing in this panel calls back into
+   the app until OK is pressed — a repaint would tear the native colour
+   popover off its anchor and close it (see chatSettings in render.ts). */
+.chatsettings .setbuttons { margin-top: 6px; justify-content: flex-end; gap: 6px; }

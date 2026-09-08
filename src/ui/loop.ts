@@ -779,9 +779,17 @@ export class DebugApp {
         box.setSelectionRange(at + emoji.length, at + emoji.length);
       });
     }
+    // Committed by a button, and nothing repaints before it: Chrome's
+    // colour well is a popover anchored to the input, and a repaint takes
+    // that element away and closes it. See `chatSettings` in render.ts.
     const colorBox = this.root.querySelector<HTMLInputElement>("#chatcolor");
-    colorBox?.addEventListener("change", () => {
-      this.table.setChatColor?.(colorBox.value);
+    on("#chatcolor-ok", () => {
+      if (colorBox) this.table.setChatColor?.(colorBox.value);
+      this.chatSettingsOpen = false;
+      this.paint();
+    });
+    on("#chatcolor-cancel", () => {
+      this.chatSettingsOpen = false;
       this.paint();
     });
     for (const el of Array.from(this.root.querySelectorAll<HTMLElement>(".mod-ban"))) {
