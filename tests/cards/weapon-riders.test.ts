@@ -314,3 +314,48 @@ describe("Treasured Samadji (102015)", () => {
     expect(optionIds(engine)).not.toContain("strike:dodge");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Whose strike is it? (regression, tranche 3 wave 11)
+// ---------------------------------------------------------------------------
+
+describe("a weapon in an ADDITIONAL sub-round", () => {
+  it("is offered to the OPPOSING side when only they have the extra strike", () => {
+    // The bug the fuzz found. The weapon compiler decided whose turn it
+    // was with "`strikes.acting === null` means the acting side" — true
+    // in a normal round, WRONG in an additional sub-round, where only the
+    // minions with additional strikes strike (p. 32) and a
+    // non-participant's `strikes[side]` stays null all sub-round. The
+    // opposing bearer was offered nothing; with the AK-47's commitment
+    // also barring the hand strike, they had NO legal option at all.
+    const { state, engine } = intoCombat((s) => equip(s, "M", "ak", "AK-47"));
+    expect(walkTo(engine, "ability:AK-47:ak:strike")).toBe(true);
+    runTrace(engine, [["Bob", "ability:AK-47:ak:strike"]]);
+    const cf = combat(state)!;
+    const side = cf.opposing === "M" ? "opposing" : "acting";
+    expect(cf.additionalStrikes[side]).toBe(1);
+    expect(cf.committedStrike[side]).toBe("ak");
+
+    // Walk into the extra sub-round and check the bearer is asked, with
+    // the gun on offer.
+    expect(walkTo(engine, "ability:AK-47:ak:strike")).toBe(true);
+    const dp = engine.decision()!;
+    expect(dp.window).toBe("combat.chooseStrike");
+    expect(dp.options.length).toBeGreaterThan(0);
+  });
+
+  it("a commitment to a weapon that has LEFT PLAY frees the hand strike", () => {
+    // The other half of the same dead end: a commitment names a card, and
+    // that card can be burned between the maneuver and the strike. A
+    // commitment to a card that is gone is no commitment.
+    const { state, engine } = intoCombat((s) => equip(s, "V1", "sr", "Sniper Rifle"));
+    const cf = combat(state)!;
+    cf.range = "close";
+    const side = cf.acting === "V1" ? "acting" : "opposing";
+    cf.committedStrike[side] = "sr";
+    // Burn the weapon out from under the commitment.
+    find(state, "V1").attached = find(state, "V1").attached.filter((p) => p.card.id !== "sr");
+
+    expect(walkTo(engine, "strike:hand")).toBe(true);
+  });
+});

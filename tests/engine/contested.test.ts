@@ -517,22 +517,28 @@ describe("reading the title city off a real crypt card", () => {
     expect(donny.city).toBe("Pittsburgh");
   });
 
-  it("finds the two cities the V5 crypt deliberately triples up", () => {
-    // Surveyed, not assumed: 43 city titles over 41 cities, and the two
-    // repeats are not accidents — Mannheim and Pittsburgh each have a
-    // prince, a baron AND an archbishop, which is exactly the shape p. 39
-    // describes ("contested by another vampire who claims ANY title to
-    // the same city"). This is the pair of contests the V5 pool contains.
+  it("finds cities two vampires both claim — the shape p. 39 describes", () => {
+    // The pair this named (Mannheim, Pittsburgh) was the whole of it while
+    // the pool was V5-only; widening the crypt added more, so the LIST was
+    // a hostage to the pool's size (docs/pool-widening-design.md §3).
+    // The claim worth keeping is the one p. 39 makes: a city title is
+    // "contested by another vampire who claims ANY title to the same
+    // city", so the pool must actually contain such pairs for the
+    // contest rules to have anything to bite on.
     const byCity = new Map<string, string[]>();
     for (const c of claims()) {
       if (c.city === undefined) continue;
       byCity.set(c.city, [...(byCity.get(c.city) ?? []), c.title ?? "?"]);
     }
     const shared = [...byCity.entries()].filter(([, v]) => v.length > 1).sort();
-    expect(shared.map(([city]) => city)).toEqual(["Mannheim", "Pittsburgh"]);
-    for (const [, titles] of shared) {
-      expect(titles.sort()).toEqual(["archbishop", "baron", "prince"]);
-    }
+    expect(shared.length).toBeGreaterThan(0);
+    // Mannheim and Pittsburgh are the two the V5 sets ship, and they must
+    // survive any widening — they are the fixtures the contest tests use.
+    expect(shared.map(([city]) => city)).toEqual(expect.arrayContaining(["Mannheim", "Pittsburgh"]));
+    // NOT "shared by different titles". The widened pool has two Princes
+    // of Chicago, and that is the PRIMARY contest, not an anomaly: p. 39
+    // says a city title is contested by any vampire claiming any title to
+    // the same city, and the same title obviously qualifies.
   });
 
   it("gives NO city to a title that has none — the control", () => {
@@ -581,5 +587,70 @@ describe("a mirror match on a real precon", () => {
     expect(state.seats[0]!.contested?.map((c) => c.card.name)).toEqual([shared!.name]);
     expect(state.seats[1]!.contested?.map((c) => c.card.name)).toEqual([shared!.name]);
     expect(state.seats[0]!.minions.some((m) => m.name === shared!.name)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Contested TITLE CARDS (as against a vampire's printed title)
+// ---------------------------------------------------------------------------
+
+describe("a contested title CARD takes the title with it", () => {
+  /** Both Methuselahs hold Prince of Chicago, granted by the card. */
+  function twoPrinces(): { state: GameState; engine: VtesEngine } {
+    const state = threeSeatGame();
+    const title = (id: string) => ({
+      ...loc(id, "Praxis Seizure: Chicago"),
+      tags: ["Prince of Chicago", "title"],
+    });
+    const v1 = state.seats[0]!.minions[0]!;
+    const m = state.seats[1]!.minions.find((x) => x.id === "M")!;
+    v1.title = "prince";
+    v1.attached.push(title("a1"));
+    m.title = "prince";
+    m.attached.push(title("b1"));
+    unlockPhase(state, "Bob");
+    return { state, engine: new VtesEngine(state, testRegistry) };
+  }
+
+  it("both bearers lose the title while the cards are out of play", () => {
+    // "Turned face down and OUT OF PLAY" (p. 17). `burnPermanent` has
+    // always dropped the title of a burned title card; the contested path
+    // did not, so a bearer kept a title granted by a card that was no
+    // longer there. Praxis Seizure found it; Regent has the same shape.
+    const { state, engine } = twoPrinces();
+    engine.decision();
+    expect(state.seats[0]!.minions[0]!.title).toBeNull();
+    expect(state.seats[1]!.minions.find((x) => x.id === "M")!.title).toBeNull();
+    expect(state.seats[0]!.contested?.map((c) => c.card.id)).toEqual(["a1"]);
+  });
+
+  it("and the winner gets it back when the contest ends", () => {
+    // The other half: a contest can be won turns later, so the title has
+    // to be restorable rather than merely dropped.
+    const { state, engine } = twoPrinces();
+    engine.decision();
+    answer(engine, ":yield");
+
+    unlockPhase(state, "Alice");
+    const alice = new VtesEngine(state, testRegistry);
+    alice.decision();
+    const v1 = state.seats[0]!.minions[0]!;
+    expect(v1.attached.map((p) => p.card.id)).toContain("a1");
+    expect(v1.title).toBe("prince");
+  });
+
+  it("NEGATIVE SPACE: a non-title card in the same contest touches no title", () => {
+    // The control. If the contest simply cleared every bearer's title,
+    // the two tests above would pass for the wrong reason.
+    const state = threeSeatGame();
+    const v1 = state.seats[0]!.minions[0]!;
+    v1.title = "prince";
+    v1.attached.push(loc("a1", "Elder Library"));
+    state.seats[1]!.permanents.push(loc("b1", "Elder Library"));
+    unlockPhase(state, "Bob");
+    const engine = new VtesEngine(state, testRegistry);
+    engine.decision();
+    expect(state.seats[0]!.contested?.map((c) => c.card.id)).toEqual(["a1"]);
+    expect(v1.title).toBe("prince");
   });
 });

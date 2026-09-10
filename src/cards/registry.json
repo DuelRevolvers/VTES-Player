@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-04T13:17:51.445Z",
+ "fetchedAt": "2026-09-10T01:45:46.168Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -27,6 +27,30 @@
     "image": "https://static.krcg.org/card/44magnum.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100003": {
+   "card": {
+    "kind": "library",
+    "id": 100003,
+    "name": "Aaron's Feeding Razor",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique.\nThe bearer gets +1 hunt.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/aaronsfeedingrazor.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -71,6 +95,30 @@
     "image": "https://static.krcg.org/card/academichuntingground.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100016": {
+   "card": {
+    "kind": "library",
+    "id": 100016,
+    "name": "Acheron Vortex",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [
+     "Harbinger of Skulls"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Minions without Necromancy [nec] or Obtenebration [obt] get -1 intercept.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/acheronvortex.jpg",
+    "sets": [
+     "Lost Kindred",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -162,6 +210,59 @@
     "image": "https://static.krcg.org/card/alamut.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100046": {
+   "card": {
+    "kind": "library",
+    "id": 100046,
+    "name": "Ambush",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Ⓓ Enter combat with a locked minion. This acting minion gets 1 optional maneuver during that combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/ambush.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Anarchs",
+     "Black Hand",
+     "Kindred Most Wanted",
+     "First Blood",
+     "Promo"
+    ]
+   },
+   "supported": true
+  },
+  "100049": {
+   "card": {
+    "kind": "library",
+    "id": 100049,
+    "name": "Amusement Park Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Brujah antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/amusementparkhuntingground.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -452,6 +553,32 @@
    },
    "supported": true
   },
+  "100094": {
+   "card": {
+    "kind": "library",
+    "id": 100094,
+    "name": "Arson",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after the action.\nⒹ Burn a location.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/arson.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "100095": {
    "card": {
     "kind": "library",
@@ -472,6 +599,57 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100099": {
+   "card": {
+    "kind": "library",
+    "id": 100099,
+    "name": "Art Scam",
+    "types": [
+     "Action"
+    ],
+    "clans": [
+     "Toreador antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action.\nGain 2 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/artscam.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Black Hand",
+     "Third Edition",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": true
+  },
+  "100104": {
+   "card": {
+    "kind": "library",
+    "id": 100104,
+    "name": "Ascendance",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nGain 1 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/ascendance.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -520,6 +698,30 @@
    },
    "supported": true
   },
+  "100115": {
+   "card": {
+    "kind": "library",
+    "id": 100115,
+    "name": "Autarkis Persecution",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means each Methuselah gains 1 pool for each minion he or she controls.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/autarkispersecution.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "100126": {
    "card": {
     "kind": "library",
@@ -539,6 +741,33 @@
     "image": "https://static.krcg.org/card/backways.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "100130": {
+   "card": {
+    "kind": "library",
+    "id": 100130,
+    "name": "Bang Nakh — Tiger's Claws",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Melee weapon.\nStrike: strength+2 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bangnakhtigersclaws.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Camarilla Edition",
+     "Kindred Most Wanted",
+     "Third Edition",
+     "Lords of the Night",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -584,6 +813,51 @@
      "Fifth Edition",
      "New Blood",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "100136": {
+   "card": {
+    "kind": "library",
+    "id": 100136,
+    "name": "Base Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Osebo"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/basehuntingground.jpg",
+    "sets": [
+     "Legacies of Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100139": {
+   "card": {
+    "kind": "library",
+    "id": 100139,
+    "name": "Bastard Sword",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Melee weapon.\nStrength+1 damage each strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bastardsword.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
     ]
    },
    "supported": true
@@ -800,6 +1074,28 @@
    },
    "supported": true
   },
+  "100226": {
+   "card": {
+    "kind": "library",
+    "id": 100226,
+    "name": "Blow Torch",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Weapon.\n1 aggravated damage each strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/blowtorch.jpg",
+    "sets": [
+     "Anarchs",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100227": {
    "card": {
     "kind": "library",
@@ -893,6 +1189,31 @@
    },
    "supported": true
   },
+  "100246": {
+   "card": {
+    "kind": "library",
+    "id": 100246,
+    "name": "Brass Knuckles",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Melee weapon.\nStrength+1 damage each strike, only usable once each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/brassknuckles.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Legacies of Blood",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100260": {
    "card": {
     "kind": "library",
@@ -912,6 +1233,83 @@
     "image": "https://static.krcg.org/card/brujahdebate.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100266": {
+   "card": {
+    "kind": "library",
+    "id": 100266,
+    "name": "Bum's Rush",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after this action.\nⒹ Enter combat with a minion. This acting minion gets 1 optional maneuver during that combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bumsrush.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs",
+     "Kindred Most Wanted",
+     "Legacies of Blood",
+     "Heirs to the Blood",
+     "2023 Belgian Championship Promo"
+    ]
+   },
+   "supported": true
+  },
+  "100269": {
+   "card": {
+    "kind": "library",
+    "id": 100269,
+    "name": "Bureaucratic Overload",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique master.\nPut this card in play. Political actions cost 1 additional blood. Any vampire can call a referendum to burn this card as a +1 stealth political action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bureaucraticoverload.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100288": {
+   "card": {
+    "kind": "library",
+    "id": 100288,
+    "name": "Campground Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Gangrel antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting Ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/campgroundhuntingground.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Kindred Most Wanted"
     ]
    },
    "supported": true
@@ -1098,6 +1496,48 @@
    },
    "supported": true
   },
+  "100315": {
+   "card": {
+    "kind": "library",
+    "id": 100315,
+    "name": "Centralized Background Check",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nWeapons cost an additional pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/centralizedbackgroundcheck.jpg",
+    "sets": [
+     "Gehenna"
+    ]
+   },
+   "supported": true
+  },
+  "100317": {
+   "card": {
+    "kind": "library",
+    "id": 100317,
+    "name": "Chainsaw",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Weapon.\n3 damage as a strike, only usable once each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/chainsaw.jpg",
+    "sets": [
+     "Jyhad"
+    ]
+   },
+   "supported": true
+  },
   "100323": {
    "card": {
     "kind": "library",
@@ -1186,6 +1626,30 @@
    },
    "supported": true
   },
+  "100338": {
+   "card": {
+    "kind": "library",
+    "id": 100338,
+    "name": "Childling Muse",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [
+     "Malkavian"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Changeling with 1 life.\nThis Malkavian gets +1 bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/childlingmuse.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100356": {
    "card": {
     "kind": "library",
@@ -1205,6 +1669,27 @@
     "image": "https://static.krcg.org/card/clawsofthedead.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "100361": {
+   "card": {
+    "kind": "library",
+    "id": 100361,
+    "name": "Cloak of the Abalone",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique equipment.\nToreador and Toreador antitribu cannot block this minion.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/cloakoftheabalone.jpg",
+    "sets": [
+     "2008 Tournament promo"
     ]
    },
    "supported": true
@@ -1300,6 +1785,80 @@
    },
    "supported": true
   },
+  "100379": {
+   "card": {
+    "kind": "library",
+    "id": 100379,
+    "name": "Combat Shotgun",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Weapon, Gun.\n3R damage each strike, only usable once each round.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/combatshotgun.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100382": {
+   "card": {
+    "kind": "library",
+    "id": 100382,
+    "name": "Command of the Harpies",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire.\nChoose a ready prince. Successful referendum means the prince loses his or her title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/commandoftheharpies.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100390": {
+   "card": {
+    "kind": "library",
+    "id": 100390,
+    "name": "Computer Hacking",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Ⓓ Bleed with +1 bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/computerhacking.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Legacies of Blood",
+     "Heirs to the Blood",
+     "Sabbat Preconstructed",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "100391": {
    "card": {
     "kind": "library",
@@ -1347,6 +1906,27 @@
    },
    "supported": true
   },
+  "100404": {
+   "card": {
+    "kind": "library",
+    "id": 100404,
+    "name": "Conflict of Interests",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum.\nCancel the votes and ballots of a vampire who belongs to the same clan as this reacting minion.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/conflictofinterests.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
   "100410": {
    "card": {
     "kind": "library",
@@ -1365,6 +1945,28 @@
     "sets": [
      "Fifth Edition",
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100411": {
+   "card": {
+    "kind": "library",
+    "id": 100411,
+    "name": "Consanguineous Condemnation",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Choose a clan. Successful referendum locks all vampires of that clan.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/consanguineouscondemnation.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
     ]
    },
    "supported": true
@@ -1408,6 +2010,31 @@
     "sets": [
      "Fifth Edition (Anarch)",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "100426": {
+   "card": {
+    "kind": "library",
+    "id": 100426,
+    "name": "Corporate Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Ventrue antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting ground.\nDuring your unlock phase, you may move 1 blood from the bank to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/corporatehuntingground.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Heirs to the Blood"
     ]
    },
    "supported": true
@@ -1518,6 +2145,28 @@
      "Fifth Edition",
      "New Blood",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "100494": {
+   "card": {
+    "kind": "library",
+    "id": 100494,
+    "name": "Dark Mirror of the Mind",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Requires a vampire with capacity 8 or more.\nGain 2 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/darkmirrorofthemind.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -1642,6 +2291,28 @@
    },
    "supported": true
   },
+  "100529": {
+   "card": {
+    "kind": "library",
+    "id": 100529,
+    "name": "Desert Eagle",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Weapon, gun.\nStrike: 2R damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/deserteagle.jpg",
+    "sets": [
+     "Gehenna",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100541": {
    "card": {
     "kind": "library",
@@ -1729,6 +2400,29 @@
     "image": "https://static.krcg.org/card/diversion.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100564": {
+   "card": {
+    "kind": "library",
+    "id": 100564,
+    "name": "Diversity",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means each Methuselah gains X pool, where X is the number of clans to which his or her ready vampires belong.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/diversity.jpg",
+    "sets": [
+     "Gehenna",
+     "Kindred Most Wanted",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -1988,6 +2682,35 @@
    },
    "supported": true
   },
+  "100616": {
+   "card": {
+    "kind": "library",
+    "id": 100616,
+    "name": "Effective Management",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nMove the top card from your crypt to your uncontrolled region.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/effectivemanagement.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Legacies of Blood",
+     "Third Edition",
+     "Keepers of Tradition",
+     "Heirs to the Blood"
+    ]
+   },
+   "supported": true
+  },
   "100617": {
    "card": {
     "kind": "library",
@@ -2176,6 +2899,73 @@
    },
    "supported": true
   },
+  "100653": {
+   "card": {
+    "kind": "library",
+    "id": 100653,
+    "name": "Entrenching",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action.\nIf this vampire has 4 or more blood, he or she gains 4 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/entrenching.jpg",
+    "sets": [
+     "Gehenna",
+     "Kindred Most Wanted",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "100671": {
+   "card": {
+    "kind": "library",
+    "id": 100671,
+    "name": "Exclusion Principle",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means each Methuselah gains 1 pool for each ready Independent or Anarch vampire he or she controls.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/exclusionprinciple.jpg",
+    "sets": [
+     "Twilight Rebellion"
+    ]
+   },
+   "supported": true
+  },
+  "100672": {
+   "card": {
+    "kind": "library",
+    "id": 100672,
+    "name": "Excommunication",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire.\nChoose a ready archbishop. Successful referendum means the chosen archbishop loses his or her title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/excommunication.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100680": {
    "card": {
     "kind": "library",
@@ -2322,6 +3112,31 @@
    },
    "supported": true
   },
+  "100724": {
+   "card": {
+    "kind": "library",
+    "id": 100724,
+    "name": "Fetish Club Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Toreador antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting Ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fetishclubhuntingground.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
   "100726": {
    "card": {
     "kind": "library",
@@ -2360,6 +3175,28 @@
     "image": "https://static.krcg.org/card/fifthtraditionhospitality.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100731": {
+   "card": {
+    "kind": "library",
+    "id": 100731,
+    "name": "The Final Nights",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means each vampire burns 1 blood. If this referendum fails, the acting vampire burns 1 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/finalnightsthe.jpg",
+    "sets": [
+     "Final Nights",
+     "Kindred Most Wanted"
     ]
    },
    "supported": true
@@ -2539,6 +3376,29 @@
     "sets": [
      "Fifth Edition",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "100768": {
+   "card": {
+    "kind": "library",
+    "id": 100768,
+    "name": "Forgery",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a ready vampire with capacity 5 or more.\nⒹ Bleed. If the bleed is successful, this acting vampire gains 1 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/forgery.jpg",
+    "sets": [
+     "Camarilla Edition",
+     "Third Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -2751,6 +3611,29 @@
    },
    "supported": true
   },
+  "100811": {
+   "card": {
+    "kind": "library",
+    "id": 100811,
+    "name": "Gas-Powered Chainsaw",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Melee weapon.\n3 damage each strike. This weapon is only usable once each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/gaspoweredchainsaw.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "100824": {
    "card": {
     "kind": "library",
@@ -2934,6 +3817,30 @@
    },
    "supported": true
   },
+  "100875": {
+   "card": {
+    "kind": "library",
+    "id": 100875,
+    "name": "Gypsies",
+    "types": [
+     "Ally"
+    ],
+    "clans": [
+     "Gangrel"
+    ],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Unique mortal with 1 life. 1 strength, 1 bleed.\nGypsies get +1 stealth on each of their actions.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/gypsies.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
+    ]
+   },
+   "supported": true
+  },
   "100897": {
    "card": {
     "kind": "library",
@@ -2955,6 +3862,30 @@
      "Fifth Edition (Companion)",
      "New Blood III",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "100898": {
+   "card": {
+    "kind": "library",
+    "id": 100898,
+    "name": "Hawg",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Vehicle.\nThe minion with this vehicle gets an optional press each combat. A minion may have only 1 vehicle.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/hawg.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -3215,6 +4146,33 @@
    },
    "supported": true
   },
+  "100996": {
+   "card": {
+    "kind": "library",
+    "id": 100996,
+    "name": "Institution Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Malkavian antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Unique location. Hunting ground.\nDuring your unlock phase, a ready vampire you control can gain 1 blood. A vampire can gain blood from only one hunting ground each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/institutionhuntingground.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Black Hand",
+     "Third Edition",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
   "100999": {
    "card": {
     "kind": "library",
@@ -3234,6 +4192,33 @@
     "image": "https://static.krcg.org/card/intimidation.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101007": {
+   "card": {
+    "kind": "library",
+    "id": 101007,
+    "name": "IR Goggles",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Electronic equipment.\nThis minion gets an optional maneuver each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/irgoggles.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Black Hand",
+     "Legacies of Blood",
+     "Third Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -3262,6 +4247,27 @@
    },
    "supported": true
   },
+  "101010": {
+   "card": {
+    "kind": "library",
+    "id": 101010,
+    "name": "Irregular Protocol",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Only usable during a referendum.\nLock this reacting vampire to force the acting vampire to abstain (this can cancel that vampire's votes and ballots).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/irregularprotocol.jpg",
+    "sets": [
+     "Anarchs"
+    ]
+   },
+   "supported": true
+  },
   "101014": {
    "card": {
     "kind": "library",
@@ -3281,6 +4287,78 @@
      "Fifth Edition (Anarch)",
      "New Blood",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "101015": {
+   "card": {
+    "kind": "library",
+    "id": 101015,
+    "name": "J. S. Simmons, Esq.",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique mortal with 1 life.\nThe employer gets +1 bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/jssimmonsesq.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Third Edition",
+     "Heirs to the Blood",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101018": {
+   "card": {
+    "kind": "library",
+    "id": 101018,
+    "name": "Jackie Therman",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique mortal with 1 life.\nThis minion gets an optional maneuver each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/jackietherman.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101022": {
+   "card": {
+    "kind": "library",
+    "id": 101022,
+    "name": "Jericho Founding",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a non-Camarilla vampire.\nSuccessful referendum means all locations are burned. Any Methuselah can keep any locations he or she controls by repaying their pool cost.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/jerichofounding.jpg",
+    "sets": [
+     "Lords of the Night"
     ]
    },
    "supported": true
@@ -3396,6 +4474,56 @@
    },
    "supported": true
   },
+  "101050": {
+   "card": {
+    "kind": "library",
+    "id": 101050,
+    "name": "Kindred Intelligence",
+    "types": [
+     "Action"
+    ],
+    "clans": [
+     "Nosferatu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action.\nMove the top card from your crypt to your uncontrolled region.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/kindredintelligence.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101053": {
+   "card": {
+    "kind": "library",
+    "id": 101053,
+    "name": "Kindred Segregation",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means that all allies are burned. Any Methuselah can keep an ally or allies he or she controls by repaying their pool cost to recruit.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/kindredsegregation.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101056": {
    "card": {
     "kind": "library",
@@ -3415,6 +4543,31 @@
      "Fifth Edition",
      "New Blood",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "101063": {
+   "card": {
+    "kind": "library",
+    "id": 101063,
+    "name": "The Knights",
+    "types": [
+     "Ally"
+    ],
+    "clans": [
+     "Brujah"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique mortal with 2 life. 2 strength, 0 bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/knightsthe.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -3484,6 +4637,58 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101073": {
+   "card": {
+    "kind": "library",
+    "id": 101073,
+    "name": "Laptop Computer",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Electronic.\nThe bearer gets +1 bleed. A minion can have only one Laptop Computer.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/laptopcomputer.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs",
+     "Black Hand",
+     "Legacies of Blood",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101097": {
+   "card": {
+    "kind": "library",
+    "id": 101097,
+    "name": "Letter from Vienna",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nLock all ready Tremere.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/letterfromvienna.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
     ]
    },
    "supported": true
@@ -3600,6 +4805,29 @@
    },
    "supported": true
   },
+  "101120": {
+   "card": {
+    "kind": "library",
+    "id": 101120,
+    "name": "London Evening Star, Tabloid Newspaper",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nLock to give any minion +1 intercept for the current action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/londoneveningstartabloidnewspaper.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Final Nights",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101125": {
    "card": {
     "kind": "library",
@@ -3623,6 +4851,32 @@
      "New Blood",
      "New Blood II",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "101129": {
+   "card": {
+    "kind": "library",
+    "id": 101129,
+    "name": "Loyal Street Gang",
+    "types": [
+     "Ally"
+    ],
+    "clans": [
+     "Brujah"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Mortal with 2 life. 1 strength, 0 bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/loyalstreetgang.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -3723,6 +4977,52 @@
    },
    "supported": true
   },
+  "101162": {
+   "card": {
+    "kind": "library",
+    "id": 101162,
+    "name": "Mantle of the Moon",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [
+     "Ravnos"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 4,
+    "cardText": "Only usable as the action is announced.\nThis action is unblockable.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/mantleofthemoon.jpg",
+    "sets": [
+     "Lords of the Night",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "101168": {
+   "card": {
+    "kind": "library",
+    "id": 101168,
+    "name": "Mark V",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Weapon, gun.\nStrike: 4R damage, only usable once each round and only at long range.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/markv.jpg",
+    "sets": [
+     "Bloodlines",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101171": {
    "card": {
     "kind": "library",
@@ -3766,6 +5066,55 @@
     "image": "https://static.krcg.org/card/martyrsresilience.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101187": {
+   "card": {
+    "kind": "library",
+    "id": 101187,
+    "name": "The Mausoleum, Venice",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Giovanni"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique location.\nLock during the polling step of a political action to get +1 vote, with an additional +1 vote if the card named /Ventrue Headquarters/ is not in play.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/mausoleumvenicethe.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Final Nights",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "101190": {
+   "card": {
+    "kind": "library",
+    "id": 101190,
+    "name": "Meat Cleaver",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Melee weapon.\nStrength+1 damage each strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/meatcleaver.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Black Hand"
     ]
    },
    "supported": true
@@ -3931,6 +5280,30 @@
    },
    "supported": true
   },
+  "101238": {
+   "card": {
+    "kind": "library",
+    "id": 101238,
+    "name": "Monastery of Shadows",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Unique location.\n+1 hand size. Lock to give a vampire with capacity 8 or more +1 stealth.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/monasteryofshadows.jpg",
+    "sets": [
+     "Keepers of Tradition",
+     "Anthology",
+     "Sabbat Preconstructed",
+     "Twenty-Fifth Anniversary"
+    ]
+   },
+   "supported": true
+  },
   "101239": {
    "card": {
     "kind": "library",
@@ -3972,6 +5345,32 @@
     "sets": [
      "New Blood III",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "101243": {
+   "card": {
+    "kind": "library",
+    "id": 101243,
+    "name": "Morgue Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Giovanni"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Unique location. Hunting ground.\nDuring your unlock phase, a ready vampire you control can gain 1 blood. A vampire can gain blood from only one hunting ground each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/morguehuntingground.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Final Nights",
+     "Lords of the Night",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -4391,6 +5790,134 @@
    },
    "supported": true
   },
+  "101364": {
+   "card": {
+    "kind": "library",
+    "id": 101364,
+    "name": "The Path of Metamorphosis",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Tzimisce"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique.\nPut this card in play. Cards requiring Vicissitude [vic] cost Tzimisce -1 blood. Minions can burn this card as a Ⓓ action that inflicts 1 unpreventable environmental damage on acting vampires.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/pathofmetamorphosisthe.jpg",
+    "sets": [
+     "Sabbat War",
+     "Third Edition",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "101365": {
+   "card": {
+    "kind": "library",
+    "id": 101365,
+    "name": "The Path of Night",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Lasombra"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique.\nPut this card in play. Cards requiring Obtenebration [obt] cost Lasombra 1 fewer blood. Any minion can burn this card as a Ⓓ action that inflicts 1 unpreventable environmental damage on acting vampires.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/pathofnightthe.jpg",
+    "sets": [
+     "Sabbat War",
+     "Third Edition",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "101366": {
+   "card": {
+    "kind": "library",
+    "id": 101366,
+    "name": "The Path of Paradox",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Ravnos"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique.\nPut this card in play. Cards requiring Chimerstry [chi] cost Ravnos 1 fewer blood. Any minion can burn this card as a Ⓓ action that inflicts 1 unpreventable environmental damage on acting vampires.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/pathofparadoxthe.jpg",
+    "sets": [
+     "Final Nights",
+     "Lords of the Night",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "101373": {
+   "card": {
+    "kind": "library",
+    "id": 101373,
+    "name": "The Path of Typhon",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Ministry"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique.\nPut this card in play. Cards requiring Serpentis [ser] cost Followers of Set 1 fewer blood. Any minion can burn this card as a Ⓓ action that inflicts 1 unpreventable environmental damage on acting vampires.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/pathoftyphonthe.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "101380": {
+   "card": {
+    "kind": "library",
+    "id": 101380,
+    "name": "Peace Treaty",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means all weapons are burned. A Methuselah may keep any of his or her minions' weapons by repaying their pool cost to equip.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/peacetreaty.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Legacies of Blood",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101384": {
    "card": {
     "kind": "library",
@@ -4454,6 +5981,49 @@
     "sets": [
      "Fifth Edition",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101390": {
+   "card": {
+    "kind": "library",
+    "id": 101390,
+    "name": "Permanent Vacation",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Choose a ready ally. Successful referendum means the chosen ally is removed from the game.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/permanentvacation.jpg",
+    "sets": [
+     "Lords of the Night",
+     "Twenty-Fifth Anniversary"
+    ]
+   },
+   "supported": true
+  },
+  "101391": {
+   "card": {
+    "kind": "library",
+    "id": 101391,
+    "name": "Perpetual Care",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means each Methuselah burns 2 pool for each vampire in torpor he or she controls.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/perpetualcare.jpg",
+    "sets": [
+     "Third Edition"
     ]
    },
    "supported": true
@@ -4522,6 +6092,29 @@
     "image": "https://static.krcg.org/card/politicalhuntingground.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101421": {
+   "card": {
+    "kind": "library",
+    "id": 101421,
+    "name": "Port Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Ishtarri"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/porthuntingground.jpg",
+    "sets": [
+     "Legacies of Blood"
     ]
    },
    "supported": true
@@ -4631,6 +6224,278 @@
     "sets": [
      "New Blood II",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "101447": {
+   "card": {
+    "kind": "library",
+    "id": 101447,
+    "name": "Praxis Seizure: Amsterdam",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Amsterdam. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureamsterdam.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101449": {
+   "card": {
+    "kind": "library",
+    "id": 101449,
+    "name": "Praxis Seizure: Atlanta",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Atlanta.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureatlanta.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101452": {
+   "card": {
+    "kind": "library",
+    "id": 101452,
+    "name": "Praxis Seizure: Boston",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Boston. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureboston.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101455": {
+   "card": {
+    "kind": "library",
+    "id": 101455,
+    "name": "Praxis Seizure: Chicago",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Chicago.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurechicago.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101456": {
+   "card": {
+    "kind": "library",
+    "id": 101456,
+    "name": "Praxis Seizure: Cleveland",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Cleveland. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurecleveland.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101457": {
+   "card": {
+    "kind": "library",
+    "id": 101457,
+    "name": "Praxis Seizure: Dallas",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Dallas. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizuredallas.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101458": {
+   "card": {
+    "kind": "library",
+    "id": 101458,
+    "name": "Praxis Seizure: Dublin",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Dublin. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizuredublin.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101459": {
+   "card": {
+    "kind": "library",
+    "id": 101459,
+    "name": "Praxis Seizure: Frankfurt",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Frankfurt. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurefrankfurt.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101462": {
+   "card": {
+    "kind": "library",
+    "id": 101462,
+    "name": "Praxis Seizure: Houston",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Houston.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurehouston.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101464": {
+   "card": {
+    "kind": "library",
+    "id": 101464,
+    "name": "Praxis Seizure: London",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of London. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurelondon.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101465": {
+   "card": {
+    "kind": "library",
+    "id": 101465,
+    "name": "Praxis Seizure: Miami",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Miami.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizuremiami.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101469": {
+   "card": {
+    "kind": "library",
+    "id": 101469,
+    "name": "Praxis Seizure: Seattle",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Seattle. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureseattle.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -4861,6 +6726,28 @@
     "image": "https://static.krcg.org/card/quickness.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "101535": {
+   "card": {
+    "kind": "library",
+    "id": 101535,
+    "name": "Rabble Razing",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means all vampires with capacity below 4 burn 1 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/rabblerazing.jpg",
+    "sets": [
+     "Sabbat War",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -5350,6 +7237,100 @@
    },
    "supported": true
   },
+  "101670": {
+   "card": {
+    "kind": "library",
+    "id": 101670,
+    "name": "Sacré-Cœur Cathedral, France",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "This equipment card represents a location and does not count as equipment while in play. Unique.\nAllies cannot block this vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sacrecoeurcathedralfrance.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101671": {
+   "card": {
+    "kind": "library",
+    "id": 101671,
+    "name": "Sacrifice",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire with capacity above 7.\nChoose a vampire with a capacity below 7 who belongs to the same clan as the acting vampire. Successful referendum means the chosen vampire is burned.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sacrifice.jpg",
+    "sets": [
+     "Sabbat",
+     "Tenth Anniversary"
+    ]
+   },
+   "supported": true
+  },
+  "101682": {
+   "card": {
+    "kind": "library",
+    "id": 101682,
+    "name": "Saturday-Night Special",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Weapon, gun.\n1R damage each strike, with an optional maneuver each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/saturdaynightspecial.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101685": {
+   "card": {
+    "kind": "library",
+    "id": 101685,
+    "name": "Sawed-Off Shotgun",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Weapon, gun.\n3R damage each strike, only usable once each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sawedoffshotgun.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101686": {
    "card": {
     "kind": "library",
@@ -5419,6 +7400,27 @@
     "sets": [
      "New Blood",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101699": {
+   "card": {
+    "kind": "library",
+    "id": 101699,
+    "name": "Screw the Masquerade!",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Choose a Methuselah. Successful referendum means each Methuselah burns 1 pool and the chosen Methuselah burns an additional pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/screwthemasquerade.jpg",
+    "sets": [
+     "Sabbat"
     ]
    },
    "supported": true
@@ -5493,6 +7495,31 @@
    },
    "supported": true
   },
+  "101715": {
+   "card": {
+    "kind": "library",
+    "id": 101715,
+    "name": "Sengir Dagger",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Unique melee weapon.\nStrike: strength aggravated damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sengirdagger.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101717": {
    "card": {
     "kind": "library",
@@ -5513,6 +7540,31 @@
     "sets": [
      "Sabbat V5",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101753": {
+   "card": {
+    "kind": "library",
+    "id": 101753,
+    "name": "Shanty Town Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Nosferatu antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/shantytownhuntingground.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Black Hand"
     ]
    },
    "supported": true
@@ -5606,6 +7658,29 @@
     "image": "https://static.krcg.org/card/sightbeyondsight.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101781": {
+   "card": {
+    "kind": "library",
+    "id": 101781,
+    "name": "The Signet of King Saul",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique.\nVampires with capacity 8 or more cannot attempt to block the bearer.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/signetofkingsaulthe.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Tenth Anniversary",
+     "Twenty-Fifth Anniversary"
     ]
    },
    "supported": true
@@ -5862,6 +7937,29 @@
    },
    "supported": true
   },
+  "101854": {
+   "card": {
+    "kind": "library",
+    "id": 101854,
+    "name": "Spoils of War",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [
+     "Brujah antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable after resolution of a successful directed action.\nThis vampire gains 1 blood and you gain 1 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/spoilsofwar.jpg",
+    "sets": [
+     "Danse Macabre"
+    ]
+   },
+   "supported": true
+  },
   "101856": {
    "card": {
     "kind": "library",
@@ -5908,6 +8006,29 @@
    },
    "supported": true
   },
+  "101870": {
+   "card": {
+    "kind": "library",
+    "id": 101870,
+    "name": "Stiff Contempt",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [
+     "Samedi"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable as the action is announced.\nVampires must burn 1 blood to attempt to block this action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/stiffcontempt.jpg",
+    "sets": [
+     "Heirs to the Blood"
+    ]
+   },
+   "supported": true
+  },
   "101872": {
    "card": {
     "kind": "library",
@@ -5929,6 +8050,30 @@
    },
    "supported": true
   },
+  "101891": {
+   "card": {
+    "kind": "library",
+    "id": 101891,
+    "name": "Submachine Gun",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 4,
+    "bloodCost": null,
+    "cardText": "Weapon, gun.\n3R damage each strike, with an optional maneuver each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/submachinegun.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Tenth Anniversary"
+    ]
+   },
+   "supported": true
+  },
   "101896": {
    "card": {
     "kind": "library",
@@ -5946,6 +8091,31 @@
     "image": "https://static.krcg.org/card/suddenreversal.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101909": {
+   "card": {
+    "kind": "library",
+    "id": 101909,
+    "name": "Surprise Influence",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a ready vampire. Only usable during the referendum of a political action.\nThis reacting vampire gains 2 votes.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/surpriseinfluence.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -5995,6 +8165,31 @@
     "image": "https://static.krcg.org/card/targetvitals.jpg",
     "sets": [
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "101943": {
+   "card": {
+    "kind": "library",
+    "id": 101943,
+    "name": "Tasha Morgan",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique mortal with 1 life.\nThe employer gets +1 bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/tashamorgan.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "2025 CC Promo"
     ]
    },
    "supported": true
@@ -6215,6 +8410,27 @@
    },
    "supported": true
   },
+  "101968": {
+   "card": {
+    "kind": "library",
+    "id": 101968,
+    "name": "Therbold Realty",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nLocations cost you 1 less blood or pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/therboldrealty.jpg",
+    "sets": [
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
   "101972": {
    "card": {
     "kind": "library",
@@ -6281,6 +8497,29 @@
     "image": "https://static.krcg.org/card/tierofsouls.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101986": {
+   "card": {
+    "kind": "library",
+    "id": 101986,
+    "name": "Tithings",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a ready Sabbat vampire with a capacity above 6.\nSuccessful referendum means you steal 1 pool from each Methuselah who does not control a vampire with a capacity above 6.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/tithings.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -6354,6 +8593,29 @@
    },
    "supported": true
   },
+  "102010": {
+   "card": {
+    "kind": "library",
+    "id": 102010,
+    "name": "Transfer of Power",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Successful referendum means you steal 1 pool from each Methuselah who has more pool than you do.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/transferofpower.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "102015": {
    "card": {
     "kind": "library",
@@ -6373,6 +8635,30 @@
     "image": "https://static.krcg.org/card/treasuredsamadji.jpg",
     "sets": [
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "102023": {
+   "card": {
+    "kind": "library",
+    "id": 102023,
+    "name": "Tribute to the Master",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Move 1 blood from each ready vampire you control to your pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/tributetothemaster.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition",
+     "Promo"
     ]
    },
    "supported": true
@@ -6470,6 +8756,32 @@
    },
    "supported": true
   },
+  "102075": {
+   "card": {
+    "kind": "library",
+    "id": 102075,
+    "name": "University Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Tremere antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Unique location. Hunting ground.\nDuring your unlock phase, a ready vampire you control can gain 1 blood. A vampire can gain blood from only one hunting ground each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/universityhuntingground.jpg",
+    "sets": [
+     "Sabbat",
+     "Black Hand",
+     "Third Edition",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": true
+  },
   "102078": {
    "card": {
     "kind": "library",
@@ -6487,6 +8799,31 @@
     "image": "https://static.krcg.org/card/unlicensedtaxicab.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "102080": {
+   "card": {
+    "kind": "library",
+    "id": 102080,
+    "name": "Unnatural Disaster",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master.\nBurn a location.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/unnaturaldisaster.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -6602,6 +8939,29 @@
    },
    "supported": true
   },
+  "102112": {
+   "card": {
+    "kind": "library",
+    "id": 102112,
+    "name": "Vermin Channel",
+    "types": [
+     "Action"
+    ],
+    "clans": [
+     "Nosferatu antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+3 stealth action.\nⒹ Bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/verminchannel.jpg",
+    "sets": [
+     "Sword of Caine"
+    ]
+   },
+   "supported": true
+  },
   "102113": {
    "card": {
     "kind": "library",
@@ -6692,6 +9052,31 @@
      "New Blood",
      "New Blood II",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "102134": {
+   "card": {
+    "kind": "library",
+    "id": 102134,
+    "name": "Vulnerability",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master.\nBurn a vampire in torpor.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/vulnerability.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Legacies of Blood",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -8966,6 +11351,27 @@
     "image": "https://static.krcg.org/card/umbrousclutch.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "102307": {
+   "card": {
+    "kind": "library",
+    "id": 102307,
+    "name": "Praxis Seizure: York",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Title. Requires a Camarilla vampire.\nSuccessful referendum means this card is put on this vampire to represent the unique Camarilla title of Prince of York.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureyork.jpg",
+    "sets": [
+     "2025 CC Promo"
     ]
    },
    "supported": true

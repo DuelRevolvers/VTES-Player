@@ -4,7 +4,7 @@
 > wave-by-wave history, much of it stale — it still listed finished phases
 > as upcoming and named blockers that had been built days earlier. That
 > staleness cost this project more time than any bug. Nothing is lost:
-> every mechanic has its own doc in `docs/` (110 of them), which is where
+> every mechanic has its own doc in `docs/` (114 of them), which is where
 > the citations, readings and traps live, and the old file is archived at
 > `docs/project-memory-archive-2026-09-07.md`. **This file is now only what
 > is BINDING and what is TRUE.**
@@ -32,16 +32,34 @@ rulebook, card text wins** (the Golden Rule, p. 16).
 
 ## Scope (locked)
 
-- Card pool = the **V5 product line only**, defined in
-  `config/v5-sets.json` (7 KRCG sets: Fifth Edition, Anarch, Companion,
-  Sabbat V5, New Blood I–III).
-- **661 unique cards** — 444 library, 217 crypt.
-- The full legacy pool (~4,000 cards) is out of scope. **Never widen the
-  pool without the owner's say-so.**
-- *Owner decision on record:* widening beyond V5 is blessed **in
-  principle** and is phase 8's job. `data/vtes-raw.json` already holds all
-  4,149 KRCG cards, so widening is an edit to `config/v5-sets.json` plus
-  `npm run cards:registry` — no network fetch.
+- **Library** = the **V5 product line** (`config/v5-sets.json`: 7 KRCG
+  sets — Fifth Edition, Anarch, Companion, Sabbat V5, New Blood I–III)
+  **plus any legacy card that has been implemented.** **545 cards, all
+  implemented.** A legacy library card is admitted by
+  `config/supported.json` alone — there is no separate config, because
+  for the library "implemented" and "may be in the pool" are the same
+  question (`docs/pool-widening-design.md` §6).
+- **Crypt** = the V5 sets. **217 cards, all whole.** The machinery to
+  widen past them exists and is deliberately switched OFF:
+  `config/crypt-groups.json` is `"groups": []`.
+- **762 unique cards.** *Re-derive from `src/cards/registry.json` rather
+  than trusting this line.*
+- **Widening is a PIPELINE, not a switch** (`docs/pool-widening-design.md`).
+  Opening a group in that config admits only vampires that are already
+  whole — the builder gates on it, so the pool can never get ahead of the
+  card waves. A 2026-09-08 widening to 1,680 crypt cards was rolled back
+  on the owner's word because it had admitted 1,104 inert abilities; the
+  gate is what stops that recurring. To widen: implement a clan's
+  abilities, then open its groups, then `npm run cards:registry`.
+- The legacy pool (~3,500 more cards) is out of scope for now.
+  **Never widen without the owner's say-so.** `data/vtes-raw.json`
+  already holds all 4,149 KRCG cards, so every widening is a config edit
+  plus `npm run cards:registry` — no network fetch.
+- **The crypt is cheap to ADMIT and not cheap to FINISH**, and those are
+  different things. An unimplemented crypt ability is reported as inert
+  rather than blocking the deck, so the registry would happily take a
+  vampire whose text does nothing — which is precisely why the gate
+  exists rather than being left to judgement.
 
 ---
 
@@ -74,7 +92,7 @@ rulebook, card text wins** (the Golden Rule, p. 16).
 
 ---
 
-## Status (accurate as of 2026-09-07)
+## Status (accurate as of 2026-09-10, platform v0.9.8)
 
 **Phases 1–7 are COMPLETE.** Data pipeline, rules kernel, the entire V5
 card pool, the play UI, AI v1 + batch simulation, PeerJS multiplayer with
@@ -82,24 +100,43 @@ lobby and room codes, and the deck importer (32 precons derived from the
 KRCG snapshot, 18 of them playable as printed — the rest are New Blood
 starters, half decks by design).
 
-**The card pool is finished.**
+**The card pool is finished and WHOLE — every card in it does everything
+it prints**, which `tests/cards/no-partial-cards.test.ts` asserts over
+the entire registry.
 
-- **Library 444/444 (100%)**
-- **Crypt: 99/217 have implementations, and ALL 217 play correctly** — the
-  other 118 print only a bare sect/title line and need no code.
-- Total with an implementation: 543/661. *Re-derive these from
+- **Library 545/545 (100%)** — 444 V5 plus 101 legacy cards from fifteen
+  waves (2026-09-09/10): 14 weapons, 13 locations, 7 equipment statics,
+  7 retainers and allies, 13 Praxis Seizures, 4 referendums, 6 one-shot
+  masters, 7 cost-modifier masters, 4 action modifiers, 3 referendum
+  reactions, 10 action cards, 13 political actions.
+- **Crypt 217** — 99 with an implementation, 118 printing no ability and
+  needing none. Both kinds are whole; there is no third kind.
+- Total with an implementation: 644/762. *Re-derive these from
   `src/cards/registry.json` rather than trusting this line.*
 - `docs/partial-support.md` is the ledger of supported cards with a
   known-missing clause. **Its "needs engine work" table is empty**, there
   are no `// PARTIAL:` markers left in `cards.ts`, and the cut and blocked
   lists are empty.
+- **`docs/card-status-by-set.md` is the whole picture**: every one of the
+  4,149 KRCG cards, by set, as built / whole / which wave takes it. It is
+  GENERATED — regenerate it in the same pass as any card wave
+  (`node scripts/card-status-by-set.cjs > docs/card-status-by-set.md`)
+  and never hand-edit its numbers.
 
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 178 test files, 1934 tests**, with `npm run typecheck`,
+**Green baseline: 200 test files, 2252 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
+
+**Saved games and default bot names landed 2026-09-09 (v0.9.8)** —
+`docs/saved-games-design.md`. The Profile screen now lists the games this
+browser holds: named slots plus a **Last game** slot the table rewrites
+at the top of every turn, loadable from there or from a `.json` file. A
+save now records **which seats were bots** (`SavedGame.botSeats`), without
+which a loaded private table came back with nobody driving three of its
+seats. Bot seats also take their default names from the Profile screen.
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 
@@ -111,8 +148,52 @@ fewer, something regressed.
    ~2200px as **WebP, not JPEG** — the alpha channel IS used (8.5% of
    pixels partially transparent, measured). Deploying is the owner's act;
    nothing in the tree publishes by itself.
-2. **PHASE 8 — widen the pool beyond V5.** The months-long one. Expect the
-   661 count and every tally here to need re-deriving.
+2. **PHASE 8 — widen the pool beyond V5.** Plan and status:
+   `docs/pool-widening-design.md`. **The CRYPT is deliberately still
+   V5-only; the LIBRARY is widening, one implemented card at a time.**
+   The config split, the crypt group rule, the sect/title fixes and the
+   ambiguity-resolving deck importer all landed; a widening to 1,680
+   crypt cards was then rolled back because it broke "No partial cards",
+   and the builder now gates on wholeness so it cannot recur.
+   **Widening is now downstream of card work**, and the card work is:
+   - **§6 — the library, IN PROGRESS.** Three tranches, in this order:
+     **T1** no discipline, **T2** only disciplines the V5 crypt already
+     has, **T3** a legacy discipline. The library comes before the crypt
+     because the nearest crypt cards carry legacy disciplines nothing in
+     the pool yet requires. A legacy library card is admitted by
+     `supported.json` alone, so implementing it and admitting it are one
+     edit.
+     **Waves 1–15 landed 2026-09-09/10, library 444 → 545.**
+   - **§7 — the crypt abilities.** Follows the library. Clan-by-clan
+     waves, each of which lets its clan's groups be opened in
+     `config/crypt-groups.json`. **1,162 legacy vampires print an ability
+     with no implementation**; a further **386 print none and are already
+     whole** — those enter the pool the day their group opens, for free.
+
+   **The road ahead, T1 by bucket** (re-derive with
+   `scripts/card-status-by-set.cjs`; **1,105 cards left in T1**, then 229
+   in T2 and 485 in T3):
+
+   | Bucket | Left | Notes |
+   |---|---:|---|
+   | Master | 369 | **No families.** Clustering by text shape finds no group of three or more, so masters are hand-picked a few per wave. Opened in wave 7. |
+   | Action | 176 | Opened in waves 11–12. |
+   | Political Action | 122 | Opened in waves 13–15; the richest vein so far — three waves, three engine gaps found. |
+   | Equipment | 118 | Statics opened in wave 3. |
+   | Ally | 90 | |
+   | Combat | 53 | |
+   | Action Modifier | 47 | Opened in wave 9. |
+   | Event | 40 | **Untouched.** No event card is in the pool at all; expect this to need machinery, not just cards. |
+   | Reaction | 40 | Opened in wave 10. |
+   | Retainer | 28 | |
+   | (mixed types) | 22 | Action Modifier/Reaction and friends. |
+   | Conviction | 3 | Imbued-only. **Out of scope** — no engine model. |
+
+   **Sequence by MECHANIC, never alphabetically.** A wave is a family
+   that shares a primitive, which is what makes one new primitive pay for
+   four or five cards and what makes the negative-space tests meaningful.
+   **Deferred, waiting on §7:** Tradition Upheld (needs a Caitiff in the
+   pool).
 3. **AI.** Weight-tweaking is exhausted, demonstrably
    (`docs/richer-options-design.md` §5–§8). A search agent exists, is
    guarded, and is **not better yet**; the unsolved part is the VALUE
@@ -143,6 +224,58 @@ catch it, and a negative test needs a fixture that fails for the RIGHT
 reason. Seen as: a clan filter naming "Assamite" (the registry says Banu
 Haqim), unenforced `meetsRequirements`, a test that passes by doing
 nothing, and a measurement that reads zero because it never ran.
+
+**A set derived from "the registry" has to name its card KIND.** While
+the library was V5-only, crypt clans and library clans were the same
+names, so `clan-vocabulary.test.ts` could union both and be right by
+accident. The legacy library brought in twenty-two clans no vampire has
+(Giovanni, Osebo, Brujah antitribu…), and a library card's clan is an
+ICON, not a vampire — `CLANS` is what Consanguineous Boon offers and p. 49
+says that is the clans in the POOL. Expect every registry-derived set to
+need this question re-asked as the library widens.
+
+**`meetsRequirements` has now been forgotten FOUR times**, most recently
+by `permanentActionOptions` — the shared recruit-ally / employ-retainer /
+put-permanent enumerator — which left every clan- and sect-gated ally and
+retainer in the pool playable by any minion (Crypt's Sons, Feral Hound,
+both Szlachtas). Twice now the fix went into one enumerator while a
+sibling went without. **When you add an option enumerator, or fix one,
+check every other one.**
+
+**"It already exists" is a claim to CHECK, not to make.** Praxis Seizure
+prints "this could lead to a contested title", and the contest was
+reported as free because the engine models contests. It gates on
+`registry[name].isUnique`, which the card did not set — and turning it on
+uncovered that the contested path never emitted `TitleLost`, so a
+contested prince kept a title granted by a card no longer in play (Regent
+had the same bug). A deferral is a claim about the code as it was; so is
+a NON-deferral.
+
+**A strike is CHOSEN in one window and RESOLVED in another**, and a
+combatant can leave the table in between — an ally paying a cost with the
+life that IS its blood, a burn, a removal. `inflict()` read both
+combatants with `getMinion` and threw. The fuzz found it on seed 1 the
+moment a card that burns allies from outside combat joined the decks, and
+stashing the deck change turned it green: **a green fuzz before and a red
+one after is usually a latent bug being dealt in, not a new one.** Read
+the fuzz failure as a report about the ENGINE first.
+
+**A card can be WHOLE and still be inert, and the pool wants neither.**
+Tradition Upheld ("choose a ready Caitiff … burn that Caitiff") was built,
+tested and passing before `clan-vocabulary.test.ts` pointed out that no
+vampire in the pool is Caitiff — 36 legacy ones are, none in V5. It did
+everything it printed and could never do anything. §0 keeps that out for
+the same reason it keeps partial cards out. **Before implementing a card
+that filters on a clan, title, sect or card type, check the pool actually
+contains one.** Deferred to §7; it costs nothing the day a Caitiff group
+opens.
+
+**A new call beside an existing one should copy its GUARDS before it
+copies its shape.** `applyReferendumFailed` was added one line above a
+call that reads the same field, and the neighbour's `rf.cardInstanceId &&`
+was not a style choice: a BLOOD HUNT is a referendum with no calling card
+and an empty `cardName`, which `handler()` throws on. Five test files went
+red at once. The guards around a line are part of what that line means.
 
 **A handler lookup cannot answer a question whose answer differs by mode.**
 Denormalize onto the frame or the entry instead (the `isMaster`
@@ -202,7 +335,8 @@ worked.
 ## Version numbering (BINDING — owner rule, 2026-09-07)
 
 The platform carries a version number, shown in very small text at the
-foot of the main menu under the copyright line: **`platform v0.7.0`**.
+foot of the main menu under the copyright line, e.g. **`platform v0.9.8`**
+(what it actually reads is whatever `src/version.ts` says — see below).
 
 - **It lives in `src/version.ts`** (`PLATFORM_VERSION`), which is the
   single source of truth. `package.json` carries the same string and
@@ -216,6 +350,35 @@ foot of the main menu under the copyright line: **`platform v0.7.0`**.
   code, so a build and its number cannot disagree.
 - The current version is whatever `src/version.ts` says. **Read it rather
   than trusting this line** — the example above is an example.
+
+## No partial cards (BINDING — owner rule, 2026-09-08)
+
+> *"We can't half-ass any card, ever. We need all cards added to this
+> platform working at 100% entirely or we literally can't play the game
+> correctly. Never skimp on building cards."*
+
+A card is **in the pool** only when it does everything it prints. Not
+most of it, not the common case, not "that clause is rare".
+
+- **A vampire's printed ability counts.** A crypt card whose ability does
+  nothing is a card that plays wrong every time the ability would have
+  mattered, and nothing on the table shows it happening.
+- **"Reported as inert" is not a substitute for implemented.** Telling a
+  player the card does nothing is honest; an honest wrong card is still a
+  wrong card. `inertAbilities` exists so a playtest is not misled — never
+  as a licence to ship the card that way.
+- **Admitting a card to the registry is a promise about it.** If its
+  ability is not built, it does not come in yet. This is why the crypt
+  widening is a pipeline (`config/crypt-groups.json`), not a one-off:
+  cards follow the waves that implement them.
+- This outranks any counting argument. "Cheap" in a design doc means
+  cheap to ADMIT — see `docs/pool-widening-design.md` §0 and §7, where
+  eliding that distinction let 1,104 vampires with inert abilities into
+  the pool before it was rolled back.
+- **It is enforced, not trusted.** `tests/cards/no-partial-cards.test.ts`
+  asserts it over the whole registry, and `widenedCrypt` in
+  `scripts/build-registry.mts` refuses to admit a card that fails it. Do
+  not weaken either to make a widening land.
 
 ## Card registry rules
 
@@ -243,12 +406,43 @@ foot of the main menu under the copyright line: **`platform v0.7.0`**.
    **`implementedIds` is only for a bespoke handler with NO spec** — it
    already starts with `...cardSpecs.map(s => s.krcgId)`, so adding a
    spec-compiled card again makes a duplicate and `supported.test.ts`
-   fails.
+   fails. **Then regenerate the status doc** (owner rule, 2026-09-09):
+   `node scripts/card-status-by-set.cjs > docs/card-status-by-set.md`.
+   It must be current after every wave, widening or registry rebuild;
+   never hand-edit its numbers.
 5. Add the card (and any discipline it needs) to the fuzz decks in
    `tests/engine/fuzz.test.ts`. **Every addition reshuffles every seeded
    game**, so a green fuzz before and a failure after usually means a
    pre-existing latent bug just got dealt in.
 6. `npm run typecheck` && `npm test` green before done.
+
+### A WAVE (what the owner means by "onto the next")
+
+A wave is 3–6 cards that **share a mechanic**, not a letter of the
+alphabet. Picking the family is most of the work: one new primitive
+should pay for the whole wave, and the cards should differ in ways worth
+asserting against each other.
+
+1. **Pick the family** from the T1 bucket table above, and **check the
+   pool can actually produce its targets** before building — a card that
+   filters on a clan, title, sect or card type the pool does not have is
+   inert, and §0 keeps inert cards out as firmly as partial ones.
+2. **Read the printed text from the raw snapshot**, not from memory, and
+   read the RULINGS. Three waves running, a legacy card's ruling exposed
+   a missing half in a V5 card already in the pool.
+3. Implement, test and admit each card by the six steps above.
+4. **Bump `src/version.ts` and `package.json` by 0.0.1** in the same pass.
+5. **`npm run typecheck`, `npm test`, `npx vite build`, `npm run simulate`**
+   — all four, every wave.
+6. **Update three files**: a wave section in
+   `docs/pool-widening-design.md` §6, the counts and green baseline in
+   this file, and `docs/card-status-by-set.md` (regenerated, never
+   hand-edited).
+7. **Report to the owner**: library / crypt / total, re-derived from
+   `data/registry-report.txt`, plus what the wave found. The card counts
+   are the least interesting part — **the engine defects the cards
+   uncovered are the point**, and every wave since 11 has found at least
+   one.
 
 **Edit source files with the file-editing tools, never with shell string
 surgery.** `node -e`, heredocs and `sed` mangle TypeScript — backticks,
@@ -337,7 +531,6 @@ Each has cost an hour of "why is my card not offered":
   Discipline) are built.
 - The `.44 Magnum` bespoke handler does not honour the
   equipment-restriction static (it does honour `handStrikesOnly`).
-- Rutor's Hand's pay-to-opt-out.
 - `spec.combatLimit` is per COMBAT FRAME where the printed limit is per
   VAMPIRE, so two combatants cannot each play their own copy in a round.
 - Fuzz games end in a draw at `maxTurns` — an engine safeguard, not a
@@ -385,8 +578,12 @@ than the batch file.
 - Prefers being walked through decisions rather than having them made
   silently. When a rules question is ambiguous, **cite the rulebook
   section and ask**.
-- **Report the card count with every card wave** — library X/444, crypt
-  X/217, total X/661, re-derived from the registry.
+- **Report the card count with every card wave** — library, crypt and
+  total, re-derived from the registry (`data/registry-report.txt` prints
+  them). The denominators MOVE now that the library is widening, so
+  quote them from the build rather than from this file. **And regenerate
+  `docs/card-status-by-set.md`** in the same pass — the owner reads it as
+  the picture of platform completeness, so a stale copy misreports.
 - The owner plays the build and finds real bugs by looking at the table.
   Take that feedback literally and check the rules before assuming it is
   cosmetic — half of what looks like a bug is the engine being right about
@@ -406,7 +603,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-Every mechanic that took a decision has a doc under `docs/` (110 files).
+Every mechanic that took a decision has a doc under `docs/` (114 files).
 **Read the doc before touching the mechanic** rather than re-deriving it;
 each holds the rulebook citations and the readings taken.
 
@@ -454,7 +651,9 @@ leaderboard, deck library, diablerie steps 2 and 4, and withdrawal).
 
 **Planning and audits:** `crypt-plan.md`, `crypt-wave-1.md` … `-7.md`,
 `remaining-mechanics-roadmap.md`, `one-off-sweep.md`, `library-audit.md`,
-`ledger-closeout.md`, `partial-support.md`.
+`ledger-closeout.md`, `partial-support.md`, `card-status-by-set.md` (every KRCG
+card by set and state — built, whole, or which wave takes it; regenerate with
+`node scripts/card-status-by-set.cjs > docs/card-status-by-set.md`).
 
 **AI:** `ai-v1-design.md` (the scoring policy and the batch harness),
 `ai-bench-design.md` (the fair mirror-match harness and its controls),
@@ -465,6 +664,8 @@ may legitimately have, and the verdict that the value function is the open
 problem).
 
 **UI, net and shipping:** `debug-ui-design.md`, `shell-design.md`,
+`saved-games-design.md` (named save slots, the automatic per-turn slot,
+`SavedGame.botSeats`, and the default bot names),
 `lobby-design.md`, `lobby-rework-2026-09-06.md`, `multiplayer-design.md`,
 `deck-import-design.md`, `fresh-game-design.md`, `game-log-design.md`,
 `futile-options-design.md`, `playtest-2026-09-05.md`, `pages-design.md`,
@@ -486,6 +687,12 @@ before the rewrite, kept for the wave-by-wave narrative.
 4. `docs/partial-support.md` **before designing against any deferral** —
    and verify it against the tree, because a deferral is a claim about the
    code as it was.
+5. **If the task is a card wave** (the owner says "onto the next"):
+   `docs/pool-widening-design.md` §6 for what the last waves did and why,
+   `docs/card-status-by-set.md` for what is left, and "A WAVE" above for
+   the rhythm. **Re-derive every count from
+   `data/registry-report.txt`** rather than trusting any line in a doc,
+   this one included.
 
 Do not relitigate the settled decisions (headless engine, event sourcing,
 the impulse system, the legal-move generator, the V5-only pool, the

@@ -276,6 +276,9 @@ export interface EngineOps {
   /** "Once each combat" for an ability that is not a prevention — the
    *  same latch `preventDamageAbility` writes with `scope: "combat"`. */
   markUsedThisCombat(cardId: CardInstanceId): void;
+  /** "Once each round" — the sibling latch, emptied at the start of every
+   *  round by the engine. */
+  markUsedThisRound(cardId: CardInstanceId): void;
   /** The minion-addressed form of `grantAdditionalStrike`, for a card in
    *  play (which has no `CardPlayFrame`). */
   grantAdditionalStrikeTo(minion: MinionId, count: number, limited: boolean): void;
@@ -422,7 +425,10 @@ export interface EngineOps {
   registerCorruptionUnlock(minion: MinionId, seat: SeatId): void;
   /** "X cannot block this action" — allies/vampires/titled outright, or a
    *  chosen vampire by id (Seduction, Visions of Gehenna; p. 26). */
-  restrictBlocking(who: "allies" | "vampires" | "titled" | "chosen", chosen?: MinionId): void;
+  restrictBlocking(
+    who: "allies" | "vampires" | "titled" | "chosen" | "all",
+    chosen?: MinionId,
+  ): void;
   /** "Minions [without X] must burn 1 blood [or life] to attempt to block
    *  this action" (docs/block-tax-design.md). Cumulative. */
   imposeBlockCost(
@@ -431,7 +437,12 @@ export interface EngineOps {
   ): void;
   /** "Minions get -1 intercept" — action-wide, unlike modifyBlockerIntercept,
    *  which pushes down the minion currently attempting the block. */
-  modifyAllIntercept(delta: number, source: string, appliesTo?: "vampire" | "ally"): void;
+  modifyAllIntercept(
+    delta: number,
+    source: string,
+    appliesTo?: "vampire" | "ally",
+    exemptDisciplines?: string[],
+  ): void;
   /** "Allies and younger vampires get −1 intercept" (Perfect Paragon
    *  superior) — the same event with a two-clause filter; the English
    *  "and" is a UNION. docs/opposing-statics-design.md §1 */
@@ -841,6 +852,8 @@ export interface CardActionParams {
   /** "Ⓓ Enter combat with AND LOCK a vampire" (Deep Song superior) — the
    *  lock happens on success, with the combat. */
   lockTarget?: boolean;
+  /** "…with a LOCKED minion" — re-checked at resolution (Ambush). */
+  requiresLockedTarget?: boolean;
 }
 
 export interface CardHandler {
@@ -1009,6 +1022,19 @@ export interface CardHandler {
   /** Referendum step 3: apply the card's effects after the referendum
    *  passes. Failed referendums never call this. */
   applyReferendum?(frame: ReferendumFrame, ops: EngineOps): void;
+  /**
+   * The other half of step 3: apply the CALLING card's effects after its
+   * referendum FAILED ("If this referendum fails, the acting vampire
+   * burns 1 blood" — The Final Nights).
+   *
+   * `onReferendumLost` cannot serve: it iterates cards in play, and the
+   * calling card has already gone to the ash heap. This is called on the
+   * calling card's own handler, the mirror of `applyReferendum`, and only
+   * for a referendum that RESOLVED — a cancelled one never reaches here,
+   * which is what "if this referendum fails" means
+   * (docs/abstain-gate-design.md).
+   */
+  applyReferendumFailed?(frame: ReferendumFrame, ops: EngineOps): void;
   /** Statics/tags this card carries while in play (denormalized onto the
    *  PermanentInPlay entry at entry time). */
   permanentStatics?: PermanentStatics;

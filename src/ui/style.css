@@ -855,6 +855,24 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .deckstore .lobbyrow { gap: 6px; }
 .deckstore button { padding: 3px 8px; font-size: 11px; }
 
+/* Saved games. The same row as a saved deck's, with one more column: when
+   it was saved, which is what tells two games at the same table apart. */
+.savestore .lobbyrow { gap: 6px; }
+.savestore button { padding: 3px 8px; font-size: 11px; }
+.saverow .lname { flex: 0 0 auto; }
+.saverow .ldeck { text-align: left; }
+.savewhen { flex: 0 0 auto; font-size: 11px; white-space: nowrap; }
+
+/* The bot-name boxes are a LIST, so they read as rows rather than as five
+   stacked forms: the label sits beside its box instead of above it. */
+.botnames .botnamerow {
+  flex-direction: row; align-items: center; gap: 10px; margin-bottom: 6px;
+}
+.botnames .botnamerow > span:first-child {
+  flex: 0 0 46px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+}
+.botnames .botnamerow input { flex: 1 1 auto; }
+
 .lbtable { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
 .lbtable th {
   text-align: left; color: var(--dim); font-weight: 600; font-size: 11px;

@@ -25,7 +25,7 @@ import registry from "../cards/registry.json";
 import type { CardDef, CardRegistry, CryptCardDef, PreconDeck } from "../cards/types.ts";
 import { importCryptCard } from "./cardinfo.ts";
 import type { DeckList } from "./decks.ts";
-import { MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
+import { cryptGroupProblem, MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
 
 const reg = registry as unknown as CardRegistry;
 
@@ -55,22 +55,48 @@ function normalise(name: string): string {
     .trim();
 }
 
-/** KRCG suffixes a crypt name with its group — "Ariane (G5)". Deck lists
- *  usually print the group in its own column instead, so both spellings
- *  have to resolve. `(ADV)` marks an advanced vampire (none in V5). */
+/**
+ * KRCG suffixes a crypt name with its group, and marks an advanced
+ * printing in the same parenthetical — "Ariane (G5)", "Alan Sovereign
+ * (G3 ADV)". Deck lists usually print the group in its own column
+ * instead, so the bare spelling has to resolve too.
+ */
 function stripCryptSuffix(name: string): string {
-  return name.replace(/\s*\((?:g\s*\d+|adv)\)\s*$/i, "").trim();
+  return name.replace(/\s*\((?:g\s*\d+(?:\s+adv)?|adv)\)\s*$/i, "").trim();
+}
+
+/**
+ * Does this written name ask for the ADVANCED printing?
+ *
+ * A BARE NAME MEANS THE BASE CARD, always. The advanced printing is a
+ * separate card that every deck list marks explicitly (p. 6: "an advanced
+ * card … has an Advanced icon under the clan icon"), and the two share a
+ * group — so no amount of deck context could tell them apart. Treating a
+ * bare name as ambiguous would reject lists that are perfectly clear;
+ * treating it as the base card is what the writer meant.
+ */
+function wantsAdvanced(name: string): boolean {
+  return /\badv\)?\s*$/i.test(name.trim());
 }
 
 const byName = new Map<string, CardDef>();
+/**
+ * Bare crypt name → every printing that could be meant.
+ *
+ * ONE NAME IS NO LONGER ONE CARD. While the pool was a single group range
+ * a bare name was unique, and this map was a `CardDef` with a test
+ * asserting no collisions. Widening the crypt past one group range breaks
+ * that — 73 bare names cover 148 cards — so the ambiguity is carried
+ * here and resolved against the deck being imported.
+ * docs/pool-widening-design.md §5
+ */
+const cryptByBare = new Map<string, CryptCardDef[]>();
 for (const entry of Object.values(reg.entries)) {
   const card = entry.card;
   byName.set(normalise(card.name), card);
   if (card.kind === "crypt") {
-    // The bare name, for a list that puts the group in a column. No V5
-    // crypt card collides once its group is stripped — a test asserts it,
-    // because the day one does this map would silently prefer one of them.
     const base = normalise(stripCryptSuffix(card.name));
+    cryptByBare.set(base, [...(cryptByBare.get(base) ?? []), card]);
     if (!byName.has(base)) byName.set(base, card);
   }
 }
@@ -78,10 +104,33 @@ for (const entry of Object.values(reg.entries)) {
 const byId = new Map<number, CardDef>();
 for (const entry of Object.values(reg.entries)) byId.set(entry.card.id, entry.card);
 
-/** Look up one exact name, in any of the spellings a site might use. */
+/**
+ * Every card a written name could mean, best first.
+ *
+ * An exact spelling ("Ariane (G5)") names one card and is returned alone.
+ * A bare name returns every printing of it that matches the advanced
+ * marker the writer used — which is one card most of the time, and more
+ * when the pool holds the same vampire in several groups.
+ */
+export function findCards(name: string): CardDef[] {
+  const exact = byName.get(normalise(name));
+  // An exact hit on the FULL name is unambiguous by construction: the
+  // group (and the ADV marker) are part of it.
+  if (exact && normalise(name) === normalise(exact.name)) return [exact];
+  const bare = cryptByBare.get(normalise(stripCryptSuffix(name)));
+  if (bare) {
+    const adv = wantsAdvanced(name);
+    const matching = bare.filter((c) => wantsAdvanced(c.name) === adv);
+    if (matching.length > 0) return matching;
+  }
+  return exact ? [exact] : [];
+}
+
+/** Look up one exact name, in any of the spellings a site might use.
+ *  Returns the first candidate when a bare name covers several — callers
+ *  that need to know about the ambiguity use `findCards`. */
 export function findCard(name: string): CardDef | null {
-  const n = normalise(name);
-  return byName.get(n) ?? byName.get(normalise(stripCryptSuffix(name))) ?? null;
+  return findCards(name)[0] ?? null;
 }
 
 /**
@@ -93,13 +142,38 @@ export function findCard(name: string): CardDef | null {
  * on the separator. Matching longest-first matters — a shorter card name
  * can be the prefix of a longer one, and the longer one is the real card.
  */
-function resolveLine(rest: string): CardDef | null {
+function resolveLine(rest: string): CardDef[] {
   const words = rest.split(/\s+/).filter(Boolean);
   for (let take = words.length; take > 0; take--) {
-    const hit = findCard(words.slice(0, take).join(" "));
-    if (hit) return hit;
+    const hits = findCards(words.slice(0, take).join(" "));
+    if (hits.length > 0) return hits;
   }
-  return null;
+  return [];
+}
+
+/**
+ * Pick one printing out of several, using the crypt already resolved.
+ *
+ * The rule that makes this safe is the group rule itself (p. 4): a crypt
+ * uses one group or two consecutive ones, so once any unambiguous vampire
+ * has been read, the deck's group range is known and a bare name that
+ * only fits one of its printings is not a guess — it is the only reading
+ * that produces a legal deck.
+ *
+ * Returns null when the context does not settle it, and the caller
+ * reports the ambiguity rather than choosing. A deck importer that
+ * guesses builds a deck the player did not.
+ */
+function narrowByGroup(candidates: CardDef[], known: Set<number>): CardDef | null {
+  if (candidates.length === 1) return candidates[0]!;
+  if (known.size === 0) return null;
+  const fits = candidates.filter((c) => {
+    if (c.kind !== "crypt" || typeof c.group !== "number") return true;
+    // Legal beside every group already seen, which for a span of two
+    // means within one of both ends.
+    return [...known].every((g) => Math.abs(g - (c.group as number)) <= 1);
+  });
+  return fits.length === 1 ? fits[0]! : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,25 +218,22 @@ export interface ImportReport {
   groups: Array<number | "ANY">;
 }
 
-/** p. 4: "A Methuselah's crypt must be built using vampires from a single
- *  group or from two consecutive groups." Glossary: "A crypt card with the
- *  group 'any' is not subject to the group restriction." */
+/**
+ * The group rule, for the report — the verdict comes from
+ * `cryptGroupProblem` in decks.ts, which is the ONE place the rule lives.
+ *
+ * This used to carry its own copy of the arithmetic, and a second copy
+ * was very nearly added beside `validateDecks`'s other p. 14 checks. One
+ * question asked in two places will drift, and this one had already been
+ * asked twice.
+ */
 function groupProblem(cards: CryptCardDef[]): { problem: string | null; groups: Array<number | "ANY"> } {
   const seen = new Set<number | "ANY">();
   for (const c of cards) seen.add(c.group);
-  const numeric = [...seen].filter((g): g is number => typeof g === "number").sort((a, b) => a - b);
   const groups = [...seen].sort((a, b) =>
     a === "ANY" ? 1 : b === "ANY" ? -1 : (a as number) - (b as number),
   );
-  if (numeric.length === 0) return { problem: null, groups };
-  const span = numeric[numeric.length - 1]! - numeric[0]!;
-  if (span > 1) {
-    return {
-      problem: `crypt mixes groups ${numeric.join(", ")}; a crypt may use one group or two consecutive ones (p. 4)`,
-      groups,
-    };
-  }
-  return { problem: null, groups };
+  return { problem: cryptGroupProblem([...seen]), groups };
 }
 
 /** "Deck Name: X" / "Name: X", however the site spells it. */
@@ -191,6 +262,35 @@ export function importDeck(text: string, seat: string): { deck: DeckList | null;
   const inert = new Set<string>();
   const counted = new Map<number, ImportedCard>();
 
+  // TWO PASSES, because a bare crypt name can only be read once the
+  // deck's group range is known, and that range comes from the lines that
+  // were unambiguous. Pass one resolves everything it can and records the
+  // groups; pass two settles what is left against them, and reports what
+  // it still cannot settle. docs/pool-widening-design.md §5
+  const deferred: Array<{ line: number; text: string; copies: number; candidates: CardDef[] }> = [];
+  const knownGroups = new Set<number>();
+
+  /** Record one resolved card. Shared by both passes so a deferred line
+   *  lands exactly as an immediate one would. */
+  const take = (card: CardDef, copies: number): void => {
+    const already = counted.get(card.id);
+    if (already) {
+      already.copies += copies;
+      return;
+    }
+    const item: ImportedCard = { id: card.id, name: card.name, copies };
+    counted.set(card.id, item);
+    if (card.kind === "crypt") {
+      crypt.push(item);
+      cryptDefs.push(card);
+      if (typeof card.group === "number") knownGroups.add(card.group);
+      if (importCryptCard(card.id).hasUnimplementedAbility) inert.add(card.name);
+    } else {
+      library.push(item);
+      if (!(reg.entries[card.id]?.supported ?? false)) unsupported.push(item);
+    }
+  };
+
   lines.forEach((raw, i) => {
     const line = raw.trim();
     if (line === "") return;
@@ -208,8 +308,8 @@ export function importDeck(text: string, seat: string): { deck: DeckList | null;
     const rest = (m[2] ?? "").trim();
     if (!Number.isFinite(copies) || copies <= 0 || rest === "") return;
 
-    const card = resolveLine(rest);
-    if (!card) {
+    const candidates = resolveLine(rest);
+    if (candidates.length === 0) {
       unknown.push({
         line: i + 1,
         text: line,
@@ -217,29 +317,33 @@ export function importDeck(text: string, seat: string): { deck: DeckList | null;
       });
       return;
     }
-
-    // The same card can be listed twice (some exports split by card type);
-    // fold the counts rather than emitting it twice.
-    const already = counted.get(card.id);
-    if (already) {
-      already.copies += copies;
+    if (candidates.length > 1) {
+      // Several printings share this name. Hold it for pass two, when the
+      // deck's own group range is known.
+      deferred.push({ line: i + 1, text: line, copies, candidates });
       return;
     }
-    const item: ImportedCard = { id: card.id, name: card.name, copies };
-    counted.set(card.id, item);
-
-    if (card.kind === "crypt") {
-      crypt.push(item);
-      cryptDefs.push(card);
-      // A vampire whose card text is a bare sect/title line needs no code
-      // and plays correctly; one with real text that is unimplemented is
-      // reported, not refused (the same reading validateDecks takes).
-      if (importCryptCard(card.id).hasUnimplementedAbility) inert.add(card.name);
-    } else {
-      library.push(item);
-      if (!(reg.entries[card.id]?.supported ?? false)) unsupported.push(item);
-    }
+    // The same card can be listed twice (some exports split by card type);
+    // `take` folds the counts rather than emitting it twice.
+    take(candidates[0]!, copies);
   });
+
+  // Pass two: settle the held lines against the groups pass one found.
+  for (const d of deferred) {
+    const picked = narrowByGroup(d.candidates, knownGroups);
+    if (picked) {
+      take(picked, d.copies);
+      continue;
+    }
+    unknown.push({
+      line: d.line,
+      text: d.text,
+      reason: `several cards are called that — write the group, e.g. ${d.candidates
+        .slice(0, 3)
+        .map((c) => `"${c.name}"`)
+        .join(" or ")}`,
+    });
+  }
 
   const cryptCount = crypt.reduce((n, c) => n + c.copies, 0);
   const libraryCount = library.reduce((n, c) => n + c.copies, 0);

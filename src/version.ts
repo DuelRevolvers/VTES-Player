@@ -11,7 +11,7 @@
  * not semver in the library sense, it is a build counter people can point
  * at. A wave of card work, a bug fix and a UI tweak each earn one.
  */
-export const PLATFORM_VERSION = "0.7.3";
+export const PLATFORM_VERSION = "0.9.8";
 
-/** As it is written on screen: "platform v0.7.3". */
+/** As it is written on screen: "platform v0.8.0". */
 export const PLATFORM_VERSION_LABEL = `platform v${PLATFORM_VERSION}`;

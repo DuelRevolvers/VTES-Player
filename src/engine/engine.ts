@@ -76,6 +76,7 @@ import type {
   GameEvent,
   GameState,
   HandSizeGrant,
+  MinionKind,
   MinionId,
   RushRiders,
   MinionState,
@@ -766,6 +767,7 @@ export class VtesEngine implements EngineOps {
           if (!found) break;
           held.permanent = found.entry;
           if (ev.bearer !== undefined) held.bearer = ev.bearer;
+          if (ev.title !== undefined) held.title = ev.title;
           for (const s of this.state.seats) {
             s.permanents = s.permanents.filter((p) => p.card.id !== ev.cardId);
             for (const m of s.minions) {
@@ -804,6 +806,12 @@ export class VtesEngine implements EngineOps {
             seat.permanents.push(held.permanent);
           } else if (bearer) {
             bearer.attached.push(held.permanent);
+            // …and the title comes back with it: the card is in play
+            // again, so it grants what it granted before (p. 17, "the
+            // card is turned face up, ending the contest").
+            if (held.title !== undefined) {
+              this.emit({ type: "TitleGranted", minion: bearer.id, title: held.title });
+            }
           } else {
             // The bearer is gone, so an attached card has nowhere to
             // return to and is burned (§5) — a reading, not a citation.
@@ -1383,6 +1391,20 @@ export class VtesEngine implements EngineOps {
       const toMove = list.filter((c) => !c.held);
       if (toMove.length === 0) continue; // already all face down: stable
       for (const c of toMove) {
+        // A TITLE card going face down takes the title with it: the card
+        // is "out of play" (p. 17), so the bearer is no longer a prince
+        // while the contest stands. `burnPermanent` has always done this
+        // for a title card that is burned; the contested path did not,
+        // which left a Praxis Seizure's — and a Regent's — bearer holding
+        // a title granted by a card that was no longer there.
+        const bearer =
+          c.bearer !== undefined && c.entry?.tags.includes("title")
+            ? findMinion(this.state, c.bearer)
+            : null;
+        const heldTitle = bearer?.title ?? undefined;
+        if (bearer && heldTitle !== undefined) {
+          this.emit({ type: "TitleLost", minion: bearer.id });
+        }
         this.emit({
           type: "ContestBegan",
           seat: c.seat,
@@ -1390,6 +1412,7 @@ export class VtesEngine implements EngineOps {
           name,
           ...(c.minion ? { minion: c.minion.id } : {}),
           ...(c.bearer !== undefined ? { bearer: c.bearer } : {}),
+          ...(heldTitle !== undefined ? { title: heldTitle } : {}),
         });
       }
       return true;
@@ -2277,6 +2300,16 @@ export class VtesEngine implements EngineOps {
       if (rf.cardInstanceId && this.handler(rf.cardName).holdsCardForReferendum) {
         this.emit({ type: "CardBurned", cardId: rf.cardInstanceId, name: rf.cardName, seat: rf.caller });
       }
+      // The calling card's own failure clause ("If this referendum fails,
+      // the acting vampire burns 1 blood" — The Final Nights). Before the
+      // in-play sweep below, so the card that CAUSED the referendum acts
+      // before cards that merely watched it, and after the card-burn
+      // above, which is a cost of the failure rather than an effect of it.
+      // A BLOOD HUNT has no calling card and an empty `cardName`, which
+      // `handler()` throws on — the guard the line above spells as
+      // `rf.cardInstanceId &&`. A registry read rather than `handler()`,
+      // so a referendum with no card simply has no failure clause.
+      this.registry[rf.cardName]?.applyReferendumFailed?.(rf, this);
       // "…is canceled or FAILS" (Cedrick). The frame is already popped.
       this.notifyReferendumLost(rf, "failed");
       return;
@@ -2629,6 +2662,7 @@ export class VtesEngine implements EngineOps {
       ...(params.noCombat ? { noCombatOnSuccess: true } : {}),
       ...(params.invertCombatRoles ? { invertCombatRoles: true } : {}),
       ...(params.lockTarget ? { lockTargetOnSuccess: true } : {}),
+      ...(params.requiresLockedTarget ? { rushRequiresLockedTarget: true } : {}),
       grantedEffect: null,
       grantedCost: null,
       // "…can use those counters to pay some or all of the cost" — the
@@ -3578,6 +3612,16 @@ export class VtesEngine implements EngineOps {
       const victimStrike = from === "acting" ? cf.strikes.opposing : cf.strikes.acting;
       const victim = from === "acting" ? cf.opposing : cf.acting;
       const source = from === "acting" ? cf.acting : cf.opposing;
+      // EITHER COMBATANT CAN BE GONE BY NOW. Strikes are chosen in one
+      // window and resolved in another, and anything in between can take
+      // a minion off the table — an ally paying a cost with the life that
+      // IS its blood, a burn, a card that removes it from the game. A
+      // minion no longer in play neither strikes nor is struck, and the
+      // reads below (`strengthOf`, the incapacitate branch) are the
+      // non-total kind that turns that into a game nobody can answer.
+      // Found by the fuzz on seed 1 the moment a card that burns allies
+      // outside combat entered the deck; the gap predates it.
+      if (!findMinion(this.state, source) || !findMinion(this.state, victim)) return;
       // "Steal blood" strikes move blood before damage (p. 33) — not
       // damage, so not dodged or prevented; ranged.
       if (strike.stealBlood > 0) {
@@ -3914,6 +3958,13 @@ export class VtesEngine implements EngineOps {
   markUsedThisCombat(cardId: CardInstanceId): void {
     const cf = this.requireCombat();
     if (!cf.usedThisCombat.includes(cardId)) cf.usedThisCombat.push(cardId);
+  }
+
+  /** "Once each round" (Combat Shotgun, Mark V) — the sibling latch, which
+   *  the engine already empties at the start of every round. */
+  markUsedThisRound(cardId: CardInstanceId): void {
+    const cf = this.requireCombat();
+    if (!cf.usedThisRound.includes(cardId)) cf.usedThisRound.push(cardId);
   }
 
   /** The minion-addressed form of `grantAdditionalStrike`, for a card in
@@ -5109,10 +5160,19 @@ export class VtesEngine implements EngineOps {
   }
 
   /** "X cannot block this action" (Seduction, Visions of Gehenna). */
-  restrictBlocking(who: "allies" | "vampires" | "titled" | "chosen", chosen?: MinionId): void {
+  restrictBlocking(
+    who: "allies" | "vampires" | "titled" | "chosen" | "all",
+    chosen?: MinionId,
+  ): void {
     const af = this.action();
     if (!af) throw new Error("restrictBlocking outside an action");
-    if (who === "allies") af.blockRestrictions.noAllies = true;
+    // "This action is unblockable" (Mantle of the Moon) is the UNION of
+    // the two kind bars, not a new kind of state — so every site that
+    // already reads them is right with no change of its own.
+    if (who === "all") {
+      af.blockRestrictions.noAllies = true;
+      af.blockRestrictions.noVampires = true;
+    } else if (who === "allies") af.blockRestrictions.noAllies = true;
     else if (who === "vampires") af.blockRestrictions.noVampires = true;
     else if (who === "titled") af.blockRestrictions.noTitled = true;
     else if (chosen) af.blockRestrictions.cannotBlock.push(chosen);
@@ -5121,7 +5181,12 @@ export class VtesEngine implements EngineOps {
   /** "Minions [without X] must burn 1 blood [or life] to attempt to block
    *  this action" (docs/block-tax-design.md). Cumulative. */
   imposeBlockCost(
-    cost: { amount: number; payWith: "blood" | "bloodOrLife"; exemptDiscipline?: string },
+    cost: {
+      amount: number;
+      payWith: "blood" | "bloodOrLife";
+      exemptDiscipline?: string;
+      kinds?: MinionKind[];
+    },
     source: string,
   ): void {
     const af = this.action();
@@ -5137,7 +5202,12 @@ export class VtesEngine implements EngineOps {
 
   /** "Minions get -1 intercept" (Unthinkable Humiliation superior) — an
    *  action-wide penalty, not one aimed at the current blocker. */
-  modifyAllIntercept(delta: number, source: string, appliesTo?: "vampire" | "ally"): void {
+  modifyAllIntercept(
+    delta: number,
+    source: string,
+    appliesTo?: "vampire" | "ally",
+    exemptDisciplines?: string[],
+  ): void {
     const af = this.action();
     if (!af) throw new Error("modifyAllIntercept outside an action");
     this.emit({
@@ -5146,6 +5216,7 @@ export class VtesEngine implements EngineOps {
       delta,
       source,
       ...(appliesTo ? { appliesTo } : {}),
+      ...(exemptDisciplines && exemptDisciplines.length > 0 ? { exemptDisciplines } : {}),
     });
   }
 
@@ -6324,7 +6395,13 @@ export class VtesEngine implements EngineOps {
     if (success && af.actionKind === "cardEffect" && af.targetMinion && rushLike) {
       const actor = findMinion(this.state, af.acting);
       const target = findMinion(this.state, af.targetMinion);
-      if (actor && isReady(actor) && target && isReady(target)) {
+      // "…with a LOCKED minion", re-read HERE. A target that unlocked
+      // between announcement and resolution makes the action fizzle: the
+      // cost is paid and the action counts as successful, but no combat
+      // occurs [Ambush ruling]. Fleetness superior has the same clause
+      // and had the same gap.
+      const lockedOk = !af.rushRequiresLockedTarget || target?.locked === true;
+      if (actor && isReady(actor) && target && isReady(target) && lockedOk) {
         // "The target vampire is considered the ACTING MINION during that
         // combat" (Deep Song superior): the inversion is these two pairs
         // in the other order, because every "who is acting" question in a
@@ -6937,6 +7014,18 @@ export class VtesEngine implements EngineOps {
           const bar = p.statics.cannotBeBlockedBy;
           if (!bar) return false;
           if ((bar.kinds ?? []).includes(m.kind)) return true;
+          // "Toreador and Toreador antitribu cannot block this minion"
+          // (Cloak of the Abalone).
+          // An ALLY has no clan (`clan` is null), which is why this reads
+          // the field rather than assuming a string.
+          if (m.clan !== null && (bar.clans ?? []).includes(m.clan)) return true;
+          if (
+            bar.minCapacity !== undefined &&
+            m.kind === "vampire" &&
+            capacityOf(m) >= bar.minCapacity
+          ) {
+            return true;
+          }
           return (
             bar.maxCapacity !== undefined &&
             m.kind === "vampire" &&
@@ -7124,7 +7213,17 @@ export class VtesEngine implements EngineOps {
         }
         // A used weapon maneuver commits that weapon's strike (.44
         // ruling): no other initial strike may be chosen.
-        if (cf.committedStrike[side] === null) {
+        //
+        // …unless the committed WEAPON is gone. A commitment names a card,
+        // and that card can be burned between the maneuver and the strike
+        // (Conceal, a burn-equipment action, the bearer changing). The
+        // commitment then bars the hand strike while the weapon it points
+        // at offers nothing, and the striker is left with NO legal option
+        // at all — which the fuzz found as an empty option list, not as an
+        // error. A commitment to a card that has left play is no
+        // commitment: the minion strikes with their hands.
+        const committedCard = cf.committedStrike[side];
+        if (committedCard === null || this.findEntry(committedCard) === null) {
           options.push({
             id: "strike:hand",
             kind: "chooseStrike",

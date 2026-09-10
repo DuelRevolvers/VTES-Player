@@ -54,6 +54,7 @@ import {
   defaultTable,
   isOnlineTable,
   seatDeckHash,
+  uniqueSeatName,
   MAX_SEATS,
   MIN_SEATS,
   RECOMMENDED_SEATS,
@@ -71,13 +72,52 @@ import {
 } from "./profile.ts";
 import bannerUrl from "../assets/banner.png";
 import { PLATFORM_VERSION_LABEL } from "../version.ts";
-import { loadSettings, OPENING_DELAY_MS, seatSeed } from "./settings.ts";
+import {
+  botNameFor,
+  botNameProblem,
+  loadSettings,
+  MAX_BOT_NAMES,
+  OPENING_DELAY_MS,
+  saveSettings,
+  seatSeed,
+} from "./settings.ts";
+import type { SaveSlot } from "./savedgames.ts";
+import {
+  botSeatsFor,
+  deleteSave,
+  findSave,
+  keepAuto,
+  loadSaves,
+  renameSave,
+} from "./savedgames.ts";
+import type { SavedGame } from "./history.ts";
+import { readSaveFile } from "./history.ts";
 import { LocalTransport } from "./transport.ts";
 
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
 type Screen = "profile" | "menu" | "newgame" | "lobby" | "join" | "leaderboard" | "table";
+
+/**
+ * "2 minutes ago", for a saved game's row.
+ *
+ * Relative rather than a timestamp because the question a player is
+ * actually asking is "is this the one I was just playing?", and a clock
+ * time makes them work that out. Falls back to the date once it stops
+ * being a useful answer.
+ */
+function ago(iso: string): string {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return "";
+  const secs = Math.max(0, Math.round((Date.now() - then) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"} ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  return new Date(then).toLocaleDateString();
+}
 
 export class Shell {
   private screen: Screen;
@@ -87,6 +127,11 @@ export class Shell {
   /** The last deck-library problem, shown where it happened. Separate from
    *  `error` so a failed save does not clear a lobby's message. */
   private deckError = "";
+  /** The saved-games panel's message. Separate from `deckError` and from
+   *  `error` so a failed load does not clear what the deck importer or the
+   *  profile form was telling you — they are three panels on one screen. */
+  private saveError = "";
+  private botNameError = "";
   /** Which seat's deck panel is open on the new-game screen. */
   private editingDeck: number | null = null;
 
@@ -108,7 +153,7 @@ export class Shell {
 
   constructor(private readonly root: HTMLElement) {
     this.profile = loadProfile();
-    this.table = defaultTable(this.profile?.name ?? "You");
+    this.table = this.newTable(this.profile?.name ?? "You");
     // A join LINK skips the menu — someone who clicked it has already said
     // what they want. They still need a profile first, since a seat is
     // labelled with a name.
@@ -123,7 +168,24 @@ export class Shell {
     this.paint();
   }
 
+  /**
+   * A fresh table, with the bot seats named the way this player likes.
+   *
+   * Every table starts here — the constructor, "Host a game", and the
+   * moment a profile is first created — so the preference is read fresh
+   * each time rather than captured once at boot: a name changed on the
+   * Profile screen should be on the next table, not the next reload.
+   */
+  private newTable(name: string): TableConfig {
+    const settings = loadSettings();
+    return defaultTable(name, (i) => botNameFor(settings, i));
+  }
+
   private go(screen: Screen): void {
+    // Leaving the Profile screen abandons whatever was half-typed on it;
+    // coming back should show what is SAVED. `paint` re-reads the draft
+    // from the live form, so this has to come first.
+    if (screen !== "profile") this.profileDraft = null;
     this.screen = screen;
     this.error = "";
     // A deliberate move somewhere else acknowledges the "you were removed"
@@ -135,6 +197,15 @@ export class Shell {
 
   private paint(): void {
     if (this.screen === "table") return; // the table owns the root now
+    // WHAT WAS TYPED SURVIVES THE REPAINT.
+    //
+    // The screen is a pure function of state re-rendered whole, which is
+    // what keeps it free of stale-view bugs — but a half-typed name is
+    // state too, and it lived only in the DOM node about to be thrown
+    // away. Everything else on the Profile screen repaints it (renaming a
+    // deck, deleting a save, saving bot names), so typing a new name and
+    // then touching anything else silently put the old one back.
+    this.keepProfileDraft();
     // The menu is centred in the window (there is nothing else on screen
     // to align with); the lobby is sized to fill it, because it is a table
     // and a table should look like the room it is.
@@ -218,8 +289,31 @@ export class Shell {
 
   // --- profile -------------------------------------------------------------
 
+  /**
+   * The Profile screen's unsaved edits, carried across a repaint.
+   *
+   * Null when there is nothing in flight. Cleared whenever the screen
+   * changes — a draft is about the form you are looking at, and coming
+   * back to Profile later should show what is SAVED, not what you
+   * abandoned three screens ago.
+   */
+  private profileDraft: { name: string; color: string } | null = null;
+
+  private keepProfileDraft(): void {
+    if (this.screen !== "profile") return;
+    const name = this.root.querySelector<HTMLInputElement>("#pname");
+    const color = this.root.querySelector<HTMLInputElement>("#pcolor");
+    // Absent on the very first paint, when there is no form yet.
+    if (!name) return;
+    this.profileDraft = {
+      name: name.value,
+      color: color?.value ?? this.profile?.chatColor ?? DEFAULT_CHAT_COLOR,
+    };
+  }
+
   private profileScreen(): string {
     const p = this.profile;
+    const draft = this.profileDraft;
     return `
       <div class="card">
         <h1>${p ? "Your profile" : "Welcome"}</h1>
@@ -231,7 +325,7 @@ export class Shell {
         <label class="field">
           <span>Name</span>
           <input id="pname" maxlength="${MAX_NAME_LENGTH}"
-                 value="${esc(p?.name ?? "")}" placeholder="Methuselah" />
+                 value="${esc(draft?.name ?? p?.name ?? "")}" placeholder="Methuselah" />
         </label>
         <label class="field">
           <span>Avatar</span>
@@ -251,7 +345,8 @@ export class Shell {
         -->
         <label class="field">
           <span>Chat name colour</span>
-          <input id="pcolor" type="color" value="${esc(p?.chatColor ?? DEFAULT_CHAT_COLOR)}" />
+          <input id="pcolor" type="color"
+                 value="${esc(draft?.color ?? p?.chatColor ?? DEFAULT_CHAT_COLOR)}" />
         </label>
         <p class="note">
           The colour your name is written in when you talk at a table.
@@ -263,6 +358,110 @@ export class Shell {
           ${p ? `<button id="pclear" class="danger">Delete profile</button>` : ""}
         </div>
         ${p ? this.deckLibrary() : ""}
+        ${p ? this.savedGamesPanel() : ""}
+        ${p ? this.botNamesPanel() : ""}
+      </div>`;
+  }
+
+  /**
+   * The games this browser is holding (docs/saved-games-design.md).
+   *
+   * On the Profile screen for the reason the deck library is: this is
+   * where the things that are YOURS live, and a saved game is one of them.
+   * It could equally have been a menu entry, and the menu is deliberately
+   * five buttons — a sixth that is empty for most of a player's first
+   * session is a worse first screen than a section they find when they
+   * have something in it.
+   */
+  private savedGamesPanel(): string {
+    const saves = loadSaves();
+    return `
+      <div class="supported savestore">
+        <div class="sethead">Saved games</div>
+        <p class="note">
+          Saved in this browser. <b>Last game</b> is kept for you
+          automatically at the top of every turn — press <b>Keep</b> to
+          hold on to a position before the next turn overwrites it.
+        </p>
+        ${
+          saves.length === 0
+            ? `<p class="note dim">No saved games yet. One will appear here
+                 once you have played a turn.</p>`
+            : `<div class="seats">${saves.map((s) => this.saveRow(s)).join("")}</div>`
+        }
+        <div class="row">
+          <button id="save-file">Load from file…</button>
+        </div>
+        <p class="note dim">
+          A save holds the whole game — every deck and every decision — so
+          it can be handed over with a bug report and replayed exactly.
+        </p>
+        ${this.saveError ? `<p class="err">${esc(this.saveError)}</p>` : ""}
+      </div>`;
+  }
+
+  private saveRow(s: SaveSlot): string {
+    // The seat list is what tells two saves apart at a glance, far more
+    // than the date does, so it is the widest thing in the row.
+    const who = s.seats.length > 0 ? s.seats.join(", ") : "unknown table";
+    const turn = s.turn > 0 ? `turn ${s.turn}` : "mid-game";
+    return `
+      <div class="lobbyrow saverow">
+        <span class="lname">${esc(s.name)}${
+          s.auto ? ` <span class="dim">auto</span>` : ""
+        }</span>
+        <span class="ldeck ready">${esc(turn)} · ${esc(who)}</span>
+        <span class="dim savewhen">${esc(ago(s.savedAt))}</span>
+        <button class="saveload primary" data-save="${esc(s.id)}">Load</button>
+        ${
+          s.auto
+            ? `<button class="savekeep" data-save="${esc(s.id)}">Keep</button>`
+            : `<button class="saverename" data-save="${esc(s.id)}">Rename</button>`
+        }
+        <button class="savedelete danger" data-save="${esc(s.id)}">Delete</button>
+      </div>`;
+  }
+
+  /**
+   * What this machine's tables call their bots.
+   *
+   * DEFAULTS, and the note says so: every bot seat is still renameable in
+   * the lobby, and this only decides what it starts as. The boxes are
+   * positional — box 1 is bot seat 1 — so a blank one is left in place
+   * rather than closing the gap, and reads as "Bot 3" on the table.
+   */
+  private botNamesPanel(): string {
+    const settings = loadSettings();
+    const rows = [];
+    for (let i = 1; i <= MAX_BOT_NAMES; i++) {
+      const configured = settings.botNames[i - 1] ?? "";
+      rows.push(`
+        <label class="field botnamerow">
+          <span>Bot ${i}</span>
+          <input class="botname" data-bot="${i}" maxlength="${MAX_NAME_LENGTH}"
+                 value="${esc(configured)}" placeholder="Bot ${i}" />
+        </label>`);
+    }
+    return `
+      <div class="supported botnames">
+        <div class="sethead">Default bot names</div>
+        <p class="note">
+          What a new table calls its bot seats. Leave one blank and that
+          seat is called "Bot 1", "Bot 2" and so on. You can still rename
+          any seat in the lobby before a game starts.
+        </p>
+        ${rows.join("")}
+        <div class="row">
+          <button id="botnames-save" class="primary">Save names</button>
+          <button id="botnames-reset">Reset to Bot 1…${MAX_BOT_NAMES}</button>
+        </div>
+        <p class="note dim">
+          A bot's name decides how it plays: the AI is seeded from it, so
+          "Bea" makes the same choices in the same spots every game, and
+          renaming a bot gives it a different personality. Leaderboard
+          standings are kept per name too.
+        </p>
+        ${this.botNameError ? `<p class="err">${esc(this.botNameError)}</p>` : ""}
       </div>`;
   }
 
@@ -931,7 +1130,7 @@ export class Shell {
       this.paint();
     });
     this.on("#m-host", () => {
-      this.table = defaultTable(this.profile?.name ?? "You");
+      this.table = this.newTable(this.profile?.name ?? "You");
       // A NEW TABLE STARTS A NEW CONVERSATION (owner request). The chat is
       // a module-level store so that it survives the lobby→table handover
       // (src/ui/chat.ts); the price of that is that it also survives
@@ -1171,15 +1370,209 @@ export class Shell {
         return;
       }
       this.profile = profile;
-      this.table = defaultTable(profile.name);
+      this.table = this.newTable(profile.name);
       this.go("menu");
     });
 
     this.on("#pclear", () => {
       clearProfile();
       this.profile = null;
+      // The draft is the deleted profile's name — `go("profile")` does not
+      // clear it, because it is not leaving the screen. Keeping it would
+      // put the name straight back in the box of a profile just deleted.
+      this.profileDraft = null;
       this.go("profile");
     });
+
+    this.wireSavedGames();
+    this.wireBotNames();
+  }
+
+  private wireSavedGames(): void {
+    this.on(".saveload", (el) => {
+      const slot = findSave(el.dataset["save"] ?? "");
+      if (!slot) {
+        // It was on screen a moment ago, so this is a second tab or a
+        // stale click rather than a mistake. Repaint and say so.
+        this.saveError = "that save is no longer there";
+        this.paint();
+        return;
+      }
+      this.loadSavedGame(slot.game);
+    });
+
+    this.on(".savekeep", () => {
+      const name = prompt("Keep this game as:", "");
+      if (name === null) return; // cancelled — not an error
+      this.saveError = keepAuto(name) ?? "";
+      this.paint();
+    });
+
+    this.on(".saverename", (el) => {
+      const id = el.dataset["save"] ?? "";
+      const from = findSave(id);
+      if (!from) return;
+      const to = prompt("New name for this save:", from.name);
+      if (to === null || to.trim() === from.name) return;
+      this.saveError = renameSave(id, to) ?? "";
+      this.paint();
+    });
+
+    this.on(".savedelete", (el) => {
+      const id = el.dataset["save"] ?? "";
+      const slot = findSave(id);
+      if (!slot) return;
+      // A DELETED GAME IS GONE — there is no backend and no second copy,
+      // so this is one of the few places a confirm is genuinely earned.
+      if (!confirm(`Delete the saved game "${slot.name}"?`)) return;
+      deleteSave(id);
+      this.saveError = "";
+      this.paint();
+    });
+
+    this.on("#save-file", () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json";
+      input.addEventListener("change", () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        void readSaveFile(file)
+          .then((game) => this.loadSavedGame(game))
+          .catch((err: unknown) => {
+            this.saveError = (err as Error).message;
+            this.paint();
+          });
+      });
+      input.click();
+    });
+  }
+
+  private wireBotNames(): void {
+    this.on("#botnames-save", () => {
+      const boxes = Array.from(
+        this.root.querySelectorAll<HTMLInputElement>("input.botname"),
+      );
+      const names: string[] = [];
+      for (const box of boxes) {
+        const problem = botNameProblem(box.value);
+        if (problem) {
+          this.botNameError = `Bot ${box.dataset["bot"] ?? "?"}: ${problem}`;
+          this.paint();
+          return;
+        }
+        names.push(box.value.trim());
+      }
+      // TWO BOTS CANNOT SHARE A NAME. A seat name is the engine's seat id,
+      // so a duplicate is a table that will not deal — `buildTable` does
+      // catch it, but it catches it at Start, on a screen that cannot fix
+      // it. Blanks are exempt: they are not names, they are gaps that
+      // become "Bot 3" and "Bot 4".
+      const filled = names.filter((n) => n !== "").map((n) => n.toLowerCase());
+      const clash = filled.find((n, i) => filled.indexOf(n) !== i);
+      if (clash) {
+        this.botNameError = `two bots cannot both be called "${clash}"`;
+        this.paint();
+        return;
+      }
+      const settings = loadSettings();
+      settings.botNames = names;
+      saveSettings(settings);
+      this.botNameError = "";
+      // A TABLE ALREADY BUILT DOES NOT RENAME ITSELF. `this.table` was
+      // made when the shell booted, and the player is looking at a screen
+      // that says what the NEXT table will be called — so rebuild it now,
+      // or Host would open a lobby still showing the old names and the
+      // setting would look like it had not taken (a feature that cannot
+      // be seen is indistinguishable from one that is absent). Only when
+      // there is no live lobby: renaming seats out from under people who
+      // have joined is not what this button says it does.
+      if (!this.lobbyHost && !this.lobbyPeer) {
+        this.table = this.newTable(this.profile?.name ?? "You");
+      }
+      this.paint();
+    });
+
+    this.on("#botnames-reset", () => {
+      const settings = loadSettings();
+      settings.botNames = [];
+      saveSettings(settings);
+      this.botNameError = "";
+      if (!this.lobbyHost && !this.lobbyPeer) {
+        this.table = this.newTable(this.profile?.name ?? "You");
+      }
+      this.paint();
+    });
+  }
+
+  /**
+   * Pick a saved game back up.
+   *
+   * The commands go to the transport, which replays them into a fresh
+   * engine — the same operation as undo, and the reason a save is a setup
+   * plus a command log rather than a snapshot of the state (architecture
+   * principle 2).
+   *
+   * `this.table` is rebuilt from the save because the TABLE is what the
+   * mats read: `seatFaces`, `mySeat` and `deckLabels` all go through it,
+   * and left describing the lobby's table a loaded game would show the
+   * wrong names on every mat and hand the local player the wrong seat.
+   */
+  private loadSavedGame(game: SavedGame): void {
+    const bots = botSeatsFor(game, this.profile?.name ?? null);
+    // THE GUESS IS SAID OUT LOUD. A save from before `botSeats` existed —
+    // an older file, or the slot adopted from the single-slot key — does
+    // not record who the bots were, and `botSeatsFor` assumes every seat
+    // but yours. That is right for a private table and wrong for a
+    // hotseat one, and handing somebody's seat to a bot without saying so
+    // is the kind of thing that gets reported as "it played my turn".
+    //
+    // Asked HERE rather than on the row, because there are two ways in
+    // (a slot and a file) and only one of them has a row.
+    if (bots.assumed && bots.seats.length > 0) {
+      const ok = confirm(
+        `This game was saved before bot seats were recorded, so it does ` +
+          `not say who the bots were.\n\n` +
+          `Loading it will hand ${bots.seats.join(", ")} to the AI, and ` +
+          `leave you the rest.\n\nLoad it anyway?`,
+      );
+      if (!ok) return;
+    }
+    const botSet = new Set(bots.seats);
+    const seatNames = game.setup.decks.map((d) => d.seat);
+    this.table = {
+      seats: seatNames.map((name) => ({
+        name,
+        kind: botSet.has(name) ? ("ai" as const) : ("you" as const),
+        // The save holds RESOLVED deck lists, not the precon or the pasted
+        // text they came from, so there is no source to name. Null rather
+        // than a guessed label: the leaderboard's deck column would rather
+        // say nothing than say the wrong deck.
+        deck: null,
+      })),
+      seed: game.setup.seed,
+      maxTurns: game.setup.maxTurns,
+      privateGame: true,
+    };
+    const transport = new LocalTransport({
+      setup: game.setup,
+      commands: game.commands,
+      log: new GameLog(new DevServerSink(), game.setup),
+      onResult: (r) => {
+        this.pendingResult = r;
+      },
+      deckLabels: this.deckLabels(),
+      aiDelayMs: loadSettings().aiDelayMs,
+      // NO OPENING BEAT. That pause exists so a fresh deal does not open
+      // on a board the bots have already played; a load lands mid-game,
+      // where a hold before the next move reads as the load having hung.
+      // `restart` makes the same distinction, for the same reason.
+    });
+    for (const seat of bots.seats) {
+      transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
+    }
+    this.saveError = "";
+    this.toTable(transport);
   }
 
   private wireNewGame(): void {
@@ -1278,7 +1671,16 @@ export class Shell {
     this.on("#seat-add", () => {
       if (this.table.seats.length >= MAX_SEATS) return;
       const n = this.table.seats.length;
-      this.table.seats.push({ name: `Bot ${n}`, kind: "ai", deck: null });
+      // The same `botNameFor` the default table uses, so seat 4 is called
+      // whatever the Profile screen says bot 4 is called — and uniquified,
+      // because a configured name may already be on the table (a seat
+      // renamed by hand, or a duplicate in the list) and a name the app
+      // chose must not be one the player is then blamed for.
+      const name = uniqueSeatName(
+        botNameFor(loadSettings(), n),
+        this.table.seats.map((s) => s.name),
+      );
+      this.table.seats.push({ name, kind: "ai", deck: null });
       this.lobbyHost?.update(this.table);
       this.paint();
     });
@@ -1508,6 +1910,11 @@ export class Shell {
       faces: () => this.seatFaces(),
       localSeat: this.mySeat(),
       onLeave: () => this.leaveTable(),
+      // A REAL GAME, so it is worth keeping. The playtest snapshot builds
+      // its table without a shell and does not ask for this — see
+      // `TableIdentity.autosave`. A guest sets it and nothing happens:
+      // they have no history to snapshot.
+      autosave: true,
       // THE HOST MAY NOT PLAY OTHER PEOPLE'S TURNS (owner report). The
       // host runs the engine, so it holds a live option list for every
       // seat at the table; these are the ones that are not its to answer.

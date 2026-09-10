@@ -609,6 +609,13 @@ describe("what remains in the pool", () => {
     // Sabbat V5 vampires, and the registry pipeline was simply dropping
     // the field (docs/path-cards-design.md §0).
     expect(unsupported.map((e) => e.card.name)).toEqual([]);
-    expect(library.length).toBe(444);
+    // PIN THE REASON, NOT THE COUNT. This used to read `toBe(444)`, which
+    // made a true statement — every library card in the pool is
+    // implemented — a hostage to the pool ever changing size
+    // (docs/pool-widening-design.md §2.4). The claim worth keeping is
+    // that the library is whole and non-empty; the number is the
+    // registry's business.
+    expect(library.length).toBeGreaterThan(400);
+    expect(unsupported).toHaveLength(0);
   });
 });

@@ -203,6 +203,22 @@ export type EffectPrimitive =
       onlyIfVoted?: boolean;
       lockTarget?: boolean;
       burnTargetBlood?: number;
+      /** "…a vampire who belongs to the SAME CLAN as this reacting minion"
+       *  (Conflict of Interests) — the target set is filtered against the
+       *  minion playing the card, not chosen freely. */
+      sameClanAsReactor?: boolean;
+      /** "…force THE ACTING VAMPIRE to abstain" (Irregular Protocol) —
+       *  one target, named by the referendum rather than chosen. */
+      callingMinionOnly?: boolean;
+      /** "LOCK THIS REACTING VAMPIRE to force…" (Irregular Protocol) — a
+       *  cost paid by the player, the mirror of `lockTarget`. */
+      lockSelf?: boolean;
+      /** *"Cannot be used during a referendum that is automatically
+       *  passing"* [PIB 20150105] — an auto-passing referendum casts no
+       *  votes at all, so there is nothing to cancel. Carried per card
+       *  rather than applied to every abstain, because the two V5 cards
+       *  using this effect do not print the ruling. */
+      notWhenAutoPassing?: boolean;
     }
   /** "Cancel the referendum. If you played a political action card to call
    *  this referendum, return it to its owner's hand" (Telepathic Vote
@@ -247,7 +263,9 @@ export type EffectPrimitive =
    *  or a `chosen` vampire (Seduction — `chosenScope` limits the pick). */
   | {
       kind: "blockRestriction";
-      who: "allies" | "vampires" | "titled" | "chosen";
+      /** "all" is "this action is UNBLOCKABLE" (Mantle of the Moon) — the
+       *  union of the allies and vampires bars, not a new kind of state. */
+      who: "allies" | "vampires" | "titled" | "chosen" | "all";
       chosenScope?: "younger" | "locked" | "any";
     }
   /** "Minions [without Oblivion] must burn 1 blood [or life] to attempt to
@@ -258,11 +276,24 @@ export type EffectPrimitive =
       amount: number;
       payWith: "blood" | "bloodOrLife";
       exemptDiscipline?: string;
+      /** "VAMPIRES must burn 1 blood to attempt to block" (Stiff Contempt)
+       *  — the printed clause names a kind, and taxing allies as well
+       *  would be a stricter card than the one printed. Absent = every
+       *  minion, which is what every existing card says. */
+      kinds?: Array<"vampire" | "ally">;
     }
   /** "Minions get -1 intercept" (Unthinkable Humiliation superior) — every
    *  minion, for this action, as opposed to `modifyBlockerIntercept`.
    *  `kind` narrows it: "ALLIES get -1 intercept" (Obedient Flesh). */
-  | { kind: "modifyAllIntercept"; amount: number; appliesTo?: "vampire" | "ally" }
+  | {
+      kind: "modifyAllIntercept";
+      amount: number;
+      appliesTo?: "vampire" | "ally";
+      /** "Minions WITHOUT Necromancy or Obtenebration get -1 intercept"
+       *  (Acheron Vortex) — an exemption, so a minion holding any of these
+       *  is unaffected. KRCG abbreviations. */
+      exemptDisciplines?: string[];
+    }
   /** "During this action, minions cannot unlock" (The Sleeping Mind sup.). */
   | { kind: "preventUnlockDuringAction" }
   /** "This vampire takes N unpreventable environmental aggravated damage
@@ -281,8 +312,14 @@ export type EffectPrimitive =
   | { kind: "actionBleed"; bonus: number }
   | { kind: "actionStealth"; amount: number }
   | { kind: "addUncontrolledBlood"; amount: number; youngerOnly: boolean; clan?: string; sect?: Sect; titledOnly?: boolean }
-  /** "This vampire gains N blood" on a successful action (Restoration). */
-  | { kind: "actionGainBlood"; amount: number }
+  /** "This vampire gains N blood" on a successful action (Restoration).
+   *  `ifActorBloodAtLeast` is "IF this vampire has 4 or more blood, he or
+   *  she gains 4 blood" (Entrenching) — read at RESOLUTION on the actor,
+   *  so blood spent getting there counts against the threshold. */
+  | { kind: "actionGainBlood"; amount: number; ifActorBloodAtLeast?: number }
+  /** "…and YOU gain N pool" (Spoils of War) — the acting minion's
+   *  controller, the pool twin of `actionGainBlood`. */
+  | { kind: "actionGainPool"; amount: number }
   /** "Add N blood to another vampire" — a chosen in-play vampire, fixed
    *  at announcement (Fifth Tradition: Hospitality). */
   /** "Add N blood to another vampire" (Fifth Tradition: Hospitality) and,
@@ -929,6 +966,28 @@ export type EffectPrimitive =
    *  chosen clan they control" (Consanguineous Boon). The terms range
    *  over every clan in the POOL, not every clan in play (p. 49). §1 */
   | { kind: "refClanBoon"; poolPerVampire: number }
+  /** "Each Methuselah gains/burns N pool for each \<minion\> they control",
+   *  or "all \<vampires\> burn N blood" — one filtered per-minion tally
+   *  covering four legacy referendums that differ only in the filter and
+   *  the resource (docs/pool-widening-design.md §6, tranche 3 wave 6).
+   *
+   *  `burnBlood` is charged to each MINION, the other two to the seat, so
+   *  the effect decides who pays as well as what. */
+  | {
+      kind: "refPerMinion";
+      effect: "gainPool" | "burnPool" | "burnBlood";
+      amount: number;
+      /** Every filter present must match; absent does not constrain. */
+      who?: {
+        kind?: "vampire" | "ally";
+        ready?: boolean;
+        inTorpor?: boolean;
+        /** "…with capacity BELOW 4" is `maxCapacity: 3`. */
+        maxCapacity?: number;
+        /** "…Independent OR Anarch" — a union, one modifier per minion. */
+        sects?: Sect[];
+      };
+    }
   /** "Choose a Methuselah OR a location — or BOTH if the acting vampire
    *  is one of \<titles\>" (Cold War). §2 */
   | {
@@ -986,6 +1045,16 @@ export type EffectPrimitive =
        *  capacity is `atMost` (Neonate Breach) or `atLeast` (Empires
        *  Fall) the bound. */
       capBonus?: { atMost?: number; atLeast?: number; extra: number };
+      /** "Choose A Methuselah" (Screw the Masquerade!) — exactly one,
+       *  where the primitive's default is any non-empty subset. The terms
+       *  are the legal-move generator's answer to "who may this name", so
+       *  the card's own arity belongs there rather than in the tally. */
+      chooseExactly?: number;
+      /** "…means EACH Methuselah burns 1 pool and the chosen Methuselah
+       *  burns an ADDITIONAL pool" (Screw the Masquerade!). Charged to
+       *  every standing seat; `base` is then what the chosen seat pays on
+       *  top, not instead. */
+      everySeatBurns?: number;
     }
   /** "Choose up to N minions. Successful referendum means the chosen
    *  minions cannot play reaction cards, block or cast votes or ballots
@@ -995,8 +1064,130 @@ export type EffectPrimitive =
    *  Ages) — the calling card becomes the permanent its own `permanent`
    *  clause describes, instead of being burned at resolution.
    *  docs/pool-drain-design.md §6 */
-  | { kind: "refPutInPlay" }
+  /** "Successful referendum means this card is put in play" (War of
+   *  Ages). With `onActor`, it goes ON THE CALLING VAMPIRE instead of at
+   *  seat level, and `grantsTitle` is the title it then represents — the
+   *  Praxis Seizure shape, which `ReferendumFrame.cardInstanceId` was
+   *  always kept for ("so a title-granting referendum can attach it on a
+   *  pass"). */
+  | { kind: "refPutInPlay"; onActor?: boolean; grantsTitle?: VampireTitle }
+  /** "Successful referendum means YOU steal 1 pool from each Methuselah
+   *  who \<condition\>" (Transfer of Power, Tithings).
+   *
+   *  A steal is a TRANSFER, not a burn: the victim loses and the caller
+   *  gains the same amount, and a victim with less than `amount` gives
+   *  what they have — so the two halves are computed per victim rather
+   *  than a burn-all-then-gain-the-total.
+   *
+   *  The condition is read ONCE, before any pool moves. Transfer of Power
+   *  says "who has more pool than you do", and taking from the richest
+   *  seat first would otherwise change who qualifies partway down the
+   *  table — the same seat order dependence `refAllocateBurn` avoids.
+   *  docs/pool-widening-design.md §6 (tranche 1 wave 13) */
+  | {
+      kind: "refStealPerSeat";
+      amount: number;
+      /** Exactly one arm is set; both are per-VICTIM questions. */
+      from:
+        | { morePoolThanCaller: true }
+        /** "…who does not control a vampire with a capacity ABOVE 6"
+         *  (Tithings) — `aboveCapacity: 6` means capacity 7 or more. */
+        | { noVampireAboveCapacity: number };
+    }
+  /** "Successful referendum means each Methuselah gains X pool, where X is
+   *  the number of CLANS to which his or her ready vampires belong"
+   *  (Diversity).
+   *
+   *  A tally of DISTINCT clans, not of vampires — three ready Brujah are
+   *  one clan and pay once. Allies have no clan and never count, and an
+   *  unready vampire's clan does not count even when a ready stablemate
+   *  shares it, because the sentence quantifies over ready vampires. */
+  | { kind: "refClanDiversity"; poolPerClan: number }
+  /** "Choose a clan. Successful referendum LOCKS all vampires of that
+   *  clan" (Consanguineous Condemnation) — every Methuselah's, the
+   *  caller's own included, and an already-locked vampire is simply
+   *  already locked. Terms range over the clans in the POOL, the
+   *  `refClanBoon` rule (p. 49). */
+  | { kind: "refLockClan" }
+  /** "Choose a ready \<filter\>. Successful referendum means it \<outcome\>"
+   *  — Command of the Harpies, Excommunication, Tradition Upheld,
+   *  Permanent Vacation. One primitive, four filters, three outcomes
+   *  (docs/pool-widening-design.md §6, tranche 1 wave 14).
+   *
+   *  The three outcomes are NOT interchangeable and the difference is
+   *  visible at the table:
+   *   - `loseTitle` leaves the minion in play with no title. A contested
+   *     title is a different thing again — this is the plain loss.
+   *   - `burn` sends it to the ash heap, where cards can still reach it.
+   *   - `removeFromGame` does not: a card removed from the game "cannot
+   *     be retrieved or affected in any way" (p. 16).
+   *
+   *  The chosen minion is re-read at RESOLUTION, never assumed: the whole
+   *  polling step happens between the choice and the effect, and the
+   *  minion can be burned, moved to torpor or removed in it. */
+  | {
+      kind: "refRemoveChosenMinion";
+      /** Every filter present must match; absent does not constrain. */
+      who: {
+        kind?: "vampire" | "ally";
+        ready?: boolean;
+        /** "…a ready PRINCE" / "…a ready ARCHBISHOP". */
+        title?: VampireTitle[];
+        /** A literal clan name. Note the `clan-vocabulary.test.ts` guard:
+         *  a clan no vampire in the POOL has makes the card inert. */
+        clan?: string;
+        /** "…who belongs to the same clan as THE ACTING VAMPIRE"
+         *  (Sacrifice) — a filter relative to the caller rather than a
+         *  fixed clan, so it stays correct as the crypt widens. Read from
+         *  the calling minion at terms time; a caller with no clan
+         *  matches nothing, which is the print-faithful answer. */
+        sameClanAsCaller?: boolean;
+        /** "…with a capacity BELOW 7" is `maxCapacity: 6`. */
+        maxCapacity?: number;
+      };
+      outcome: "loseTitle" | "burn" | "removeFromGame";
+    }
+  /** "Successful referendum means all \<X\> are burned. Any Methuselah can
+   *  keep \<theirs\> by repaying their pool cost" — Jericho Founding
+   *  (locations), Kindred Segregation (allies), Peace Treaty (weapons).
+   *  docs/pool-widening-design.md §6, tranche 1 wave 15.
+   *
+   *  A table-wide sweep with a PER-CARD ransom, so it raises one choice
+   *  per card rather than burning first and refunding after. The question
+   *  has to precede the burn — the Rutor's Hand rule, learned when a
+   *  ChoiceFrame raised during resolution turned out only to QUEUE, and
+   *  the obvious build asked after the damage had landed.
+   *
+   *  The choice is MANDATORY with two answers rather than optional with a
+   *  decline: a declined optional choice is a plain `pass` the handler is
+   *  never told about, and the burn lives on the decline. When the seat
+   *  cannot afford the ransom only "let it burn" is offered, which is the
+   *  card working rather than an option list that is empty. */
+  | { kind: "refBurnAllKeepable"; what: "location" | "ally" | "weapon" }
   // One-shot master-card primitives.
+  /** "Gain N pool" (Ascendance) — the whole card, and the simplest
+   *  possible master (docs/pool-widening-design.md §6, tranche 3 wave 7). */
+  | { kind: "gainPool"; amount: number }
+  /** "Burn a vampire in torpor" (Vulnerability) — ANY Methuselah's, and
+   *  torpor is the whole filter: a vampire in torpor is still in play. */
+  | { kind: "burnTorpidVampire" }
+  /** "Burn a location" (Unnatural Disaster) — any Methuselah's, keyed on
+   *  the printed `location` tag rather than on the card type, because an
+   *  equipment card can print "represents a location" (Living Manse,
+   *  Sacré-Cœur). */
+  | { kind: "burnLocation" }
+  /** "Move the top card from your crypt to your uncontrolled region"
+   *  (Effective Management). *"Cannot be played when the target crypt is
+   *  empty"* [RTR 20000501], so the option is gated, not a no-op. */
+  | { kind: "cryptToUncontrolled" }
+  /** "Move N blood from EACH ready vampire you control to your pool"
+   *  (Tribute to the Master). *"Can be played with no ready vampire"*
+   *  [ANK 20210717] — deliberately NOT gated, the mirror of the ruling
+   *  above. */
+  | { kind: "eachOwnReadyVampireBloodToPool"; amount: number }
+  /** "Lock all ready \<clan\>" (Letter from Vienna) — every Methuselah's,
+   *  not just the player's. */
+  | { kind: "lockAllMatching"; clan?: string; sect?: Sect }
   | { kind: "lockMinion" }
   /** "The first referendum a \<sect\> vampire you control calls on this
    *  turn passes automatically (skip the polling step)" (Día de los
@@ -1324,6 +1515,16 @@ export interface CardSpec {
       /** "…you can burn N pool to get +M votes" (Ferraille) — a FIXED
        *  price, unlike `perPoolX`, which enumerates X. */
       poolCost?: number;
+      /** "…with an ADDITIONAL +1 vote if the card named /Ventrue
+       *  Headquarters/ is not in play" (The Mausoleum, Venice). "In play"
+       *  is ANY Methuselah's, not just this card's controller.
+       *
+       *  The amount is now asked in two places — the option's label and
+       *  the grant itself — so both go through one `voteAmount` helper.
+       *  A label that disagrees with the grant is the exact drift CLAUDE.md
+       *  warns about, and it would show up as a player being told "+2" and
+       *  being given 1. */
+      extraUnlessInPlay?: { card: string; amount: number };
       /** "ONCE EACH TURN, …" (Ferraille) — reads
        *  `PermanentInPlay.usedThisTurn`, cleared on TurnBegan. */
       oncePerTurn?: boolean;
@@ -2273,6 +2474,13 @@ export interface CardSpec {
        *  `MinionState.skipNextUnlock` was built for Toreador Grand Ball
        *  and has been waiting for this. docs/opposing-statics-design.md §2 */
       bearerPenalty?: { lock?: boolean; skipNextUnlock?: boolean };
+      /** "…as a Ⓓ action that INFLICTS 1 unpreventable environmental
+       *  damage on acting vampires" (the four Path masters). A price on
+       *  the ACTOR for taking the burn, not on the card's bearer — the
+       *  mirror of `bearerPenalty`. Queued through `damageAfterAction`,
+       *  the Daring the Dawn path, so it lands after the action resolves
+       *  and cannot be prevented. */
+      actorDamage?: { amount: number; aggravated?: boolean };
     };
   };
   /** Ally cards: printed stats — enters play with `life` from the blood
@@ -2351,6 +2559,17 @@ export interface CardSpec {
      *  gate on options, so a close round simply does not list it.
      *  docs/weapon-riders-design.md §3 */
     onlyAtLongRange?: boolean;
+    /** "…only usable once each COMBAT" (Chainsaw, Sawed-Off Shotgun,
+     *  Brass Knuckles, Gas-Powered Chainsaw) or "once each ROUND" (Combat
+     *  Shotgun, Mark V).
+     *
+     *  Keyed on the CARD INSTANCE, which is what the ruling asks for:
+     *  *"a second copy allows a second use in the same combat"*
+     *  [ANK 20230316]. A bearer holding two Chainsaws gets two strikes;
+     *  keying it to the bearer would silently take one away. Note this is
+     *  the opposite of `spec.combatLimit`, which is per combat FRAME —
+     *  see the known-deviations list in CLAUDE.md. */
+    usableOnce?: "combat" | "round";
     /** "After the bearer strikes with this gun, they get 1 optional
      *  additional strike (limited), ONLY USABLE TO STRIKE WITH THIS GUN,
      *  this round" (AK-47). The restriction is the .44 ruling's
@@ -2436,6 +2655,19 @@ export interface CardSpec {
   /** "Requires a ready [clan]" on a Master card — the clan sibling. */
   requiresControlledClan?: string[];
   usable: UsabilityRule[];
+  /** "If this referendum FAILS, the acting vampire burns 1 blood" (The
+   *  Final Nights) — the other half of a referendum, and the first card
+   *  in the pool to have one.
+   *
+   *  It cannot ride on `applyReferendum`, which by contract is never
+   *  called for a failure, and it cannot ride on `onReferendumLost`,
+   *  which iterates cards IN PLAY — the calling card is in the ash heap
+   *  by then. It needs its own hook, `applyReferendumFailed`.
+   *
+   *  A CANCELLED referendum is not a failed one (docs/abstain-gate-design.md):
+   *  it never resolves, so this never fires for it, which is what "if this
+   *  referendum fails" says. */
+  referendumFail?: { callingVampireBurnsBlood: number };
   /** Frenzy keyword (p. 32): marks the card so frenzy-referencing effects
    *  (cancel/immunity) can find it. Adds a "frenzy" tag to the handler. */
   frenzy?: boolean;

@@ -89,14 +89,25 @@ export const MAX_SEATS = 6;
 export const DEFAULT_SEATS = 4;
 export const RECOMMENDED_SEATS = [4, 5];
 
-/** A table to start from: you, three bots, and a precon each. */
-export function defaultTable(playerName: string): TableConfig {
+/**
+ * A table to start from: you, three bots, and a precon each.
+ *
+ * `botNames` is the player's configured defaults (`settings.ts`), asked
+ * for as a function rather than passed as a list so this and the button
+ * that adds a seat go through the same `botNameFor` — the two used to
+ * both spell `Bot ${i}` inline, which is exactly the shape of thing that
+ * drifts the moment one of them learns something the other does not.
+ */
+export function defaultTable(
+  playerName: string,
+  botName: (index: number) => string = (i) => `Bot ${i}`,
+): TableConfig {
   const precons = supportedPrecons().filter((p) => p.playable);
   const seats: SeatConfig[] = [];
   for (let i = 0; i < DEFAULT_SEATS; i++) {
     const p = precons[i % Math.max(1, precons.length)];
     seats.push({
-      name: i === 0 ? playerName : `Bot ${i}`,
+      name: i === 0 ? playerName : botName(i),
       kind: i === 0 ? "you" : "ai",
       // Spread every seat across a different precon, so a first game is
       // not four copies of one deck playing itself.
@@ -104,6 +115,25 @@ export function defaultTable(playerName: string): TableConfig {
     });
   }
   return { seats, seed: null, maxTurns: null, privateGame: true };
+}
+
+/**
+ * `base`, or the first "base 2", "base 3" … that nobody at the table has.
+ *
+ * Seat names are the engine's seat IDS, so a duplicate is a table that
+ * will not deal — `buildTable` reports it, which is right when a player
+ * typed it and wrong when the app produced it. Adding a seat picks a name
+ * on the player's behalf, so it must pick one that works: with configured
+ * bot names, "add a seat" on a five-seat table would otherwise hand out a
+ * name already on the mat and blame the player for it.
+ */
+export function uniqueSeatName(base: string, taken: string[]): string {
+  const used = new Set(taken.map((t) => t.trim()));
+  if (!used.has(base)) return base;
+  for (let n = 2; ; n++) {
+    const candidate = `${base} ${n}`;
+    if (!used.has(candidate)) return candidate;
+  }
 }
 
 /** Resolve one seat's deck source, with the reason if it cannot be. */

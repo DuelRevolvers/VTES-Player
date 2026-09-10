@@ -106,7 +106,16 @@ export function importCryptCard(id: number): CryptImport {
     disciplines[key.toLowerCase()] = level;
   }
 
-  const text = card.cardText.trim();
+  // AN ADVANCED VAMPIRE'S TEXT OPENS "Advanced, Sabbat bishop", and the
+  // sect clause is anchored to the start — so the prefix hid the sect AND
+  // the title on every advanced card in the pool. It cost nothing while
+  // the pool was V5-only (no advanced vampires there); admitting the
+  // legacy groups brought in 22, four of them titled, and a lost title is
+  // lost VOTES. "Advanced" is a card-type marker, not part of the clause
+  // (p. 6, "An advanced card is a type of vampire card for your crypt"),
+  // so it is stripped before the clause is read rather than being taught
+  // to the regex. docs/pool-widening-design.md §5
+  const text = card.cardText.trim().replace(/^Advanced,\s*/i, "");
   const prefix = /^(Camarilla|Sabbat|Anarch|Independent|Laibon)\b([^.:]*)/.exec(text);
   const sect = prefix ? (SECTS[prefix[1]!] ?? null) : null;
 
@@ -114,12 +123,23 @@ export function importCryptCard(id: number): CryptImport {
   let titleCity: string | undefined;
   if (prefix?.[2]) {
     // "Prince of Melbourne" / "bishop" / "Assamite Justicar" → the title word.
-    const words = prefix[2].replace(/\s+of\s+.*$/i, "").trim().split(/\s+/);
-    for (const w of words) {
-      const found = TITLES[w.toLowerCase()];
-      if (found) {
-        title = found;
-        break;
+    const clause = prefix[2].replace(/\s+of\s+.*$/i, "").trim();
+    // INNER CIRCLE IS THE ONE TITLE THAT IS TWO WORDS, so the word-by-word
+    // scan below can never see it — and it is the biggest title there is
+    // (4 votes, `TITLE_VOTES`). No V5 crypt card prints it, so this has
+    // never mattered; a card in the pool already asks for one ("Requires a
+    // prince, justicar or Inner Circle member"), so the first legacy
+    // Inner Circle vampire admitted would otherwise arrive titleless and
+    // silently lose four votes. docs/pool-widening-design.md §2.5
+    if (/\binner\s+circle\b/i.test(clause)) {
+      title = "innerCircle";
+    } else {
+      for (const w of clause.split(/\s+/)) {
+        const found = TITLES[w.toLowerCase()];
+        if (found) {
+          title = found;
+          break;
+        }
       }
     }
     // "…of Melbourne" — the CITY, which is the whole key of a title

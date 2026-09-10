@@ -130,6 +130,42 @@ export interface DeckValidation {
 export const STARTING_POOL = 30;
 
 /**
+ * The crypt GROUP rule (p. 4 and p. 6, Deck Construction):
+ *
+ *   "A Methuselah's crypt must be built using vampires from a single
+ *    group or from two consecutive groups. This does not restrict a
+ *    Methuselah from stealing vampires from other groups through play,
+ *    however."
+ *
+ * DECK CONSTRUCTION ONLY, and that second sentence is why: a vampire from
+ * any group at all can end up under your control mid-game, so this must
+ * never become an engine check. It lives here with the other p. 14 limits
+ * and nowhere else.
+ *
+ * "ANY" is a wildcard — Anarch Convert and New Blood print no group and
+ * are legal beside any crypt — so it is dropped before the span is
+ * measured rather than treated as a group of its own.
+ *
+ * Unenforced while the pool was V5-only (groups 5–7 with nothing else to
+ * mix), which is exactly why it had to land before groups 1–4 were
+ * admitted: without it a player builds an illegal crypt and nothing says
+ * so. docs/pool-widening-design.md §5
+ */
+export function cryptGroupProblem(groups: Array<number | string>): string | null {
+  const distinct = [
+    ...new Set(groups.map((g) => Number(g)).filter((g) => Number.isFinite(g))),
+  ].sort((a, b) => a - b);
+  if (distinct.length <= 1) return null;
+  // THE SPAN IS THE WHOLE TEST. Consecutive integers a span of 1 apart can
+  // only be two distinct values, so "at most two groups" needs no separate
+  // check: 5 and 7 span two and are illegal; 5, 6 and 7 span two and are
+  // illegal for the same arithmetic.
+  const span = distinct[distinct.length - 1]! - distinct[0]!;
+  if (span <= 1) return null;
+  return `crypt mixes groups ${distinct.join(", ")}; a crypt may use one group or two consecutive ones (p. 4)`;
+}
+
+/**
  * What a deck's starting position actually cost in pool.
  *
  * Influence moves counters one-for-one from your pool onto a vampire in
@@ -148,6 +184,18 @@ export function poolSpent(deck: SnapshotDeck): number {
   for (const v of deck.ready) spent += importCryptCard(v.id).capacity;
   for (const u of deck.uncontrolled) spent += u.counters;
   return spent;
+}
+
+/**
+ * A crypt card's printed group, or null if the id is not in the pool.
+ *
+ * Read off the registry rather than through `importCryptCard`, which
+ * parses sect and title and throws on an unknown id — this is asked for
+ * every card in every deck and needs neither.
+ */
+function cryptGroupOf(id: number): number | string | null {
+  const entry = reg.entries[id];
+  return entry && entry.card.kind === "crypt" ? entry.card.group : null;
 }
 
 /** Every crypt card in a starting position, however it is expressed. */
@@ -215,6 +263,15 @@ export function validateDecks(decks: DeckDef[]): DeckValidation {
         seat: deck.seat,
         problem: `library has ${deck.library.length} cards; it must hold between ${MIN_LIBRARY} and ${MAX_LIBRARY}`,
       });
+    }
+    // The group rule (p. 4/6). Only when every crypt id resolved — an
+    // unreadable id has no group, and reporting a group problem on top of
+    // an unknown-card problem would name the wrong cause.
+    if (badCryptIds.size === 0) {
+      const problem = cryptGroupProblem(
+        deck.crypt.map((v) => cryptGroupOf(v.id)).filter((g): g is number | string => g !== null),
+      );
+      if (problem) illegalDecks.push({ seat: deck.seat, problem });
     }
   }
   return {

@@ -68,11 +68,30 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   poolGainOnBleedSuccess: "poolGain",
   moveOwnVampireBloodToPool: "poolGain",
   refClanBoon: "poolGain",
+  // Both directions live in one primitive, so one tag has to cover a pool
+  // gain, a pool burn and a blood burn. "poolGain" is the shape three of
+  // the four cards using it take.
+  refPerMinion: "poolGain",
+  // Tranche 3 wave 7 — the one-shot masters.
+  gainPool: "poolGain",
+  actionGainPool: "poolGain",
+  eachOwnReadyVampireBloodToPool: "poolGain",
+  burnTorpidVampire: "deny",
+  burnLocation: "deny",
+  cryptToUncontrolled: null,
+  lockAllMatching: "deny",
   distributePerVoteMargin: "poolGain",
   actionStealPool: "poolDrain",
   burnPoolVotedAgainst: "poolDrain",
   refAllocateBurn: "poolDrain",
   refBurnSeatOrLocation: "poolDrain",
+  // A steal is a drain from the table's point of view: what the reader
+  // wants warned about is losing pool, not the caller's matching gain.
+  refStealPerSeat: "poolDrain",
+  refClanDiversity: "poolGain",
+  refLockClan: null,
+  refRemoveChosenMinion: null,
+  refBurnAllKeepable: null,
   refChooseSeatsBurn: "poolDrain",
   refLockAndAllocate: "poolDrain",
 

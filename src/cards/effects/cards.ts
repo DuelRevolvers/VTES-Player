@@ -89,6 +89,64 @@ function huntingGround(krcgId: number, name: string): CardSpec {
   };
 }
 
+/**
+ * "Requires a Camarilla vampire. Title. If this referendum is successful,
+ * put this card on the acting vampire to represent the unique Camarilla
+ * title of Prince of <city>. This could lead to a contested title."
+ *
+ * The hunting-ground treatment for the Praxis Seizures: thirteen cards
+ * that differ only in the city name, so one helper builds them all
+ * (docs/pool-widening-design.md §6, tranche 3 wave 5).
+ *
+ * "This could lead to a contested title" describes what the rules already
+ * do (p. 39, "any title to the same city") — but the engine's contest
+ * detector gates on `registry[name].isUnique`, so DESCRIBING it is not
+ * the same as being reachable. `unique: true` is what makes two Princes
+ * of Chicago contest at all; without it the clause is printed and inert.
+ *
+ * Uniqueness here is the CITY — the card names one — so two copies in
+ * play is a contest rather than an illegal state, and the engine already
+ * models exactly that (docs/contested-design.md).
+ */
+function praxisSeizure(krcgId: number, city: string): CardSpec {
+  return {
+    krcgId,
+    name: `Praxis Seizure: ${city}`,
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    requiresSect: ["camarilla"],
+    permanent: { where: "bearer", statics: {}, tags: [`Prince of ${city}`] },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refPutInPlay", onActor: true, grantsTitle: "prince" }],
+      },
+    ],
+  };
+}
+
+const PRAXIS_SEIZURES: CardSpec[] = (
+  [
+    [101447, "Amsterdam"],
+    [101449, "Atlanta"],
+    [101452, "Boston"],
+    [101455, "Chicago"],
+    [101456, "Cleveland"],
+    [101457, "Dallas"],
+    [101458, "Dublin"],
+    [101459, "Frankfurt"],
+    [101462, "Houston"],
+    [101464, "London"],
+    [101465, "Miami"],
+    [101469, "Seattle"],
+    [102307, "York"],
+  ] as Array<[number, string]>
+).map(([id, city]) => praxisSeizure(id, city));
+
 const HUNTING_GROUNDS: CardSpec[] = (
   [
     [100015, "Academic Hunting Ground"],
@@ -104,11 +162,33 @@ const HUNTING_GROUNDS: CardSpec[] = (
     [102150, "Warzone Hunting Ground"],
     [102212, "Zoo Hunting Ground"],
     [102287, "Biotech Company Hunting Ground"],
+    // The ten legacy hunting grounds the V5 sets left behind
+    // (docs/pool-widening-design.md §6, tranche 3 wave 2). Each prints
+    // the same clause as the V5 twelve above — "during your unlock phase,
+    // a ready vampire you control can gain 1 blood" — so they are the
+    // same card with another name, and they take the same helper.
+    //
+    // THE CLAN ICON IS DECORATIVE. Every hunting ground carries one (the
+    // V5 Society is Toreador, Zoo is Gangrel), and none of them restricts
+    // who plays it or who gains the blood; the text says "a ready vampire
+    // you control". So Amusement Park being a Brujah antitribu card — a
+    // clan with no vampires in this pool — costs nothing.
+    [100049, "Amusement Park Hunting Ground"],
+    [100136, "Base Hunting Ground"],
+    [100288, "Campground Hunting Ground"],
+    [100426, "Corporate Hunting Ground"],
+    [100724, "Fetish Club Hunting Ground"],
+    [100996, "Institution Hunting Ground"],
+    [101243, "Morgue Hunting Ground"],
+    [101421, "Port Hunting Ground"],
+    [101753, "Shanty Town Hunting Ground"],
+    [102075, "University Hunting Ground"],
   ] as Array<[number, string]>
 ).map(([id, name]) => huntingGround(id, name));
 
 export const cardSpecs: CardSpec[] = [
   ...HUNTING_GROUNDS,
+  ...PRAXIS_SEIZURES,
   // --- Weapons gate (docs/weapons-design.md) ---
   {
     krcgId: 100107,
@@ -732,6 +812,1337 @@ export const cardSpecs: CardSpec[] = [
     unique: true,
     weapon: { damage: null, handBonus: 1, ranged: false, aggravated: true },
     permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Legacy rush and burn actions, tranche 3 wave 12
+  //     (docs/pool-widening-design.md §6).
+  {
+    // "Do not replace until after the action. Ⓓ Burn a location."
+    krcgId: 100094,
+    name: "Arson",
+    cardType: "action",
+    bloodCost: 0,
+    delayedReplace: "afterAction",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "actionOnPermanent", what: "location", outcome: "burn" }],
+      },
+    ],
+  },
+  {
+    // "Do not replace until after this action. Ⓓ Enter combat with a
+    //  minion. This acting minion gets 1 optional maneuver during that
+    //  combat."
+    krcgId: 100266,
+    name: "Bum's Rush",
+    cardType: "action",
+    bloodCost: 0,
+    delayedReplace: "afterAction",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "actionEnterCombat", targets: "minion", riders: { maneuver: 1 } }],
+      },
+    ],
+  },
+  {
+    // "Ⓓ Enter combat with a LOCKED minion. This acting minion gets 1
+    //  optional maneuver during that combat."  No replace clause — the
+    //  one difference from Bum's Rush besides the target filter.
+    //
+    // *"If the action is unblocked when it resolves and the target is
+    // unlocked, the action fizzles"* — which is why `lockedOnly` is now
+    // re-read at resolution rather than only at announcement.
+    krcgId: 100046,
+    name: "Ambush",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "actionEnterCombat",
+            targets: "minion",
+            lockedOnly: true,
+            riders: { maneuver: 1 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. If this vampire has 4 or more blood, he or she
+    //  gains 4 blood."  The condition is read at RESOLUTION, on the
+    //  actor — blood spent on the way there counts against it.
+    krcgId: 100653,
+    name: "Entrenching",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "actionGainBlood", amount: 4, ifActorBloodAtLeast: 4 },
+        ],
+      },
+    ],
+  },
+  // --- Legacy action cards, tranche 3 wave 11
+  //     (docs/pool-widening-design.md §6). Six actions whose whole text is
+  //     the action-card vocabulary already speaks: a stealth number, a
+  //     bleed, a payout, a requirement.
+  {
+    // "Ⓓ Bleed with +1 bleed."  No stealth clause at all — the bare
+    //  enhanced bleed, and the smallest action card in the pool.
+    krcgId: 100390,
+    name: "Computer Hacking",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "actionBleed", bonus: 1 }] },
+    ],
+  },
+  {
+    // "+3 stealth action. Ⓓ Bleed."  The opposite trade: a lot of stealth
+    //  and no bonus.
+    krcgId: 102112,
+    name: "Vermin Channel",
+    cardType: "action",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 3 },
+          { kind: "actionBleed", bonus: 0 },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Gain 2 pool."  UNDIRECTED — no Ⓓ — so anyone
+    //  may block it (p. 24).
+    krcgId: 100099,
+    name: "Art Scam",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "actionGainPool", amount: 2 },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a vampire with capacity 8 or more.
+    //  Gain 2 pool."  Art Scam with a price of admission.
+    krcgId: 100494,
+    name: "Dark Mirror of the Mind",
+    cardType: "action",
+    bloodCost: 0,
+    requiresCapacity: 8,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "actionGainPool", amount: 2 },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Move the top card from your crypt to your
+    //  uncontrolled region."
+    //
+    // *"Cannot be played when the target crypt is empty"* [RTR 20000501]
+    // — the same ruling Effective Management carries, on the same effect.
+    krcgId: 101050,
+    name: "Kindred Intelligence",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "cryptToUncontrolled" },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a ready vampire with capacity 5 or more. Ⓓ Bleed. If the
+    //  bleed is successful, this acting vampire gains 1 blood."
+    //
+    // `actionGainBlood` already fires only on SUCCESS, which is what the
+    // clause asks for — the effects switch is the success path.
+    krcgId: 100768,
+    name: "Forgery",
+    cardType: "action",
+    bloodCost: 0,
+    requiresCapacity: 5,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionBleed", bonus: 0 },
+          { kind: "actionGainBlood", amount: 1 },
+        ],
+      },
+    ],
+  },
+  // --- Legacy referendum reactions, tranche 3 wave 10
+  //     (docs/pool-widening-design.md §6). The polling step already offers
+  //     REACTIONS to the non-calling seats (p. 28), so these three sit on
+  //     machinery that was built for the V5 abstain cards.
+  {
+    // "Requires a ready vampire. Only usable during the referendum of a
+    //  political action. This reacting vampire gains 2 votes."
+    //
+    // "Requires a ready vampire" is the reactor itself: the polling
+    // enumerator already offers only ready, unlocked vampires.
+    krcgId: 101909,
+    name: "Surprise Influence",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "modifyVotes", amount: 2 }] },
+    ],
+  },
+  {
+    // "Only usable during a referendum. Cancel the votes and ballots of a
+    //  vampire who belongs to the same clan as this reacting minion."
+    krcgId: 100404,
+    name: "Conflict of Interests",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "forceAbstain", sameClanAsReactor: true, notWhenAutoPassing: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable during a referendum. Lock this reacting vampire to
+    //  force the acting vampire to abstain (this can cancel that
+    //  vampire's votes and ballots)."
+    krcgId: 101010,
+    name: "Irregular Protocol",
+    cardType: "reaction",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "forceAbstain",
+            callingMinionOnly: true,
+            lockSelf: true,
+            notWhenAutoPassing: true,
+          },
+        ],
+      },
+    ],
+  },
+  // --- Legacy action modifiers, tranche 3 wave 9
+  //     (docs/pool-widening-design.md §6). Four modifiers that each asked
+  //     the existing vocabulary for one more knob.
+  {
+    // "Only usable as the action is announced. This action is
+    //  unblockable."  Unblockable is the UNION of the two kind bars, not
+    //  a new kind of state.
+    krcgId: 101162,
+    name: "Mantle of the Moon",
+    cardType: "actionModifier",
+    bloodCost: 4,
+    usable: ["onlyAsAnnounced"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "blockRestriction", who: "all" }],
+      },
+    ],
+  },
+  {
+    // "Only usable as the action is announced. VAMPIRES must burn 1 blood
+    //  to attempt to block this action."
+    //
+    // The kind filter is load-bearing: without it an ally facing a
+    // blood-only toll cannot pay and so cannot block at all (p. 22), so
+    // the card would silently become "nobody can block" for allies.
+    krcgId: 101870,
+    name: "Stiff Contempt",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: ["onlyAsAnnounced"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "blockCost", amount: 1, payWith: "blood", kinds: ["vampire"] }],
+      },
+    ],
+  },
+  {
+    // "Only usable after resolution of a successful DIRECTED action. This
+    //  vampire gains 1 blood and you gain 1 pool."
+    krcgId: 101854,
+    name: "Spoils of War",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: ["afterResolutionByActor", "ifActionSucceeded", "ifActionDirected"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionGainBlood", amount: 1 },
+          { kind: "actionGainPool", amount: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "Minions without Necromancy [nec] or Obtenebration [obt] get -1
+    //  intercept."
+    //
+    // *"Can be played any time during the action before resolution; a
+    // block attempt is not required"* [LSJ 20020612] — which is the
+    // p. 26 override, `evenIfNotNeeded`.
+    //
+    // Neither discipline is carried by any vampire in this pool, so the
+    // exemption currently spares nobody. That is the card as printed, not
+    // a shortcut: it is written as an exemption so it starts sparing
+    // people the moment a legacy crypt wave lands.
+    krcgId: 100016,
+    name: "Acheron Vortex",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: ["evenIfNotNeeded"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "modifyAllIntercept", amount: -1, exemptDisciplines: ["nec", "obt"] },
+        ],
+      },
+    ],
+  },
+  // --- Legacy cost-modifier masters, tranche 3 wave 8
+  //     (docs/pool-widening-design.md §6). Cards whose text is a standing
+  //     price change, plus the four Path masters, which pair one with the
+  //     already-built "any minion can burn this card" action.
+  {
+    // "Master: unique location. Locations cost you 1 less blood or pool."
+    //  "YOU" — `controllerOnly`; a seat-level modifier reaches every
+    //  Methuselah without it.
+    krcgId: 101968,
+    name: "Therbold Realty",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {
+        playCostMod: {
+          amount: -1,
+          pays: "bloodOrPool",
+          tags: ["location"],
+          controllerOnly: true,
+        },
+      },
+      tags: ["location"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. Weapons cost an additional pool."
+    //  No "you": everyone pays, which is the seat-level default.
+    krcgId: 100315,
+    name: "Centralized Background Check",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: { playCostMod: { amount: 1, pays: "pool", tags: ["weapon"] } },
+      tags: ["location"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique master. Put this card in play. Political actions cost 1
+    //  additional blood. Any vampire can call a referendum to burn this
+    //  card as a +1 stealth political action."
+    krcgId: 100269,
+    name: "Bureaucratic Overload",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {
+        playCostMod: { amount: 1, pays: "blood", cardTypes: ["politicalAction"] },
+      },
+      tags: [],
+      vulnerableTo: { who: { kind: "vampire" }, stealth: 1, via: "politicalAction" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  ...(
+    [
+      // "Cards requiring <Discipline> cost <clan> 1 fewer blood. Any
+      //  minion can burn this card as a Ⓓ action that inflicts 1
+      //  unpreventable environmental damage on acting vampires."
+      //
+      // The four Path masters differ only in the discipline and the clan.
+      // NONE of those disciplines is required by anything in the pool
+      // yet, so the price clause correctly matches nothing today — the
+      // Wall Street Night precedent. The burn action is live regardless,
+      // and it is the half that can be got wrong.
+      [101364, "The Path of Metamorphosis", "vic", "Tzimisce"],
+      [101365, "The Path of Night", "obt", "Lasombra"],
+      [101366, "The Path of Paradox", "chi", "Ravnos"],
+      // "Followers of Set" is the MINISTRY — the registry's V5 name, and
+      // the reason tests/cards/clan-vocabulary.test.ts exists.
+      [101373, "The Path of Typhon", "ser", "Ministry"],
+    ] as Array<[number, string, string, string]>
+  ).map(([krcgId, name, discipline, clan]): CardSpec => ({
+    krcgId,
+    name,
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {
+        playCostMod: {
+          amount: -1,
+          pays: "blood",
+          requiresDiscipline: [discipline],
+          requiresClan: [clan],
+        },
+      },
+      tags: [],
+      vulnerableTo: { stealth: 0, actorDamage: { amount: 1 } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  })),
+  // --- Legacy one-shot masters, tranche 3 wave 7
+  //     (docs/pool-widening-design.md §6). Six cards whose whole text is
+  //     one thing happening once. The master compiler already had a
+  //     one-shot path with its own effect switch; these are six small
+  //     cases in it.
+  {
+    // "Master. Gain 1 pool."
+    krcgId: 100104,
+    name: "Ascendance",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }],
+  },
+  {
+    // "Master. Burn a vampire in torpor."  ANY Methuselah's.
+    krcgId: 102134,
+    name: "Vulnerability",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "burnTorpidVampire" }] }],
+  },
+  {
+    // "Master. Burn a location."  ANY Methuselah's.
+    krcgId: 102080,
+    name: "Unnatural Disaster",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 2,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "burnLocation" }] }],
+  },
+  {
+    // "Master. Move the top card from your crypt to your uncontrolled
+    //  region."  Unplayable on an empty crypt [RTR 20000501].
+    krcgId: 100616,
+    name: "Effective Management",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "cryptToUncontrolled" }] }],
+  },
+  {
+    // "Move 1 blood from each ready vampire you control to your pool."
+    //  Playable with NO ready vampire [ANK 20210717] — the mirror of
+    //  Effective Management's ruling, and the reason neither gate is
+    //  guessed at.
+    krcgId: 102023,
+    name: "Tribute to the Master",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "eachOwnReadyVampireBloodToPool", amount: 1 }],
+      },
+    ],
+  },
+  {
+    // "Master. Lock all ready Tremere."  Every Methuselah's, including
+    //  the player's own.
+    krcgId: 101097,
+    name: "Letter from Vienna",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "lockAllMatching", clan: "Tremere" }],
+      },
+    ],
+  },
+  // --- Legacy referendums, tranche 3 wave 6
+  //     (docs/pool-widening-design.md §6). Four political actions that
+  //     differ only in a filter and a resource, so they share one new
+  //     primitive rather than four bespoke ones.
+  {
+    // "Successful referendum means each Methuselah gains 1 pool for each
+    //  minion he or she controls."  MINION, not vampire — allies count.
+    krcgId: 100115,
+    name: "Autarkis Persecution",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refPerMinion", effect: "gainPool", amount: 1 }],
+      },
+    ],
+  },
+  {
+    // "Successful referendum means each Methuselah burns 2 pool for each
+    //  vampire in torpor he or she controls."
+    krcgId: 101391,
+    name: "Perpetual Care",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refPerMinion",
+            effect: "burnPool",
+            amount: 2,
+            who: { kind: "vampire", inTorpor: true },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Successful referendum means each Methuselah gains 1 pool for each
+    //  ready Independent or Anarch vampire he or she controls."
+    krcgId: 100671,
+    name: "Exclusion Principle",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refPerMinion",
+            effect: "gainPool",
+            amount: 1,
+            who: { kind: "vampire", ready: true, sects: ["independent", "anarch"] },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Successful referendum means all vampires with capacity below 4
+    //  burn 1 blood."  ALL vampires, every Methuselah's, torpor included —
+    //  a vampire in torpor is still a vampire in play. "Below 4" is
+    //  capacity 3 or less.
+    krcgId: 101535,
+    name: "Rabble Razing",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refPerMinion",
+            effect: "burnBlood",
+            amount: 1,
+            who: { kind: "vampire", maxCapacity: 3 },
+          },
+        ],
+      },
+    ],
+  },
+  // --- Legacy political actions, tranche 1 wave 13
+  //     (docs/pool-widening-design.md §6). Five referendums that tally a
+  //     per-SEAT condition rather than a per-minion one: who is richer
+  //     than the caller, who lacks an elder, how many clans a seat
+  //     fields. The per-minion tally (`refPerMinion`, wave 6) counts
+  //     inside one seat; these ask a question ABOUT the seat.
+  {
+    // "Successful referendum means you steal 1 pool from each Methuselah
+    //  who has more pool than you do."
+    krcgId: 102010,
+    name: "Transfer of Power",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refStealPerSeat", amount: 1, from: { morePoolThanCaller: true } }],
+      },
+    ],
+  },
+  {
+    // "Requires a ready Sabbat vampire with a capacity above 6.
+    //  Successful referendum means you steal 1 pool from each Methuselah
+    //  who does not control a vampire with a capacity above 6."
+    //
+    //  "Above 6" is capacity 7 or more on BOTH halves of the card — the
+    //  requirement and the victim test are the same bound, and writing
+    //  one of them as ">= 6" would make the caller its own victim's twin.
+    krcgId: 101986,
+    name: "Tithings",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    requiresCapacity: 7,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refStealPerSeat", amount: 1, from: { noVampireAboveCapacity: 6 } }],
+      },
+    ],
+  },
+  {
+    // "Successful referendum means each Methuselah gains X pool, where X
+    //  is the number of clans to which his or her ready vampires belong."
+    krcgId: 100564,
+    name: "Diversity",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "refClanDiversity", poolPerClan: 1 }] },
+    ],
+  },
+  {
+    // "Successful referendum means each vampire burns 1 blood. If this
+    //  referendum fails, the acting vampire burns 1 blood."
+    //
+    //  EACH VAMPIRE — every Methuselah's, torpor included, the caller's
+    //  own included. The failure clause is the first in the pool and is
+    //  why `applyReferendumFailed` exists.
+    krcgId: 100731,
+    name: "The Final Nights",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    referendumFail: { callingVampireBurnsBlood: 1 },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "refPerMinion", effect: "burnBlood", amount: 1, who: { kind: "vampire" } },
+        ],
+      },
+    ],
+  },
+  {
+    // "Choose a clan. Successful referendum locks all vampires of that
+    //  clan."
+    krcgId: 100411,
+    name: "Consanguineous Condemnation",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "refLockClan" }] }],
+  },
+  // --- Legacy political actions, tranche 1 wave 14
+  //     (docs/pool-widening-design.md §6). "Choose a ready <filter>" and
+  //     then take something away from it: a title, the minion, or the
+  //     card itself. One primitive, four filters, three outcomes.
+  {
+    // "Requires a Camarilla vampire. Choose a ready prince. Successful
+    //  referendum means the prince loses his or her title."
+    krcgId: 100382,
+    name: "Command of the Harpies",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresSect: ["camarilla"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refRemoveChosenMinion",
+            who: { kind: "vampire", ready: true, title: ["prince"] },
+            outcome: "loseTitle",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a Sabbat vampire. Choose a ready archbishop. Successful
+    //  referendum means the chosen archbishop loses his or her title."
+    krcgId: 100672,
+    name: "Excommunication",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refRemoveChosenMinion",
+            who: { kind: "vampire", ready: true, title: ["archbishop"] },
+            outcome: "loseTitle",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a Sabbat vampire with capacity above 7. Choose a vampire
+    //  with a capacity below 7 who belongs to the same clan as the acting
+    //  vampire. Successful referendum means the chosen vampire is
+    //  burned."
+    //
+    //  BURNED, so it reaches the ash heap — contrast Permanent Vacation
+    //  below, which removes instead. Note what the card does NOT say: the
+    //  target need not be READY, so a vampire in torpor is a legal
+    //  choice, and it may be the caller's own clanmate in any seat.
+    krcgId: 101671,
+    name: "Sacrifice",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    requiresCapacity: 8,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refRemoveChosenMinion",
+            who: { kind: "vampire", sameClanAsCaller: true, maxCapacity: 6 },
+            outcome: "burn",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Choose a ready ally. Successful referendum means the chosen ally
+    //  is removed from the game."  REMOVED, not burned: it never reaches
+    //  the ash heap and nothing can retrieve it (p. 16).
+    krcgId: 101390,
+    name: "Permanent Vacation",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refRemoveChosenMinion",
+            who: { kind: "ally", ready: true },
+            outcome: "removeFromGame",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Choose a Methuselah. Successful referendum means each Methuselah
+    //  burns 1 pool and the chosen Methuselah burns an additional pool."
+    //  The chosen seat pays 2 in total: the table's 1 and its own 1.
+    krcgId: 101699,
+    name: "Screw the Masquerade!",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refChooseSeatsBurn", base: 1, chooseExactly: 1, everySeatBurns: 1 }],
+      },
+    ],
+  },
+  // --- Legacy political actions, tranche 1 wave 15
+  //     (docs/pool-widening-design.md §6). The pay-to-keep sweeps: one
+  //     referendum burns a whole category off the table, and every
+  //     Methuselah is asked, card by card, whether to ransom theirs.
+  {
+    // "Requires a non-Camarilla vampire. Successful referendum means all
+    //  locations are burned. Any Methuselah can keep any locations he or
+    //  she controls by repaying their pool cost."
+    //
+    //  "Non-Camarilla" is spelled as the other three sects because `Sect`
+    //  is a closed union and every vampire in the pool has one. A
+    //  SECTLESS vampire is therefore excluded, which is the same
+    //  print-faithful call the crypt widening made (§4a).
+    krcgId: 101022,
+    name: "Jericho Founding",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresSect: ["anarch", "sabbat", "independent"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refBurnAllKeepable", what: "location" }],
+      },
+    ],
+  },
+  {
+    // "Successful referendum means that all allies are burned. Any
+    //  Methuselah can keep an ally or allies he or she controls by
+    //  repaying their pool cost to recruit."
+    krcgId: 101053,
+    name: "Kindred Segregation",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "refBurnAllKeepable", what: "ally" }] },
+    ],
+  },
+  {
+    // "Successful referendum means all weapons are burned. A Methuselah
+    //  may keep any of his or her minions' weapons by repaying their pool
+    //  cost to equip."
+    //
+    //  MINIONS' weapons — attached, not at seat level, and an ally can
+    //  carry one just as a vampire can.
+    krcgId: 101380,
+    name: "Peace Treaty",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refBurnAllKeepable", what: "weapon" }],
+      },
+    ],
+  },
+  // --- Legacy retainers and allies, tranche 3 wave 4
+  //     (docs/pool-widening-design.md §6). A life total and one static
+  //     apiece — the shape `spec.ally` and `mode.retainerLife` already
+  //     cover exactly. NO new vocabulary in this wave.
+  {
+    // "Unique mortal with 1 life. The employer gets +1 bleed."
+    krcgId: 101015,
+    name: "J. S. Simmons, Esq.",
+    cardType: "retainer",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: { where: "bearer", statics: { bleed: 1 }, tags: ["mortal"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Unique mortal with 1 life. The employer gets +1 bleed."
+    krcgId: 101943,
+    name: "Tasha Morgan",
+    cardType: "retainer",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: { where: "bearer", statics: { bleed: 1 }, tags: ["mortal"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Unique mortal with 1 life. This minion gets an optional maneuver
+    //  each combat."
+    krcgId: 101018,
+    name: "Jackie Therman",
+    cardType: "retainer",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { maneuverPerCombat: 1 },
+      tags: ["mortal"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Changeling with 1 life. This Malkavian gets +1 bleed."  The clan
+    //  clause is a REQUIREMENT on who may employ it, not a filter on the
+    //  static — a Changeling Muse only ever sits on a Malkavian.
+    krcgId: 100338,
+    name: "Childling Muse",
+    cardType: "retainer",
+    bloodCost: 0,
+    poolCost: 1,
+    requiresClan: ["Malkavian"],
+    permanent: { where: "bearer", statics: { bleed: 1 }, tags: ["changeling"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Mortal with 2 life. 1 strength, 0 bleed."  Not unique.
+    krcgId: 101129,
+    name: "Loyal Street Gang",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 1,
+    requiresClan: ["Brujah"],
+    ally: { life: 2, strength: 1, bleed: 0 },
+    permanent: { where: "bearer", statics: {}, tags: ["mortal"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mortal with 2 life. 2 strength, 0 bleed."
+    krcgId: 101063,
+    name: "The Knights",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    requiresClan: ["Brujah"],
+    ally: { life: 2, strength: 2, bleed: 0 },
+    permanent: { where: "bearer", statics: {}, tags: ["mortal"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mortal with 1 life. 1 strength, 1 bleed. Gypsies get +1
+    //  stealth on each of their actions."  The Double Deuce treatment:
+    //  an ally's own stealth is a bearer static on its self-attached
+    //  entry.
+    krcgId: 100875,
+    name: "Gypsies",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    requiresClan: ["Gangrel"],
+    ally: { life: 1, strength: 1, bleed: 1 },
+    permanent: { where: "bearer", statics: { stealth: 1 }, tags: ["mortal"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Legacy equipment statics, tranche 3 wave 3
+  //     (docs/pool-widening-design.md §6). Equipment whose whole text is a
+  //     standing property of whoever carries it — no strike, no ability to
+  //     use, nothing to decide. The bearer statics vocabulary says all of
+  //     it, and the three cards that needed a new knob each needed exactly
+  //     one.
+  {
+    // "Unique. The bearer gets +1 hunt."
+    krcgId: 100003,
+    name: "Aaron's Feeding Razor",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: { where: "bearer", statics: { hunt: 1 }, tags: [] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Electronic equipment. This minion gets an optional maneuver each
+    //  combat."
+    krcgId: 101007,
+    name: "IR Goggles",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { maneuverPerCombat: 1 },
+      tags: ["electronic"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Vehicle. The minion with this vehicle gets an optional press each
+    //  combat. A minion may have only 1 vehicle."  The vehicle limit is
+    //  the `vehicle` tag, which `compileEquipment` already enforces.
+    krcgId: 100898,
+    name: "Hawg",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { pressPerCombat: 1 },
+      tags: ["vehicle"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Electronic. The bearer gets +1 bleed. A minion can have only one
+    //  Laptop Computer."  Not `unique` — a Methuselah may control several,
+    //  just not on one minion, which is what `exclusiveKey` says.
+    krcgId: 101073,
+    name: "Laptop Computer",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    permanent: {
+      where: "bearer",
+      statics: { bleed: 1 },
+      tags: ["electronic"],
+      exclusiveKey: "Laptop Computer",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "This equipment card represents a location and does not count as
+    //  equipment while in play. Unique. Allies cannot block this vampire."
+    //
+    // The Living Manse treatment: `notEquipment` is the printed opt-out
+    // from "every equipment card is tagged equipment", so cards that
+    // punish equipment do not see it. Paid in BLOOD, not pool.
+    krcgId: 101670,
+    name: "Sacré-Cœur Cathedral, France",
+    cardType: "equipment",
+    bloodCost: 2,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { cannotBeBlockedBy: { kinds: ["ally"] } },
+      tags: ["location", "notEquipment"],
+      notEquipment: true,
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique. Vampires with capacity 8 or more cannot attempt to block
+    //  the bearer."  The mirror of Rexton's `maxCapacity`, and read
+    //  through `capacityOf` so a granted +1 capacity really does bar a 7.
+    krcgId: 101781,
+    name: "The Signet of King Saul",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { cannotBeBlockedBy: { minCapacity: 8 } },
+      tags: [],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique equipment. Toreador and Toreador antitribu cannot block this
+    //  minion."
+    //
+    // Both names are listed as printed. Toreador antitribu has no vampires
+    // in this pool, so that half currently matches nobody — the Wall
+    // Street Night precedent: the card is written as it reads, not as the
+    // pool happens to be.
+    krcgId: 100361,
+    name: "Cloak of the Abalone",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { cannotBeBlockedBy: { clans: ["Toreador", "Toreador antitribu"] } },
+      tags: [],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Legacy weapons, tranche 3 wave 1 (docs/pool-widening-design.md §6).
+  //     The first library cards admitted from outside the V5 sets. They are
+  //     here because they are the shape the weapon vocabulary already
+  //     covers exactly: a strike, and nothing else. Every one of them is
+  //     WHOLE — its entire printed text is expressed below, which is what
+  //     admits it (CLAUDE.md, "No partial cards").
+  {
+    // "Weapon, gun. Strike: 2R damage."
+    krcgId: 100529,
+    name: "Desert Eagle",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    weapon: { damage: 2, ranged: true, aggravated: false },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Melee weapon. Strike: strength+2 damage."
+    krcgId: 100130,
+    name: "Bang Nakh — Tiger's Claws",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    weapon: { damage: null, handBonus: 2, ranged: false, aggravated: false },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Melee weapon. Strength+1 damage each strike."
+    krcgId: 100139,
+    name: "Bastard Sword",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    weapon: { damage: null, handBonus: 1, ranged: false, aggravated: false },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Melee weapon. Strength+1 damage each strike."
+    krcgId: 101190,
+    name: "Meat Cleaver",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    weapon: { damage: null, handBonus: 1, ranged: false, aggravated: false },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique melee weapon. Strike: strength aggravated damage."
+    //  strength+0 — `handBonus` is omitted, which the compiler reads as 0.
+    krcgId: 101715,
+    name: "Sengir Dagger",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    weapon: { damage: null, ranged: false, aggravated: true },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon. 1 aggravated damage each strike."
+    //  A weapon that is neither gun nor melee: fixed damage, but no "R",
+    //  so it is a close-range strike.
+    krcgId: 100226,
+    name: "Blow Torch",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    weapon: { damage: 1, ranged: false, aggravated: true },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon, gun. 1R damage each strike, with an optional maneuver each
+    //  combat."
+    krcgId: 101682,
+    name: "Saturday-Night Special",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    weapon: { damage: 1, ranged: true, aggravated: false, maneuverPerCombat: true },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon, gun. 3R damage each strike, with an optional maneuver each
+    //  combat."
+    krcgId: 101891,
+    name: "Submachine Gun",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 4,
+    weapon: { damage: 3, ranged: true, aggravated: false, maneuverPerCombat: true },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon. 3 damage as a strike, only usable once each combat."
+    krcgId: 100317,
+    name: "Chainsaw",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    weapon: { damage: 3, ranged: false, aggravated: false, usableOnce: "combat" },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Melee weapon. 3 damage each strike. This weapon is only usable once
+    //  each combat."
+    krcgId: 100811,
+    name: "Gas-Powered Chainsaw",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    weapon: { damage: 3, ranged: false, aggravated: false, usableOnce: "combat" },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon, gun. 3R damage each strike, only usable once each combat."
+    krcgId: 101685,
+    name: "Sawed-Off Shotgun",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    weapon: { damage: 3, ranged: true, aggravated: false, usableOnce: "combat" },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Melee weapon. Strength+1 damage each strike, only usable once each
+    //  combat."  Costs nothing (KRCG records no cost).
+    krcgId: 100246,
+    name: "Brass Knuckles",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    weapon: {
+      damage: null,
+      handBonus: 1,
+      ranged: false,
+      aggravated: false,
+      usableOnce: "combat",
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon, Gun. 3R damage each strike, only usable once each round."
+    krcgId: 100379,
+    name: "Combat Shotgun",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 3,
+    weapon: { damage: 3, ranged: true, aggravated: false, usableOnce: "round" },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon, gun. Strike: 4R damage, only usable once each round and
+    //  only at long range."
+    krcgId: 101168,
+    name: "Mark V",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    weapon: {
+      damage: 4,
+      ranged: true,
+      aggravated: false,
+      onlyAtLongRange: true,
+      usableOnce: "round",
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
@@ -4162,6 +5573,75 @@ export const cardSpecs: CardSpec[] = [
       // "+3 votes against" — modeled as a flexible grant (owner-approved).
       { level: "basic", discipline: null, variant: "votes", effects: [{ kind: "modifyVotes", amount: 3 }] },
     ],
+  },
+  // --- Legacy locations (docs/pool-widening-design.md §6, tranche 3
+  //     wave 2). Three lock-grant locations that the existing vocabulary
+  //     already says in full.
+  {
+    // "Master: unique location. Lock to give any minion +1 intercept for
+    // the current action."  WMRH Talk Radio without the pool penalty —
+    // no "you control", so any Methuselah's minion.
+    krcgId: 101120,
+    name: "London Evening Star, Tabloid Newspaper",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      lockGrant: { grant: "intercept", amount: 1, anyController: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique location. +1 hand size. Lock to give a vampire with
+    // capacity 8 or more +1 stealth."  The hand size is a plain seat
+    // static; the stealth reads the DERIVED capacity, so a granted +1
+    // really does make a 7 into an 8.
+    krcgId: 101238,
+    name: "Monastery of Shadows",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: { handSize: 1 },
+      tags: ["location"],
+      lockGrant: { grant: "stealth", amount: 1, minCapacity: 8 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique location. Lock during the polling step of a political
+    // action to get +1 vote, with an additional +1 vote if the card named
+    // /Ventrue Headquarters/ is not in play."
+    //
+    // The named card is in this pool (102109, just below), so the
+    // conditional is live rather than decorative — this is not a Wall
+    // Street Night case that matches nothing.
+    krcgId: 101187,
+    name: "The Mausoleum, Venice",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      lockGrant: {
+        grant: "votes",
+        amount: 1,
+        extraUnlessInPlay: { card: "Ventrue Headquarters", amount: 1 },
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     krcgId: 102109,

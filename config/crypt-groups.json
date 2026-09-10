@@ -1,0 +1,28 @@
+{
+  "note": [
+    "Crypt groups admitted from OUTSIDE the V5 sets (docs/pool-widening-design.md).",
+    "",
+    "Vampires only — never Imbued, who are a different card type the engine",
+    "has no model for. Library cards are NEVER widened by this file: an",
+    "unimplemented library card makes a whole deck unplayable, while an",
+    "unimplemented crypt ability is merely reported as inert. That asymmetry",
+    "is the whole reason this file exists.",
+    "",
+    "A deck's crypt may only use one group or two CONSECUTIVE groups",
+    "(p. 4/6), and that rule is enforced by cryptGroupProblem() in",
+    "src/ui/decks.ts.",
+    "",
+    "NO PARTIAL CARDS. A widened vampire is admitted only when it is",
+    "WHOLE: its ability is implemented, or it prints no ability at all.",
+    "The builder enforces that regardless of what this file says, so",
+    "opening a group here does not admit a card whose text does nothing.",
+    "That is what makes widening a pipeline that follows the card waves",
+    "instead of running ahead of them. docs/pool-widening-design.md §0",
+    "",
+    "Empty list = no widening at all, and the registry is byte-identical to",
+    "a V5-only build. It is empty now because the 2026-09-08 widening was",
+    "rolled back: it had admitted 1,104 vampires with inert abilities."
+  ],
+  "groups": [],
+  "excludeSects": ["Laibon"]
+}

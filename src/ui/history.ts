@@ -18,9 +18,23 @@ export interface SavedGame {
   version: 1;
   setup: GameSetup;
   commands: CommandLogEntry[];
+  /**
+   * Which seats an AI was playing when this was saved.
+   *
+   * NOT game state, and it does not contradict `settings.ts`'s rule that a
+   * save carries no preferences: that rule is about REPLAY, and it still
+   * holds — the answers are all in `commands`, so this game replays
+   * identically whoever is handed the seats afterwards. What it fixes is
+   * a game coming back UNPLAYABLE: without it, loading a private table
+   * leaves three bot seats with nobody driving them and one human being
+   * asked to answer for all four.
+   *
+   * Optional because it was added after saves already existed — a file or
+   * a slot written before this field simply does not have it, and the
+   * loader says what it assumed rather than guessing silently.
+   */
+  botSeats?: string[];
 }
-
-const STORAGE_KEY = "vtes-debug-game";
 
 /** Replay `commands` (or a prefix of them) into a brand new engine. */
 export function replay(setup: GameSetup, commands: CommandLogEntry[]): VtesEngine {
@@ -60,27 +74,40 @@ export function undoToActionStart(
   return replay(setup, []);
 }
 
-export function toSave(setup: GameSetup, commands: CommandLogEntry[]): SavedGame {
-  return { version: 1, setup, commands };
+export function toSave(
+  setup: GameSetup,
+  commands: CommandLogEntry[],
+  botSeats?: string[],
+): SavedGame {
+  return { version: 1, setup, commands, ...(botSeats ? { botSeats } : {}) };
 }
 
-export function saveToStorage(save: SavedGame): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(save));
-  } catch {
-    // A private window or blocked site data: saving to a file still works.
+/**
+ * Is this really a save?
+ *
+ * ONE PREDICATE, because there are two ways in — a file somebody hands
+ * over with a bug report, and a slot read back out of localStorage — and
+ * "one question asked in two places will drift". Both are data this code
+ * did not write: a file may be anything at all, and a slot may have been
+ * written by an older version of this app.
+ *
+ * It checks the SHAPE, not the contents. A structurally valid save whose
+ * command log does not replay is a determinism bug, and it should surface
+ * loudly from `replay` rather than being quietly rejected here as "not a
+ * save".
+ */
+export function isSavedGame(value: unknown): value is SavedGame {
+  if (typeof value !== "object" || value === null) return false;
+  const s = value as Partial<SavedGame>;
+  if (s.version !== 1) return false;
+  if (typeof s.setup !== "object" || s.setup === null) return false;
+  if (!Array.isArray(s.setup.decks)) return false;
+  if (!Array.isArray(s.commands)) return false;
+  if (s.botSeats !== undefined) {
+    if (!Array.isArray(s.botSeats)) return false;
+    if (!s.botSeats.every((b) => typeof b === "string")) return false;
   }
-}
-
-export function loadFromStorage(): SavedGame | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as SavedGame;
-    return parsed.version === 1 ? parsed : null;
-  } catch {
-    return null;
-  }
+  return true;
 }
 
 /** Offer the save as a .json download — the file to hand over with a bug. */
@@ -97,7 +124,14 @@ export function downloadSave(save: SavedGame): void {
 /** Read a save back from a file input. */
 export async function readSaveFile(file: File): Promise<SavedGame> {
   const text = await file.text();
-  const parsed = JSON.parse(text) as SavedGame;
-  if (parsed.version !== 1) throw new Error("unsupported save version");
+  // A file is whatever somebody chose in a picker, so JSON.parse throwing
+  // is an ordinary outcome here, not a bug — say which of the two it was.
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("that file is not a saved game");
+  }
+  if (!isSavedGame(parsed)) throw new Error("that file is not a saved game");
   return parsed;
 }

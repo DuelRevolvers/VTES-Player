@@ -11,6 +11,8 @@
  * throws on access and a missing preference is never an error.
  */
 
+import { nameProblem } from "./profile.ts";
+
 const KEY = "vtes-ui-settings";
 
 export interface UiSettings {
@@ -41,6 +43,46 @@ export interface UiSettings {
   cardTextPx: number;
   /** Debug: reveal every seat's hidden cards. */
   omniscient: boolean;
+  /**
+   * What a new table calls its bot seats, in order.
+   *
+   * A PREFERENCE, not a profile field: it is about the tables made on this
+   * machine, not about the person, and it does not travel to somebody
+   * else's room the way a name and a chat colour do.
+   *
+   * A blank entry — or a list shorter than the table — falls back to
+   * "Bot 1", "Bot 2" and so on, so this can be partly filled in and the
+   * rest still works. Positional on purpose (owner decision): bot seat 1
+   * always gets the first name, which is what makes a leaderboard row
+   * accumulate against one bot instead of scattering across a pool.
+   *
+   * These are DEFAULTS. Every bot seat is still renameable in the lobby,
+   * per game — this is only what it starts as.
+   */
+  botNames: string[];
+}
+
+/**
+ * The most bot seats a table can have: every seat but the host's.
+ *
+ * Derived from `MAX_SEATS` would be the obvious thing, and it is
+ * deliberately not — `newgame.ts` imports this module's `seatSeed`, and
+ * importing back the other way would be a cycle. The two are pinned to
+ * each other by a test instead.
+ */
+export const MAX_BOT_NAMES = 5;
+
+/**
+ * What bot seat `index` (1-based) is called by default.
+ *
+ * THE ONE PLACE THAT ANSWERS IT. A table is built in two places — a fresh
+ * default table, and the button that adds a seat to an existing one — and
+ * those two drifting apart is how a table ends up with "Bea, Cato, Bot 3"
+ * where the third name was configured all along.
+ */
+export function botNameFor(settings: UiSettings, index: number): string {
+  const configured = settings.botNames[index - 1]?.trim();
+  return configured ? configured : `Bot ${index}`;
 }
 
 /** The card-text sizes offered in Settings. */
@@ -81,6 +123,10 @@ export const DEFAULT_SETTINGS: UiSettings = {
   // card text at that size, and this is text you read rather than glance at.
   cardTextPx: 15,
   omniscient: false,
+  // Empty rather than ["Bot 1", …]: an unset name and a name that happens
+  // to read "Bot 1" should behave the same, and `botNameFor` is the one
+  // place that knows what unset looks like.
+  botNames: [],
 };
 
 /** A stable per-seat seed, so two AI seats do not make identical choices
@@ -94,10 +140,32 @@ export function seatSeed(seat: string): number {
   return (h >>> 0) % 1000000 || 1;
 }
 
+/**
+ * A stored bot-name list, made safe to use.
+ *
+ * A name that would be REFUSED if it were typed in must not survive being
+ * stored either — a hand edit or an older version could have put a control
+ * character or a 200-character string in here, and this list becomes seat
+ * ids. Anything `nameProblem` objects to becomes blank, which is the same
+ * as never having been set: `botNameFor` falls back to "Bot N".
+ *
+ * Note the empty string is kept as a POSITION rather than dropped. The
+ * list is positional, so removing a blank third entry would silently
+ * promote the fourth name to the third bot.
+ */
+function cleanBotNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, MAX_BOT_NAMES)
+    .map((n) => (typeof n === "string" && !nameProblem(n) ? n.trim() : ""));
+}
+
 export function loadSettings(): UiSettings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {} };
+    // The spread would share DEFAULT_SETTINGS' own objects and arrays with
+    // every caller, so each mutable field is replaced with a fresh one.
+    if (!raw) return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [] };
     const parsed = JSON.parse(raw) as Partial<UiSettings>;
     return {
       autoPass:
@@ -117,10 +185,23 @@ export function loadSettings(): UiSettings {
           ? Math.min(32, Math.max(9, Math.round(parsed.cardTextPx)))
           : DEFAULT_SETTINGS.cardTextPx,
       omniscient: parsed.omniscient === true,
+      botNames: cleanBotNames(parsed.botNames),
     };
   } catch {
-    return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {} };
+    return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [] };
   }
+}
+
+/**
+ * Why this bot name cannot be used, or null.
+ *
+ * BLANK IS ALLOWED here and nowhere else: an empty box means "no name of
+ * my own, call it Bot N", which is the only way to unset one. Everything
+ * else is the seat-name rule, asked of `profile.ts` so a bot and a person
+ * are held to one standard.
+ */
+export function botNameProblem(name: string): string | null {
+  return name.trim() === "" ? null : nameProblem(name);
 }
 
 export function saveSettings(settings: UiSettings): void {

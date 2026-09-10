@@ -109,8 +109,13 @@ describe("every equipment card is tagged `equipment` (§1)", () => {
       .filter((h) => h.isEquipment)
       .filter((h) => !(h.permanentTags ?? []).includes("equipment"))
       .map((h) => h.name);
-    // Living Manse is the ONLY card in the pool that prints the opt-out.
-    expect(untagged).toEqual(["Living Manse"]);
+    // The opt-out is PRINTED, so this list grows only when a card that
+    // says so is added. Sacré-Cœur Cathedral arrived with tranche 3
+    // wave 3 and prints the same clause as Living Manse: "this equipment
+    // card represents a location and does not count as equipment while
+    // in play". Sorted, so the order the specs happen to sit in cannot
+    // break it.
+    expect(untagged.sort()).toEqual(["Living Manse", "Sacré-Cœur Cathedral, France"]);
   });
 
   it("covers the hand-rolled .44 Magnum, which listed only weapon/gun", () => {

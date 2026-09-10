@@ -12,6 +12,7 @@ import registry from "../../src/cards/registry.json";
 import type { CardRegistry, CryptCardDef } from "../../src/cards/types.ts";
 import {
   findCard,
+  findCards,
   importDeck,
   preconDeck,
   supportedPrecons,
@@ -144,16 +145,42 @@ describe("matching names people actually paste", () => {
     expect(findCard("ariane (g5)")!.name).toBe("Ariane (G5)");
   });
 
-  it("...and no two crypt cards collide once the group is stripped", () => {
-    // The bare-name index silently prefers one of a colliding pair, so the
-    // absence of collisions is load-bearing, not a coincidence to rely on.
-    const seen = new Map<string, string>();
+  it("...and a colliding bare name yields every candidate, not one of them", () => {
+    // THIS USED TO ASSERT THAT NO TWO CRYPT CARDS COLLIDE, which was true
+    // of a single-group-range pool and is false the moment the crypt is
+    // widened (docs/pool-widening-design.md §5). The invariant that
+    // replaces it is stronger: where a bare name IS ambiguous, the lookup
+    // must hand back all of them so the importer can resolve or report,
+    // rather than silently preferring one.
+    const bareOf = (n: string): string =>
+      n.replace(/ \(G\d+( ADV)?\)$/, "").replace(/ \(ADV\)$/, "").toLowerCase();
+    const byBare = new Map<string, string[]>();
     for (const e of Object.values(reg.entries)) {
       if (e.card.kind !== "crypt") continue;
-      const bare = e.card.name.replace(/ \(G\d+\)$/, "").toLowerCase();
-      expect(seen.has(bare), `${bare} is used by two crypt cards`).toBe(false);
-      seen.set(bare, e.card.name);
+      const bare = bareOf(e.card.name);
+      byBare.set(bare, [...(byBare.get(bare) ?? []), e.card.name]);
     }
+    for (const [bare, names] of byBare) {
+      // Base and advanced share a bare name but are told apart by the
+      // marker, so only same-markedness collisions are ambiguities.
+      const base = names.filter((n) => !/ADV\)$/.test(n));
+      if (base.length < 2) continue;
+      const got = findCards(bare).map((c) => c.name);
+      expect(got.sort(), `${bare} must offer every candidate`).toEqual(base.sort());
+    }
+  });
+
+  it("reads a bare name as the BASE printing, and ADV as the advanced one", () => {
+    // A bare name is never the advanced card: they share a group, so no
+    // context could separate them, and every deck list marks the advanced
+    // one explicitly (p. 6).
+    const advanced = Object.values(reg.entries)
+      .map((e) => e.card)
+      .find((c) => c.kind === "crypt" && / ADV\)$/.test(c.name));
+    if (!advanced) return; // pool has no advanced printings right now
+    const bare = advanced.name.replace(/ \(G\d+ ADV\)$/, "");
+    expect(findCards(bare).every((c) => !/ADV\)$/.test(c.name))).toBe(true);
+    expect(findCard(advanced.name)!.name).toBe(advanced.name);
   });
 });
 

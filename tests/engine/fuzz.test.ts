@@ -580,6 +580,116 @@ function fourSeatGame(seed: number): GameState {
     "Malkavian Justicar",
     "Protected District",
     "Party Out Of Bounds",
+    // Legacy weapons (docs/pool-widening-design.md §6, tranche 3 wave 1).
+    // The once-each-combat and once-each-round latches are the new thing
+    // here, and a latch that never clears is exactly the kind of bug the
+    // fuzz sees: it makes an option list shrink and never grow back.
+    "Chainsaw",
+    "Combat Shotgun",
+    "Mark V",
+    "Brass Knuckles",
+    "Sengir Dagger",
+    "Submachine Gun",
+    // Legacy locations (tranche 3 wave 2). The Mausoleum's conditional
+    // reads whether /Ventrue Headquarters/ is in play, and that card is
+    // already in this list — so both branches get dealt.
+    "The Mausoleum, Venice",
+    "London Evening Star, Tabloid Newspaper",
+    "Monastery of Shadows",
+    "Morgue Hunting Ground",
+    "Port Hunting Ground",
+    // Legacy equipment statics (tranche 3 wave 3). The two block bars are
+    // the interesting ones here: they SHRINK the blocker list, and an
+    // over-broad bar shows up as a table where nothing can ever block.
+    "The Signet of King Saul",
+    "Cloak of the Abalone",
+    "Aaron's Feeding Razor",
+    "Laptop Computer",
+    "IR Goggles",
+    // Legacy retainers and allies (tranche 3 wave 4).
+    "J. S. Simmons, Esq.",
+    "Jackie Therman",
+    "Loyal Street Gang",
+    "The Knights",
+    // Legacy referendums (tranche 3 wave 6). Four filters over one
+    // primitive: a filter that is too broad pays for minions the card
+    // never named, which shows up here as pool conservation drifting.
+    "Autarkis Persecution",
+    "Perpetual Care",
+    "Exclusion Principle",
+    "Rabble Razing",
+    // Legacy political actions (tranche 1 wave 13). Two of these MOVE
+    // pool between seats rather than creating or destroying it, which is
+    // exactly what the conservation invariant is shaped to catch if a
+    // steal's two halves ever disagree. The Final Nights is also the only
+    // card here that does something when its referendum FAILS, and the
+    // fuzz votes badly often enough to reach that path.
+    "Transfer of Power",
+    "Tithings",
+    "Diversity",
+    "The Final Nights",
+    "Consanguineous Condemnation",
+    // Legacy political removals (tranche 1 wave 14). These take minions
+    // OFF the table mid-referendum, which is where a stale reference to a
+    // minion that no longer exists surfaces — and Permanent Vacation
+    // removes rather than burns, so the blood it was holding leaves the
+    // game and the conservation invariant has to account for it.
+    "Command of the Harpies",
+    "Excommunication",
+    "Sacrifice",
+    "Permanent Vacation",
+    "Screw the Masquerade!",
+    // The pay-to-keep sweeps (tranche 1 wave 15). These raise one CHOICE
+    // FRAME PER CARD across every seat, which is the largest fan-out of
+    // frames any card in the pool produces — and the random walker will
+    // answer them in every combination, including paying itself to 0.
+    "Jericho Founding",
+    "Kindred Segregation",
+    "Peace Treaty",
+    // Legacy one-shot masters (tranche 3 wave 7). Ascendance and Tribute
+    // move pool, so pool conservation over the event log covers them; the
+    // two burns take cards off the table, which is where a stale
+    // reference to a burned card shows up.
+    "Ascendance",
+    "Tribute to the Master",
+    "Vulnerability",
+    "Unnatural Disaster",
+    "Effective Management",
+    "Letter from Vienna",
+    // Legacy cost-modifier masters (tranche 3 wave 8). These change what
+    // OTHER cards cost, so a mis-scoped modifier shows up as pool
+    // conservation drifting rather than as an error.
+    "Therbold Realty",
+    "Centralized Background Check",
+    "Bureaucratic Overload",
+    "The Path of Night",
+    "The Path of Typhon",
+    // Legacy action modifiers (tranche 3 wave 9). Mantle of the Moon
+    // empties the blocker list outright, which is the shape most likely
+    // to strand the option enumerator.
+    "Mantle of the Moon",
+    "Stiff Contempt",
+    "Spoils of War",
+    "Acheron Vortex",
+    // Legacy referendum reactions (tranche 3 wave 10).
+    "Surprise Influence",
+    "Conflict of Interests",
+    "Irregular Protocol",
+    // Legacy action cards (tranche 3 wave 11). Bleeds and pool payouts,
+    // which pool conservation over the event log covers directly.
+    "Computer Hacking",
+    "Vermin Channel",
+    "Art Scam",
+    "Dark Mirror of the Mind",
+    "Kindred Intelligence",
+    "Forgery",
+    // Legacy rush and burn actions (tranche 3 wave 12). Ambush's locked
+    // target is re-read at resolution, so a fizzled rush is a path the
+    // fuzz can now reach.
+    "Arson",
+    "Bum's Rush",
+    "Ambush",
+    "Entrenching",
   ];
   const seats = ["A", "B", "C", "D"].map((id, i) => {
     const cards: CardInstance[] = [];
@@ -739,7 +849,7 @@ function playFuzzGame(seed: number): void {
     if (!dp) break;
 
     if (dp.options.length === 0) {
-      throw new Error(`[seed ${seed}] step ${steps}: no legal options offered`);
+      throw new Error(`[seed ${seed}] step ${steps}: no legal options offered (seat ${dp.seat}, window ${dp.window}, frames ${state.frames.map((f) => f.kind).join(">")})`);
     }
     const ids = new Set(dp.options.map((o) => o.id));
     if (ids.size !== dp.options.length) {
@@ -770,7 +880,9 @@ function playFuzzGame(seed: number): void {
     try {
       engine.choose(choice.id);
     } catch (e) {
-      throw new Error(`[seed ${seed}] on option ${choice.id}: ${String(e)}`);
+      // The STACK, not just the message: a bare "no permanent in play:
+      // B-card-72" says nothing about which of ~460 cards asked for it.
+      throw new Error(`[seed ${seed}] on option ${choice.id}: ${String(e)}\n${(e as Error).stack}`);
     }
   }
   if (steps >= DECISION_CAP) {
@@ -822,6 +934,7 @@ function playFuzzGame(seed: number): void {
       // taken once — a single ceiling for the whole game silently
       // mis-clamps every gain before or after the card was there.
       let cap = capacities.get(m.id) ?? Number.POSITIVE_INFINITY;
+      let knownCap = capacities.has(m.id);
       const bonusOnMe = new Map<string, number>();
       for (const ev of state.eventLog) {
         if (ev.type === "PermanentEnteredPlay") {
@@ -848,6 +961,17 @@ function playFuzzGame(seed: number): void {
         if (ev.type === "VampireEnteredPlay" && ev.minion === m.id) {
           blood = ev.blood;
         }
+        // A TOKEN vampire (Waters of Duat, the Path cards) has its own
+        // entry event and never appears in the setup snapshot, so the
+        // fold had no ceiling for it at all — `cap` stayed Infinity and
+        // every gain went in unclamped. It read as a conservation
+        // failure against an engine that was clamping correctly. A token
+        // starts at 0 blood and carries its printed capacity.
+        if (ev.type === "VampireTokenEnteredPlay" && ev.minion === m.id) {
+          blood = 0;
+          cap = ev.capacity;
+          knownCap = true;
+        }
         if (ev.type === "AllyEnteredPlay" && ev.minion === m.id) {
           blood = ev.life;
           isAlly = true;
@@ -860,7 +984,7 @@ function playFuzzGame(seed: number): void {
         }
       }
       // The fold and the live value must agree on the ceiling too.
-      if (m.kind === "vampire" && capacities.has(m.id)) {
+      if (m.kind === "vampire" && knownCap) {
         expect(cap, `[seed ${seed}] capacity fold for ${m.id}`).toBe(capacityOf(m));
       }
       expect(blood, `[seed ${seed}] blood conservation for ${m.id}`).toBe(m.blood);

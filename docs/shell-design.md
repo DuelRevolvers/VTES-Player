@@ -90,10 +90,18 @@ straight into one.
 
 ## 6. Not done yet
 
-- **No deck library.** The Profile screen is settings only; saving named
-  decks is its own small store.
-- **No leaderboard data.** The per-game logs already record the result, so
-  the source exists; nothing reads them back yet.
+> **Stale as written — corrected 2026-09-09 (v0.9.8).** The first two
+> items below were built days after this section was written and it was
+> never updated. *A deferral is a claim about the code AS IT WAS.*
+>
+> - **The deck library exists** (`src/ui/decklibrary.ts`), on the Profile
+>   screen, with its own store — so the Profile screen is no longer
+>   "settings only".
+> - **The leaderboard exists** (`src/ui/results.ts`), reading rows the
+>   transport computes when a game ends, not the log files.
+> - **Saved games and default bot names** now sit on the same screen —
+>   `docs/saved-games-design.md`.
+
 - **`startFromConfig` is no longer the entry point** but is kept: the
   playtest snapshot is still the fastest way to reach a mid-game position
   for a hands-on look at a card, and a fresh deal spends its first turns

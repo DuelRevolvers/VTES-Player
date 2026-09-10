@@ -19,7 +19,8 @@ import { validateDecks } from "./decks.ts";
 import { cardText } from "./cardinfo.ts";
 import { chatProblem, onChat } from "./chat.ts";
 import { DevServerSink, GameLog } from "./gamelog.ts";
-import { downloadSave, loadFromStorage, readSaveFile, saveToStorage } from "./history.ts";
+import { downloadSave, readSaveFile } from "./history.ts";
+import { autoSave, loadSaves, saveAs } from "./savedgames.ts";
 import { DEFAULT_CHAT_COLOR } from "./profile.ts";
 import type { FinishedView, ModerationView, SeatFace } from "./render.ts";
 import { DEFAULT_EMOJI_CATEGORY } from "./render.ts";
@@ -90,6 +91,19 @@ export interface TableIdentity {
    *  their profile, which the shell owns — the table only shows it. */
   chatColor?: () => string;
   setChatColor?: (color: string) => void;
+  /**
+   * Keep this game in the browser's automatic slot, once per turn.
+   *
+   * OPT-IN, and the shell is the only thing that opts in. The playtest
+   * snapshot runs through this same class, and it is a hand-authored
+   * mid-game position somebody is poking at a card in — autosaving it
+   * would quietly overwrite the real game a player left half-finished,
+   * which is the one thing an automatic save must never do.
+   *
+   * A guest has no `history` and cannot snapshot a game it does not run,
+   * so this does nothing there even when set.
+   */
+  autosave?: boolean;
 }
 
 /** The decision on the table, or none. Named because `waitingFor` reads
@@ -167,7 +181,13 @@ export class DebugApp {
     this.wireZoom();
     // Any state change repaints, whoever caused it — our own click today, a
     // message from the host once a peer transport exists.
-    this.transport.onChanged(() => this.paint());
+    this.transport.onChanged(() => {
+      // BEFORE the paint, not after: a paint can throw (an engine error
+      // surfaces there on purpose), and the turn that just ended is worth
+      // keeping precisely when something has gone wrong with the next one.
+      this.autosave();
+      this.paint();
+    });
     // A chat line changes nothing about the GAME, so it arrives on its own
     // channel and has to ask for its own repaint.
     if (this.table.say) onChat(() => this.paint());
@@ -673,10 +693,18 @@ export class DebugApp {
       on("#undo-action", () => void history.undoToActionStart());
       on("#restart", () => void history.restart());
       on("#save", () => {
-        const save = history.snapshot();
-        saveToStorage(save);
-        downloadSave(save);
+        // A NAME, because there is more than one slot now. Cancelling is
+        // not an error and neither is an empty box — both mean "no, not
+        // after all", and the automatic slot has this turn anyway.
+        const suggested = loadSaves().filter((s) => !s.auto).length + 1;
+        const name = prompt("Save this game as:", `Game ${suggested}`);
+        if (name === null || name.trim() === "") return;
+        const problem = saveAs(name, history.snapshot(), this.saveLabel());
+        // Unlike the autosave, this was asked for — so a refusal is said
+        // out loud rather than swallowed.
+        if (problem) alert(problem);
       });
+      on("#download", () => downloadSave(history.snapshot()));
       on("#load", () => {
         const input = document.createElement("input");
         input.type = "file";
@@ -684,15 +712,32 @@ export class DebugApp {
         input.addEventListener("change", () => {
           const file = input.files?.[0];
           if (!file) return;
-          void readSaveFile(file).then((save) => history.load(save));
+          void readSaveFile(file)
+            .then((save) => {
+              void history.load(save);
+              // THE AGENTS DO NOT COME WITH IT. `load` replaces the engine
+              // and leaves the transport's agents alone — which is right
+              // when the seats are the same game's and wrong when they are
+              // not, so a save that says who its bots were is honoured.
+              // Without this, loading someone else's file at the table
+              // leaves every seat waiting on a human who is not there.
+              if (save.botSeats && this.transport instanceof LocalTransport) {
+                const wanted = new Set(save.botSeats);
+                for (const seat of save.setup.decks.map((d) => d.seat)) {
+                  this.transport.setAgent(
+                    seat,
+                    wanted.has(seat) ? new HeuristicAgent({ seed: seatSeed(seat) }) : null,
+                  );
+                }
+              }
+            })
+            .catch((err: unknown) => alert((err as Error).message));
         });
         input.click();
       });
     }
 
-    // LEAVING IS CONFIRMED. A local game is only saved when the player
-    // asks, so walking out of one throws away everything since the last
-    // save — that is worth one question.
+    // LEAVING IS CONFIRMED — see `#leave-btn` below for what it costs.
     // Table chat. The same panel as the lobby's, over the same store, so
     // the conversation carries on rather than starting again.
     const chatBox = this.root.querySelector<HTMLInputElement>("#chatinput");
@@ -809,13 +854,22 @@ export class DebugApp {
     on("#leave-btn", () => {
       const leave = this.table.onLeave;
       if (!leave) return;
-      const saved = this.transport.history !== null;
+      // WHAT LEAVING COSTS depends on whether this client keeps the game.
+      // With the automatic slot, walking out of a private game no longer
+      // throws it away — it costs whatever has happened since the turn
+      // began, and saying "anything since your last save is lost" would
+      // now frighten a player out of a door that is safe to use.
+      const kept = this.table.autosave === true && this.transport.history !== null;
+      const rewindable = this.transport.history !== null;
       if (
         !confirm(
           "Leave this game?\n\n" +
-            (saved
-              ? "Anything since your last save is lost."
-              : "This game will not be kept."),
+            (kept
+              ? "It is kept in Saved games on your profile — you can pick " +
+                "it up from the start of this turn."
+              : rewindable
+                ? "Anything since your last save is lost."
+                : "This game will not be kept."),
         )
       ) {
         return;
@@ -1007,6 +1061,48 @@ export class DebugApp {
     });
   }
 
+  /**
+   * Keep the game in the automatic slot, once per turn.
+   *
+   * ONCE PER TURN, not once per decision. A save is the setup plus every
+   * command in the game, so writing it costs a full serialisation of both
+   * — cheap next to a turn, wasteful next to a click, and there are
+   * hundreds of clicks in a turn. A turn is also the unit a player thinks
+   * in when they say where they got back to.
+   *
+   * `turnNumber` rather than a counter of our own: a game can be undone or
+   * loaded underneath us, and a monotonic counter would then refuse to
+   * write the turn it had already seen. Comparing the ACTUAL turn means a
+   * rewind to turn 4 autosaves turn 4 again, which is right — the board
+   * really is different.
+   */
+  private autosave(): void {
+    const history = this.transport.history;
+    if (!this.table.autosave || !history) return;
+    const view = this.transport.view();
+    const frame = view.frames.find((f) => f.kind === "turn");
+    const turn = frame && frame.kind === "turn" ? frame.turnNumber : 0;
+    if (turn === this.autosavedTurn) return;
+    this.autosavedTurn = turn;
+    autoSave(history.snapshot(), { turn, seats: view.seats.map((s) => s.id) });
+  }
+
+  /** The turn already written to the automatic slot. -1 so turn 0 — a
+   *  game with no turn frame yet — still counts as a change. */
+  private autosavedTurn = -1;
+
+  /** What a slot's row should say about this game. Read fresh from the
+   *  view, so a named save taken mid-turn is labelled with the turn it
+   *  was actually taken in. */
+  private saveLabel(): { turn: number; seats: string[] } {
+    const view = this.transport.view();
+    const frame = view.frames.find((f) => f.kind === "turn");
+    return {
+      turn: frame && frame.kind === "turn" ? frame.turnNumber : 0,
+      seats: view.seats.map((s) => s.id),
+    };
+  }
+
   private setBusy(busy: boolean): void {
     for (const btn of Array.from(this.root.querySelectorAll<HTMLButtonElement>("button.opt"))) {
       btn.disabled = busy;
@@ -1076,7 +1172,13 @@ export function startFromConfig(
     maxTurns: config.maxTurns,
   };
   // Resume the last game saved in this browser, if there is one.
-  const saved = resume ? loadFromStorage() : null;
+  //
+  // The automatic slot, which is the same store the shell reads — there
+  // is ONE answer to "what games are saved?" and this is not a second
+  // one. Note that this path does not WRITE that slot (see
+  // `TableIdentity.autosave`): a playtest snapshot may read the last real
+  // game, but it must never overwrite it.
+  const saved = resume ? (loadSaves().find((s) => s.auto)?.game ?? null) : null;
   // One log file per playthrough, written into `logs/` by the dev server
   // so a session can be read back afterwards (docs/game-log-design.md).
   // The logger belongs to the transport, not here: only the authority sees

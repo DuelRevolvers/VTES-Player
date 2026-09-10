@@ -1370,6 +1370,14 @@ export function render(input: RenderInput): string {
         <button id="undo-action" ${input.canUndo ? "" : "disabled"}>Undo action</button>
         <button id="save">Save</button>
         <button id="load">Load</button>
+        <!--
+          SAVING AND DOWNLOADING ARE TWO THINGS, and Save used to be both:
+          it wrote the browser's slot AND dropped a .json in Downloads, so
+          a player keeping a position collected a file they never asked
+          for. The file is for handing over with a bug report, which is a
+          different errand and now has its own button.
+        -->
+        <button id="download" title="a .json to attach to a bug report">Download</button>
         <button id="restart">Restart</button>
       </div>`
           : ""

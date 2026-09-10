@@ -569,7 +569,13 @@ export function auraBonus(
  * applies to every hunt they make. docs/blood-locations-design.md §4
  */
 export function huntAmountFor(state: GameState, minion: MinionState): number {
-  return 1 + auraBonus(state, minion, "hunt");
+  // Two sources, and they are different questions: an AURA radiates onto
+  // other minions ("Sabbat vampires you control get +1 hunt"), while a
+  // STATIC sits on a card attached to this minion and applies to it alone
+  // (Aaron's Feeding Razor). Equipment cannot use the aura — an unfiltered
+  // one would feed every minion at the table.
+  const attached = minion.attached.reduce((n, p) => n + (p.statics.hunt ?? 0), 0);
+  return 1 + auraBonus(state, minion, "hunt") + attached;
 }
 
 /**
@@ -1031,7 +1037,12 @@ export function currentIntercept(
           intercept += ev.delta;
         }
       } else if (!ev.appliesTo || ev.appliesTo === kind) {
-        intercept += ev.delta;
+        // "Minions WITHOUT Necromancy or Obtenebration" (Acheron Vortex).
+        const exempt =
+          holder !== undefined &&
+          holder !== null &&
+          (ev.exemptDisciplines ?? []).some((disc) => disciplinesOf(holder)[disc]);
+        if (!exempt) intercept += ev.delta;
       }
     }
   }
@@ -1138,6 +1149,10 @@ export function blockTollFor(
   ];
   for (const c of costs) {
     if (c.exemptDiscipline && disciplinesOf(minion)[c.exemptDiscipline]) continue;
+    // "VAMPIRES must burn 1 blood to attempt to block" — checked BEFORE
+    // the allies-cannot-pay-blood rule below, or a vampires-only toll
+    // would bar allies from blocking instead of leaving them alone.
+    if (c.kinds && !c.kinds.includes(minion.kind)) continue;
     // Allies hold life, not blood (p. 22): a cost printed as "1 blood" is
     // one they cannot pay, which is what "allies cannot burn blood" on
     // Where the Veil Thins spells out.

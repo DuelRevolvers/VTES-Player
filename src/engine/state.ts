@@ -92,7 +92,15 @@ export const CITY_TITLES: VampireTitle[] = ["prince", "baron", "archbishop"];
  * explicit about which list it is (p. 49): "You must choose an EXISTING
  * clan, **even if no vampires of the chosen clan are in play**." So this
  * is every clan in the pool, not every clan on the table.
- * docs/referendum-terms-design.md §1
+ *
+ * IT GROWS WITH THE POOL. Widening the crypt beyond the V5 sets took this
+ * from the fourteen V5 clans to thirty-five, because the bloodlines and
+ * the antitribu arrived with it — and "every clan in the pool" is a
+ * rulebook phrase, so a card that offers fourteen of thirty-five is
+ * simply wrong. Hand-listed rather than read from the registry so the
+ * kernel stays free of the card data; `tests/cards/clan-vocabulary.test.ts`
+ * cross-checks it against the registry so it cannot drift.
+ * docs/referendum-terms-design.md §1, docs/pool-widening-design.md §3
  */
 export const CLANS: string[] = [
   "Banu Haqim",
@@ -577,11 +585,27 @@ export interface PermanentStatics {
    *
    *  Distinct from `alliesCannotBlock`, which names one group and no
    *  capacity (docs/crypt-wave-1.md §3). */
-  cannotBeBlockedBy?: { kinds?: MinionKind[]; maxCapacity?: number };
+  cannotBeBlockedBy?: {
+    kinds?: MinionKind[];
+    maxCapacity?: number;
+    /** "Vampires with capacity 8 OR MORE cannot attempt to block the
+     *  bearer" (The Signet of King Saul) — the mirror of `maxCapacity`,
+     *  and read through `capacityOf` for the same reason. */
+    minCapacity?: number;
+    /** "Toreador and Toreador antitribu cannot block this minion" (Cloak
+     *  of the Abalone) — a clan bar. A list, because the printed clause
+     *  names a clan and its antitribu, which are two registry names. */
+    clans?: string[];
+  };
   /** Applies to the bearer's actions (an ally's own +1 stealth). */
   stealth?: number;
   /** Persistent bonus to the bearer's bleed amount (Heart of the City). */
   bleed?: number;
+  /** "The bearer gets +N hunt" (Aaron's Feeding Razor) — the BEARER's own
+   *  static, as against the `PermanentAura` `hunt`, which radiates onto
+   *  other minions ("Sabbat vampires you control get +1 hunt"). Both are
+   *  folded by `huntAmountFor`. */
+  hunt?: number;
   /** "+N bleed AGAINST YOUR PREY" (Tier of Souls) — read in
    *  `currentBleed` against `preyOf(bearer.controller)`, the simpler
    *  direction of the `bleedAuraAgainst` question.
@@ -968,6 +992,11 @@ export interface ContestedCard {
    *  was. A bearer who is gone by then leaves the card nowhere to return
    *  to, and it is burned (§5). */
   bearer?: MinionId;
+  /** The title this card was granting when it went face down (Praxis
+   *  Seizure, Regent). Held so winning the contest restores it: the
+   *  bearer loses the title while the card is out of play (p. 17,
+   *  "out of play"), and a contest can be won turns later. */
+  title?: VampireTitle;
 }
 
 export interface SeatState {
@@ -1199,6 +1228,9 @@ export type GameEvent =
       /** "ALLIES get -1 intercept" (Obedient Flesh) — limits the change to
        *  one kind of minion. Absent = every minion. */
       appliesTo?: MinionKind;
+      /** "Minions WITHOUT Necromancy or Obtenebration get -1 intercept"
+       *  (Acheron Vortex) — a minion holding any of these is unaffected. */
+      exemptDisciplines?: string[];
       /** "Allies AND YOUNGER VAMPIRES get −1 intercept" (Perfect Paragon
        *  superior) — two clauses, and the English "and" is a UNION of two
        *  sets, not an intersection: a minion qualifies by being one of
@@ -1261,6 +1293,9 @@ export type GameEvent =
       name: string;
       minion?: MinionId;
       bearer?: MinionId;
+      /** The title the card was granting, carried so the event alone can
+       *  rebuild the state on replay. */
+      title?: VampireTitle;
     }
   /** "The cost to contest a card is 1 pool, which you pay during each of
    *  your unlock phases" — the pool itself moves via PoolBurned. */
@@ -1569,6 +1604,14 @@ export interface ActionFrame {
   /** "…AND LOCK a vampire" (Deep Song superior) — applied with the combat
    *  push, on success. */
   lockTargetOnSuccess?: boolean;
+  /** "Ⓓ Enter combat with a LOCKED minion" (Ambush, Fleetness superior)
+   *  — re-read at RESOLUTION, not just at announcement. *"If the action
+   *  is unblocked when it resolves and the target is unlocked, the action
+   *  fizzles (cost is paid, it is considered successful, but no combat
+   *  occurs)"* [Ambush ruling]. The target can unlock between the two
+   *  moments, and without this the rush would fight a minion the card
+   *  could never have named. */
+  rushRequiresLockedTarget?: boolean;
   /** How the action turned out, recorded as it resolves so a card played
    *  in the after-resolution window can gate on "only usable if the
    *  action was successful" / "…was blocked" after the fact. */
@@ -1772,6 +1815,11 @@ export interface ActionFrame {
     /** "Minions without Oblivion" — a minion with this discipline owes
      *  nothing towards this entry. */
     exemptDiscipline?: string;
+    /** "VAMPIRES must burn 1 blood to attempt to block" (Stiff Contempt)
+     *  — a kind filter. Absent = every minion. Read BEFORE the
+     *  "allies cannot pay blood" rule, so a vampires-only toll leaves
+     *  allies able to block rather than barring them outright. */
+    kinds?: MinionKind[];
     source: string;
   }>;
   /** "During this action, minions cannot unlock" (The Sleeping Mind

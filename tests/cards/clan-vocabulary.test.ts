@@ -18,18 +18,29 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { CLANS } from "../../src/engine/index.ts";
 import registry from "../../src/cards/registry.json";
 
 interface RegistryShape {
   entries: Record<string, { card: { kind: string; clan?: string; clans?: string[] } }>;
 }
 
-/** Every clan name the registry actually uses, from both card kinds. */
-function registryClans(): Set<string> {
+/**
+ * The clans a VAMPIRE in this pool can be — crypt cards only.
+ *
+ * This is the set that matters, and the distinction became load-bearing
+ * when the library widened past V5 (docs/pool-widening-design.md §6). A
+ * library card carries a clan too, but it is an ICON or a requirement,
+ * not a vampire: Morgue Hunting Ground is a Giovanni card and no Giovanni
+ * exists in this pool. Letting those into the vocabulary would offer
+ * "Giovanni" in a Consanguineous Boon referendum, where it can never
+ * match anyone — the p. 49 list is the clans in the game, not the clans
+ * printed on cardboard.
+ */
+function cryptClans(): Set<string> {
   const out = new Set<string>();
   for (const { card } of Object.values((registry as unknown as RegistryShape).entries)) {
-    if (card.clan) out.add(card.clan);
-    for (const c of card.clans ?? []) out.add(c);
+    if (card.kind === "crypt" && card.clan) out.add(card.clan);
   }
   return out;
 }
@@ -53,10 +64,13 @@ function clanLiterals(code: string): string[] {
 }
 
 describe("clan vocabulary", () => {
-  const clans = registryClans();
+  const clans = cryptClans();
 
-  it("the registry uses the fourteen V5 clan names", () => {
-    expect(clans.size).toBe(14);
+  it("uses V5 clan NAMES, whatever the pool's size", () => {
+    // The count was pinned at fourteen until the crypt widened past the
+    // V5 sets and the bloodlines arrived (docs/pool-widening-design.md
+    // §3). The number was never the claim: what matters is that KRCG
+    // gives V5 names, so a V5 clan filter matches a legacy vampire.
     expect(clans.has("Banu Haqim")).toBe(true);
     expect(clans.has("Ministry")).toBe(true);
     // The legacy names the card TEXT still prints are not clan values.
@@ -64,11 +78,37 @@ describe("clan vocabulary", () => {
     expect(clans.has("Follower of Set")).toBe(false);
   });
 
-  it("no card implementation filters on a clan the registry does not use", () => {
+  it("is exactly what CLANS offers — 'an EXISTING clan' means the pool's", () => {
+    // Consanguineous Boon offers `CLANS` and the rulebook says it must be
+    // every clan in the pool (p. 49), so a hand-listed engine constant and
+    // the registry cannot be allowed to drift. This is the cross-check
+    // that lets `CLANS` stay a plain list in the kernel.
+    expect([...CLANS].sort()).toEqual([...clans].sort());
+  });
+
+  it("no card implementation filters on a clan no VAMPIRE in the pool has", () => {
+    // These literals are compared against `MinionState.clan`, so the
+    // standard is the crypt's vocabulary, not the registry's. A filter
+    // naming a library card's clan icon ("Giovanni", "Osebo") compiles,
+    // reads fine, and matches nobody — the same silent failure as the
+    // "Assamite" bug, one widening later.
     for (const file of ["../../src/cards/effects/cards.ts", "../../src/cards/effects/compile.ts"]) {
       const bad = [...new Set(clanLiterals(source(file)))].filter((c) => !clans.has(c));
-      expect(bad, `${file} compares against non-registry clan name(s)`).toEqual([]);
+      expect(bad, `${file} compares against a clan no vampire in the pool has`).toEqual([]);
     }
+  });
+
+  it("the legacy library's clan icons stayed OUT of the vocabulary", () => {
+    // The control for the split above: those names really are in the
+    // registry, so `clans` excluding them is a decision this test is
+    // making rather than a set that happens to be empty.
+    const libraryClans = new Set<string>();
+    for (const { card } of Object.values((registry as unknown as RegistryShape).entries)) {
+      if (card.kind === "library") for (const c of card.clans ?? []) libraryClans.add(c);
+    }
+    const iconOnly = [...libraryClans].filter((c) => !clans.has(c));
+    expect(iconOnly.length).toBeGreaterThan(0);
+    expect(iconOnly.some((c) => CLANS.includes(c as (typeof CLANS)[number]))).toBe(false);
   });
 
   it("finds the bug it was written for, if it comes back", () => {
