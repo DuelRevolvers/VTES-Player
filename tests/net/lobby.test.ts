@@ -241,7 +241,12 @@ describe("starting the game from the lobby", () => {
     expect(mine.hand.every((c) => c.name !== "")).toBe(true);
   });
 
-  it("turns away someone arriving after the game has started", async () => {
+  /**
+   * MID-GAME ARRIVALS (owner request). They used to be hung up on, which
+   * made an accidental back-button permanent: the seat went to a bot and
+   * there was no way back in.
+   */
+  it("lets a stranger arriving mid-game WATCH rather than turning them away", async () => {
     const { lobby } = room(2);
     const bob = await guest(lobby, "Bob");
     bob.peer.setDeck(deckFor(1));
@@ -252,7 +257,29 @@ describe("starting the game from the lobby", () => {
     await settle();
 
     const late = await guest(lobby, "Dave");
-    expect(late.peer.closedReason).toContain("already started");
+    await settle();
+    // Not hung up on, and holding no seat — a spectator.
+    expect(late.peer.closedReason).toBeNull();
+    expect(late.peer.state?.you ?? null).toBeNull();
+  });
+
+  it("gives a player their OWN seat back when they rejoin", async () => {
+    const { lobby } = room(2);
+    const bob = await guest(lobby, "Bob");
+    bob.peer.setDeck(deckFor(1));
+    const carol = await guest(lobby, "Carol");
+    carol.peer.setDeck(deckFor(2));
+    await settle();
+    lobby.start();
+    await settle();
+    // Bob drops out, and his seat goes to a bot as usual.
+    bob.channel.peer.close();
+    await settle();
+
+    const again = await guest(lobby, "Bob");
+    await settle();
+    expect(again.peer.closedReason).toBeNull();
+    expect(again.peer.state?.you).toBe("Bob");
   });
 
   it("starts only once", async () => {

@@ -290,7 +290,7 @@ describe("Día de los Muertos (100541)", () => {
       ["Alice", "play:Día de los Muertos:-:dm"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as played
     ]);
-    expect(state.seats[0]!.autoPassReferendum).toBe(true);
+    expect(state.seats[0]!.autoPassReferendum).toEqual({ sect: "sabbat", thisTurnOnly: true });
     toMinionPhase(engine, state);
     runTrace(engine, [
       ["Alice", "play:Kine Resources Contested:basic:V1:kr"],
@@ -307,7 +307,8 @@ describe("Día de los Muertos (100541)", () => {
     expect(resolved).toMatchObject({ passed: true, votesFor: 0, votesAgainst: 0 });
     // Nobody ever voted.
     expect(state.eventLog.some((e) => e.type === "VoteCast")).toBe(false);
-    expect(state.seats[0]!.autoPassReferendum).toBe(false);
+    // Consumed — the grant is a record now, and spending it removes it.
+    expect(state.seats[0]!.autoPassReferendum).toBeUndefined();
   });
 
   it("a NON-Sabbat caller polls as normal", () => {
@@ -332,7 +333,7 @@ describe("Día de los Muertos (100541)", () => {
     expect(referendum(state).step).toBe("polling");
     expect(referendum(state).autoPass ?? false).toBe(false);
     // The flag is still armed: it was never spent by a non-Sabbat caller.
-    expect(state.seats[0]!.autoPassReferendum).toBe(true);
+    expect(state.seats[0]!.autoPassReferendum).toEqual({ sect: "sabbat", thisTurnOnly: true });
   });
 
   it("only one can be played in a game, even after the first has resolved", () => {

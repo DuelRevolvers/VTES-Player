@@ -18,7 +18,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { GameState, MinionState } from "../../src/engine/index.ts";
-import { VtesEngine } from "../../src/engine/index.ts";
+import { titleContestKey, VtesEngine } from "../../src/engine/index.ts";
 import { runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 import registry from "../../src/cards/registry.json";
 import type { CardRegistry } from "../../src/cards/types.ts";
@@ -218,5 +218,98 @@ describe("the contested title", () => {
     settle(engine, state);
     expect(state.seats.flatMap((s) => s.contested ?? [])).toEqual([]);
     expect(v1(state).title).toBe("prince");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 19 — the Crusades, and the city that was never recorded
+// ---------------------------------------------------------------------------
+
+describe("Crusade: <city> — the Sabbat mirror", () => {
+  /** Alice's V1, a SABBAT vampire, calls the crusade and votes it through. */
+  function callCrusade(city: string, sect: "sabbat" | "camarilla" = "sabbat") {
+    const state = threeSeatGame();
+    Object.assign(v1(state), { sect, title: null });
+    state.seats[0]!.hand.push({ id: "cr", name: `Crusade: ${city}` });
+    const engine = new VtesEngine(state, testRegistry);
+    return { state, engine };
+  }
+
+  it("makes the caller Archbishop OF THAT CITY", () => {
+    const { state, engine } = callCrusade("Chicago");
+    runTrace(engine, [
+      ["Alice", "play:Crusade: Chicago"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "vote:caller:for"],
+    ]);
+    settle(engine, state);
+    expect(v1(state).title).toBe("archbishop");
+    expect(v1(state).attached.map((p) => p.card.name)).toContain("Crusade: Chicago");
+    /**
+     * THE DEFECT THIS WAVE FOUND. `titleContestKey` keys prince, baron and
+     * archbishop on the CITY ALONE (p. 39: "contested by another vampire
+     * who claims ANY title to the same city"; p. 41 rules archbishop the
+     * same way) — and no card-granted title recorded one, so every Praxis
+     * Seizure prince since wave 13 answered null and contested with
+     * nothing but another copy of its own card.
+     */
+    expect(v1(state).titleCity).toBe("Chicago");
+    expect(titleContestKey(v1(state))).toBe("city:chicago");
+  });
+
+  /** All twelve, the same way the Praxis loop covers its thirteen: these
+   *  are one factory's output, so what is worth asserting per card is that
+   *  the card EXISTS, is playable by a Sabbat vampire, and names its own
+   *  city — not the mechanism, which the test above pins once. */
+  const CRUSADES = [
+    "Crusade: Atlanta", "Crusade: Chicago", "Crusade: Detroit",
+    "Crusade: Frankfurt", "Crusade: Houston", "Crusade: Mexico City",
+    "Crusade: Miami", "Crusade: New York", "Crusade: Paris",
+    "Crusade: Philadelphia", "Crusade: Pittsburgh", "Crusade: Toronto",
+  ];
+
+  it("every city is offered, and claims its own city", () => {
+    const entries = Object.values(
+      (registry as { entries: Record<string, { card: { name: string; cardText: string } }> }).entries,
+    );
+    for (const name of CRUSADES) {
+      const city = name.slice("Crusade: ".length);
+      const { engine } = callCrusade(city);
+      const ids = engine.decision()?.options.map((o) => o.id) ?? [];
+      expect(ids.some((o) => o.startsWith(`play:${name}`)), name).toBe(true);
+      // The city in the spec is the city the card prints — the one thing a
+      // twelve-row table can get wrong and nothing else would notice.
+      const printed = entries.find((e) => e.card.name === name)?.card.cardText ?? "";
+      expect(printed.includes(`Archbishop of ${city}`), name).toBe(true);
+    }
+  });
+
+  it("NEGATIVE SPACE: not offered to a Camarilla vampire", () => {
+    const { engine } = callCrusade("Chicago", "camarilla");
+    const ids = engine.decision()?.options.map((o) => o.id) ?? [];
+    expect(ids.some((o) => o.startsWith("play:Crusade: Chicago"))).toBe(false);
+  });
+
+  it("a Prince and an Archbishop of ONE city contest — two different cards", () => {
+    const { state, engine } = callCrusade("Chicago");
+    // Bob's vampire already holds Chicago by the other sect's card.
+    const bob = state.seats[1]!.minions[0]!;
+    Object.assign(bob, { sect: "camarilla" as const, title: "prince", titleCity: "Chicago" });
+    runTrace(engine, [
+      ["Alice", "play:Crusade: Chicago"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "vote:caller:for"],
+    ]);
+    settle(engine, state);
+    // NOT `toBe(titleContestKey(bob))` — two nulls would satisfy that,
+    // and null is exactly what this returned before the fix.
+    expect(titleContestKey(bob)).toBe("city:chicago");
+    expect(titleContestKey(v1(state))).toBe("city:chicago");
   });
 });

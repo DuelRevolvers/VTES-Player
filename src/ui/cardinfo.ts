@@ -36,6 +36,30 @@ export function cardText(name: string): string | null {
   return byName.get(name)?.cardText ?? null;
 }
 
+/**
+ * Every card name in the registry, LONGEST FIRST, as one regex.
+ *
+ * Longest first is the whole trick: "Vessel" is a substring of nothing,
+ * but "Praxis Seizure: Berlin" contains "Berlin" and "Target Head"
+ * contains "Target", so a shorter name matching first would cut a longer
+ * one in half. Alternation is ordered in JavaScript, so sorting by length
+ * makes the regex prefer the longest match at each position.
+ *
+ * Built once, lazily — it is ~800 alternatives and the log rebuilds on
+ * every repaint.
+ */
+let namePattern: RegExp | null = null;
+export function cardNamePattern(): RegExp {
+  if (!namePattern) {
+    const names = [...byName.keys()]
+      .filter((n) => n.length >= 4)
+      .sort((a, b) => b.length - a.length)
+      .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    namePattern = new RegExp(`(${names.join("|")})`, "g");
+  }
+  return namePattern;
+}
+
 export function isSupported(name: string): boolean {
   return byName.get(name)?.supported ?? false;
 }

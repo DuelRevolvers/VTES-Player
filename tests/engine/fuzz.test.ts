@@ -83,6 +83,9 @@ function fourSeatGame(seed: number): GameState {
     "Raven Spy",
     "Murder of Crows",
     "Dread Mastiff",
+    "Vengeful Spirit",
+    "Zombie",
+    "Resplendent Protector",
     "Dog Pack",
     "Homunculus",
     // Rush gate.
@@ -111,6 +114,13 @@ function fourSeatGame(seed: number): GameState {
     "Righteous Blade",
     "Sword of the Archangel",
     "Treasured Samadji",
+    // Ammo (docs/ammo-design.md) — the before-resolution window. Dealt in
+    // beside the guns above, which are what they need to do anything.
+    "Manstopper Rounds",
+    "Glaser Rounds",
+    "Scattershot",
+    "Dragon's Breath Rounds",
+    "Caseless Rounds",
     // Retainers (docs/retainer-wave-design.md).
     "Crypt's Sons",
     "Owl Companion",
@@ -123,6 +133,9 @@ function fourSeatGame(seed: number): GameState {
     "Telepathic Tracking",
     "Immortal Grapple",
     "Target Vitals",
+    "Target Hand",
+    "Target Head",
+    "Target Leg",
     "Dance with the Devil",
     // Referendum terms (docs/referendum-terms-design.md).
     "Anarch Salon",
@@ -164,6 +177,10 @@ function fourSeatGame(seed: number): GameState {
     // Politics gate.
     "Kine Resources Contested",
     "Anarchist Uprising",
+    "Elder Kindred Network",
+    "Bribes",
+    "Malkavian Rider Clause",
+    "Cryptic Rider",
     "Ancilla Empowerment",
     "Domain Challenge",
     "Conservative Agitation",
@@ -173,6 +190,11 @@ function fourSeatGame(seed: number): GameState {
     // Second sweep.
     "Glancing Blow",
     "Soak",
+    "Dodge",
+    "Fake Out",
+    "Boxed In",
+    "Dead-End Alley",
+    "Open Grate",
     "Rego Motum",
     "Telepathic Counter",
     "Restoration",
@@ -338,6 +360,8 @@ function fourSeatGame(seed: number): GameState {
     "Obedient Flesh",
     // Discipline master cards (docs/derived-traits-design.md).
     "Celerity",
+    "Auspex",
+    "Presence",
     "Dominate",
     "Obfuscate",
     "Potence",

@@ -234,6 +234,30 @@ export type EffectPrimitive =
   /** "Methuselahs casting votes or ballots against the referendum burn N
    *  pool once results are tallied" (Scorn of Adonis). */
   | { kind: "burnPoolVotedAgainst"; amount: number }
+  /**
+   * The three REFERENDUM OUTCOME riders (wave 21): played in the polling
+   * step, they register a payload that fires when the result is known.
+   * docs/referendum-riders-design.md
+   */
+  /** "If the referendum fails, the Methuselah calling the referendum
+   *  burns N pool plus M for each vote difference" (Elder Kindred
+   *  Network). */
+  | { kind: "burnCallerOnFail"; base: number; perMargin: number }
+  /** "Any other Methuselah who casts one or more votes or ballots in
+   *  favor of and does not cast votes or ballots against the referendum
+   *  gains N pool when the results are tallied" (Bribes). */
+  | { kind: "payVotedForOnly"; amount: number }
+  /** "If the referendum passes, the next referendum a vampire you
+   *  control calls passes automatically" (Malkavian Rider Clause) —
+   *  played during POLLING, so it has to wait for the tally. */
+  | { kind: "autoPassNextOnPass"; thisTurnOnly?: boolean }
+  /** "The next referendum a vampire you control calls this turn passes
+   *  automatically" (Cryptic Rider) — played in the after-resolution
+   *  window of a referendum that has ALREADY passed, so the grant is
+   *  immediate. Two kinds rather than one with a flag, because the two
+   *  are legal in different windows and `POLLING_ONLY_EFFECTS` keys on
+   *  the kind; they share one op. */
+  | { kind: "autoPassNextNow"; thisTurnOnly?: boolean }
   /** "Prevent N damage to a minion or retainer in combat", played by a
    *  vampire NOT in that combat (Martyr's Resilience, Touch of Valeren
    *  superior). The victim is chosen at play time and rides in the option
@@ -851,7 +875,11 @@ export type EffectPrimitive =
    *  at the pop. docs/temporary-hand-size-design.md */
   | { kind: "handSizeBonus"; amount: number }
   | { kind: "maneuver"; onlyToClose?: boolean }
-  | { kind: "press"; continueOnly: boolean }
+  /** `continueOnly` is "only usable to CONTINUE combat" (Dead-End Alley,
+   *  Righteous Blade); `endOnly` is its mirror, "only usable to END
+   *  combat" (Open Grate, Disengage) — which can only ever cancel a
+   *  standing press (p. 32), so it is offered nowhere else. */
+  | { kind: "press"; continueOnly: boolean; endOnly?: boolean }
   /** "Only usable if combat would end. Instead, start a new round"
    *  (Hunting the Quarry superior, Telepathic Tracking superior).
    *  docs/round-end-design.md §1 */
@@ -859,10 +887,31 @@ export type EffectPrimitive =
   /** "Strikes that are not hand strikes cannot be used this round (by
    *  EITHER combatant)" (Immortal Grapple). §2 */
   | { kind: "handStrikesOnly"; skipNextRange?: boolean }
-  /** "If any damage from this strike is successfully inflicted on the
-   *  opposing minion, they take +N damage from this strike, and they
-   *  cannot press this round" (Target Vitals). §3 */
-  | { kind: "aimBonus"; amount: number }
+  /**
+   * An AIM card (Target Vitals, Head, Hand, Leg): played as this minion
+   * chooses a strike, with a payload that waits for that strike to
+   * SUCCESSFULLY INFLICT DAMAGE on the opposing minion.
+   *
+   * `strikeDamage` is the exception and the only thing applied at once:
+   * "the strike does +2 damage" (Target Head) is part of what the strike
+   * deals and prevention eats it, where `damage` — "if any damage is
+   * successfully inflicted, they take +N from this strike" — rides damage
+   * that already got through. docs/aim-design.md
+   */
+  | {
+      kind: "aimRider";
+      /** Added to the strike's own damage, before prevention. */
+      strikeDamage?: number;
+      /** Added to damage that landed ("they take +N from this strike"). */
+      damage?: number;
+      barPress?: boolean;
+      barAdditionalStrikes?: boolean;
+      setRangeNextRound?: boolean;
+      strengthPenalty?: number;
+      destroyWeapon?: boolean;
+      /** Discipline abbreviations that a maneuver or press must require. */
+      moveDisciplines?: string[];
+    }
   /** "Once this round, this vampire can burn N blood to get 1 additional
    *  maneuver, only usable to get to close range" (Dance with the Devil
    *  superior) — a credit, where `maneuver` performs one. §4 */
@@ -888,6 +937,36 @@ export type EffectPrimitive =
       /** "This vampire can burn this card to prevent N damage"
        *  (Wall of Filth) — an ability of the attached card. */
       burnToPrevent?: { amount: number; nonAggravated?: boolean };
+    }
+  /**
+   * "Ammo. Only usable before resolution of a gun's strike … for the
+   * remainder of this combat" — a card loaded into one gun
+   * (docs/ammo-design.md).
+   *
+   * The gun is named in the option id, because the bearer may carry two
+   * and the choice is the player's. Every field below matches a field on
+   * `AmmoLoad`, which is what this compiles into; the rules that are the
+   * SAME on all five cards — one ammo per gun per combat, your own gun
+   * only ([LSJ 20020425]), only on a gun whose strike is declared — live
+   * in the enumerator rather than here, so no card can forget one.
+   */
+  | {
+      kind: "loadAmmo";
+      /** Flat bonus in the base damage's own properties [TOM 19960225]. */
+      damage?: number;
+      /** Scattershot's "+2 at close range and -2 at long range". */
+      damageByRange?: { close: number; long: number };
+      /** Dragon's Breath's separate aggravated packet [LSJ 20030419-2]. */
+      aggravatedDamage?: number;
+      burnGunAfterStrike?: boolean;
+      additionalStrikeSelf?: boolean;
+      /**
+       * Glaser Rounds: "not usable the first time the gun is used in a
+       * given combat" — [RTR 19941109] reads that as "wait until the
+       * second time", so this is 2 and the enumerator compares it against
+       * `cf.gunUses`, which counts the strike being asked about.
+       */
+      minGunUses?: number;
     }
   /** "Prevent ALL damage from the opposing minion's strike", played by the
    *  minion taking it (Touch of Valeren's inferior combat mode). */
@@ -1070,7 +1149,15 @@ export type EffectPrimitive =
    *  Praxis Seizure shape, which `ReferendumFrame.cardInstanceId` was
    *  always kept for ("so a title-granting referendum can attach it on a
    *  pass"). */
-  | { kind: "refPutInPlay"; onActor?: boolean; grantsTitle?: VampireTitle }
+  /** `grantsTitleCity` is "…the unique Camarilla title of Prince OF
+   *  CHICAGO" (Praxis Seizure) or "…Sabbat title of Archbishop OF
+   *  CHICAGO" (Crusade). It is what the title contests ON. */
+  | {
+      kind: "refPutInPlay";
+      onActor?: boolean;
+      grantsTitle?: VampireTitle;
+      grantsTitleCity?: string;
+    }
   /** "Successful referendum means YOU steal 1 pool from each Methuselah
    *  who \<condition\>" (Transfer of Power, Tithings).
    *
@@ -1194,7 +1281,7 @@ export type EffectPrimitive =
    *  Muertos) — a one-shot master that arms
    *  `SeatState.autoPassReferendum`, consumed by the first qualifying
    *  referendum push. docs/politics-locations-design.md §4 */
-  | { kind: "autoPassReferendum" }
+  | { kind: "autoPassReferendum"; sect?: Sect }
   | { kind: "addBloodToReadyVampire"; amount: number }
   | { kind: "moveOwnVampireBloodToPool" }
   // Riders.
@@ -1844,6 +1931,12 @@ export interface CardSpec {
       /** "The employer can BURN this retainer to reduce the cost of \<a
        *  card\> they play by N blood or pool" (Szlachta Assistant, §4). */
       burnForDiscount?: { amount: number; mod: PlayCostMod };
+      /** "The minion with this retainer may prevent N damage EACH COMBAT"
+       *  (Resplendent Protector) — `lockToPrevent` without the lock, and
+       *  once a combat rather than once a round. A separate field because
+       *  the retainer is not spent either way: only the latch differs.
+       *  docs/combat-retainers-design.md §3 */
+      preventPerCombat?: number;
     };
     /** "Once each combat, the bearer can prevent N damage from GUN
      *  strikes or M damage from any other source" (Kevlar Vest) — the
@@ -2273,7 +2366,12 @@ export interface CardSpec {
         | "ashExchange"
         | "reviveAlly"
         | "reorderTop"
-        | "stripMinion";
+        | "stripMinion"
+        /** `burnSelfForBlood` — "this vampire can BURN THIS RETAINER to
+         *  gain N blood" (Zombie). The cost is the card granting the
+         *  action, which is why it is its own arm rather than `addBlood`
+         *  with a price. */
+        | "burnSelfForBlood";
       stealth?: number;
       bloodCost?: number;
       /** Ⓓ — directed at the target's controller, who alone may block
@@ -2672,6 +2770,6 @@ export interface CardSpec {
    *  (cancel/immunity) can find it. Adds a "frenzy" tag to the handler. */
   frenzy?: boolean;
   /** "Do not replace until …" — defers the replacement draw. */
-  delayedReplace?: "unlock" | "afterAction" | "discard";
+  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard";
   modes: CardMode[];
 }

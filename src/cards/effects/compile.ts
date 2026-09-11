@@ -690,6 +690,14 @@ function applyReferendumPayout(
   const rf = ops.state.frames.find((f) => f.kind === "referendum");
   if (rf?.kind !== "referendum") return;
   const margin = rf.margin ?? 0;
+  if (e.kind === "autoPassNextNow") {
+    // "Only usable ON A SUCCESSFUL referendum" (Cryptic Rider) — this
+    // window only opens on a pass, so the condition is the window.
+    ops.armAutoPassReferendum(play.seat, {
+      ...(e.thisTurnOnly ? { thisTurnOnly: true } : {}),
+    });
+    return;
+  }
   if (e.kind === "bloodPerVoteMargin") {
     if (!play.minion) return;
     const toPool = Math.min(Number(play.params["x"] ?? "0"), margin);
@@ -744,7 +752,12 @@ function referendumPayoutOptions(
   const margin = rf.margin ?? 0;
   const out: LegalOption[] = [];
   for (const e of mode.effects) {
-    if (e.kind === "bloodPerVoteMargin") {
+    if (e.kind === "autoPassNextNow") {
+      // No margin condition and nothing to choose (Cryptic Rider): the
+      // window itself is the card's whole "only usable on a successful
+      // referendum".
+      out.push(makeOption(spec, card, caller, mode, {}));
+    } else if (e.kind === "bloodPerVoteMargin") {
       if (margin <= 0) continue;
       // "…move UP TO N of those blood to your pool instead": the split is
       // chosen at play time, one option per amount (the `x=N` shape).
@@ -2183,6 +2196,10 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       // (Immortal Grapple, docs/round-end-design.md §2).
       case "handStrikesOnly":
         return "combat.beforeStrikes";
+      // "Only usable BEFORE RESOLUTION OF A GUN'S STRIKE" — after strikes
+      // are declared, before they resolve ([RTR 19990105]).
+      case "loadAmmo":
+        return "combat.beforeResolution";
       // "Only usable BEFORE RANGE IS DETERMINED" (Hunger of Marduk).
       case "grantStealBloodStrike":
         return "combat.beforeRange";
@@ -2201,7 +2218,7 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       case "startNewRound":
         return "combat.endOfRound";
       // "Only usable AS THIS MINION CHOOSES A STRIKE" (Target Vitals, §3).
-      case "aimBonus":
+      case "aimRider":
         return "combat.chooseStrike";
       case "press":
         return "combat.press";
@@ -2228,6 +2245,31 @@ function combatWindowFor(mode: CardMode): WindowId | null {
  * "burn X blood to prevent X+1" emits one option per affordable X, the
  * shape `bankStealth` established. docs/outside-combat-design.md
  */
+/**
+ * Target Leg's filter: does this mode REQUIRE one of these Disciplines?
+ *
+ * `allowed` null or absent means no restriction is in force, which is the
+ * normal state of every combat — so the answer is yes and nothing is
+ * gated. A mode with no Discipline requirement at all fails the filter,
+ * which is the point of the card: the common maneuver is a basic-level
+ * card anyone can play.
+ *
+ * `{ all: [...] }` ("[pot][pre]") requires every listed Discipline, so it
+ * passes if any ONE of them is allowed — the card asks whether the
+ * maneuver requires Obfuscate, not whether that is all it requires.
+ */
+function modeRequiresOneOf(mode: CardMode, allowed: string[] | null | undefined): boolean {
+  if (!allowed) return true;
+  const d = mode.discipline;
+  if (d === null) return false;
+  const list = typeof d === "string" ? [d] : Array.isArray(d) ? d : d.all;
+  // A string[] is "any ONE of these" — the player picks, so it only
+  // qualifies if EVERY choice is allowed; otherwise the option would let
+  // them satisfy it with a Discipline the card does not name.
+  return Array.isArray(d) ? list.every((x) => allowed.includes(x))
+    : list.some((x) => allowed.includes(x));
+}
+
 function outsidePreventOptions(
   spec: CardSpec,
   card: CardInstance,
@@ -2412,6 +2454,12 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             }
             const addl = mode.effects.find((e) => e.kind === "additionalStrike");
             if (addl && addl.kind === "additionalStrike") {
+              // "…cannot use any additional strikes … this round" (Target
+              // Head). [LSJ 20011214-5] is explicit that the barred
+              // minion cannot play such a card "even if just to benefit
+              // from another effect", so this is a gate on the OPTION and
+              // not merely on the grant. docs/aim-design.md §5
+              if (cf.noAdditionalStrikes?.[side]) continue;
               // Additional strikes are granted in the normal strike pair,
               // not during an additional sub-round; the "(limited)" source
               // is spent once per round (p. 32).
@@ -2466,6 +2514,9 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             if (cf.awaiting !== side) continue;
             // "The opposing minion cannot maneuver" (Terror Frenzy).
             if (cf.restrict[side].maneuver) continue;
+            // "…may use maneuvers only if they REQUIRE Obfuscate, Blood
+            // Sorcery or Flight this action" (Target Leg). §5
+            if (!modeRequiresOneOf(mode, cf.moveDisciplines?.[side])) continue;
             // "Maneuver, ONLY USABLE TO GET TO CLOSE RANGE" (Dance with
             // the Devil) — worth nothing once the range is already close,
             // the same gate `closeManeuvers` uses (§4).
@@ -2479,9 +2530,14 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           case "combat.press": {
             if (cf.awaiting !== side) continue;
             if (cf.restrict[side].press) continue; // "cannot press to continue"
+            // "…or presses only if they require …" (Target Leg). §5
+            if (!modeRequiresOneOf(mode, cf.moveDisciplines?.[side])) continue;
             const press = mode.effects.find((e) => e.kind === "press");
             if (!press || press.kind !== "press") continue;
             if (!cf.willContinue) {
+              // "Only usable to END combat" (Open Grate) — nothing to end
+              // while no press is standing, so it is not offered here.
+              if (press.endOnly) continue;
               options.push(makeOption(spec, card, m, mode, { press: "continue" }));
             } else if (!press.continueOnly) {
               // Cancel the standing press to continue (p. 32).
@@ -2544,6 +2600,31 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           case "combat.beforeStrikes":
             options.push(makeOption(spec, card, m, mode, {}));
             break;
+          case "combat.beforeResolution": {
+            const load = mode.effects.find((e) => e.kind === "loadAmmo");
+            if (load?.kind !== "loadAmmo") continue;
+            // ONE PLACE FOR THE FOUR RULES EVERY AMMO CARD PRINTS, so a
+            // sixth ammo card cannot ship having forgotten one:
+            //
+            //  1. it goes on a gun THIS minion just declared a strike
+            //     with — "before resolution of A GUN'S STRIKE";
+            //  2. never an opponent's weapon [LSJ 20020425], which falls
+            //     out of (1) because `m` is this seat's own combatant;
+            //  3. "no more than one ammo card can be used on a gun each
+            //     combat";
+            //  4. Glaser's "not the first time the gun is used".
+            const strike = cf.strikes[side];
+            const gun = strike?.weaponCard;
+            if (!gun || strike.source !== "weapon") continue;
+            // A weapon is a gun only if the card in play says so; the
+            // strike alone cannot tell a gun from a sword.
+            const entry = m.attached.find((p) => p.card.id === gun);
+            if (!entry || !entry.tags.includes("gun")) continue;
+            if (cf.ammo[gun]) continue;
+            if ((cf.gunUses[gun] ?? 0) < (load.minGunUses ?? 1)) continue;
+            options.push(makeOption(spec, card, m, mode, { gun }));
+            break;
+          }
           case "combat.endOfRound": {
             // "Only usable at close range at the end of a round during
             // which this vampire successfully inflicted more damage than
@@ -2916,8 +2997,40 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             ops.restrictToHandStrikes();
             if (e.skipNextRange) ops.skipNextRangeStep();
             break;
-          case "aimBonus":
-            ops.addAimBonus(play, e.amount);
+          case "aimRider":
+            ops.addAimRider(
+              play,
+              {
+                cardName: play.card.name,
+                cardId: play.card.id,
+                ...(e.damage !== undefined ? { damage: e.damage } : {}),
+                ...(e.barPress ? { barPress: true } : {}),
+                ...(e.barAdditionalStrikes ? { barAdditionalStrikes: true } : {}),
+                ...(e.setRangeNextRound ? { setRangeNextRound: true } : {}),
+                ...(e.strengthPenalty !== undefined
+                  ? { strengthPenalty: e.strengthPenalty }
+                  : {}),
+                ...(e.destroyWeapon ? { destroyWeapon: true } : {}),
+                ...(e.moveDisciplines ? { moveDisciplines: e.moveDisciplines } : {}),
+              },
+              e.strikeDamage ?? 0,
+            );
+            break;
+          case "loadAmmo":
+            // The gun rode in the option id, chosen by the player from
+            // the guns the enumerator vetted — so nothing is re-derived
+            // here and nothing can pick a different one.
+            ops.loadAmmo(play.params["gun"] ?? "", {
+              cardId: play.card.id,
+              name: play.card.name,
+              ...(e.damage !== undefined ? { damage: e.damage } : {}),
+              ...(e.damageByRange ? { damageByRange: e.damageByRange } : {}),
+              ...(e.aggravatedDamage !== undefined
+                ? { aggravatedDamage: e.aggravatedDamage }
+                : {}),
+              ...(e.burnGunAfterStrike ? { burnGunAfterStrike: true } : {}),
+              ...(e.additionalStrikeSelf ? { additionalStrikeSelf: true } : {}),
+            });
             break;
           case "preventAll":
             // "Prevent all damage from the opposing minion's strike" — the
@@ -3628,7 +3741,10 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
           (e) =>
             e.kind === "forceAbstain" ||
             e.kind === "cancelReferendum" ||
-            e.kind === "burnPoolVotedAgainst",
+            e.kind === "burnPoolVotedAgainst" ||
+            e.kind === "burnCallerOnFail" ||
+            e.kind === "payVotedForOnly" ||
+            e.kind === "autoPassNextOnPass",
         )
       ) {
         for (const e of mode.effects) {
@@ -3659,6 +3775,30 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             }
           } else if (e.kind === "burnPoolVotedAgainst") {
             ops.addPostTally({ kind: "burnPoolVotedAgainst", amount: e.amount });
+          } else if (e.kind === "burnCallerOnFail") {
+            ops.addPostTally({
+              kind: "burnCallerOnFail",
+              base: e.base,
+              perMargin: e.perMargin,
+            });
+          } else if (e.kind === "gainPool") {
+            // "GAIN 1 POOL. Any other Methuselah who…" (Bribes) — a
+            // polling-step card may carry an ordinary effect alongside
+            // its rider, and this branch returns, so the ordinary one has
+            // to be handled here or it is silently skipped.
+            ops.emit({ type: "PoolGained", seat: play.seat, amount: e.amount });
+          } else if (e.kind === "payVotedForOnly") {
+            ops.addPostTally({
+              kind: "payVotedForOnly",
+              amount: e.amount,
+              seat: play.seat,
+            });
+          } else if (e.kind === "autoPassNextOnPass") {
+            ops.addPostTally({
+              kind: "autoPassNextOnPass",
+              seat: play.seat,
+              ...(e.thisTurnOnly ? { thisTurnOnly: true } : {}),
+            });
           }
         }
         return;
@@ -4499,7 +4639,13 @@ function compileMasterCard(spec: CardSpec): CardHandler {
             break;
           }
           case "autoPassReferendum":
-            ops.armAutoPassReferendum(play.seat);
+            // "…on this turn" is Día de los Muertos' own clause, and so is
+            // the sect it names; both ride on the grant rather than being
+            // written into the engine.
+            ops.armAutoPassReferendum(play.seat, {
+              ...(e.sect ? { sect: e.sect } : {}),
+              thisTurnOnly: true,
+            });
             break;
           default:
             break;
@@ -6183,6 +6329,12 @@ const POLLING_ONLY_EFFECTS: ReadonlySet<EffectPrimitive["kind"]> = new Set([
   "forceAbstain",
   "cancelReferendum",
   "burnPoolVotedAgainst",
+  // The wave-21 outcome riders. `autoPassNextNow` is deliberately NOT
+  // here: Cryptic Rider is played in the after-resolution window, which
+  // is not the polling step.
+  "burnCallerOnFail",
+  "payVotedForOnly",
+  "autoPassNextOnPass",
 ]);
 
 /** Every minion in play, in seat order — the candidate pool for a
@@ -6684,7 +6836,14 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
             tags: [...(spec.permanent?.tags ?? []), ...(primitive.grantsTitle ? ["title"] : [])],
           });
           if (primitive.grantsTitle && onActor) {
-            ops.emit({ type: "TitleGranted", minion: onActor, title: primitive.grantsTitle });
+            ops.emit({
+              type: "TitleGranted",
+              minion: onActor,
+              title: primitive.grantsTitle,
+              ...(primitive.grantsTitleCity !== undefined
+                ? { city: primitive.grantsTitleCity }
+                : {}),
+            });
           }
           break;
         }
@@ -8784,6 +8943,24 @@ function addCryptAbilities(
         targetPermanent?: CardInstanceId;
       }> = [];
       switch (ga.do) {
+        case "burnSelfForBlood": {
+          // "This vampire can burn this retainer to gain N blood"
+          // (Zombie) — one option, no target: the actor is the employer
+          // and the price is the card offering the action. Offered even
+          // at capacity is wrong for the same reason `addBlood` guards,
+          // so the bearer must be able to hold it.
+          // The actor IS the employer — a retainer's granted action is
+          // announced by the minion it sits on.
+          if (canGainBlood(actor)) {
+            out.push({
+              key: "burnself",
+              label: `burn ${spec.name} to gain ${ga.amount ?? 1} blood`,
+              params: { target: actor.id },
+              targetMinion: actor.id,
+            });
+          }
+          break;
+        }
         case "addBlood": {
           for (const m of getSeat(state, seat).minions) {
             if (!isReady(m)) continue;
@@ -8954,6 +9131,15 @@ function addCryptAbilities(
       const p = af.grantedEffect.params;
       const seat = af.actingSeat;
       switch (ga.do) {
+        case "burnSelfForBlood": {
+          const m = p["target"] ? findMinion(ops.state, p["target"]) : null;
+          // Blood FIRST, then the burn: the retainer pays for a gain that
+          // has already happened, and a derived read must be total —
+          // the bearer can have gone since the action was announced.
+          if (m) ops.emit({ type: "BloodGained", minion: m.id, amount: ga.amount ?? 1 });
+          ops.burnPermanent(entry.card.id);
+          return;
+        }
         case "addBlood": {
           const m = p["target"] ? findMinion(ops.state, p["target"]) : null;
           if (!m) return;
@@ -10224,6 +10410,23 @@ function addRetainerAbilities(spec: CardSpec, handler: CardHandler): void {
       }
     }
 
+    // "The minion with this retainer may prevent N damage EACH COMBAT"
+    // (Resplendent Protector). No lock and no burn — the latch is the
+    // per-combat one, which is what "each combat" means.
+    if (ra.preventPerCombat && ctx.window === "combat.damageResolution") {
+      const cf = ctx.combat;
+      const pd = cf?.pendingDamage[0];
+      if (cf && pd && pd.minion === bearer.id && !cf.usedThisCombat.includes(entry.card.id)) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:preventcombat`,
+          kind: "useAbility",
+          label: `${spec.name}: prevent ${ra.preventPerCombat} damage (once each combat)`,
+          source: entry.card.id,
+          params: { act: "retainerPreventCombat" },
+        });
+      }
+    }
+
     // "You can burn this retainer to have an action directed at A MINION
     // YOU CONTROL fail" — narrower than "directed at you": a bleed is
     // directed at a SEAT and does not qualify (§5).
@@ -10290,6 +10493,13 @@ function addRetainerAbilities(spec: CardSpec, handler: CardHandler): void {
         if (!me) return;
         ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
         ops.preventDamageFor(me, ra.lockToPrevent!);
+        return;
+      case "retainerPreventCombat":
+        if (!me) return;
+        // Spent by the per-combat latch, not by locking or burning: the
+        // retainer is still there and still fighting.
+        ops.markUsedThisCombat(entry.card.id);
+        ops.preventDamageFor(me, ra.preventPerCombat!);
         return;
       case "retainerFailAction":
         ops.burnPermanent(entry.card.id);

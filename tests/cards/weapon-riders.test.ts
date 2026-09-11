@@ -246,7 +246,9 @@ describe("Sword of the Archangel (102261)", () => {
         .map(([n]) => n)
         .sort();
     expect(named("grapple")).toEqual(["Immortal Grapple"]);
-    expect(named("aim")).toEqual(["Target Vitals"]);
+    // Wave 17 took the aim family from one card to four; Target Retainer
+    // is the fifth and is not in the pool yet (docs/aim-design.md §7).
+    expect(named("aim")).toEqual(["Target Hand", "Target Head", "Target Leg", "Target Vitals"]);
     // The Sword itself has no keyword — it FILTERS on them.
     expect(testRegistry["Sword of the Archangel"]!.cardKeywords?.()).toEqual([]);
     expect(testRegistry["Conditioning"]!.cardKeywords?.()).toEqual([]);

@@ -197,8 +197,7 @@ export class LobbyHost {
       return;
     }
     if (this.started) {
-      channel.send({ type: "bye", reason: "that game has already started" });
-      channel.close();
+      this.onLateJoin(channel, name, msg, off);
       return;
     }
     const open = this.table.seats.find((s) => s.kind === "open");
@@ -229,6 +228,71 @@ export class LobbyHost {
       off,
     });
     this.broadcast();
+  }
+
+  /**
+   * Somebody arrives after the game has been dealt.
+   *
+   * They used to be hung up on ("that game has already started"), which
+   * made an accidental back-button permanent: the seat went to a bot and
+   * there was no way back into it. Now there are exactly two outcomes.
+   *
+   *  - **Their old seat back**, if the name they arrive under matches a
+   *    seat that a person was playing, nobody is holding it now, and the
+   *    host did not remove them. `HostSession.seatIsRejoinable` answers
+   *    all three — asked there rather than re-derived here, because the
+   *    session is the only thing that knows who is still connected.
+   *  - **A spectator's view otherwise**, which is every other case: the
+   *    table is full, the name is new, the seat was a bot from the start,
+   *    or they were kicked. Watching needs no seat and has no limit.
+   *
+   * The client needs no new message: it is sent the lobby snapshot (which
+   * is what tells it whether it has a seat) and then `started`, which is
+   * the same pair a player who was here from the beginning receives.
+   */
+  private onLateJoin(
+    channel: HostChannel,
+    name: string,
+    msg: JoinMsg,
+    off: () => void,
+  ): void {
+    const session = this.session;
+    if (!session) {
+      channel.send({ type: "bye", reason: "that game has already started" });
+      channel.close();
+      return;
+    }
+    const wanted = name.trim();
+    const seat =
+      !msg.spectate &&
+      wanted !== "" &&
+      this.table.seats.some((s) => s.name === wanted) &&
+      session.seatIsRejoinable(wanted)
+        ? wanted
+        : null;
+    const guest: LobbyGuest = {
+      channel,
+      name: seat ?? wanted ?? "Spectator",
+      seat,
+      chatColor: cleanColor(msg.chatColor),
+      off,
+    };
+    this.guests.push(guest);
+    // The snapshot first — it carries `you`, which is how their client
+    // learns whether it is sitting down or watching — then the handover.
+    channel.send(this.lobbyFor(guest));
+    channel.send({ type: "started" });
+    // The lobby stops listening on this channel; the session takes over,
+    // exactly as it does for everybody at `start()`.
+    guest.off();
+    session.accept(channel);
+    this.say(
+      seat
+        ? `${seat} has rejoined the table.`
+        : `${guest.name} is watching this game.`,
+      "table",
+      true,
+    );
   }
 
   private uniqueName(name: string): string {
@@ -387,7 +451,13 @@ export class LobbyHost {
     for (const seat of botSeats(this.table)) {
       transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
     }
-    const session = new HostSession(transport);
+    // The seats a PERSON is sitting in as the game is dealt. Only these
+    // can be reclaimed later; a seat that was a bot from the start stays
+    // the table's (owner rule).
+    const session = new HostSession(
+      transport,
+      this.table.seats.filter((s) => s.kind === "remote").map((s) => s.name),
+    );
 
     for (const guest of this.guests) {
       guest.off(); // the lobby stops listening; the session takes over

@@ -19,11 +19,17 @@ import {
 import type { CardSpec } from "./spec.ts";
 
 /**
- * The six Discipline master cards (docs/derived-traits-design.md). One
+ * The eleven Discipline master cards (docs/derived-traits-design.md). One
  * printed text, one spec shape:
  *
  *   "Discipline. Put this card on a vampire. This vampire gets +1 level of
  *    <D> and +1 capacity. Cannot be put on a vampire with superior <D>."
+ *
+ * The V5 printings word the middle clause differently — "gains 1 level of
+ * <D>. Capacity increases by 1: THE VAMPIRE IS ONE GENERATION OLDER" —
+ * which is the same effect said more carefully, since capacity and
+ * generation are two readings of one number (p. 11). Both printings are
+ * in this list and neither needs its own shape.
  *
  * Both bonuses are derived at read time (`disciplinesOf`, `capacityOf`),
  * never written onto the minion — so they vanish correctly if the card
@@ -42,6 +48,19 @@ function disciplineCards(): CardSpec[] {
     [101424, "Potence", "pot"],
     [101498, "Protean", "pro"],
     [102277, "Oblivion", "obl"],
+    // WAVE 18. Which five is not a preference: the pool requires exactly
+    // eleven Disciplines, the six above covered six of them, and these are
+    // the other five. The nine remaining Discipline masters (Chimerstry,
+    // Dementation, Necromancy, Obtenebration, Quietus, Serpentis,
+    // Vicissitude, Abombwe, Agent of Power) grant a Discipline NO card in
+    // the pool requires, which is the Tradition Upheld shape — whole and
+    // inert — so §0 keeps them out until §7 opens the clans that use them.
+    // docs/discipline-masters-design.md
+    [100070, "Animalism", "ani"],
+    [100114, "Auspex", "aus"],
+    [100774, "Fortitude", "for"],
+    [101480, "Presence", "pre"],
+    [101965, "Thaumaturgy", "tha"],
   ];
   return all.map(([krcgId, name, code]) => ({
     krcgId,
@@ -123,11 +142,93 @@ function praxisSeizure(krcgId: number, city: string): CardSpec {
       {
         level: "basic",
         discipline: null,
-        effects: [{ kind: "refPutInPlay", onActor: true, grantsTitle: "prince" }],
+        effects: [
+          {
+            kind: "refPutInPlay",
+            onActor: true,
+            grantsTitle: "prince",
+            // WAVE 19: the city was in the TAG and nowhere else, so
+            // `titleContestKey` — which keys prince/baron/archbishop on
+            // the city ALONE — answered null for every card-granted
+            // title. See the Crusade factory below.
+            grantsTitleCity: city,
+          },
+        ],
       },
     ],
   };
 }
+
+/**
+ * "Requires a Sabbat vampire. Title. If this referendum passes, put this
+ * card on the acting vampire to represent the unique Sabbat title of
+ * Archbishop of <city>. This could lead to a contested title."
+ *
+ * The Praxis Seizure, in the other sect — same shape, same factory
+ * treatment, `archbishop` (2 votes, p. 28) instead of `prince`.
+ *
+ * These are the cards that made the missing city visible. p. 39 says a
+ * prince "can be contested by another vampire who claims ANY title to the
+ * same city" and p. 41 rules archbishop the same way, so a Prince of
+ * Chicago and an Archbishop of Chicago MUST contest — two different
+ * cards, which card-level `isUnique` cannot see. Only `titleContestKey`
+ * can, and it needs the city.
+ *
+ * The five Crusades that omit "this could lead to a contested title" are
+ * built identically: that sentence is reminder text for a rule on p. 39,
+ * not a clause, and the rule applies whether or not a printing repeats it.
+ */
+function crusade(krcgId: number, city: string): CardSpec {
+  return {
+    krcgId,
+    name: `Crusade: ${city}`,
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    requiresSect: ["sabbat"],
+    permanent: { where: "bearer", statics: {}, tags: [`Archbishop of ${city}`] },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refPutInPlay",
+            onActor: true,
+            grantsTitle: "archbishop",
+            grantsTitleCity: city,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/**
+ * The twelve Crusades whose whole text is the shape above. The other
+ * eleven each add a clan rider ("if this vampire is Tzimisce, they unlock
+ * during your next discard phase", "if Lucita is in play…") naming a clan
+ * or a vampire the pool does not have — inert by §0, and they cost
+ * nothing the day §7 opens those clans.
+ */
+const CRUSADES: CardSpec[] = (
+  [
+    [100453, "Atlanta"],
+    [100457, "Chicago"],
+    [100458, "Detroit"],
+    [100460, "Frankfurt"],
+    [100462, "Houston"],
+    [100465, "Mexico City"],
+    [100466, "Miami"],
+    [100467, "New York"],
+    [100468, "Paris"],
+    [100469, "Philadelphia"],
+    [100470, "Pittsburgh"],
+    [100472, "Toronto"],
+  ] as Array<[number, string]>
+).map(([id, city]) => crusade(id, city));
 
 const PRAXIS_SEIZURES: CardSpec[] = (
   [
@@ -189,6 +290,7 @@ const HUNTING_GROUNDS: CardSpec[] = (
 export const cardSpecs: CardSpec[] = [
   ...HUNTING_GROUNDS,
   ...PRAXIS_SEIZURES,
+  ...CRUSADES,
   // --- Weapons gate (docs/weapons-design.md) ---
   {
     krcgId: 100107,
@@ -455,7 +557,220 @@ export const cardSpecs: CardSpec[] = [
     keywords: ["aim"],
     payToCancel: { pool: 0, who: "opposingMinion", discardCombatCards: 2 },
     usable: [],
-    modes: [{ level: "basic", discipline: null, effects: [{ kind: "aimBonus", amount: 2 }] }],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // BOTH clauses hang off "if any damage from this strike is
+        // successfully inflicted" — including the press bar, which this
+        // card applied at play time until wave 17. [RTR 19960221]: an aim
+        // "can be played on a strike that does no damage, even a dodge or
+        // a combat ends, but has no effect in that case".
+        effects: [{ kind: "aimRider", damage: 2, barPress: true }],
+      },
+    ],
+  },
+  // --- AIM (wave 17, docs/aim-design.md) ----------------------------------
+  //
+  // Four cards that share one trigger — "if any damage from this strike
+  // is successfully inflicted on the opposing minion" — and differ in
+  // everything they do with it. The trigger lives on the frame; each spec
+  // says only its own payload.
+  {
+    // "Aim. Play when choosing a strike. The opposing minion may discard
+    // two combat cards to cancel this card. If any damage from this
+    // strike is successfully inflicted on the opposing minion, he or she
+    // gets -1 strength this action, and you may destroy a weapon he or
+    // she has. A minion may play only one aim each strike."
+    krcgId: 101938,
+    name: "Target Hand",
+    cardType: "combat",
+    bloodCost: 0,
+    keywords: ["aim"],
+    payToCancel: { pool: 0, who: "opposingMinion", discardCombatCards: 2 },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "aimRider", strengthPenalty: 1, destroyWeapon: true }],
+      },
+    ],
+  },
+  {
+    // "Aim. Play when choosing a strike. The strike does +2 damage. The
+    // opposing minion may discard A combat card to cancel this card. If
+    // any damage from this strike is successfully inflicted on the
+    // opposing minion, he or she cannot use any additional strikes or
+    // presses this round, and you may set the range for the next round.
+    // A minion may play only one aim each strike."
+    //
+    // ONE discard, not two — the only aim card that is cheap to cancel,
+    // and the reason `discardCombatCards` is a number rather than a flag.
+    krcgId: 101939,
+    name: "Target Head",
+    cardType: "combat",
+    bloodCost: 0,
+    keywords: ["aim"],
+    payToCancel: { pool: 0, who: "opposingMinion", discardCombatCards: 1 },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "aimRider",
+            // "The strike does +2 damage" is NOT conditional and is part
+            // of the strike's damage — unlike Target Vitals' +2. §3
+            strikeDamage: 2,
+            barPress: true,
+            barAdditionalStrikes: true,
+            setRangeNextRound: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Aim. Play when choosing a strike. The opposing minion may discard
+    // two combat cards to cancel this card. If any damage from this
+    // strike is successfully inflicted on the opposing minion, he or she
+    // may use maneuvers or presses only if they require Obfuscate, Blood
+    // Sorcery or Flight this action. A minion may play only one aim each
+    // strike."
+    krcgId: 101940,
+    name: "Target Leg",
+    cardType: "combat",
+    bloodCost: 0,
+    keywords: ["aim"],
+    payToCancel: { pool: 0, who: "opposingMinion", discardCombatCards: 2 },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "aimRider", moveDisciplines: ["obf", "tha", "flight"] }],
+      },
+    ],
+  },
+  // --- AMMO (wave 16, docs/ammo-design.md) --------------------------------
+  //
+  // Five cards, one primitive. Everything they share — the window
+  // ([RTR 19990105]: after strikes are declared, before they resolve),
+  // one ammo per gun per combat, your own gun only ([LSJ 20020425]) —
+  // lives in the enumerator, so each spec says only what its own card
+  // does differently.
+  {
+    // "Ammo. Only usable before resolution of a gun's strike. The gun
+    // inflicts +1 damage each strike for the remainder of this combat.
+    // No more than one ammo card can be used on a gun each combat."
+    krcgId: 101160,
+    name: "Manstopper Rounds",
+    cardType: "combat",
+    bloodCost: 0,
+    keywords: ["ammo"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "loadAmmo", damage: 1 }] }],
+  },
+  {
+    // "Ammo. Only usable before resolution of a gun's strike. This gun
+    // inflicts +2 damage each strike for the remainder of this combat.
+    // Not usable the first time the gun is used in a given combat. No
+    // more than 1 ammo card can be used on a gun card each combat."
+    //
+    // [RTR 19941109]: "must wait until the SECOND time a given gun is
+    // used in a given combat to play it" — hence minGunUses 2, counted at
+    // declaration, so the window for the gun's first strike does not
+    // offer it at all.
+    krcgId: 100836,
+    name: "Glaser Rounds",
+    cardType: "combat",
+    bloodCost: 0,
+    keywords: ["ammo"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "loadAmmo", damage: 2, minGunUses: 2 }],
+      },
+    ],
+  },
+  {
+    // "Ammo. Only usable before resolution of a gun's strike. This gun
+    // inflicts +2 damage at close range and -2 damage at long range each
+    // strike for the remainder of this combat. No more than one ammo card
+    // can be used on a gun each combat."
+    //
+    // The range is read at every strike, not at loading: a gun loaded in
+    // a close round is still loaded when a later round is long, and then
+    // the card is a penalty. That is the card working, not a bug.
+    krcgId: 101689,
+    name: "Scattershot",
+    cardType: "combat",
+    bloodCost: 0,
+    keywords: ["ammo"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "loadAmmo", damageByRange: { close: 2, long: -2 } }],
+      },
+    ],
+  },
+  {
+    // "Ammo. Only usable before resolution of a gun's strike. This gun
+    // inflicts +2 aggravated damage each strike for the remainder of this
+    // combat. Burn the gun after strike resolution. No more than one ammo
+    // card can be used on a gun each combat."
+    //
+    // [LSJ 20030419-2]: it "does not make the gun base damage
+    // aggravated", so this is a SEPARATE aggravated packet beside the
+    // gun's normal damage — not `damage: 2` with an aggravated flag.
+    // [LSJ 19981006]: it does not burn the gun if combat ends before the
+    // strike resolves.
+    krcgId: 100580,
+    name: "Dragon's Breath Rounds",
+    cardType: "combat",
+    bloodCost: 0,
+    keywords: ["ammo"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "loadAmmo", aggravatedDamage: 2, burnGunAfterStrike: true }],
+      },
+    ],
+  },
+  {
+    // "Ammo. Only usable before resolution of a gun's strike. For the
+    // remainder of combat, once each round when the bearer strikes with
+    // this gun, the bearer gets an optional additional strike (limited),
+    // only usable to strike with this gun. No more than one ammo card can
+    // be used on a gun each combat."
+    //
+    // Exactly the AK-47's printed rider (docs/weapon-riders-design.md
+    // §2), bought from the hand for any gun — which is why this card
+    // needed no new mechanism at all, only the window.
+    krcgId: 100304,
+    name: "Caseless Rounds",
+    cardType: "combat",
+    bloodCost: 0,
+    // The only ammo card that costs anything — 1 pool, which
+    // `supported.test.ts` caught me omitting.
+    poolCost: 1,
+    keywords: ["ammo"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "loadAmmo", additionalStrikeSelf: true }],
+      },
+    ],
   },
   {
     // "[obf] or [tha] Maneuver, only usable to get to close range. [OBF]
@@ -3285,6 +3600,78 @@ export const cardSpecs: CardSpec[] = [
         level: "superior",
         discipline: "pro",
         effects: [{ kind: "strikeCombatEnds", unlockSelf: false }],
+      },
+    ],
+  },
+  // --- THE BASIC COMBAT CARDS (wave 20, docs/basic-combat-design.md) -------
+  //
+  // The five disciplineless cards that each ARE one of the three things
+  // any minion may do in combat — dodge, maneuver, press — with no
+  // Discipline, no cost, and no rider. Three of them carry the one clause
+  // that makes them a family: "DO NOT REPLACE UNTIL AFTER COMBAT", which
+  // is what a card with no requirement costs instead.
+  {
+    // "Do not replace until after combat. Strike: dodge."
+    krcgId: 100567,
+    name: "Dodge",
+    cardType: "combat",
+    bloodCost: 0,
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "strikeDodge" }] }],
+  },
+  {
+    // "Do not replace until after combat. Maneuver."
+    krcgId: 100693,
+    name: "Fake Out",
+    cardType: "combat",
+    bloodCost: 0,
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "maneuver" }] }],
+  },
+  {
+    // "Do not replace until after combat. Press."
+    krcgId: 100244,
+    name: "Boxed In",
+    cardType: "combat",
+    bloodCost: 0,
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "press", continueOnly: false }] },
+    ],
+  },
+  {
+    // "Press, only usable to continue combat."
+    //
+    // No deferred replacement — the restriction IS its cost, which is the
+    // comparison the family is worth making: an unrestricted press pays
+    // by staying out of your hand, a restricted one does not.
+    krcgId: 100504,
+    name: "Dead-End Alley",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "press", continueOnly: true }] },
+    ],
+  },
+  {
+    // "Press, only usable to end combat." The mirror of Dead-End Alley,
+    // and p. 32 makes it narrower than it looks: the only way a press
+    // ENDS combat is by cancelling one that is already standing, so this
+    // is offered in exactly the window where the other two are not.
+    krcgId: 101323,
+    name: "Open Grate",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "press", continueOnly: false, endOnly: true }],
       },
     ],
   },
@@ -7050,6 +7437,61 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
+    // --- COMBAT RETAINERS (wave 22, docs/combat-retainers-design.md) ------
+    //
+    // Three retainers whose whole content is what they do once a fight
+    // starts. `combatRoundDamage` has existed since the retainer wave;
+    // what these needed was the other two shapes a retainer can take in
+    // combat — preventing without being spent, and being spent for
+    // something other than combat.
+    krcgId: 102107,
+    name: "Vengeful Spirit",
+    cardType: "retainer",
+    bloodCost: 1,
+    permanent: {
+      where: "bearer",
+      // "…at close range" — no "R", so not ranged.
+      statics: { bleed: 1, combatRoundDamage: { amount: 1, ranged: false } },
+      tags: ["wraith"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 2, effects: [] }],
+  },
+  {
+    // "Zombie with 2 life. Zombie inflicts 1 damage on the opposing
+    // minion each round of combat during normal strike resolution at
+    // close range. This vampire can burn this retainer to gain 2 blood
+    // as a +1 stealth action."
+    krcgId: 102210,
+    name: "Zombie",
+    cardType: "retainer",
+    bloodCost: 1,
+    permanent: {
+      where: "bearer",
+      statics: { combatRoundDamage: { amount: 1, ranged: false } },
+      tags: ["zombie"],
+      grantedAction: { do: "burnSelfForBlood", amount: 2, stealth: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 2, effects: [] }],
+  },
+  {
+    // "Mortal with 1 life. The minion with this retainer may prevent 1
+    // damage each combat."
+    krcgId: 101612,
+    name: "Resplendent Protector",
+    cardType: "retainer",
+    bloodCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mortal"],
+      retainerAbilities: { preventPerCombat: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
     krcgId: 102317,
     name: "Dread Mastiff",
     cardType: "retainer",
@@ -8331,7 +8773,99 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     poolCost: 1,
     usable: [],
-    modes: [{ level: "basic", discipline: null, effects: [{ kind: "autoPassReferendum" }] }],
+    // WAVE 21: the sect it names is the CARD's clause, not the engine's —
+    // it used to be written into the consumption site, which made two
+    // later cards with no sect condition unbuildable.
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "autoPassReferendum", sect: "sabbat" }] },
+    ],
+  },
+  // --- REFERENDUM OUTCOME RIDERS (wave 21, docs/referendum-riders-design.md)
+  //
+  // Four cards played while a referendum is live whose effect waits for
+  // the RESULT. The engine could already carry a payload past the tally
+  // (Scorn of Adonis) but not one that asked which way it went.
+  {
+    // "Only usable during a referendum before any votes or ballots are
+    // cast. If the referendum fails, the Methuselah calling the
+    // referendum burns 1 pool plus 1 additional pool for each vote
+    // difference."
+    krcgId: 100619,
+    name: "Elder Kindred Network",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "burnCallerOnFail", base: 1, perMargin: 1 }],
+      },
+    ],
+  },
+  {
+    // "Only usable during a referendum before votes and ballots are cast.
+    // Gain 1 pool. Any other Methuselah who casts one or more votes or
+    // ballots in favor of and does not cast votes or ballots against the
+    // referendum gains 1 pool when the results of the referendum are
+    // tallied."
+    //
+    // Two halves at two moments: the player's own pool NOW, everyone
+    // else's at the tally, once the votes are known.
+    krcgId: 100251,
+    name: "Bribes",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "gainPool", amount: 1 },
+          { kind: "payVotedForOnly", amount: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable during the polling step of a political action before
+    // votes and ballots are cast. If the referendum passes, the next
+    // referendum a vampire you control calls passes automatically (skip
+    // the polling step)."
+    //
+    // NO turn limit — the card does not say "this turn", so the grant
+    // waits however long it takes.
+    krcgId: 101156,
+    name: "Malkavian Rider Clause",
+    cardType: "reaction",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "autoPassNextOnPass" }] },
+    ],
+  },
+  {
+    // "Only usable on a successful referendum. The next referendum a
+    // vampire you control calls THIS TURN passes automatically."
+    //
+    // The same grant as Malkavian Rider Clause, earned at a different
+    // moment: this one is played in the after-resolution window, which
+    // only opens on a pass — so "on a successful referendum" is the
+    // window rather than a condition to test.
+    krcgId: 100478,
+    name: "Cryptic Rider",
+    cardType: "actionModifier",
+    bloodCost: 1,
+    usable: ["afterReferendumPassed"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        usable: ["afterReferendumPassed"],
+        effects: [{ kind: "autoPassNextNow", thisTurnOnly: true }],
+      },
+    ],
   },
   {
     // "Unique location. Requires a ready Sabbat vampire. Once each turn, a

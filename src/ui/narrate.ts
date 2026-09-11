@@ -98,7 +98,13 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
                 ? "attempts diablerie"
                 : ev.actionKind === "rescue"
                   ? "attempts a rescue"
-                  : `takes an action${at}`;
+                    : // NAME THE ACTION. A card-driven action used to read
+                    // "takes an action", which is the commonest line in
+                    // the game saying the least of any of them; the card
+                    // now travels on the event.
+                    ev.cardName
+                    ? `takes the ${ev.cardName} action${at}`
+                    : `takes an action${at}`;
       return { text: `${who} ${kind}.`, weight: "major" };
     }
     case "ActionResolved":

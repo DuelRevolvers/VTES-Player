@@ -67,6 +67,8 @@ import type {
   CardInstanceId,
   CardPlayFrame,
   AfterCombatRider,
+  AimRider,
+  AmmoLoad,
   ChoiceFrame,
   CombatFrame,
   CombatRoundDamageRider,
@@ -126,6 +128,17 @@ const HAND_SIZE_DOWN = "handSizeDown";
  *  ENGINE-owned choice key like the discard-down — it is a rule of the
  *  game, and no card is involved in it at all. */
 const DIABLERIE_DISCIPLINE = "diablerieDiscipline";
+/**
+ * The two questions an aim rider asks (Target Head, Target Hand).
+ *
+ * ENGINE-owned like the two above, for the reason recorded there: the
+ * question is raised long after the card has finished resolving, from a
+ * chokepoint the card cannot see, and three of the five aim cards would
+ * otherwise each carry their own copy of the same answer.
+ * docs/aim-design.md §4
+ */
+const AIM_SET_RANGE = "aimSetRange";
+const AIM_BURN_WEAPON = "aimBurnWeapon";
 /** Paying for, or yielding, a contest during your unlock phase (p. 17-18).
  *  Engine-owned for the same reason again: it is a rule of the game, and
  *  a contest can be over a card whose handler knows nothing about it — or
@@ -413,9 +426,10 @@ export class VtesEngine implements EngineOps {
           // not carry, and the superior-once-per-turn limit resets.
           seat.stealthCharges = 0;
           seat.superiorPlaysThisTurn = [];
-          // "…on this turn" (Día de los Muertos): an unused auto-pass
-          // does not carry into the next turn.
-          seat.autoPassReferendum = false;
+          // "…on this turn" (Día de los Muertos, Cryptic Rider): an unused
+          // auto-pass does not carry into the next turn. A grant that does
+          // NOT say "this turn" (Malkavian Rider Clause) waits.
+          if (seat.autoPassReferendum?.thisTurnOnly) delete seat.autoPassReferendum;
           // "…this turn" (Expulsion).
           for (const m of seat.minions) m.expelledThisTurn = false;
           // "…cannot perform the same action again THIS TURN" (Change of
@@ -446,9 +460,17 @@ export class VtesEngine implements EngineOps {
       case "MinionWoke":
         getMinion(this.state, ev.minion).awake = true;
         break;
-      case "TitleGranted":
-        getMinion(this.state, ev.minion).title = ev.title;
+      case "TitleGranted": {
+        const gm = getMinion(this.state, ev.minion);
+        gm.title = ev.title;
+        // The city travels WITH the grant. Without it a card-granted
+        // prince keyed on nothing and could not be contested at all —
+        // which is p. 39's "contested by another vampire who claims ANY
+        // title to the same city", silently not happening.
+        if (ev.city !== undefined) gm.titleCity = ev.city;
+        else delete gm.titleCity;
         break;
+      }
       case "TitleLost": {
         const tm = findMinion(this.state, ev.minion);
         if (tm) tm.title = null;
@@ -2117,6 +2139,17 @@ export class VtesEngine implements EngineOps {
         return false;
       case "chooseStrike":
         if (this.allStrikersChosen(cf)) {
+          // STRIKES DECLARED, NOT YET RESOLVED (p. 30). A card that says
+          // "before resolution" is played here and nowhere else
+          // ([RTR 19990105]); when nobody has one, the step is skipped
+          // entirely and resolution follows declaration as it always did.
+          if (this.openBeforeResolution(cf)) return true;
+          this.resolveStrikes(cf);
+          return true;
+        }
+        return false;
+      case "beforeResolution":
+        if (cycleQuiescent(cf.cycle)) {
           this.resolveStrikes(cf);
           return true;
         }
@@ -2173,8 +2206,13 @@ export class VtesEngine implements EngineOps {
             // "…cannot be used THIS ROUND (by either combatant)"
             // (Immortal Grapple) and the aim rider that rides one strike.
             cf.handStrikesOnly = false;
-            cf.aimBonus = { acting: 0, opposing: 0 };
+            cf.aimRiders = { acting: [], opposing: [] };
+            cf.aimStrikeBonus = { acting: 0, opposing: 0 };
             cf.aimsThisStrike = [];
+            // "…cannot use any additional strikes or presses THIS ROUND"
+            // (Target Head). `moveDisciplines` is deliberately NOT here:
+            // Target Leg says "this ACTION".
+            cf.noAdditionalStrikes = { acting: false, opposing: false };
             cf.bloodLostThisRound = { acting: 0, opposing: 0 };
             // "THIS ROUND, this vampire can strike…" (Hunger of Marduk) —
             // a round-scoped grant is gone; a once-per-combat one is not.
@@ -2211,6 +2249,31 @@ export class VtesEngine implements EngineOps {
             for (const r of cf.roundDamage) {
               if (r.when === "beforeRange") this.inflictRoundDamage(cf, r);
             }
+            // "You may SET THE RANGE for the next round" (Target Head) —
+            // asked here, the first moment there is known to be a next
+            // round. The frame goes on top of the stack, so it is answered
+            // before this round's determine-range step would run, and
+            // answering it skips that step [RTR 19970630].
+            //
+            // Not offered when another effect is already setting this
+            // round's range [PIB 20120214]: "that effect has priority",
+            // and `skipRangeNextRound` (Immortal Grapple) is one.
+            const pending = cf.pendingSetRange ?? [];
+            cf.pendingSetRange = [];
+            // `skipRangeNextRound` was consumed above and is already
+            // false; the step it left behind is the readable form of the
+            // same fact.
+            if (cf.step === "beforeRange") {
+              for (const p of pending) {
+                this.raiseChoice({
+                  seat: p.seat,
+                  cardName: p.cardName,
+                  cardId: p.cardId,
+                  key: AIM_SET_RANGE,
+                  optional: true,
+                });
+              }
+            }
           } else {
             this.emit({ type: "CombatEnded", rounds: cf.round });
             this.pop();
@@ -2221,6 +2284,12 @@ export class VtesEngine implements EngineOps {
             // outlives its place on the stack (Monster).
             this.applyAfterCombatRiders(cf);
             this.notifyCombatEnded(cf);
+            // "Do not replace until after combat" — flushed at the
+            // engine's ONE CombatEnded site, which is what makes this
+            // safe: combat ends four different ways and a deferral
+            // flushed at three of them is a card that never comes back.
+            for (const s of cf.drawAfterCombat ?? []) this.drawToReplace(s);
+            cf.drawAfterCombat = [];
             // "THIS COMBAT, you get +1 hand size" lapsed with the pop —
             // and this is the engine's single CombatEnded site, which is
             // what makes the derived model safe (§3).
@@ -2286,11 +2355,44 @@ export class VtesEngine implements EngineOps {
     // they cast, and read off `v.seat` so "including controlling a minion
     // casting" is covered by construction.
     for (const pt of rf.postTally ?? []) {
-      if (pt.kind !== "burnPoolVotedAgainst") continue;
-      const seats = new Set(rf.votes.filter((v) => !v.inFavor).map((v) => v.seat));
-      for (const seat of seats) {
-        if (getSeat(this.state, seat).ousted) continue;
-        this.emit({ type: "PoolBurned", seat, amount: pt.amount });
+      if (pt.kind === "burnPoolVotedAgainst") {
+        const seats = new Set(rf.votes.filter((v) => !v.inFavor).map((v) => v.seat));
+        for (const seat of seats) {
+          if (getSeat(this.state, seat).ousted) continue;
+          this.emit({ type: "PoolBurned", seat, amount: pt.amount });
+        }
+      } else if (pt.kind === "burnCallerOnFail") {
+        // "If the referendum FAILS, the caller burns 1 pool plus 1 for
+        // each VOTE DIFFERENCE" (Elder Kindred Network). The margin is
+        // `votesFor - votesAgainst`, so a failed referendum's is zero or
+        // negative and the difference is its size — and a tie, which
+        // fails with a margin of 0 (p. 28), costs the base alone.
+        if (passed) continue;
+        if (getSeat(this.state, rf.caller).ousted) continue;
+        const diff = Math.abs(rf.margin ?? 0);
+        this.emit({
+          type: "PoolBurned",
+          seat: rf.caller,
+          amount: pt.base + pt.perMargin * diff,
+        });
+      } else if (pt.kind === "payVotedForOnly") {
+        // "Any OTHER Methuselah who casts one or more votes or ballots in
+        // favor of AND DOES NOT cast votes or ballots against" (Bribes) —
+        // both halves are per SEAT, so a Methuselah who hedged gets
+        // nothing, and the player who paid for the card is excluded.
+        const against = new Set(rf.votes.filter((v) => !v.inFavor).map((v) => v.seat));
+        const paid = new Set<SeatId>();
+        for (const v of rf.votes) {
+          if (!v.inFavor || v.seat === pt.seat || against.has(v.seat)) continue;
+          if (paid.has(v.seat) || getSeat(this.state, v.seat).ousted) continue;
+          paid.add(v.seat);
+          this.emit({ type: "PoolGained", seat: v.seat, amount: pt.amount });
+        }
+      } else if (pt.kind === "autoPassNextOnPass") {
+        if (!passed || getSeat(this.state, pt.seat).ousted) continue;
+        this.armAutoPassReferendum(pt.seat, {
+          ...(pt.thisTurnOnly ? { thisTurnOnly: true } : {}),
+        });
       }
     }
     if (!passed) {
@@ -2631,6 +2733,7 @@ export class VtesEngine implements EngineOps {
       seat,
       target,
       directed,
+      cardName: play.card.name,
       ...(params.targetMinion ? { targetMinion: params.targetMinion } : {}),
       ...(announcedTypes.length > 0 ? { cardTypes: announcedTypes } : {}),
       ...(announcedTags.length > 0 ? { cardTags: announcedTags } : {}),
@@ -3477,6 +3580,8 @@ export class VtesEngine implements EngineOps {
       strengthBonusRound: { acting: 0, opposing: 0 },
       handStrikesAggravated: { acting: false, opposing: false },
       weaponDamageNullified: { acting: false, opposing: false },
+      ammo: {},
+      gunUses: {},
       playCostMods: [],
       afterCombatEnds: outcome ? [outcome] : [],
       preventAllFrom: { acting: false, opposing: false },
@@ -3716,15 +3821,56 @@ export class VtesEngine implements EngineOps {
         amount = strengthOf(from) + strike.handBonus;
         if (cf.handStrikesAggravated[from]) aggravated = true;
       }
+      // AMMO, read here rather than stamped on the Strike when it was
+      // loaded: "for the remainder of this combat" reaches strikes that
+      // do not exist yet, and this is the one place a strike becomes
+      // damage. docs/ammo-design.md §4
+      const load = strike.weaponCard ? cf.ammo[strike.weaponCard] : undefined;
+      if (load) {
+        // "+2 damage at close range and -2 at long" (Scattershot) — the
+        // range is the frame's, read now, because a gun loaded at close
+        // range can still be firing in a later long-range round.
+        const byRange = load.damageByRange
+          ? (cf.range === "close" ? load.damageByRange.close : load.damageByRange.long)
+          : (load.damage ?? 0);
+        // "Additional damage inherits all of the properties of the base
+        // damage" [TOM 19960225] — so it rides on `amount`, which already
+        // carries this strike's aggravated flag and its noPreventBy.
+        amount += byRange;
+      }
+      // "THE STRIKE DOES +2 DAMAGE" (Target Head) — part of what the
+      // strike deals, so it is added here and prevention eats it, unlike
+      // the aim RIDER's bonus, which is added at the chokepoint to damage
+      // that already got through. [RTR 19960221]: adding damage to a
+      // strike that deals none has no effect, which the `amount > 0` gate
+      // below already is. docs/aim-design.md §3
+      amount += cf.aimStrikeBonus?.[from] ?? 0;
+      if (amount > 0) {
+        this.pushPendingDamage(cf, {
+          minion: victim,
+          amount,
+          source,
+          aggravated,
+          ...(strike.noPreventBy?.length ? { noPreventBy: strike.noPreventBy } : {}),
+          ...(this.isGunStrike(strike) ? { fromGun: true } : {}),
+        });
+      }
+      if (load?.aggravatedDamage) {
+        // Dragon's Breath Rounds: "+2 AGGRAVATED damage each strike". A
+        // SECOND packet, because [LSJ 20030419-2] says it "does not make
+        // the gun base damage aggravated" — so a 2R gun inflicts 2 normal
+        // and 2 aggravated, and `resolveStrikes` already sorts normal
+        // before aggravated for a given victim (p. 34).
+        this.pushPendingDamage(cf, {
+          minion: victim,
+          amount: load.aggravatedDamage,
+          source,
+          aggravated: true,
+          ...(strike.noPreventBy?.length ? { noPreventBy: strike.noPreventBy } : {}),
+          ...(this.isGunStrike(strike) ? { fromGun: true } : {}),
+        });
+      }
       if (amount <= 0) return;
-      this.pushPendingDamage(cf, {
-        minion: victim,
-        amount,
-        source,
-        aggravated,
-        ...(strike.noPreventBy?.length ? { noPreventBy: strike.noPreventBy } : {}),
-        ...(this.isGunStrike(strike) ? { fromGun: true } : {}),
-      });
       // "For each damage inflicted by this strike (even if prevented),
       // burn 1 counter from this card" (Weighted Walking Stick) — spent
       // here, at infliction, so prevention never gets the counters back.
@@ -3738,6 +3884,46 @@ export class VtesEngine implements EngineOps {
     };
     inflict("opposing", so);
     inflict("acting", sa);
+    // AMMO EFFECTS THAT ARE NOT DAMAGE, applied once per gun strike that
+    // actually resolved.
+    //
+    // Deliberately outside `inflict`, which returns early on a dodge, on
+    // a range mismatch and on zero damage. p. 33: a dodge "cancels the
+    // effects of the opposing strike ON THIS MINION" — burning your own
+    // gun (Dragon's Breath) and granting yourself an extra strike
+    // (Caseless) are effects on YOUR side of the table, so a dodge does
+    // not reach them. The damage bonus above is an effect on the victim,
+    // and a dodge does cancel that.
+    //
+    // A combat-ends strike never gets here: `resolveStrikes` returned far
+    // above, which is exactly [LSJ 19981006] — Dragon's Breath "does not
+    // burn the gun if combat ends before the strike resolves".
+    const ammoRiders = (from: "acting" | "opposing", strike: Strike | null): void => {
+      if (!strike?.weaponCard) return;
+      const load = cf.ammo[strike.weaponCard];
+      if (!load) return;
+      // "Once each round when the bearer strikes with this gun, the
+      // bearer gets an optional additional strike (limited), only usable
+      // to strike with this gun" (Caseless Rounds) — the AK-47 rider
+      // (docs/weapon-riders-design.md §2), bought from a card. Committing
+      // the strike is what "only usable to strike with this gun" means,
+      // and it is the .44 ruling the engine has held all along.
+      if (load.additionalStrikeSelf && load.additionalStrikeRound !== cf.round) {
+        load.additionalStrikeRound = cf.round;
+        const bearer = from === "acting" ? cf.acting : cf.opposing;
+        if (findMinion(this.state, bearer)) {
+          this.grantAdditionalStrikeTo(bearer, 1, true);
+          cf.committedStrike[from] = strike.weaponCard;
+        }
+      }
+      // "Burn the gun after strike resolution" (Dragon's Breath Rounds).
+      // Last, so the additional strike above is granted before the gun it
+      // names leaves play — the option enumerator already treats a
+      // commitment to a card that has gone as no commitment.
+      if (load.burnGunAfterStrike) this.burnPermanent(strike.weaponCard);
+    };
+    ammoRiders("opposing", so);
+    ammoRiders("acting", sa);
     // An additional sub-round consumes one additional strike from each
     // minion that struck (p. 32).
     if (cf.strikeRound === "additional") {
@@ -3881,6 +4067,12 @@ export class VtesEngine implements EngineOps {
   grantAdditionalStrike(play: CardPlayFrame, count: number, limited: boolean): void {
     const cf = this.requireCombat();
     const side = this.sideOf(cf, play.minion);
+    // "…cannot use any additional strikes … this round" (Target Head) —
+    // the grant simply does not happen. [LSJ 20011214-5]: the minion
+    // "cannot play a card that provides an additional strike, EVEN IF
+    // JUST TO BENEFIT FROM ANOTHER EFFECT", which the option enumerator
+    // enforces; this is the same bar for a grant from a card in play.
+    if (cf.noAdditionalStrikes?.[side]) return;
     cf.additionalStrikes[side] += count;
     if (limited) cf.usedLimitedAddl[side] = true;
   }
@@ -3915,8 +4107,48 @@ export class VtesEngine implements EngineOps {
   /** Is this strike a GUN's? A weapon strike whose card carries the
    *  `gun` tag — the same pair `weaponDamageNullified` reads. Kevlar
    *  Vest is the only card that asks. docs/last-combat-design.md §5 */
+  /**
+   * Open the before-resolution window, or say there is nothing to open.
+   *
+   * RECORDED DEVIATION, and the same one `combat.damageResolution` and
+   * `action.afterResolution` already carry: the step is entered only when
+   * some seat actually has something to play in it, rather than cycling
+   * every seat unconditionally the way beforeRange / beforeStrikes /
+   * endOfRound do.
+   *
+   * The reason is sharper here than there. This window sits between
+   * declaration and resolution of EVERY strike pair in every round of
+   * every combat, and the cards that use it are five ammo cards that only
+   * work on a gun. Cycling four seats through an empty question twice a
+   * round would multiply the decisions in a game with no content and no
+   * outcome — and it would do it in the most-played part of the engine.
+   * No behaviour changes for a seat that could act.
+   *
+   * docs/ammo-design.md §2, docs/outside-combat-design.md §2
+   */
+  private openBeforeResolution(cf: CombatFrame): boolean {
+    const order = sequencingOrder(this.state, cf.actingSeat, []).filter(
+      (s) =>
+        this.handlerOptions(s, "combat.beforeResolution").length > 0 ||
+        this.abilityOptionsFor(s, "combat.beforeResolution").length > 0,
+    );
+    if (order.length === 0) return false;
+    cf.step = "beforeResolution";
+    cf.cycle = newCycle(order);
+    return true;
+  }
+
   private isGunStrike(strike: Strike): boolean {
-    if (strike.source !== "weapon" || !strike.name) return false;
+    if (strike.source !== "weapon") return false;
+    // BY CARD when the strike names one. The name search below takes the
+    // FIRST weapon called that anywhere on the table, which is a wrong
+    // answer the moment two minions in a combat both carry a .44 Magnum —
+    // and every weapon strike now records its card, so the search is only
+    // a fallback for a strike built before that. docs/ammo-design.md §3
+    if (strike.weaponCard) {
+      return this.findEntry(strike.weaponCard)?.tags.includes("gun") ?? false;
+    }
+    if (!strike.name) return false;
     for (const s of this.state.seats) {
       for (const m of s.minions) {
         for (const p of m.attached) {
@@ -3972,8 +4204,31 @@ export class VtesEngine implements EngineOps {
   grantAdditionalStrikeTo(minion: MinionId, count: number, limited: boolean): void {
     const cf = this.requireCombat();
     const side = this.sideOf(cf, minion);
+    // "…cannot use any additional strikes … this round" (Target Head) —
+    // the grant simply does not happen. [LSJ 20011214-5]: the minion
+    // "cannot play a card that provides an additional strike, EVEN IF
+    // JUST TO BENEFIT FROM ANOTHER EFFECT", which the option enumerator
+    // enforces; this is the same bar for a grant from a card in play.
+    if (cf.noAdditionalStrikes?.[side]) return;
     cf.additionalStrikes[side] += count;
     if (limited) cf.usedLimitedAddl[side] = true;
+  }
+
+  /**
+   * Load an ammo card into a gun for the rest of this combat
+   * (docs/ammo-design.md §4).
+   *
+   * Refuses a gun that already has ammo rather than overwriting it: "no
+   * more than one ammo card can be used on a gun each combat" is printed
+   * on all five cards, and the option enumerator already gates on it — a
+   * throw here means the two disagreed, which is a bug worth surfacing
+   * rather than a second ammo card silently replacing the first.
+   */
+  loadAmmo(gun: CardInstanceId, load: AmmoLoad): void {
+    const cf = this.requireCombat();
+    if (!gun) throw new Error("loadAmmo without a gun");
+    if (cf.ammo[gun]) throw new Error("that gun already has ammo this combat");
+    cf.ammo[gun] = { ...load };
   }
 
   /** "Only usable if combat WOULD END. Instead, start a new round"
@@ -3997,17 +4252,88 @@ export class VtesEngine implements EngineOps {
     this.requireCombat().skipRangeNextRound = true;
   }
 
-  /** "If any damage from this strike is successfully inflicted, they take
-   *  +N damage from this strike" (Target Vitals). */
-  addAimBonus(play: CardPlayFrame, amount: number): void {
+  /**
+   * Play an AIM card: the unconditional half now, the rest as a rider.
+   *
+   * The split is the whole point of the wave. Everything an aim card does
+   * to the OPPONENT is written "if any damage from this strike is
+   * successfully inflicted on the opposing minion, …", and
+   * [RTR 19960221] says so in as many words: an aim can be played on a
+   * dodge or a combat-ends strike "but has no effect in that case".
+   * Applying any of it here would make that false.
+   * docs/aim-design.md §2
+   */
+  addAimRider(play: CardPlayFrame, rider: Omit<AimRider, "seat">, strikeDamage = 0): void {
     const cf = this.requireCombat();
     const side = this.sideOf(cf, play.minion);
-    cf.aimBonus ??= { acting: 0, opposing: 0 };
-    cf.aimBonus[side] += amount;
+    if (strikeDamage) {
+      cf.aimStrikeBonus ??= { acting: 0, opposing: 0 };
+      cf.aimStrikeBonus[side] += strikeDamage;
+    }
+    cf.aimRiders ??= { acting: [], opposing: [] };
+    cf.aimRiders[side].push({ ...rider, seat: play.seat });
     if (play.minion) (cf.aimsThisStrike ??= []).push(play.minion);
-    // "…and they cannot press this round" — the restriction already
-    // exists (Terror Frenzy sets it) and is round-scoped.
-    cf.restrict[side === "acting" ? "opposing" : "acting"].press = true;
+  }
+
+  /**
+   * "…IS SUCCESSFULLY INFLICTED ON THE OPPOSING MINION" — the one moment
+   * every aim rider waits for, at the one chokepoint for damage that
+   * actually landed.
+   *
+   * Riders are SPENT as they fire: an aim rides one strike, and a strike
+   * can put two packets on a victim (an ammo card's separate aggravated
+   * packet), which must not pay the card twice.
+   */
+  private fireAimRiders(cf: CombatFrame, side: "acting" | "opposing"): void {
+    const riders = cf.aimRiders?.[side];
+    if (!riders || riders.length === 0) return;
+    const victim = side === "acting" ? "opposing" : "acting";
+    cf.aimRiders![side] = [];
+    for (const r of riders) {
+      if (r.barPress) cf.restrict[victim].press = true;
+      if (r.barAdditionalStrikes) {
+        cf.noAdditionalStrikes ??= { acting: false, opposing: false };
+        cf.noAdditionalStrikes[victim] = true;
+        // A strike already granted this round is taken away too — the card
+        // says they cannot USE any additional strikes, not that they
+        // cannot be granted one.
+        cf.additionalStrikes[victim] = 0;
+      }
+      if (r.strengthPenalty) {
+        cf.strengthBonus[victim] -= r.strengthPenalty;
+      }
+      if (r.moveDisciplines) {
+        cf.moveDisciplines ??= { acting: null, opposing: null };
+        cf.moveDisciplines[victim] = [...r.moveDisciplines];
+      }
+      // "You may set the range for the NEXT round" — earned here, asked at
+      // the round boundary, because the press step has not run yet and
+      // there may be no next round to set a range for.
+      if (r.setRangeNextRound) {
+        (cf.pendingSetRange ??= []).push({
+          seat: r.seat,
+          cardName: r.cardName,
+          cardId: r.cardId,
+        });
+      }
+      // "You may destroy a weapon he or she has" is answered now: raised
+      // here it pushes a choice frame immediately — `deferChoices` is only
+      // set while an ACTION resolves — so the weapon is gone before the
+      // round can offer another strike with it.
+      if (r.destroyWeapon) {
+        const target = findMinion(this.state, side === "acting" ? cf.opposing : cf.acting);
+        if (target?.attached.some((p) => p.tags.includes("weapon"))) {
+          this.raiseChoice({
+            seat: r.seat,
+            cardName: r.cardName,
+            cardId: r.cardId,
+            key: AIM_BURN_WEAPON,
+            params: { victim: target.id },
+            optional: true,
+          });
+        }
+      }
+    }
   }
 
   grantContinueOnlyPress(minion: MinionId, count: number): void {
@@ -4135,6 +4461,7 @@ export class VtesEngine implements EngineOps {
       seat,
       target,
       directed,
+      cardName: entry.card.name,
       ...(targetMinion !== null ? { targetMinion } : {}),
     });
     const frame: ActionFrame = {
@@ -4566,8 +4893,13 @@ export class VtesEngine implements EngineOps {
       dodge: false,
       aggravated: strike.aggravated ?? false,
       stealBlood: 0,
+      weaponCard: cardId,
       ...(strike.depletes ? { depletesCard: cardId } : {}),
     };
+    // COUNTED AT DECLARATION, which is what "the first time the gun is
+    // used in a given combat" means for Glaser Rounds ([RTR 19941109]).
+    // The ammo window opens after this, so the first use already reads 1.
+    cf.gunUses[cardId] = (cf.gunUses[cardId] ?? 0) + 1;
     this.emit({ type: "StrikeChosen", minion, strike: strike.name });
   }
 
@@ -4983,8 +5315,8 @@ export class VtesEngine implements EngineOps {
    *  passes automatically" (Día de los Muertos) — arms the seat; the
    *  referendum push consumes it, and TurnBegan clears an unused one.
    *  docs/politics-locations-design.md §4 */
-  armAutoPassReferendum(seat: SeatId): void {
-    getSeat(this.state, seat).autoPassReferendum = true;
+  armAutoPassReferendum(seat: SeatId, cond: { sect?: Sect; thisTurnOnly?: boolean } = {}): void {
+    getSeat(this.state, seat).autoPassReferendum = { ...cond };
   }
 
   grantStealthCharges(seat: SeatId, count: number): void {
@@ -6360,8 +6692,12 @@ export class VtesEngine implements EngineOps {
       // so a second referendum the same turn polls normally.
       const callerSeat = getSeat(this.state, af.actingSeat);
       const caller = findMinion(this.state, af.acting);
-      if (callerSeat.autoPassReferendum && caller?.sect === "sabbat") {
-        callerSeat.autoPassReferendum = false;
+      const grant = callerSeat.autoPassReferendum;
+      // The granting CARD's condition rides on the grant; the engine only
+      // asks whether it is met. Día de los Muertos names a sect, the two
+      // wave-21 cards do not.
+      if (grant && (grant.sect === undefined || caller?.sect === grant.sect)) {
+        delete callerSeat.autoPassReferendum;
         refFrame.autoPass = true;
       }
       this.state.frames.push(refFrame);
@@ -7124,13 +7460,16 @@ export class VtesEngine implements EngineOps {
     switch (cf.step) {
       case "beforeRange":
       case "beforeStrikes":
+      case "beforeResolution":
       case "endOfRound": {
         const window: WindowId =
           cf.step === "beforeRange"
             ? "combat.beforeRange"
             : cf.step === "beforeStrikes"
               ? "combat.beforeStrikes"
-              : "combat.endOfRound";
+              : cf.step === "beforeResolution"
+                ? "combat.beforeResolution"
+                : "combat.endOfRound";
         const seat = cycleSeat(cf.cycle);
         return this.dp(seat, window, [
           passOption(),
@@ -7146,7 +7485,15 @@ export class VtesEngine implements EngineOps {
         const seat = cf.awaiting === "acting" ? cf.actingSeat : cf.opposingSeat;
         const label = cf.step === "range" ? "No maneuver" : "No press";
         const options: LegalOption[] = [passOption(label)];
-        if (cf.step === "range" && !cf.restrict[cf.awaiting].maneuver) {
+        // "…may use maneuvers or presses ONLY IF THEY REQUIRE Obfuscate,
+        // Blood Sorcery or Flight this action" (Target Leg). A CREDIT —
+        // a rush rider's maneuver, a weapon's, a press from a card in
+        // play — requires no Discipline at all, so none of them survive
+        // this: the whole of `abilityOptionsFor` goes with the credits
+        // below. Card plays are filtered by the mode's own Discipline,
+        // where the compiler can see it. docs/aim-design.md §5
+        const gated = (cf.moveDisciplines?.[cf.awaiting] ?? null) !== null;
+        if (!gated && cf.step === "range" && !cf.restrict[cf.awaiting].maneuver) {
           // "1 optional maneuver during that combat" (rush riders), or a
           // close-only credit for this round (Angel's Gift), which is
           // worth nothing once the range is already close.
@@ -7164,6 +7511,7 @@ export class VtesEngine implements EngineOps {
         // the two options below (docs/weapon-riders-design.md §4).
         const continueOnly = cf.pressesContinueOnly?.[cf.awaiting] ?? 0;
         if (
+          !gated &&
           cf.step === "press" &&
           !cf.restrict[cf.awaiting].press &&
           cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly > 0
@@ -7187,7 +7535,7 @@ export class VtesEngine implements EngineOps {
           }
         }
         options.push(...this.handlerOptions(seat, window));
-        options.push(...this.abilityOptionsFor(seat, window));
+        if (!gated) options.push(...this.abilityOptionsFor(seat, window));
         return this.dp(seat, window, options);
       }
       case "chooseStrike": {
@@ -7953,6 +8301,7 @@ export class VtesEngine implements EngineOps {
     switch (cf.step) {
       case "beforeRange":
       case "beforeStrikes":
+      case "beforeResolution":
       case "endOfRound":
         cyclePass(cf.cycle);
         return;
@@ -8035,8 +8384,15 @@ export class VtesEngine implements EngineOps {
     // damage (which would get its own prevention window).
     // docs/round-end-design.md §3
     let amount = pd.amount;
-    if (pd.source !== null && amount > 0 && cf.aimBonus) {
-      amount += cf.aimBonus[pd.source === cf.acting ? "acting" : "opposing"];
+    if (pd.source !== null && amount > 0 && cf.aimRiders) {
+      const striker = pd.source === cf.acting ? "acting" : "opposing";
+      const struck = striker === "acting" ? cf.opposing : cf.acting;
+      // "…on the OPPOSING MINION": a strike that lands on a retainer or on
+      // a bystander is not what the card is waiting for.
+      if (pd.minion === struck) {
+        for (const r of cf.aimRiders[striker]) amount += r.damage ?? 0;
+        this.fireAimRiders(cf, striker);
+      }
     }
     // "Inflicts +N damage with RANGED strikes" (Noluthando). A property of
     // the STRIKER, added at this one chokepoint so it reaches the damage
@@ -8657,7 +9013,14 @@ export class VtesEngine implements EngineOps {
       (handler.costTypes?.(option.mode, option.params["variant"]) ?? []).some((t) =>
         afForDraw.delayReplaceTypes.includes(t),
       );
-    if (handler.delayedReplace === "unlock") {
+    const cfForDraw = this.combatFrame();
+    if (handler.delayedReplace === "afterCombat" && cfForDraw) {
+      // "Do not replace until AFTER COMBAT" (Dodge, Fake Out, Boxed In).
+      // Held on the combat frame, not the action's, because combat ends
+      // first — and if there is no combat at all the card replaces
+      // normally, since the clause has nothing to wait for.
+      (cfForDraw.drawAfterCombat ??= []).push(seat.id);
+    } else if (handler.delayedReplace === "unlock") {
       seat.delayedDraws += 1;
     } else if (handler.delayedReplace === "discard") {
       // "Do not replace until your next DISCARD phase" (Mirror Walk).
@@ -8844,6 +9207,26 @@ export class VtesEngine implements EngineOps {
         params: { card: c.id },
       }));
     }
+    if (frame.key === AIM_SET_RANGE) {
+      return (["close", "long"] as const).map((r) => ({
+        id: `choice:${frame.cardName}:${frame.cardId}:${AIM_SET_RANGE}:${r}`,
+        kind: "answerChoice" as const,
+        label: `Set the range for this round: ${r}`,
+        params: { range: r },
+      }));
+    }
+    if (frame.key === AIM_BURN_WEAPON) {
+      const victim = findMinion(this.state, frame.params["victim"] ?? "");
+      return (victim?.attached ?? [])
+        .filter((p) => p.tags.includes("weapon"))
+        .map((p) => ({
+          id: `choice:${frame.cardName}:${frame.cardId}:${AIM_BURN_WEAPON}:${p.card.id}`,
+          kind: "answerChoice" as const,
+          label: `Destroy ${p.card.name}`,
+          params: { card: p.card.id },
+          cardName: p.card.name,
+        }));
+    }
     if (frame.key === CONTEST) {
       const what = frame.params["what"];
       const id = frame.params["id"] ?? "";
@@ -8987,6 +9370,25 @@ export class VtesEngine implements EngineOps {
       // Still over? Ask again. The stack is clean: `choose()` pops before
       // calling this, for exactly this loop.
       this.reconcileHandSizeDown(frame.seat, frame.cardName, frame.cardId);
+      return;
+    }
+    if (frame.key === AIM_SET_RANGE) {
+      const cf = this.combatFrame();
+      const range = option.params["range"];
+      if (cf && (range === "close" || range === "long")) {
+        cf.range = range;
+        // "Skip the Determine Range step for that round" [RTR 19970630] —
+        // and with it, "no other effect can be used to reset the range
+        // that round", since the step is where they would be played.
+        if (cf.step === "beforeRange") cf.step = "beforeStrikes";
+      }
+      return;
+    }
+    if (frame.key === AIM_BURN_WEAPON) {
+      const card = option.params["card"];
+      // The weapon can have gone in the meantime (the same strike burned
+      // it, its bearer left play) — a derived read must be total.
+      if (card && this.findEntry(card)) this.burnPermanent(card);
       return;
     }
     if (frame.key === CONTEST) {

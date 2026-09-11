@@ -8,6 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import registry from "../../src/cards/registry.json";
 import type { GameState, MinionState } from "../../src/engine/index.ts";
 import { capacityOf, disciplinesOf, VtesEngine } from "../../src/engine/index.ts";
 import { makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
@@ -154,7 +155,7 @@ describe("Discipline master cards", () => {
     expect(find(state, "V1").blood).toBe(5);
   });
 
-  it("covers all six Disciplines", () => {
+  it("covers all eleven Disciplines", () => {
     for (const [name, code] of [
       ["Celerity", "cel"],
       ["Dominate", "dom"],
@@ -162,11 +163,47 @@ describe("Discipline master cards", () => {
       ["Potence", "pot"],
       ["Protean", "pro"],
       ["Oblivion", "obl"],
+      ["Animalism", "ani"],
+      ["Auspex", "aus"],
+      ["Fortitude", "for"],
+      ["Presence", "pre"],
+      ["Thaumaturgy", "tha"],
     ] as const) {
       const state = game(name);
       const engine = new VtesEngine(state, testRegistry);
       playMaster(engine, `play:${name}`);
       expect(disciplinesOf(find(state, "V1"))[code], name).toBe("basic");
     }
+  });
+
+  /**
+   * §0, pinned as a REASON rather than as a number.
+   *
+   * Which Discipline masters belong in the pool is not a preference: a
+   * card granting a Discipline that no card in the pool requires is whole
+   * and INERT, which is the Tradition Upheld shape. So the set of
+   * Discipline masters must be exactly the set of Disciplines the library
+   * asks for — and when the library widens into a clan whose Discipline
+   * nothing yet requires, this fails and names the card to add.
+   * docs/discipline-masters-design.md
+   */
+  it("§0: exactly the Disciplines the pool actually requires", () => {
+    // LIBRARY cards only. A crypt card's Disciplines are levels it HAS,
+    // not a requirement it makes — the distinction the clan-vocabulary
+    // test had to learn the hard way.
+    const entries = (Object.values(registry.entries) as Array<{
+      supported: boolean;
+      card: { kind: string; disciplines?: string[]; cardText: string; name: string };
+    }>).filter((e) => e.supported && e.card.kind === "library");
+    const required = new Set<string>();
+    for (const e of entries) {
+      for (const d of e.card.disciplines ?? []) required.add(d.toLowerCase());
+    }
+    const granted = new Set<string>();
+    for (const e of entries) {
+      const m = /\+?1 level of [^[]*\[([a-z]+)\]/.exec(e.card.cardText);
+      if (/^(Master: )?Discipline\./.test(e.card.cardText) && m) granted.add(m[1]!);
+    }
+    expect([...granted].sort()).toEqual([...required].sort());
   });
 });

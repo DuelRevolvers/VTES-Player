@@ -23,7 +23,7 @@ import type {
 import type { DecisionPoint, LegalOption } from "../engine/index.ts";
 import { isFaceDown } from "../engine/index.ts";
 import { currentIntercept, currentStealth, predatorOf, preyOf } from "../engine/index.ts";
-import { cardText, imageFor } from "./cardinfo.ts";
+import { cardNamePattern, cardText, imageFor } from "./cardinfo.ts";
 import { chatLines, MAX_CHAT_TEXT } from "./chat.ts";
 import { minionName, narrate, owned } from "./narrate.ts";
 import type { RuleSection } from "./rules.ts";
@@ -308,6 +308,53 @@ function permanentTile(p: PermanentInPlay, ctx: TableCtx | null): string {
   </div>`;
 }
 
+/**
+ * The seats in TABLE ORDER STARTING FROM YOU — you, your prey, their prey,
+ * … round to your predator.
+ *
+ * The array order is the table order already (prey is the next seat), so
+ * this is a rotation and nothing more. What it fixes is that the mats used
+ * to be drawn in raw array order, which put your prey and your predator
+ * wherever the deal happened to leave them: you had to read the "prey ·
+ * predator" line on each mat to work out which way round the table went.
+ * Rotated, the direction of play is the direction you read in, and your
+ * own mat is always first.
+ *
+ * A spectator has no seat, so they get the array as dealt.
+ */
+function seatsAroundTable(state: GameState, localSeat: string | null): Array<SeatState | null> {
+  const at = localSeat === null ? -1 : state.seats.findIndex((s) => s.id === localSeat);
+  const order =
+    at < 0 ? state.seats : [...state.seats.slice(at), ...state.seats.slice(0, at)];
+  const cols = seatColumns(order.length);
+  const rows = Math.ceil(order.length / cols);
+  // One row or one column IS a ring already — there is no second axis to
+  // go round.
+  if (rows < 2 || cols < 2) return order;
+
+  // The grid cells, walked CLOCKWISE round the perimeter from the top
+  // left: across the top, down the right, back along the bottom, up the
+  // left. Row-major placement would instead read left-to-right on BOTH
+  // rows, which is why a four-seat table put the predator diagonally
+  // opposite and the seat below you was your prey's prey (owner report).
+  const cells: Array<[number, number]> = [];
+  for (let c = 0; c < cols; c++) cells.push([0, c]);
+  for (let r = 1; r < rows; r++) cells.push([r, cols - 1]);
+  for (let c = cols - 2; c >= 0; c--) cells.push([rows - 1, c]);
+  for (let r = rows - 2; r >= 1; r--) cells.push([r, 0]);
+
+  // Placed into the grid, then read back row-major, which is the order a
+  // CSS grid fills from. HOLES ARE KEPT as nulls: dropping them would let
+  // the next mat slide up into the gap and undo the placement — which is
+  // the whole reason this returns a sparse array.
+  const grid: Array<SeatState | null> = new Array(rows * cols).fill(null);
+  order.forEach((s, i) => {
+    const cell = cells[i];
+    if (cell) grid[cell[0] * cols + cell[1]] = s;
+  });
+  return grid;
+}
+
 /** One player mat, with every zone the physical table has (design §4). */
 function seatMat(
   state: GameState,
@@ -315,6 +362,8 @@ function seatMat(
   dp: DecisionPoint | null,
   face: SeatFace | undefined,
   ctx: TableCtx | null,
+  /** This viewer's own seat — the only one whose decks open. */
+  localSeat: string | null,
 ): string {
   const ready = seat.minions.filter((m) => !m.inTorpor);
   const torpor = seat.minions.filter((m) => m.inTorpor);
@@ -384,8 +433,20 @@ function seatMat(
       )}
 
       <footer class="piles">
-        <span class="pile crypt" title="crypt draw pile">CRYPT ${seat.crypt.length}</span>
-        <span class="pile library" title="library draw pile">LIBRARY ${seat.library.length}</span>
+        ${
+          // YOUR OWN decks open; nobody else's. p. 14 keeps a library face
+          // down even to its owner, and this does not break that: the list
+          // is sorted ALPHABETICALLY, so it shows composition and never
+          // order — the same line the AI is held to
+          // ("knows its own deck: composition, never order").
+          localSeat === seat.id
+            ? `<button class="pile crypt opens" data-deck="${esc(seat.id)}:crypt"
+                       title="your crypt, alphabetically">CRYPT ${seat.crypt.length}</button>
+               <button class="pile library opens" data-deck="${esc(seat.id)}:library"
+                       title="your library, alphabetically">LIBRARY ${seat.library.length}</button>`
+            : `<span class="pile crypt" title="crypt draw pile">CRYPT ${seat.crypt.length}</span>
+               <span class="pile library" title="library draw pile">LIBRARY ${seat.library.length}</span>`
+        }
         <span class="pile hand" title="cards in hand">HAND ${seat.hand.length}</span>
         ${
           // The ash heap "can be examined by any Methuselah at any time"
@@ -564,7 +625,27 @@ function eventLine(ev: GameEvent, state: GameState, raw: boolean): string {
   const line = narrate(ev, state);
   if (!line) return "";
   const tag = raw ? ` <span class="evtype">${esc(ev.type)}</span>` : "";
-  return `<div class="ev ${line.weight}">${esc(line.text)}${tag}</div>`;
+  return `<div class="ev ${line.weight}">${linkifyCards(line.text)}${tag}</div>`;
+}
+
+/**
+ * Card names in a log line become HOVER TARGETS for the magnifier.
+ *
+ * The log is where you read what happened, and "what was that card?" is
+ * the question it raises most — but the scan is on the table, or already
+ * in an ash heap, or was never yours to see. So the names carry
+ * `data-zoom` exactly as a scan does, and one handler serves both.
+ *
+ * ESCAPING FIRST, then matching: the pattern is built from card names,
+ * which contain apostrophes and accents but no HTML, so a match inside
+ * escaped text is still a card name and no tag can be forged by one.
+ */
+function linkifyCards(text: string): string {
+  return esc(text).replace(cardNamePattern(), (name) => {
+    const src = imageFor(name);
+    if (!src) return name;
+    return `<span class="cardref" data-zoom="${esc(src)}" data-name="${esc(name)}">${name}</span>`;
+  });
 }
 
 /** Options grouped by kind so a twenty-option minion phase stays readable. */
@@ -884,6 +965,64 @@ function ashPanel(state: GameState, seatId: string | null): string {
                 .map(
                   (c) => `<div class="gridcard">${cardImage(c.name, "small")}
                     <span class="gcname">${esc(c.name)}</span></div>`,
+                )
+                .join("")}</div>`
+        }
+      </section>
+    </div>`;
+}
+
+/**
+ * YOUR OWN crypt or library, as a list — **alphabetical, with counts**.
+ *
+ * Alphabetical is not a presentation choice, it is the whole reason this
+ * is allowed to exist. p. 14 keeps the library face down even to its
+ * owner, so showing it in DECK ORDER would hand you your next draws. What
+ * a player legitimately knows is what they built: composition, never
+ * order. Sorting destroys the order and leaves exactly that — the same
+ * line the AI is held to (CLAUDE.md, "The AI knows its own deck").
+ *
+ * Counts rather than one row per copy, because "how many Villeins are
+ * left" is the question being asked.
+ */
+function deckPanel(state: GameState, open: string | null): string {
+  if (!open) return "";
+  const [seatId, which] = open.split(":");
+  const seat = state.seats.find((s) => s.id === seatId);
+  if (!seat || (which !== "crypt" && which !== "library")) return "";
+  // NOT `seat.library` — the piles are masked to face-down cards for
+  // everyone including their owner (p. 14), so reading them showed one
+  // row of nothing. `ownPiles` is the redaction's own answer to "what is
+  // in there", sorted there so no order reaches this client.
+  const names = (which === "crypt" ? seat.ownPiles?.crypt : seat.ownPiles?.library) ?? [];
+  const cards = which === "crypt" ? seat.crypt : seat.library;
+  const counts = new Map<string, number>();
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1);
+  const rows = [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  return `
+    <div class="scrim" id="deck-scrim"></div>
+    <div class="settings ashheap" id="deckview" role="dialog" aria-label="Your deck">
+      <header>
+        <h3>Your ${which} — ${cards.length} card${cards.length === 1 ? "" : "s"}</h3>
+        <button id="deck-close" title="Close">✕</button>
+      </header>
+      <section>
+        <p class="setnote">
+          What is still in the pile, <b>alphabetically</b> — never in deck
+          order. A library stays face down even to its owner (p. 16), so
+          this shows you what you built and not what you are about to draw.
+        </p>
+        ${
+          rows.length === 0
+            ? `<p class="dim">Empty.</p>`
+            : `<div class="decklist">${rows
+                .map(
+                  ([name, n]) =>
+                    `<div class="deckrow">
+                       <span class="dqty">${n}×</span>
+                       <span class="cardref" data-zoom="${esc(imageFor(name) ?? "")}"
+                             data-name="${esc(name)}">${esc(name)}</span>
+                     </div>`,
                 )
                 .join("")}</div>`
         }
@@ -1281,6 +1420,9 @@ export interface RenderInput {
   localSeat: string | null;
   /** Whose ash heap is open, if any. View state — the zone is public. */
   ashOpen: string | null;
+  /** "<seat>:crypt" or "<seat>:library" while your own deck list is open.
+   *  Optional so the existing render tests keep their fixtures. */
+  deckOpen?: string | null;
   /** Whether to offer Leave — false when there is nowhere to go back to. */
   canLeave: boolean;
   /** Whether to show the table chat — false when there is nobody to talk to
@@ -1411,8 +1553,12 @@ export function render(input: RenderInput): string {
       <div class="leftcol">
         <div class="main">
           <div class="table" id="table" style="--seat-cols:${seatColumns(state.seats.length)}">
-            ${state.seats
-              .map((s) => seatMat(state, s, dp, input.seatFaces[s.id], ctx))
+            ${seatsAroundTable(state, input.localSeat)
+              .map((s) =>
+                s === null
+                  ? `<div class="matgap"></div>`
+                  : seatMat(state, s, dp, input.seatFaces[s.id], ctx, input.localSeat),
+              )
               .join("")}
           </div>
         </div>
@@ -1447,6 +1593,7 @@ export function render(input: RenderInput): string {
     ${settingsPanel(input)}
     ${helpPanel(input)}
     ${ashPanel(state, input.ashOpen)}
+    ${deckPanel(state, input.deckOpen ?? null)}
     <div id="zoom" class="zoom" hidden style="--cardtext:${input.cardTextPx}px">
       <!-- The card's name, which FADES (owner request): it is what you
            need in the first second of a hover and clutter after that. The

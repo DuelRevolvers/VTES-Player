@@ -110,6 +110,14 @@ not card types and not Disciplines. `CardSpec.keywords` →
 `CardHandler.cardKeywords` → **`CardPlayFrame.keywords`**, the same
 treatment `isMaster` / `isCombat` / `isStrike` get.
 
+> **Superseded 2026-09-10 (wave 16).** Both cards named below shipped
+> when the library was completed, so the filter has enumerated them for
+> some time; `partial-support.md` records that closeout and
+> `weapon-riders.test.ts` asserts it. The pool now also has a **third**
+> keyword — "Ammo.", on the five cards of `docs/ammo-design.md` — which
+> the Sword does *not* filter on, correctly: it names grapple and aim.
+> The paragraph below is kept as the reasoning at the time.
+
 **The V5 pool contains exactly two keyword cards and BOTH ARE
 UNSUPPORTED**: Immortal Grapple (100959, "Grapple.") and Target Vitals
 (101942, "Aim."). So this filter is written, correct, and **enumerates

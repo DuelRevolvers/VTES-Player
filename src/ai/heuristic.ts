@@ -774,6 +774,32 @@ export class HeuristicAgent implements Agent {
     const payer = o.minion === null ? null : findMinion(view, o.minion)?.m;
     if (payer && cost.blood > 0 && payer.blood - cost.blood <= 0) return w.selfOustGuard;
 
+    // DO NOT GIVE CARDS AWAY. Several cards read "put this card on a
+    // vampire" and enumerate EVERY seat's minions, because the card says
+    // "a vampire" and the rules mean it — Vessel is the one that got
+    // played on a prey's vampire in a real game (owner report), handing
+    // them a blood engine for 1 pool.
+    //
+    // The test is what the play DOES, not which card it is: a permanent
+    // landing on somebody else's minion is fine when it is hostile
+    // (a corruption counter, a lock, a burn) and is a gift otherwise. So
+    // an option that targets a minion this seat does not control has to
+    // carry at least one effect that hurts, or it is not considered.
+    const onTarget = o.params["target"];
+    if (onTarget) {
+      const holder = findMinion(view, onTarget);
+      if (holder && holder.seat !== me) {
+        const hostile = (o.effects ?? []).some(
+          (e) =>
+            e.tag === "deny" ||
+            e.tag === "damage" ||
+            e.tag === "poolDrain" ||
+            e.tag === "steal",
+        );
+        if (!hostile) return w.selfOustGuard;
+      }
+    }
+
     let score = w.playCard + cost.pool * w.poolCost - cost.blood * 0.5;
     // What the card actually does. Before this, everything a card did was
     // invisible here and only its price was not — so the policy reliably

@@ -1094,6 +1094,22 @@ export interface SeatState {
    * docs/ai-v2-design.md §6
    */
   deckList?: { crypt: string[]; library: string[] };
+  /**
+   * What is STILL IN this seat's own two piles, as sorted names.
+   *
+   * Added by `redactFor` for the seat itself and for nobody else; never
+   * present in the real game state, and never written by the engine.
+   *
+   * SORTED IN THE REDACTION, deliberately. The piles themselves are face
+   * down to everyone including their owner (p. 14), and what a player
+   * legitimately knows is composition and never order — so the sort is
+   * not presentation, it is the redaction: sorting here means the real
+   * order never crosses the wire to a guest's client at all, where
+   * sorting in the UI would ship it and merely decline to draw it.
+   *
+   * `deckList` is what they BROUGHT; this is what is left.
+   */
+  ownPiles?: { crypt: string[]; library: string[] };
   /** Play-cost modifiers this Methuselah is holding that belong to no
    *  frame and no card in play — "burn this retainer to reduce the cost
    *  of the next \<card\> you play" (Szlachta Assistant). Optional, so
@@ -1107,12 +1123,27 @@ export interface SeatState {
    *  action it is the same rule, and it serialises and replays.
    *  docs/other-vampire-modifiers-design.md */
   stealthCharges?: number;
-  /** "The FIRST referendum a Sabbat vampire you control calls on this
-   *  turn passes automatically" (Día de los Muertos) — cleared on
-   *  `TurnBegan` beside `stealthCharges`, and consumed by the first
-   *  qualifying referendum push, so a second one polls normally.
-   *  docs/politics-locations-design.md §4 */
-  autoPassReferendum?: boolean;
+  /**
+   * "The next referendum a vampire you control calls passes
+   * automatically" — armed by a card, consumed by the first qualifying
+   * referendum push, so a second one polls normally.
+   *
+   * The RECORD carries the granting card's conditions, because they
+   * differ per card and the engine must not hold any of them: Día de los
+   * Muertos says "a SABBAT vampire … on this turn"
+   * (`{ sect: "sabbat", thisTurnOnly: true }`), Cryptic Rider says "this
+   * turn" with no sect, Malkavian Rider Clause says neither and therefore
+   * waits. It was a plain boolean with the Sabbat test written into the
+   * consumption site, which made the card's rule the mechanism's.
+   * docs/referendum-riders-design.md §3
+   */
+  autoPassReferendum?: {
+    /** The caller's sect must match, when the granting card names one. */
+    sect?: Sect;
+    /** "…on this turn" — cleared on `TurnBegan` beside `stealthCharges`.
+     *  Absent means the grant waits however long it takes. */
+    thisTurnOnly?: boolean;
+  };
   /** Card names this seat has played at superior this turn, for "only one
    *  <card> can be played at superior each turn" (Veil the Legions). */
   superiorPlaysThisTurn?: string[];
@@ -1133,7 +1164,11 @@ export type GameEvent =
    *  than being read off the frame, because the frame is not pushed until
    *  after this is emitted — which is exactly the trap Evan Klein's
    *  announce-time hook would have fallen into. docs/crypt-wave-7.md §1 */
-  | { type: "ActionAnnounced"; actionId: ActionId; actionKind: ActionKind; acting: MinionId; seat: SeatId; target: SeatId | null; directed: boolean; targetMinion?: MinionId | null; cardTypes?: PlayCostCardType[]; cardTags?: string[] }
+  /** `cardName` is the CARD THE ACTION IS, when it is one. Without it a
+   *  card-driven action read as "V1 takes an action" and the log never
+   *  said which — the commonest line in the game, saying the least
+   *  (owner report). */
+  | { type: "ActionAnnounced"; actionId: ActionId; actionKind: ActionKind; acting: MinionId; seat: SeatId; target: SeatId | null; directed: boolean; targetMinion?: MinionId | null; cardName?: string; cardTypes?: PlayCostCardType[]; cardTags?: string[] }
   | { type: "CardPlayed"; cardId: CardInstanceId; name: string; seat: SeatId; minion: MinionId | null; mode: DisciplineLevel | null }
   | { type: "CardResolved"; cardId: CardInstanceId; name: string; seat?: SeatId }
   | { type: "CardCanceled"; cardId: CardInstanceId; name: string }
@@ -1194,7 +1229,11 @@ export type GameEvent =
   | { type: "MinionLocked"; minion: MinionId }
   | { type: "MinionUnlocked"; minion: MinionId }
   | { type: "MinionWoke"; minion: MinionId }
-  | { type: "TitleGranted"; minion: MinionId; title: VampireTitle }
+  /** `city` is the CITY THE TITLE IS TO ("Prince of Chicago"), and it is
+   *  what makes the title contestable: `titleContestKey` keys prince,
+   *  baron and archbishop on the city alone, so a granted title without
+   *  one answers null and contests with nothing (p. 39, p. 41). */
+  | { type: "TitleGranted"; minion: MinionId; title: VampireTitle; city?: string }
   /** The card that carried a title left play (docs/granted-rush-design.md
    *  §7) — a title held by a card does not outlive it. */
   | { type: "TitleLost"; minion: MinionId }
@@ -1877,12 +1916,28 @@ export interface BlockAttemptFrame {
   cancelled?: boolean;
 }
 
-/** The seven combat round steps (rulebook p. 29) — §5. */
+/**
+ * The seven combat round steps (rulebook p. 29) — §5 — plus one window
+ * that lives INSIDE the strike step.
+ *
+ * `beforeResolution` is not an eighth rulebook step. p. 30 makes strike
+ * declaration ordered and public (acting minion first, then the opponent)
+ * and resolution simultaneous and separate — the rulebook itself talks
+ * about "another choose strike step and resolve strike step" for
+ * additional strikes. The moment between the two is where a whole family
+ * of cards lives: "only usable before resolution of a gun's strike",
+ * which [RTR 19990105] defines as "after strikes have been declared but
+ * before they resolve".
+ *
+ * It opens ONLY when some seat can actually use it — see
+ * `openBeforeResolution`. docs/ammo-design.md §2
+ */
 export type CombatStep =
   | "beforeRange"
   | "range"
   | "beforeStrikes"
   | "chooseStrike"
+  | "beforeResolution"
   | "damageResolution"
   | "press"
   | "endOfRound";
@@ -2100,6 +2155,17 @@ export interface Strike {
    *  Fortitude [for]" — carried onto the PendingDamage this strike
    *  inflicts. docs/discipline-filtered-design.md §3 */
   noPreventBy?: string[];
+  /**
+   * The weapon card this strike came from, when it came from one.
+   *
+   * `name` was enough while nothing needed to tell two copies apart.
+   * Ammo does: it goes on ONE gun ("no more than one ammo card can be
+   * used on a gun each combat"), and two minions in the same combat can
+   * each carry a .44 Magnum. `isGunStrike` searched by name and took the
+   * first match, which is the same bug waiting for a second copy.
+   * docs/ammo-design.md §3
+   */
+  weaponCard?: CardInstanceId;
 }
 
 export const HAND_STRIKE: Strike = {
@@ -2114,6 +2180,82 @@ export const HAND_STRIKE: Strike = {
   aggravated: false,
   stealBlood: 0,
 };
+
+/**
+ * What one ammo card does to the gun it was loaded into
+ * (docs/ammo-design.md §4).
+ *
+ * Every field is "for the remainder of this combat", because that is what
+ * all five ammo cards say. Read at INFLICTION — the one chokepoint where
+ * a strike becomes pending damage — rather than stamped onto the Strike
+ * when the ammo is played: the strike for round 3 does not exist yet when
+ * the ammo is loaded in round 1, so stamping would mean writing the same
+ * rule at two sites and one of them would learn a case the other did not.
+ */
+/**
+ * The consequence half of an aim card, held until the strike it was
+ * played on actually inflicts damage. docs/aim-design.md §2
+ *
+ * Every field is one printed clause. They live on one record rather than
+ * one flag each because all five aim cards share the same trigger, and a
+ * trigger written five times is a trigger that will one day be written
+ * four times.
+ */
+export interface AimRider {
+  cardName: string;
+  cardId: CardInstanceId;
+  /** Who played it — the seat that answers any choice the rider raises. */
+  seat: SeatId;
+  /** "They take +N damage from this strike" (Target Vitals). */
+  damage?: number;
+  /** "…they cannot press this round" (Target Vitals, Target Head). */
+  barPress?: boolean;
+  /** "…cannot use any additional strikes … this round" (Target Head). */
+  barAdditionalStrikes?: boolean;
+  /** "…and you may set the range for the next round" (Target Head). */
+  setRangeNextRound?: boolean;
+  /** "…he or she gets -N strength this action" (Target Hand). */
+  strengthPenalty?: number;
+  /** "…and you may destroy a weapon he or she has" (Target Hand). */
+  destroyWeapon?: boolean;
+  /** "…may use maneuvers or presses only if they require …" (Target Leg). */
+  moveDisciplines?: string[];
+}
+
+export interface AmmoLoad {
+  /** The ammo card itself, for the log and for the one-per-gun rule. */
+  cardId: CardInstanceId;
+  name: string;
+  /**
+   * Added to the gun's damage, in the SAME properties as the base damage
+   * ("additional damage inherits all of the properties of the base
+   * damage", [TOM 19960225]). Manstopper +1, Glaser +2.
+   */
+  damage?: number;
+  /** Scattershot: "+2 damage at close range and -2 damage at long range".
+   *  Replaces `damage` when the range matches. */
+  damageByRange?: { close: number; long: number };
+  /**
+   * A SEPARATE aggravated component (Dragon's Breath Rounds).
+   *
+   * Not `damage` plus an aggravated flag: [LSJ 20030419-2] says it "does
+   * not make the gun base damage aggravated", so a 2R gun with Dragon's
+   * Breath inflicts 2 normal AND 2 aggravated — two pending damages,
+   * which `resolveStrikes` already sorts normal-before-aggravated (p. 34).
+   */
+  aggravatedDamage?: number;
+  /** Dragon's Breath: "burn the gun after strike resolution". Not burned
+   *  if combat ends before the strike resolves ([LSJ 19981006]), which
+   *  falls out of doing it at infliction. */
+  burnGunAfterStrike?: boolean;
+  /** Caseless Rounds: "once each round when the bearer strikes with this
+   *  gun, the bearer gets an optional additional strike (limited), only
+   *  usable to strike with this gun" — the AK-47 rider, from a card. */
+  additionalStrikeSelf?: boolean;
+  /** Caseless is "once each round"; this is the round it last fired in,
+   *  so a gun struck twice in one round grants one extra strike. */
+  additionalStrikeRound?: number;
+}
 
 export interface CombatFrame {
   kind: "combat";
@@ -2252,11 +2394,58 @@ export interface CombatFrame {
    *  superior). The boundary already forces close range; this skips the
    *  step a maneuver would otherwise reopen. */
   skipRangeNextRound?: boolean;
-  /** "If any damage from this strike is successfully inflicted, they take
-   *  +N damage FROM THIS STRIKE" (Target Vitals) — added at the damage
-   *  chokepoint only to an item that already has amount > 0, which is
-   *  what "successfully inflicted" means. docs/round-end-design.md §3 */
-  aimBonus?: { acting: number; opposing: number };
+  /**
+   * "THE STRIKE DOES +N DAMAGE" (Target Head) — added to the strike's own
+   * damage, which is NOT the same question as `aimBonus`.
+   *
+   * `aimBonus` is "if any damage is successfully inflicted, they take +N
+   * FROM THIS STRIKE": it rides an item that already survived prevention.
+   * This one is part of what the strike deals, so it is added where the
+   * ammo bonus is and prevention eats it like any other damage. Two
+   * fields because the cards ask two different questions; conflating them
+   * would make Target Head's bonus unpreventable.
+   * docs/aim-design.md §3
+   */
+  aimStrikeBonus?: { acting: number; opposing: number };
+  /**
+   * The deferred half of an aim card: "IF ANY DAMAGE FROM THIS STRIKE IS
+   * SUCCESSFULLY INFLICTED on the opposing minion, …".
+   *
+   * Keyed by the side that PLAYED the aim; fired at the damage chokepoint
+   * the first time that side's strike actually puts damage on the other
+   * combatant, and spent when it fires. [RTR 19960221]: an aim "can be
+   * played on a strike that does no damage, even a dodge or a combat
+   * ends, but has no effect in that case" — which is only true if the
+   * payload waits for the damage rather than applying at play time.
+   * docs/aim-design.md §2
+   */
+  aimRiders?: { acting: AimRider[]; opposing: AimRider[] };
+  /** "…cannot use any ADDITIONAL STRIKES or presses this round" (Target
+   *  Head). Keyed by the BARRED side, round-scoped. [LSJ 20011214-5]: the
+   *  minion cannot even play a card that provides an additional strike,
+   *  so this gates options as well as grants. */
+  noAdditionalStrikes?: { acting: boolean; opposing: boolean };
+  /**
+   * "…may use maneuvers or presses only if they REQUIRE Obfuscate, Blood
+   * Sorcery or Flight this action" (Target Leg). The allowed discipline
+   * abbreviations, keyed by the restricted side.
+   *
+   * ACTION-scoped, so unlike almost everything else on the frame it is
+   * NOT cleared at the round boundary — and the frame dies with the
+   * action, which is what makes that safe.
+   */
+  moveDisciplines?: { acting: string[] | null; opposing: string[] | null };
+  /**
+   * "…and you may SET THE RANGE for the next round" (Target Head), earned
+   * but not yet asked.
+   *
+   * The question cannot be asked when the rider fires: damage resolution
+   * comes BEFORE the press step, so at that moment nobody knows whether
+   * there is a next round to set the range for. It is asked at the round
+   * boundary instead, where `willContinue` is settled — and answering it
+   * skips that round's determine-range step [RTR 19970630].
+   */
+  pendingSetRange?: Array<{ seat: SeatId; cardName: string; cardId: CardInstanceId }>;
   /** "A minion can play only one AIM each strike" — a per-KEYWORD limit,
    *  where `combatLimit` counts by card name. Cleared whenever a strike
    *  slot is filled or a new sub-round begins. */
@@ -2342,6 +2531,32 @@ export interface CombatFrame {
    *  card-granted fixed-damage strike is not a weapon.
    *  docs/discipline-filtered-design.md §4 */
   weaponDamageNullified: { acting: boolean; opposing: boolean };
+  /**
+   * Ammo loaded into a gun, by the gun's card id.
+   *
+   * THE COMBAT FRAME IS THE RIGHT SCOPE, and it is the whole reason this
+   * needs no cleanup: every ammo card says "for the remainder of this
+   * combat" and "no more than one ammo card can be used on a gun each
+   * combat", so the record and both rules die with the frame. A flag that
+   * must be cleared when combat ends is one that will one day survive a
+   * combat ending — and combat ends four different ways.
+   *
+   * Keyed by CARD, not by minion or by side: the gun keeps its ammo if it
+   * changes hands mid-combat, and one minion carrying two guns loads them
+   * separately. docs/ammo-design.md §3
+   */
+  ammo: Record<CardInstanceId, AmmoLoad>;
+  /**
+   * How many times each gun has been STRUCK WITH this combat, by card id.
+   *
+   * Counted at declaration, which is what Glaser Rounds needs: "not
+   * usable the first time the gun is used in a given combat", and
+   * [RTR 19941109] — "must wait until the second time a given gun is used
+   * in a given combat to play it". The ammo window opens after the strike
+   * is declared, so at that moment this already counts the strike being
+   * asked about: the first use reads 1, and Glaser wants 2 or more.
+   */
+  gunUses: Record<CardInstanceId, number>;
   /** "Strike cards cost the acting minion +1 blood or life during the
    *  resulting combat" (Ensnare a Beast superior) — play-cost modifiers
    *  scoped to this combat. docs/play-cost-design.md §2 */
@@ -2350,6 +2565,18 @@ export interface CombatFrame {
    *  Form of Mist) — riders applied once the frame has POPPED, where
    *  `notifyCombatEnded` runs. docs/after-combat-ends-design.md §2 */
   afterCombatEnds: AfterCombatRider[];
+  /**
+   * Seats whose card replacement waits **"until after combat"** (Dodge,
+   * Fake Out, Boxed In).
+   *
+   * NOT the same as the action's `drawAfter`, and the difference is real:
+   * combat ends before the action it happened inside resolves — a blocked
+   * action still has its resolution ahead of it — so a combat card
+   * deferred to "after the action" would come back one step too late, and
+   * a reaction played in that window would see a hand short of a card.
+   * docs/basic-combat-design.md §2
+   */
+  drawAfterCombat?: SeatId[];
   /** "Prevent all damage from the opposing minion's strikes THIS ROUND"
    *  (Rolling with the Punches superior) — per side, reset each round,
    *  checked at the `pushPendingDamage` chokepoint (§4). */
@@ -2416,7 +2643,22 @@ export interface ReferendumFrame {
   voteModifiers?: Array<{ amount: number; exceptPath?: string }>;
   /** "…once results are tallied" (Scorn of Adonis) — effects that outlive
    *  the tally, applied after ReferendumResolved whatever the outcome. */
-  postTally?: Array<{ kind: "burnPoolVotedAgainst"; amount: number }>;
+  postTally?: Array<
+    | { kind: "burnPoolVotedAgainst"; amount: number }
+    /** "If the referendum FAILS, the Methuselah calling the referendum
+     *  burns 1 pool plus 1 additional pool for each vote difference"
+     *  (Elder Kindred Network) — the first rider that cares which way the
+     *  result went, and the first that reads `margin`. */
+    | { kind: "burnCallerOnFail"; base: number; perMargin: number }
+    /** "Any OTHER Methuselah who casts one or more votes or ballots in
+     *  favor of and does not cast votes or ballots against the
+     *  referendum gains 1 pool" (Bribes). `seat` is the player, who is
+     *  the "other" this is measured against. */
+    | { kind: "payVotedForOnly"; amount: number; seat: SeatId }
+    /** "If the referendum PASSES, the next referendum a vampire you
+     *  control calls passes automatically" (Malkavian Rider Clause). */
+    | { kind: "autoPassNextOnPass"; seat: SeatId; thisTurnOnly?: boolean }
+  >;
   /** Yoruba Shrine: the referendum resolves normally but as a FAILURE.
    *  Not the same as cancelling it (§3 of the design doc). */
   forcedFail?: boolean;

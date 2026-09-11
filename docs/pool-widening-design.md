@@ -1006,6 +1006,299 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 22 — the combat retainers (3 cards), 2026-09-11
+
+Library **579 → 582**. Vengeful Spirit, Zombie, Resplendent Protector.
+Full write-up: `docs/combat-retainers-design.md`.
+
+Three retainers whose whole content is what they do once a fight starts —
+and between them they cover every way a retainer can be involved in one:
+
+| shape | card | needed |
+|---|---|---|
+| hits each round | Vengeful Spirit | **nothing** — `combatRoundDamage` is six waves old |
+| prevents, and is NOT spent | Resplendent Protector | a per-COMBAT latch |
+| IS spent, for something outside the fight | Zombie | a granted action priced in the card granting it |
+
+Vengeful Spirit is in the wave BECAUSE it needed nothing: it is the
+control that says the other two are not more of the same.
+
+#### What the other two found
+
+`retainerAbilities.lockToPrevent` existed, but it is **paid for by
+locking the retainer**; Resplendent Protector's "prevent 1 damage each
+combat" is not paid for at all. A rate is not a cost, and reusing the
+lock would have made the card lock itself — losing the retainer's other
+work every time it prevented. `preventPerCombat` differs only in the
+latch (`usedThisCombat`), which is exactly what the card says.
+
+`grantedAction` had six arms and none could be **priced in the card
+offering the action**. Zombie's "burn this retainer to gain 2 blood" is
+not `addBlood` with a cost: after paying, the action's own source is
+gone. Hence `burnSelfForBlood`, which resolves blood first and burns
+second, and reads its target with `findMinion` because the employer can
+leave play between announcement and resolution.
+
+**Deferred:** Ghoul Retainer and Duma Rafiki (a retainer wielding a weapon
+outside the strike system, and a choice at strike resolution); Razor Bat,
+Elephant Guardian and Stone Dog, which are Gargoyle- and Laibon-gated and
+therefore **inert by §0**.
+
+### Wave 21 — referendum outcome riders (4 cards), 2026-09-11
+
+Library **575 → 579**. Elder Kindred Network, Bribes, Malkavian Rider
+Clause, Cryptic Rider. Full write-up: `docs/referendum-riders-design.md`.
+
+Four cards played while a referendum is live whose effect waits for the
+RESULT. `postTally` already carried a payload past the tally (Scorn of
+Adonis) — but its doc comment says "whatever the outcome", and that was
+the gap: **no rider could ask which way the vote went**, and none read
+`margin`, though the field had been on the frame since the margin wave.
+
+#### The engine gap: a card's rule was living in the engine
+
+Two of the four grant "the next referendum a vampire you control calls
+passes automatically". `SeatState.autoPassReferendum` existed for Día de
+los Muertos — as a BOOLEAN, with that card's condition written into the
+consumption site: `if (flag && caller?.sect === "sabbat")`. Día de los
+Muertos says "a SABBAT vampire"; the two new cards name no sect, so
+neither could ever have fired. The flag is now a record carrying the
+granting card's own conditions (`{ sect?, thisTurnOnly? }`), and the
+engine only asks whether they are met — which also let Malkavian Rider
+Clause keep the fact that it does NOT say "this turn", so its grant
+survives `TurnBegan`.
+
+A smaller trap: the polling-step branch of the compiler handles its own
+effects and returns, so Bribes' plain "gain 1 pool" sitting beside its
+rider was silently skipped. The rider worked; the card paid nobody. Only
+asserting the two halves separately made it visible.
+
+**Deferred:** Poison Pill (needs pool loss attributable to a referendum's
+own effect), Aura of Invincibility (a counter permanent), and **Political
+Backlash** — "only usable when a referendum FAILS", which has nowhere to
+be played because the after-resolution window opens only on a PASS. That
+gate is small; the branch behind it is caller-scoped and the card is a
+reaction, so it lands in reaction timing and wakes. A wave of its own.
+
+### Wave 20 — the basic combat cards (5 cards), 2026-09-10
+
+Library **570 → 575**. Dodge, Fake Out, Boxed In, Dead-End Alley, Open
+Grate. Full write-up: `docs/basic-combat-design.md`.
+
+Five cards whose whole text is one of the three things any minion may
+already do in combat — dodge, maneuver, press — with no Discipline, no
+cost and no rider. The effects are as old as the combat kernel; what
+makes them a family is **what a card with no requirement pays instead**.
+
+#### The engine gap: a deferral one window too late
+
+Three of the five print "**do not replace until after combat**", and
+`delayedReplace` had `unlock`, `afterAction` and `discard` but not this.
+
+`afterAction` would have compiled and looked right. It is wrong by
+exactly one window: **combat ends before the action it happened inside
+resolves** — a blocked action still has its resolution ahead of it — so a
+card deferred to "after the action" comes back one step late, and
+anything played in that window sees a hand a card short.
+
+So `drawAfterCombat` lives on the COMBAT frame and is flushed at the
+engine's single `CombatEnded` site: combat ends four different ways, and
+a deferral flushed at three of them is a card that never comes back.
+Outside combat the clause has nothing to wait for, so the card replaces
+normally.
+
+The other two carry a usage restriction instead of the deferral, which is
+the comparison worth having in one wave. Open Grate's "only usable to
+**end** combat" needed a new `press.endOnly` gate, and p. 32 makes it
+narrow: a press never ends combat directly, it can only cancel one that
+is standing. The three press cards partition that one step between them,
+so each one's absence is another's presence at the same moment — which is
+what the negative-space tests assert.
+
+### Wave 19 — the Crusades (12 cards), 2026-09-10
+
+Library **558 → 570**. The twelve Crusades whose whole text is the Praxis
+Seizure in the other sect. Full write-up: `docs/crusades-design.md`.
+
+**Expected to be pure data; wasn't.** §0 passed easily (48 crypt cards
+print a `Sabbat:` line, and sect is parsed off that text at import — note
+there is no `sect` field on a registry crypt entry, which is a trap for
+the obvious query). Everything else was built: `requiresSect`,
+`refPutInPlay`, the archbishop title at 2 votes.
+
+#### The engine gap: `TitleGranted` never recorded the city
+
+`titleContestKey` keys prince, baron and archbishop on the **city alone**
+— p. 39, "contested by another vampire who claims ANY title to the same
+city", with p. 41 ruling archbishop the same way. It reads
+`MinionState.titleCity`, and nothing that grants a title from a CARD ever
+wrote it: the field had exactly two writers, the crypt importer and test
+fixtures.
+
+So every Praxis Seizure prince since wave 13 keyed on `null` and
+contested with nothing. It looked right because wave 13 fixed the OTHER
+uniqueness — card-level `isUnique`, which makes two copies of *Praxis
+Seizure: Chicago* contest — and prince-against-prince was the only
+card-granted contest the pool could reach. An archbishop is a different
+card claiming the same city, which card-level uniqueness cannot see.
+
+`TitleGranted` gains an optional `city`; `refPutInPlay` carries
+`grantsTitleCity`. The city was already in the permanent's tag
+("Prince of Chicago"), where nothing that mattered could read it. The
+thirteen Praxis Seizures are fixed by the same line.
+
+**Eleven Crusades stayed out**: each adds a rider naming a clan or a
+vampire the pool lacks (Tzimisce, Lucita), which would be an inert clause.
+
+### Wave 18 — the Discipline masters (5 cards), 2026-09-10
+
+Library **553 → 558**. Animalism, Auspex, Fortitude, Presence,
+Thaumaturgy. Full write-up: `docs/discipline-masters-design.md`.
+
+**Twenty lines of data and no new primitive.** The factory has existed
+since `derived-traits-design.md`; the content of this wave is *which five*,
+and that turned out not to be a preference.
+
+A Discipline master granting a Discipline no card in the pool requires is
+**whole and inert** — the Tradition Upheld shape — so §0 decides the wave
+by a set difference over the registry: the supported library requires
+eleven Disciplines, six already had their master card, and these are the
+other five (each required by 45–79 cards in the pool). The nine remaining
+Discipline masters grant Disciplines nothing asks for and stay out until
+§7 opens the clans that use them, at which point they cost nothing.
+
+Worth noting the §0 question ran **backwards** here. Usually it asks "can
+the pool produce a target this card names?"; this asks "can the pool USE
+what this card gives?". Same rule, and the answer was a query rather than
+a judgement — which is why it became the wave's one new test, written as a
+**reason** (granted == required) rather than as a count.
+
+**This wave found no engine defect** — the first since wave 11 that did
+not, and said so rather than dressing something up. It did correct a false
+claim in `CLAUDE.md`: "zero melee weapons are in the pool", carried from
+wave 16 and repeated in wave 17, was never true (ten are, all tagged
+`melee`). It came from a bad registry query and was never re-derived.
+
+### Wave 17 — the aim cards (3 cards), 2026-09-10
+
+Library **550 → 553**. Target Hand, Target Head, Target Leg. Full
+write-up: `docs/aim-design.md`.
+
+The second wave into the **Combat** bucket, and the family wave 16 passed
+over — correctly, at the time: the four aim cards do share a wrapper and
+need four different payloads. What made them a wave rather than four
+builds is a trigger nobody had written down as shared. All four print
+**"if any damage from this strike is successfully inflicted on the
+opposing minion, …"**, and the engine had no way to hold a payload until
+that moment.
+
+#### The engine gap: a card already in the pool was not waiting
+
+`Target Vitals` (shipped in the weapon-riders wave, tested, passing)
+applied its "**they cannot press this round**" clause at PLAY time. The
+`if` governs both of its clauses, and [RTR 19960221] says an aim "can be
+played on a strike that does no damage, **even a dodge or a combat ends**,
+but has no effect in that case" — so a Target Vitals played on a strike
+the opponent dodged was still barring their press.
+
+`CombatFrame.aimRiders` holds the payload and fires it at the damage
+chokepoint, spent as it fires. Target Vitals moved onto it and got its
+timing back; the three new cards hang four more payloads off the same
+trigger.
+
+#### Two damage bonuses that are not the same bonus
+
+Target Head prints "**the strike does +2 damage**"; Target Vitals prints
+"they take **+2 from this strike**" if damage lands. They read alike and
+differ under prevention — against a 1-damage strike with 1 prevention,
+Target Vitals inflicts nothing and Target Head inflicts 2. Folding the
+first into the second would have made Target Head's bonus
+**unpreventable**, and no test that counts damage would have noticed.
+Hence `aimStrikeBonus` (inside `inflict`, where the ammo bonus lives)
+beside the rider's own.
+
+#### Restrictions are gates on OPTIONS
+
+[LSJ 20011214-5] on Target Head is unusually specific — the barred minion
+"cannot play a card that provides an additional strike, **even if just to
+benefit from another effect**" — so the bar drops the option as well as
+refusing the grant. Target Leg's "maneuvers or presses only if they
+require Obfuscate, Blood Sorcery or Flight" takes every CREDIT (a rush
+rider's maneuver, a weapon's, a press from a card in play: none requires
+a Discipline) and filters card plays on the mode's own Discipline.
+
+**Deferred: Target Retainer (101941)** — its other half is an ordinary
+rider, but retargeting a strike at a **retainer** means addressing a
+permanent from the damage path, which nothing does today.
+
+### Wave 16 — the ammo cards (5 cards), 2026-09-10
+
+Library **545 → 550**. Manstopper Rounds, Glaser Rounds, Scattershot,
+Dragon's Breath Rounds, Caseless Rounds. Full write-up:
+`docs/ammo-design.md`.
+
+**The first wave into the COMBAT bucket**, which was 58 cards and
+completely untouched. The family was picked over the Aim cards (Target
+Hand / Head / Leg / Retainer) on the wave test in CLAUDE.md: one new
+primitive should pay for the whole wave. Ammo does — the aim cards share
+a wrapper but need four different payloads behind it, which is four
+builds, not a wave.
+
+**§0 was checked before anything was written**: four guns are in the pool
+(.44 Magnum, AK-47, Assault Rifle, Sniper Rifle), so the family has real
+targets and none of the five is inert. There are **zero melee weapons**
+in the pool — worth knowing for a later wave.
+
+#### The engine gap: declaration and resolution were one step
+
+All five say "only usable before resolution of a gun's strike", and
+[RTR 19990105] defines that as *after strikes have been declared but
+before they resolve*. `settleCombat` ran `resolveStrikes` the instant both
+strikes were in, so that moment did not exist.
+
+The rulebook keeps the halves apart — strike declaration is ordered and
+public, resolution is simultaneous (p. 30) — so this is a new **window
+inside step 4**, `combat.beforeResolution`, not an eighth rulebook step.
+
+It **opens only when a seat can actually use it**, the same recorded
+deviation `combat.damageResolution` and `action.afterResolution` already
+carry. That was not an optimisation but a requirement: this window sits
+between every strike pair in every round of every combat, and cycling
+four seats through an empty question twice a round would have added
+decisions to the most-played part of the engine — and moved the trace of
+every existing combat test. No existing trace moved.
+
+#### A latent bug closed on the way
+
+`isGunStrike` searched the whole table for a weapon by NAME and took the
+first match — a wrong answer as soon as two minions in one combat carry
+a .44 Magnum, which nothing prevents. Ammo needed to name a specific gun
+anyway, so every weapon strike now records `Strike.weaponCard` and the
+name search is only a fallback. It had been harmless because its one
+caller set a cosmetic flag.
+
+#### A rules reading, from p. 33
+
+A dodge "cancels the effects of the opposing strike **on this minion**" —
+so the ammo effects split by whose side they act on. The damage bonus is
+cancelled by a dodge; **burning your own gun (Dragon's Breath) and
+granting yourself an extra strike (Caseless) are not**, and they moved
+out of `inflict` (which returns early on a dodge) into a pass over both
+declared strikes.
+
+#### What the existing tests caught
+
+Both immediately, and neither was a bug in a card:
+
+- `supported.test.ts` — Caseless Rounds costs **1 pool** and the spec
+  omitted it. The metadata cross-check exists for exactly this.
+- `render.test.ts` — `['ammo']` was missing from How to Play. A new
+  printed keyword in the pool is a word players will see on a card, and
+  the in-game rules now explain it beside Grapple, Aim and Boon.
+
+Fuzz green on the first run with all five dealt in — no latent bug came
+in with them, which after wave 15 is worth stating rather than assuming.
+
 ---
 
 ## §7 Phase 6 — the crypt abilities (1,104 cards)

@@ -245,6 +245,9 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 }
 .mat.deciding { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
 .mat.ousted { opacity: .45; }
+/* An empty cell in the clockwise ring (an odd seat count). It holds the
+   place so the mats after it stay where they were put. */
+.matgap { min-width: 0; }
 
 .mat header {
   display: flex; gap: 8px; align-items: center;
@@ -818,6 +821,40 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
    Same classes where the shape is the same (.playdot, .playmenu,
    .selected), a class of its own where the element differs. */
 .actionable { position: relative; cursor: pointer; }
+/*
+ * A CARD'S ACTION MENU MUST BE ABOVE EVERY OTHER CARD, NOT JUST ITS OWN.
+ *
+ * `.playmenu` already carried a high z-index, and that was not enough:
+ * z-index only orders siblings WITHIN a stacking context, and each mat,
+ * zone and card row is its own. So a torpor card's menu was ordered
+ * correctly inside the torpor zone and then the whole uncontrolled zone —
+ * a later sibling — painted over it (owner report).
+ *
+ * The fix is to lift the ancestors, not the menu: every container that
+ * HOLDS the open card floats above its siblings for as long as it does.
+ * `:has()` is what makes that expressible in CSS rather than in the
+ * renderer, and this is a desktop-browser project.
+ */
+.actionable.selected { z-index: 30; }
+.zone:has(.actionable.selected),
+.mat:has(.actionable.selected),
+.zbody:has(.actionable.selected),
+.cardslot:has(.actionable.selected) { position: relative; z-index: 30; }
+/* …and the zone must not clip it, which `overflow` on a scrolling row
+   would otherwise do. */
+.zone:has(.actionable.selected) { overflow: visible; }
+
+/* A card name in the log or a deck list: hovering it opens the magnifier,
+   exactly as hovering the scan does. */
+.cardref {
+  cursor: zoom-in; text-decoration: underline dotted var(--line);
+  text-underline-offset: 2px;
+}
+.cardref:hover { color: var(--gold); }
+
+.decklist { display: flex; flex-direction: column; gap: 2px; }
+.deckrow { display: flex; gap: 8px; font-size: 12px; }
+.deckrow .dqty { color: var(--dim); min-width: 26px; text-align: right; }
 .actionable > .cardslot > .scanwrap,
 .actionable > .scanwrap {
   border-color: var(--gold);

@@ -240,6 +240,18 @@ export function redactFor(state: GameState, seat: SeatId): GameState {
         // face down for everyone including its owner (p. 14), so what the
         // owner gains is the COMPOSITION and never the order.
         ...(mine && deckList ? { deckList } : {}),
+        // …and what is STILL in them, sorted. Same ruling, one step on:
+        // the composition of your own piles is yours to know, the order
+        // is not, and sorting HERE is what makes that true on the wire
+        // rather than only on the screen.
+        ...(mine
+          ? {
+              ownPiles: {
+                library: s.library.map((c) => c.name).sort((a, b) => a.localeCompare(b)),
+                crypt: s.crypt.map((c) => c.name).sort((a, b) => a.localeCompare(b)),
+              },
+            }
+          : {}),
         // A card this viewer has been SHOWN stays readable even in
         // somebody else's hand — they saw it, and a rule that made them
         // forget would be modelling a worse memory than a person has

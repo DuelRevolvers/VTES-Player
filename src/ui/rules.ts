@@ -458,8 +458,13 @@ export const RULE_SECTIONS: RuleSection[] = [
         specially, and the same goes for "electronic": it is a label other
         cards name, not a rule of its own.</li>
         <li><b>Keywords</b> — a single word on its own line above the card
-        text. This set has three: <b>Grapple</b>, <b>Aim</b> and
-        <b>Boon</b>. Only one aim may be played per strike.</li>
+        text. This set has four: <b>Grapple</b>, <b>Aim</b>, <b>Boon</b>
+        and <b>Ammo</b>. Only one aim may be played per strike.</li>
+        <li><b>Ammo</b> — loaded into a <b>gun</b> after strikes have been
+        declared but before they resolve, and it changes what that gun's
+        strikes do <b>for the rest of the combat</b>. Only one ammo card
+        per gun per combat, and only onto a gun your own minion is
+        striking with — never an opponent's weapon.</li>
         <li><b>Frenzy</b> — cards that force a vampire into a rage. What
         frenzy does is written on each card; the rulebook does not define
         it.</li>

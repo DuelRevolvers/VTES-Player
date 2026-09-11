@@ -32,6 +32,11 @@ export type WindowId =
   | "combat.range"
   | "combat.beforeStrikes"
   | "combat.chooseStrike"
+  /** Strikes declared, not yet resolved — "only usable before resolution
+   *  of a gun's strike" ([RTR 19990105]). Opens only when some seat can
+   *  use it, so an ordinary round still has no window here.
+   *  docs/ammo-design.md §2 */
+  | "combat.beforeResolution"
   | "combat.damageResolution"
   | "combat.press"
   | "combat.endOfRound"

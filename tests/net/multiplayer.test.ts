@@ -139,6 +139,13 @@ describe("what a peer is allowed to see", () => {
       if (deck.seat === "Bob") continue;
       for (const name of deck.library) secrets.add(name);
     }
+    // …minus what Bob holds himself. His own pile's composition rides on
+    // the wire by design (sorted, so never its order), and a name in two
+    // decks cannot tell his copy from theirs. A name only the others have
+    // still fires.
+    for (const name of setup.decks.find((d) => d.seat === "Bob")?.library ?? []) {
+      secrets.delete(name);
+    }
     expect([...secrets].filter((n) => json.includes(n))).toEqual([]);
   });
 

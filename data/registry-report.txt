@@ -1,22 +1,22 @@
-V5 pool registry — built 2026-09-10T01:45:46.168Z
+V5 pool registry — built 2026-09-11T13:10:16.277Z
 Sets: Fifth Edition, Fifth Edition (Anarch), Fifth Edition (Companion), Sabbat V5, New Blood, New Blood II, New Blood III
 
-Unique cards:   762
+Unique cards:   799
   Crypt:        217
-  Library:      545
-Supported:      644 / 762
+  Library:      582
+Supported:      681 / 799
 Precon decks:   32
 
 Library by type:
-  Master             156
+  Master             161
+  Combat             87
   Action             75
-  Combat             74
-  Action Modifier    70
-  Political Action   53
-  Reaction           47
+  Action Modifier    72
+  Political Action   65
+  Reaction           49
   Equipment          42
   Ally               23
-  Retainer           18
+  Retainer           21
 
 Crypt by clan:
   Lasombra           19

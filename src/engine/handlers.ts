@@ -11,6 +11,8 @@ import type {
   ActionId,
   ActionKind,
   AfterCombatRider,
+  AimRider,
+  AmmoLoad,
   BlockAttemptFrame,
   CardInstance,
   CardInstanceId,
@@ -272,7 +274,9 @@ export interface EngineOps {
   /** "If any damage from this strike is successfully inflicted, they take
    *  +N damage from this strike, and they cannot press this round"
    *  (Target Vitals). docs/round-end-design.md §3 */
-  addAimBonus(play: CardPlayFrame, amount: number): void;
+  /** Play an aim card: `strikeDamage` applies to the strike now, the
+   *  rider waits for the strike to actually inflict damage. */
+  addAimRider(play: CardPlayFrame, rider: Omit<AimRider, "seat">, strikeDamage?: number): void;
   /** "Once each combat" for an ability that is not a prevention — the
    *  same latch `preventDamageAbility` writes with `scope: "combat"`. */
   markUsedThisCombat(cardId: CardInstanceId): void;
@@ -282,6 +286,9 @@ export interface EngineOps {
   /** The minion-addressed form of `grantAdditionalStrike`, for a card in
    *  play (which has no `CardPlayFrame`). */
   grantAdditionalStrikeTo(minion: MinionId, count: number, limited: boolean): void;
+  /** "Ammo. … for the remainder of this combat" — load one ammo card into
+   *  one gun, by the gun's card id (docs/ammo-design.md §4). */
+  loadAmmo(gun: CardInstanceId, load: AmmoLoad): void;
   /** "Gains 1 optional press this combat" — a combat-persistent credit. */
   grantCombatPress(play: CardPlayFrame): void;
   /** The same per-combat press credit, from a card in play (Mob
@@ -489,7 +496,7 @@ export interface EngineOps {
   /** "The first referendum a \<sect\> vampire you control calls on this
    *  turn passes automatically" (Día de los Muertos).
    *  docs/politics-locations-design.md §4 */
-  armAutoPassReferendum(seat: SeatId): void;
+  armAutoPassReferendum(seat: SeatId, cond?: { sect?: Sect; thisTurnOnly?: boolean }): void;
   /** "Only one <card> can be played at superior each turn". */
   recordSuperiorPlay(seat: SeatId, card: string): void;
   // Referendum interference (docs/abstain-gate-design.md):
@@ -522,7 +529,7 @@ export interface EngineOps {
    *  (Saulot's Guiding Wisdom). End of Round still runs (p. 32). */
   endCombatFromOutside(): void;
   /** "…once results are tallied" — an effect that outlives the tally. */
-  addPostTally(effect: { kind: "burnPoolVotedAgainst"; amount: number }): void;
+  addPostTally(effect: NonNullable<ReferendumFrame["postTally"]>[number]): void;
   /** "Cannot play reaction cards, block or cast votes or ballots this
    *  turn" (Expulsion). */
   expelMinion(minion: MinionId): void;
@@ -866,7 +873,7 @@ export interface CardHandler {
   isActionCard?: boolean;
   /** "Do not replace until …" — defer the replacement draw (p. 7 default
    *  is immediate replacement). */
-  delayedReplace?: "unlock" | "afterAction" | "discard";
+  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard";
   /** Master cards: played by the Methuselah for a master phase action. */
   isMasterCard?: boolean;
   /** Trifles refund one master phase action per phase (p. 10). */

@@ -109,7 +109,11 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   uncontrolledSectBlood: "bloodGain",
 
   // Hurting a minion.
-  aimBonus: "damage",
+  aimRider: "damage",
+  // Ammo is a damage effect on four of the five cards; Caseless Rounds
+  // buys an extra strike instead, but the tag names the family's usual
+  // shape, the way `strikeDamage` does.
+  loadAmmo: "damage",
   handStrikesAggravated: "damage",
   roundDamage: "damage",
   selfDamageAfterAction: "damage",
@@ -148,6 +152,10 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
 
   // Politics.
   autoPassReferendum: "votes",
+  autoPassNextOnPass: "votes",
+  autoPassNextNow: "votes",
+  burnCallerOnFail: "poolDrain",
+  payVotedForOnly: "poolGain",
   forceAbstain: "votes",
   modifyAllVotes: "votes",
   modifyVotes: "votes",

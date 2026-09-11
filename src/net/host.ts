@@ -54,7 +54,28 @@ export class HostSession {
   private readonly offChanged: () => void;
   private closed = false;
 
-  constructor(private readonly transport: LocalTransport) {
+  /**
+   * The seats that were held by a PERSON when the game was dealt.
+   *
+   * Only these can be claimed by somebody arriving mid-game. A seat that
+   * was a bot from the start is the table's, not a latecomer's: the other
+   * players agreed to a game with that many opponents played that way,
+   * and letting a stranger take one over changes the game they sat down
+   * to (owner rule). A seat whose player has since left is still in here
+   * — it is where they came back to.
+   */
+  private readonly humanSeats: Set<SeatId>;
+  /**
+   * Seats whose holder the host REMOVED. A kick is not a disconnection,
+   * so the door does not reopen for them.
+   */
+  private readonly banned = new Set<SeatId>();
+
+  constructor(
+    private readonly transport: LocalTransport,
+    humanSeats: readonly SeatId[] = [],
+  ) {
+    this.humanSeats = new Set(humanSeats);
     // One subscription for the whole session: every change — a local
     // click, a peer's intent, an AI seat's move, an auto-pass — reaches
     // every peer the same way. Nothing has to remember to broadcast.
@@ -147,7 +168,17 @@ export class HostSession {
         if (channel.open) channel.close();
       }, 0);
     }
+    this.banned.add(peer.seat);
     this.takeOver(peer.seat, peer.name, `was removed by the host: ${reason}`);
+  }
+
+  /** Can somebody arriving now sit in this seat? Asked by the lobby, which
+   *  is where a mid-game arrival lands. One question, one place. */
+  seatIsRejoinable(seat: SeatId): boolean {
+    if (this.banned.has(seat)) return false;
+    if (this.humanSeats.size > 0 && !this.humanSeats.has(seat)) return false;
+    const held = this.peers.get(seat);
+    return !held || !held.channel.open;
   }
 
   /** Relay a chat line to every peer, and to the host's own screen. */
@@ -265,6 +296,22 @@ export class HostSession {
       channel.close();
       return;
     }
+    // A KICK IS NOT A DISCONNECTION. Rejoining is for somebody whose
+    // connection dropped or who backed out by accident; a player the host
+    // removed stays removed.
+    if (this.banned.has(msg.seat)) {
+      channel.send({ type: "bye", reason: "the host removed you from this table" });
+      channel.close();
+      return;
+    }
+    // ONLY A SEAT SOMEBODY WAS PLAYING. A seat that was a bot when the
+    // game was dealt is part of the game the others agreed to; a latecomer
+    // watches instead of taking it over.
+    if (this.humanSeats.size > 0 && !this.humanSeats.has(msg.seat)) {
+      channel.send({ type: "bye", reason: `seat "${msg.seat}" was never a player's` });
+      channel.close();
+      return;
+    }
     const existing = this.peers.get(msg.seat);
     if (existing && existing.channel !== channel && existing.channel.open) {
       channel.send({ type: "bye", reason: `seat "${msg.seat}" is already taken` });
@@ -275,6 +322,16 @@ export class HostSession {
     // every change anyway, so a returning peer needs no catch-up
     // machinery: it just gets the next sync, which is the whole game.
     if (existing) existing.off();
+    // TAKE THE SEAT BACK OFF THE BOT. A seat whose player left is handed
+    // to a `HeuristicAgent` (`takeOver`), and that agent goes on
+    // answering for it — so without this a returning player would sit
+    // down and watch a bot play their turns. The label goes with it:
+    // the mat says "Bot" for exactly as long as a bot is there.
+    if (this.transport.botNames()[msg.seat] !== undefined) {
+      this.transport.setAgent(msg.seat, null);
+      this.transport.setBotName(msg.seat, "");
+      this.transport.note(`${msg.name ?? msg.seat} is back — ${msg.seat} is theirs again.`);
+    }
     this.peers.set(msg.seat, {
       seat: msg.seat,
       channel,

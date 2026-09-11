@@ -4,7 +4,7 @@
 > wave-by-wave history, much of it stale — it still listed finished phases
 > as upcoming and named blockers that had been built days earlier. That
 > staleness cost this project more time than any bug. Nothing is lost:
-> every mechanic has its own doc in `docs/` (114 of them), which is where
+> every mechanic has its own doc in `docs/` (115 of them), which is where
 > the citations, readings and traps live, and the old file is archived at
 > `docs/project-memory-archive-2026-09-07.md`. **This file is now only what
 > is BINDING and what is TRUE.**
@@ -34,7 +34,7 @@ rulebook, card text wins** (the Golden Rule, p. 16).
 
 - **Library** = the **V5 product line** (`config/v5-sets.json`: 7 KRCG
   sets — Fifth Edition, Anarch, Companion, Sabbat V5, New Blood I–III)
-  **plus any legacy card that has been implemented.** **545 cards, all
+  **plus any legacy card that has been implemented.** **582 cards, all
   implemented.** A legacy library card is admitted by
   `config/supported.json` alone — there is no separate config, because
   for the library "implemented" and "may be in the pool" are the same
@@ -42,7 +42,7 @@ rulebook, card text wins** (the Golden Rule, p. 16).
 - **Crypt** = the V5 sets. **217 cards, all whole.** The machinery to
   widen past them exists and is deliberately switched OFF:
   `config/crypt-groups.json` is `"groups": []`.
-- **762 unique cards.** *Re-derive from `src/cards/registry.json` rather
+- **799 unique cards.** *Re-derive from `src/cards/registry.json` rather
   than trusting this line.*
 - **Widening is a PIPELINE, not a switch** (`docs/pool-widening-design.md`).
   Opening a group in that config admits only vampires that are already
@@ -92,7 +92,7 @@ rulebook, card text wins** (the Golden Rule, p. 16).
 
 ---
 
-## Status (accurate as of 2026-09-10, platform v0.9.8)
+## Status (accurate as of 2026-09-11, platform v0.10.7)
 
 **Phases 1–7 are COMPLETE.** Data pipeline, rules kernel, the entire V5
 card pool, the play UI, AI v1 + batch simulation, PeerJS multiplayer with
@@ -104,14 +104,16 @@ starters, half decks by design).
 it prints**, which `tests/cards/no-partial-cards.test.ts` asserts over
 the entire registry.
 
-- **Library 545/545 (100%)** — 444 V5 plus 101 legacy cards from fifteen
-  waves (2026-09-09/10): 14 weapons, 13 locations, 7 equipment statics,
+- **Library 582/582 (100%)** — 444 V5 plus 138 legacy cards from twenty-two
+  waves (2026-09-09/11): 14 weapons, 13 locations, 7 equipment statics,
   7 retainers and allies, 13 Praxis Seizures, 4 referendums, 6 one-shot
   masters, 7 cost-modifier masters, 4 action modifiers, 3 referendum
-  reactions, 10 action cards, 13 political actions.
+  reactions, 10 action cards, 13 political actions, 5 ammo, 3 aim,
+  5 Discipline masters, 12 Crusades, 5 basic combat,
+  4 referendum riders, 3 combat retainers.
 - **Crypt 217** — 99 with an implementation, 118 printing no ability and
   needing none. Both kinds are whole; there is no third kind.
-- Total with an implementation: 644/762. *Re-derive these from
+- Total with an implementation: 681/799. *Re-derive these from
   `src/cards/registry.json` rather than trusting this line.*
 - `docs/partial-support.md` is the ledger of supported cards with a
   known-missing clause. **Its "needs engine work" table is empty**, there
@@ -126,7 +128,7 @@ the entire registry.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 200 test files, 2252 tests**, with `npm run typecheck`,
+**Green baseline: 205 test files, 2299 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -163,7 +165,7 @@ seats. Bot seats also take their default names from the Profile screen.
      the pool yet requires. A legacy library card is admitted by
      `supported.json` alone, so implementing it and admitting it are one
      edit.
-     **Waves 1–15 landed 2026-09-09/10, library 444 → 545.**
+     **Waves 1–22 landed 2026-09-09/11, library 444 → 582.**
    - **§7 — the crypt abilities.** Follows the library. Clan-by-clan
      waves, each of which lets its clan's groups be opened in
      `config/crypt-groups.json`. **1,162 legacy vampires print an ability
@@ -171,21 +173,21 @@ seats. Bot seats also take their default names from the Profile screen.
      whole** — those enter the pool the day their group opens, for free.
 
    **The road ahead, T1 by bucket** (re-derive with
-   `scripts/card-status-by-set.cjs`; **1,105 cards left in T1**, then 229
+   `scripts/card-status-by-set.cjs`; **1,068 cards left in T1**, then 229
    in T2 and 485 in T3):
 
    | Bucket | Left | Notes |
    |---|---:|---|
-   | Master | 369 | **No families.** Clustering by text shape finds no group of three or more, so masters are hand-picked a few per wave. Opened in wave 7. |
+   | Master | 364 | **Almost no families** — clustering by text shape finds few groups of three or more, so masters are mostly hand-picked a few per wave. Opened in wave 7; wave 18 took the five Discipline masters the pool can use. **Nine more Discipline masters are whole-but-inert until §7** (they grant Disciplines nothing in the pool requires) and cost nothing on the day their clans open. |
    | Action | 176 | Opened in waves 11–12. |
-   | Political Action | 122 | Opened in waves 13–15; the richest vein so far — three waves, three engine gaps found. |
+   | Political Action | 106 | Opened in waves 13–15, 19 and 21; the richest vein — five waves, five engine gaps. Wave 19's Crusades exposed that a card-granted title never recorded its CITY; wave 21's outcome riders exposed that `postTally` could not ask WHICH WAY the vote went, and that Día de los Muertos' sect clause was written into the engine rather than onto its grant. **Deferred: Political Backlash** — "only usable when a referendum FAILS", and the after-resolution window opens only on a PASS. **Eleven more Crusades wait on §7.** |
    | Equipment | 118 | Statics opened in wave 3. |
    | Ally | 90 | |
-   | Combat | 53 | |
+   | Combat | 45 | Opened in waves 16 (ammo — the missing before-resolution window), 17 (aim — a payload held until the strike lands) and 20 (the basic dodge/maneuver/press cards — "do not replace until after combat", a deferral that is NOT the action's). **Target Retainer is deferred** (retargeting a strike at a retainer means addressing a permanent from the damage path); so are the remaining delayed-replacement cards, which each add a second clause. |
    | Action Modifier | 47 | Opened in wave 9. |
    | Event | 40 | **Untouched.** No event card is in the pool at all; expect this to need machinery, not just cards. |
    | Reaction | 40 | Opened in wave 10. |
-   | Retainer | 28 | |
+   | Retainer | 25 | Opened in wave 22 (the combat retainers), which found that `lockToPrevent` priced a prevention rate as a cost, and that `grantedAction` could not be priced in the card granting it. **Several are Gargoyle- or Laibon-gated and inert by §0** until those clans are in the pool. |
    | (mixed types) | 22 | Action Modifier/Reaction and friends. |
    | Conviction | 3 | Imbued-only. **Out of scope** — no engine model. |
 
@@ -603,7 +605,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-Every mechanic that took a decision has a doc under `docs/` (114 files).
+Every mechanic that took a decision has a doc under `docs/` (115 files).
 **Read the doc before touching the mechanic** rather than re-deriving it;
 each holds the rulebook citations and the readings taken.
 
@@ -616,7 +618,12 @@ each holds the rulebook citations and the readings taken.
 `contested-design.md`, `old-gaps-closeout.md` (the knowledge model,
 leaderboard, deck library, diablerie steps 2 and 4, and withdrawal).
 
-**Combat:** `strike-effects-design.md`,
+**Combat:** `basic-combat-design.md` (dodge/maneuver/press with no
+requirement, and the "do not replace until after combat" deferral),
+`strike-effects-design.md`, `ammo-design.md` (the
+before-resolution window — strikes declared, not yet resolved — and the
+five ammo cards that need it), `aim-design.md` (the aim rider — a payload
+held until the strike it rode actually inflicts damage),
 `dodge-additional-strikes-design.md`, `weapons-design.md`,
 `weapon-riders-design.md`, `frenzy-design.md`, `actor-riders-design.md`,
 `dawn-operation-design.md`, `outside-combat-design.md`,
@@ -631,12 +638,17 @@ leaderboard, deck library, diablerie steps 2 and 4, and withdrawal).
 `after-resolution-design.md`, `other-vampire-modifiers-design.md`,
 `minion-target-actions-design.md`, `permanent-target-actions-design.md`.
 
-**Politics:** `politics-design.md`, `abstain-gate-design.md`,
+**Politics:** `referendum-riders-design.md` (payloads that wait for the
+tally, and the auto-pass grant that now carries its own card's
+conditions), `crusades-design.md` (the Crusades, and the city a
+card-granted title never recorded), `politics-design.md`, `abstain-gate-design.md`,
 `politics-followups-design.md`, `polling-votes-design.md`,
 `ballots-design.md`, `politics-locations-design.md`,
 `referendum-terms-design.md`, `referendum-margin-design.md`.
 
-**Cards and economies:** `clan-sect-design.md`,
+**Cards and economies:** `discipline-masters-design.md` (the eleven
+Discipline masters, and the §0 set-difference that decides which are in
+the pool), `clan-sect-design.md`,
 `on-vampire-statics-design.md`, `conditional-statics-design.md`,
 `opposing-statics-design.md`, `counters-design.md`,
 `cost-sources-design.md`, `counter-sinks-design.md`,
@@ -645,7 +657,8 @@ leaderboard, deck library, diablerie steps 2 and 4, and withdrawal).
 `unlock-tolls-design.md`, `stun-design.md`,
 `temporary-hand-size-design.md`, `allies-retainers-design.md`,
 `vozhd-allies-design.md`, `retainer-wave-design.md`,
-`archetypes-design.md`, `wraith-zombie-design.md`,
+`archetypes-design.md`, `combat-retainers-design.md` (the three shapes a
+retainer takes in a fight, and why a rate is not a cost), `wraith-zombie-design.md`,
 `token-vampire-design.md`, `path-cards-design.md`,
 `diablerie-design.md`, plus the lock-grant, attachment and location docs.
 
@@ -668,7 +681,11 @@ problem).
 `SavedGame.botSeats`, and the default bot names),
 `lobby-design.md`, `lobby-rework-2026-09-06.md`, `multiplayer-design.md`,
 `deck-import-design.md`, `fresh-game-design.md`, `game-log-design.md`,
-`futile-options-design.md`, `playtest-2026-09-05.md`, `pages-design.md`,
+`futile-options-design.md`, `playtest-2026-09-05.md`,
+`table-ux-2026-09-11.md` (ten owner reports from one session: the
+magnifier surviving a repaint, action menus and stacking contexts, seats
+in table order, your own decks alphabetically, naming the action in the
+log, the AI not gifting cards, and joining mid-game), `pages-design.md`,
 `cockatrice-lessons.md`.
 
 **Archive:** `project-memory-archive-2026-09-07.md` — this file as it was

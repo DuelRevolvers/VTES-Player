@@ -137,6 +137,23 @@ export class DebugApp {
   /** The pointer is down on a card — the hover preview stays out of the
    *  way until it comes back up. */
   private holding = false;
+  /**
+   * The card the pointer is currently over, if any.
+   *
+   * THE PREVIEW HAS TO SURVIVE A REPAINT. Every repaint is `innerHTML =`,
+   * which destroys the element the pointer was over — the browser fires
+   * no fresh `mouseover` for an element that was replaced under a
+   * stationary cursor, so the preview vanished on every tick of the game
+   * and only came back when the pointer moved (owner report: "previews
+   * disappear with every new little action"). Remembering what is under
+   * the pointer is what lets `paint()` put it back.
+   */
+  private hovering: { zoom: string; name: string } | null = null;
+  /** Where the pointer is, for the same reason: after a repaint the panel
+   *  has to be re-placed, and no mouse event will say where to. */
+  private pointer = { x: 0, y: 0 };
+  /** Whose deck list is open, as "<seat>:crypt" / "<seat>:library". */
+  private deckOpen: string | null = null;
   /** The moderation panel is open. View state, like the settings panel. */
   private modOpen = false;
   private chatSettingsOpen = false;
@@ -197,6 +214,7 @@ export class DebugApp {
   private paint(): void {
     try {
       this.repaint();
+      this.restorePreview();
     } catch (err) {
       // AN ENGINE ERROR MUST NOT LOOK LIKE A FROZEN TABLE. `decision()`
       // settles the game, so a throw from deep inside it leaves the old
@@ -265,6 +283,43 @@ export class DebugApp {
    *  between the answer and the shell taking the screen back. */
   private dismissedEnding = false;
 
+  /**
+   * Put the magnifier back after a repaint, if the pointer never left.
+   *
+   * `innerHTML =` replaced the element the pointer was over, and the
+   * browser fires no `mouseover` for a replacement under a cursor that
+   * has not moved — so the preview stayed gone until the player moved the
+   * mouse, which is what made it flicker off on every game tick.
+   *
+   * It re-asks the DOM what is under the pointer NOW rather than trusting
+   * the remembered card: the repaint may have moved the table out from
+   * under it (a card burned, a minion gone to torpor), and showing the
+   * preview of a card that is no longer there would be worse than
+   * showing none.
+   */
+  private restorePreview(): void {
+    if (!this.hovering || this.holding) return;
+    const under = document
+      .elementFromPoint(this.pointer.x, this.pointer.y)
+      ?.closest<HTMLElement>("[data-zoom]");
+    const p = this.root.querySelector<HTMLDivElement>("#zoom");
+    if (!under || !p) {
+      this.hovering = null;
+      return;
+    }
+    const img = p.querySelector("img");
+    const text = p.querySelector<HTMLDivElement>(".zoomtext");
+    if (!img || !text) return;
+    const name = under.dataset["name"] ?? (under as HTMLImageElement).alt ?? "";
+    img.src = under.dataset["zoom"] ?? "";
+    text.textContent = cardText(name) ?? "";
+    this.hovering = { zoom: under.dataset["zoom"] ?? "", name };
+    // Deliberately NOT restarting the name's fade: the card has not
+    // changed, so neither should its label — re-announcing it on every
+    // repaint is the flicker in a different form.
+    p.hidden = false;
+  }
+
   private repaint(): void {
     // Read the scroll positions BEFORE the markup that holds them is
     // thrown away — see `saveScroll`.
@@ -303,6 +358,7 @@ export class DebugApp {
       seatFaces: this.table.faces?.() ?? {},
       localSeat: this.table.localSeat ?? null,
       ashOpen: this.ashOpen,
+      deckOpen: this.deckOpen,
       canLeave: this.table.onLeave !== undefined,
       canChat: this.table.say !== undefined,
       canModerate: this.table.moderate !== undefined,
@@ -384,25 +440,43 @@ export class DebugApp {
     this.root.addEventListener("mouseup", release);
     this.root.addEventListener("dragend", release);
     this.root.addEventListener("drop", release);
+    // THE BELT AND BRACES, and it is the one that actually fixed it.
+    // After a hand card is dropped the element that was grabbed has been
+    // re-rendered, so `dragend` fires on a node that is no longer in the
+    // tree and never reaches this listener — leaving `holding` true and
+    // the preview off until the next unrelated click (owner report:
+    // "after I move a card in my hand, the previews don't show up until I
+    // click somewhere else"). No button down means nothing is held,
+    // whatever events did or did not arrive.
+    this.root.addEventListener("mousemove", (ev) => {
+      if (ev.buttons === 0) this.holding = false;
+    });
 
     this.root.addEventListener("mouseover", (ev) => {
-      const target = (ev.target as HTMLElement).closest<HTMLImageElement>("img[data-zoom]");
+      // ANY element carrying `data-zoom`, not just a scan: card names in
+      // the game log and in a deck list carry it too, so one handler
+      // serves the table, the log and the lists.
+      const target = (ev.target as HTMLElement).closest<HTMLElement>("[data-zoom]");
       const p = panel();
       if (!target || !p || this.holding) return;
       const img = p.querySelector("img");
       const text = p.querySelector<HTMLDivElement>(".zoomtext");
       const name = p.querySelector<HTMLDivElement>(".zoomname");
       if (!img || !text) return;
+      // A scan says its name in `alt`; a text reference in `data-name`.
+      const cardName =
+        target.dataset["name"] ?? (target as HTMLImageElement).alt ?? "";
       img.src = target.dataset["zoom"] ?? "";
-      text.textContent = cardText(target.alt) ?? "";
+      text.textContent = cardText(cardName) ?? "";
+      this.hovering = { zoom: target.dataset["zoom"] ?? "", name: cardName };
       // THE NAME FADES (owner request). It answers "what is this?" in the
       // first second and is clutter after that — the scan underneath says
       // the same thing permanently. Removing and re-adding the class
       // restarts the CSS animation, which is what makes it fade again for
       // the NEXT card rather than only for the first one hovered; the
       // reflow read between the two is what forces that restart.
-      if (name && name.textContent !== target.alt) {
-        name.textContent = target.alt;
+      if (name && name.textContent !== cardName) {
+        name.textContent = cardName;
         name.classList.remove("fading");
         void name.offsetWidth;
         name.classList.add("fading");
@@ -410,9 +484,10 @@ export class DebugApp {
       p.hidden = false;
     });
     this.root.addEventListener("mouseout", (ev) => {
-      const target = (ev.target as HTMLElement).closest("img[data-zoom]");
+      const target = (ev.target as HTMLElement).closest("[data-zoom]");
       const p = panel();
       if (!target || !p) return;
+      this.hovering = null;
       p.hidden = true;
       // Forget which card it was, so coming BACK to the same one shows
       // its name again rather than a label that has already faded.
@@ -421,6 +496,7 @@ export class DebugApp {
     });
     // Follow the pointer, but keep the panel on screen.
     this.root.addEventListener("mousemove", (ev) => {
+      this.pointer = { x: ev.clientX, y: ev.clientY };
       const p = panel();
       if (!p || p.hidden) return;
       if (this.holding) {
@@ -889,6 +965,25 @@ export class DebugApp {
     }
     on("#ash-close", () => {
       this.ashOpen = null;
+      this.paint();
+    });
+
+    // YOUR OWN crypt and library, alphabetically. Only your own piles are
+    // drawn as buttons (render.ts), so there is nothing here to gate.
+    for (const btn of Array.from(
+      this.root.querySelectorAll<HTMLButtonElement>("button[data-deck]"),
+    )) {
+      btn.addEventListener("click", () => {
+        this.deckOpen = btn.dataset["deck"] ?? null;
+        this.paint();
+      });
+    }
+    on("#deck-close", () => {
+      this.deckOpen = null;
+      this.paint();
+    });
+    on("#deck-scrim", () => {
+      this.deckOpen = null;
       this.paint();
     });
     on("#ash-scrim", () => {

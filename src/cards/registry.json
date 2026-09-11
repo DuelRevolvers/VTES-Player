@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-10T01:45:46.168Z",
+ "fetchedAt": "2026-09-11T13:10:16.277Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -418,6 +418,33 @@
    },
    "supported": true
   },
+  "100070": {
+   "card": {
+    "kind": "library",
+    "id": 100070,
+    "name": "Animalism",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Discipline.\nPut this card on a vampire. This vampire gets +1 level of Animalism [ani] and +1 capacity. Cannot be put on a vampire with superior Animalism [ANI].",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/animalism.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "100077": {
    "card": {
     "kind": "library",
@@ -694,6 +721,34 @@
     "image": "https://static.krcg.org/card/asylumhuntingground.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100114": {
+   "card": {
+    "kind": "library",
+    "id": 100114,
+    "name": "Auspex",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: Discipline.\nPut this card on a vampire. This vampire gains 1 level of Auspex [aus]. Capacity increases by 1: the vampire is one generation older. Cannot be placed on a vampire with superior Auspex [AUS].",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/auspex.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Third Edition",
+     "Keepers of Tradition",
+     "Heirs to the Blood"
     ]
    },
    "supported": true
@@ -1189,6 +1244,33 @@
    },
    "supported": true
   },
+  "100244": {
+   "card": {
+    "kind": "library",
+    "id": 100244,
+    "name": "Boxed In",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after combat.\nPress.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/boxedin.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100246": {
    "card": {
     "kind": "library",
@@ -1209,6 +1291,34 @@
      "Sabbat War",
      "Camarilla Edition",
      "Legacies of Blood",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100251": {
+   "card": {
+    "kind": "library",
+    "id": 100251,
+    "name": "Bribes",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum before votes and ballots are cast.\nGain 1 pool. Any other Methuselah who casts one or more votes or ballots in favor of and does not cast votes or ballots against the referendum gains 1 pool when the results of the referendum are tallied.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bribes.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Kindred Most Wanted",
      "Third Edition"
     ]
    },
@@ -1399,6 +1509,28 @@
     "image": "https://static.krcg.org/card/carversmeatpackingandstorage.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "100304": {
+   "card": {
+    "kind": "library",
+    "id": 100304,
+    "name": "Caseless Rounds",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Ammo.\nOnly usable before resolution of a gun's strike. For the remainder of combat, once each round when the bearer strikes with this gun, the bearer gets an optional additional strike (limited), only usable to strike with this gun. No more than one ammo card can be used on a gun each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/caselessrounds.jpg",
+    "sets": [
+     "Gehenna",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -2082,6 +2214,271 @@
    },
    "supported": true
   },
+  "100453": {
+   "card": {
+    "kind": "library",
+    "id": 100453,
+    "name": "Crusade: Atlanta",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum passes, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Atlanta. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadeatlanta.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
+  "100457": {
+   "card": {
+    "kind": "library",
+    "id": 100457,
+    "name": "Crusade: Chicago",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum passes, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Chicago. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadechicago.jpg",
+    "sets": [
+     "Sabbat",
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
+  "100458": {
+   "card": {
+    "kind": "library",
+    "id": 100458,
+    "name": "Crusade: Detroit",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Detroit. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadedetroit.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100460": {
+   "card": {
+    "kind": "library",
+    "id": 100460,
+    "name": "Crusade: Frankfurt",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum passes, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Frankfurt. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadefrankfurt.jpg",
+    "sets": [
+     "Gehenna"
+    ]
+   },
+   "supported": true
+  },
+  "100462": {
+   "card": {
+    "kind": "library",
+    "id": 100462,
+    "name": "Crusade: Houston",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum passes, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Houston. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadehouston.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
+  "100465": {
+   "card": {
+    "kind": "library",
+    "id": 100465,
+    "name": "Crusade: Mexico City",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum passes, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Mexico City. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusademexicocity.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
+  "100466": {
+   "card": {
+    "kind": "library",
+    "id": 100466,
+    "name": "Crusade: Miami",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum passes, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Miami. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusademiami.jpg",
+    "sets": [
+     "Sabbat",
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
+  "100467": {
+   "card": {
+    "kind": "library",
+    "id": 100467,
+    "name": "Crusade: New York",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of New York. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadenewyork.jpg",
+    "sets": [
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100468": {
+   "card": {
+    "kind": "library",
+    "id": 100468,
+    "name": "Crusade: Paris",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum passes, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Paris. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadeparis.jpg",
+    "sets": [
+     "Gehenna"
+    ]
+   },
+   "supported": true
+  },
+  "100469": {
+   "card": {
+    "kind": "library",
+    "id": 100469,
+    "name": "Crusade: Philadelphia",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Philadelphia. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadephiladelphia.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100470": {
+   "card": {
+    "kind": "library",
+    "id": 100470,
+    "name": "Crusade: Pittsburgh",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Pittsburgh. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadepittsburgh.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100472": {
+   "card": {
+    "kind": "library",
+    "id": 100472,
+    "name": "Crusade: Toronto",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Sabbat title of Archbishop of Toronto. This could lead to a contested title.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadetoronto.jpg",
+    "sets": [
+     "Sabbat",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100476": {
    "card": {
     "kind": "library",
@@ -2099,6 +2496,31 @@
     "image": "https://static.krcg.org/card/cryptssons.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "100478": {
+   "card": {
+    "kind": "library",
+    "id": 100478,
+    "name": "Cryptic Rider",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Only usable on a successful referendum.\nThe next referendum a vampire you control calls this turn passes automatically.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crypticrider.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Camarilla Edition",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -2190,6 +2612,32 @@
     "image": "https://static.krcg.org/card/dawnoperation.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "100504": {
+   "card": {
+    "kind": "library",
+    "id": 100504,
+    "name": "Dead-End Alley",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Press, only usable to continue combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/deadendalley.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs"
     ]
    },
    "supported": true
@@ -2427,6 +2875,32 @@
    },
    "supported": true
   },
+  "100567": {
+   "card": {
+    "kind": "library",
+    "id": 100567,
+    "name": "Dodge",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after combat.\nStrike: dodge.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/dodge.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100568": {
    "card": {
     "kind": "library",
@@ -2511,6 +2985,31 @@
     "image": "https://static.krcg.org/card/dominatekine.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100580": {
+   "card": {
+    "kind": "library",
+    "id": 100580,
+    "name": "Dragon's Breath Rounds",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Ammo.\nOnly usable before resolution of a gun's strike. This gun inflicts +2 aggravated damage each strike for the remainder of this combat. Burn the gun after strike resolution. No more than one ammo card can be used on a gun each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/dragonsbreathrounds.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Third Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -2752,6 +3251,32 @@
     "image": "https://static.krcg.org/card/elderintervention.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100619": {
+   "card": {
+    "kind": "library",
+    "id": 100619,
+    "name": "Elder Kindred Network",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [
+     "Ventrue"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum before any votes or ballots are cast.\nIf the referendum fails, the Methuselah calling the referendum burns 1 pool plus 1 additional pool for each vote difference.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/elderkindrednetwork.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -3015,6 +3540,32 @@
      "Fifth Edition (Anarch)",
      "New Blood",
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100693": {
+   "card": {
+    "kind": "library",
+    "id": 100693,
+    "name": "Fake Out",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after combat.\nManeuver.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fakeout.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs"
     ]
    },
    "supported": true
@@ -3452,6 +4003,36 @@
    },
    "supported": true
   },
+  "100774": {
+   "card": {
+    "kind": "library",
+    "id": 100774,
+    "name": "Fortitude",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: Discipline.\nPut this card on a vampire. This vampire gains 1 level of Fortitude [for]. Capacity increases by 1: the vampire is one generation older. Cannot be placed on a vampire with superior Fortitude [FOR].",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fortitude.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs",
+     "Legacies of Blood",
+     "Keepers of Tradition",
+     "Heirs to the Blood"
+    ]
+   },
+   "supported": true
+  },
   "100777": {
    "card": {
     "kind": "library",
@@ -3673,6 +4254,29 @@
     "image": "https://static.krcg.org/card/glancingblow.jpg",
     "sets": [
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "100836": {
+   "card": {
+    "kind": "library",
+    "id": 100836,
+    "name": "Glaser Rounds",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Ammo.\nOnly usable before resolution of a gun's strike. This gun inflicts +2 damage each strike for the remainder of this combat. Not usable the first time the gun is used in a given combat. No more than 1 ammo card can be used on a gun card each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/glaserrounds.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -4977,6 +5581,57 @@
    },
    "supported": true
   },
+  "101156": {
+   "card": {
+    "kind": "library",
+    "id": 101156,
+    "name": "Malkavian Rider Clause",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [
+     "Malkavian"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Only usable during the polling step of a political action before votes and ballots are cast.\nIf the referendum passes, the next referendum a vampire you control calls passes automatically (skip the polling step).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/malkavianriderclause.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Camarilla Edition",
+     "2021 Promo Pack 3"
+    ]
+   },
+   "supported": true
+  },
+  "101160": {
+   "card": {
+    "kind": "library",
+    "id": 101160,
+    "name": "Manstopper Rounds",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Ammo.\nOnly usable before resolution of a gun's strike. The gun inflicts +1 damage each strike for the remainder of this combat. No more than one ammo card can be used on a gun each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/manstopperrounds.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Legacies of Blood"
+    ]
+   },
+   "supported": true
+  },
   "101162": {
    "card": {
     "kind": "library",
@@ -5603,6 +6258,29 @@
      "Fifth Edition (Companion)",
      "Sabbat V5",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101323": {
+   "card": {
+    "kind": "library",
+    "id": 101323,
+    "name": "Open Grate",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Press, only usable to end combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/opengrate.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War"
     ]
    },
    "supported": true
@@ -6524,6 +7202,34 @@
    },
    "supported": true
   },
+  "101480": {
+   "card": {
+    "kind": "library",
+    "id": 101480,
+    "name": "Presence",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: Discipline.\nPut this card on a vampire. This vampire gains 1 level of Presence [pre]. Capacity increases by 1: the vampire is one generation older. Cannot be placed on a vampire with superior Presence [PRE].",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/presence.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101483": {
    "card": {
     "kind": "library",
@@ -7054,6 +7760,31 @@
    },
    "supported": true
   },
+  "101612": {
+   "card": {
+    "kind": "library",
+    "id": 101612,
+    "name": "Resplendent Protector",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [
+     "Toreador"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Mortal with 1 life.\nThe minion with this retainer may prevent 1 damage each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/resplendentprotector.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "101613": {
    "card": {
     "kind": "library",
@@ -7353,6 +8084,28 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101689": {
+   "card": {
+    "kind": "library",
+    "id": 101689,
+    "name": "Scattershot",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Ammo.\nOnly usable before resolution of a gun's strike. This gun inflicts +2 damage at close range and -2 damage at long range each strike for the remainder of this combat. No more than one ammo card can be used on a gun each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/scattershot.jpg",
+    "sets": [
+     "Gehenna",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -8148,6 +8901,69 @@
    },
    "supported": true
   },
+  "101938": {
+   "card": {
+    "kind": "library",
+    "id": 101938,
+    "name": "Target Hand",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Aim. Play when choosing a strike.\nThe opposing minion may discard two combat cards [COMBAT] to cancel this card. If any damage from this strike is successfully inflicted on the opposing minion, he or she gets -1 strength this action, and you may destroy a weapon he or she has. A minion may play only one aim each strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/targethand.jpg",
+    "sets": [
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
+  "101939": {
+   "card": {
+    "kind": "library",
+    "id": 101939,
+    "name": "Target Head",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Aim. Play when choosing a strike.\nThe strike does +2 damage. The opposing minion may discard a combat card [COMBAT] to cancel this card. If any damage from this strike is successfully inflicted on the opposing minion, he or she cannot use any additional strikes or presses this round, and you may set the range for the next round. A minion may play only one aim each strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/targethead.jpg",
+    "sets": [
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
+  "101940": {
+   "card": {
+    "kind": "library",
+    "id": 101940,
+    "name": "Target Leg",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Aim. Play when choosing a strike.\nThe opposing minion may discard two combat cards [COMBAT] to cancel this card. If any damage from this strike is successfully inflicted on the opposing minion, he or she may use maneuvers or presses only if they require Obfuscate [obf] , Blood Sorcery [tha] or Flight [FLIGHT] this action. A minion may play only one aim each strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/targetleg.jpg",
+    "sets": [
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
   "101942": {
    "card": {
     "kind": "library",
@@ -8382,6 +9198,32 @@
     "image": "https://static.krcg.org/card/terrorfrenzy.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101965": {
+   "card": {
+    "kind": "library",
+    "id": 101965,
+    "name": "Thaumaturgy",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: Discipline.\nPut this card on a vampire. This vampire gains 1 level of Blood Sorcery [tha]. Capacity increases by 1: the vampire is one generation older. Cannot be placed on a vampire with superior Blood Sorcery [THA].",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/thaumaturgy.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Camarilla Edition",
+     "Third Edition",
+     "Heirs to the Blood"
     ]
    },
    "supported": true
@@ -8912,6 +9754,29 @@
     "image": "https://static.krcg.org/card/veilthelegions.jpg",
     "sets": [
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "102107": {
+   "card": {
+    "kind": "library",
+    "id": 102107,
+    "name": "Vengeful Spirit",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [
+     "Harbinger of Skulls"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Wraith with 2 life.\nThe employer gets +1 bleed. Vengeful Spirit inflicts 1 damage on the opposing minion each round of combat during normal strike resolution at close range.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/vengefulspirit.jpg",
+    "sets": [
+     "Lost Kindred"
     ]
    },
    "supported": true
@@ -9458,6 +10323,31 @@
     "image": "https://static.krcg.org/card/yorubashrine.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "102210": {
+   "card": {
+    "kind": "library",
+    "id": 102210,
+    "name": "Zombie",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [
+     "Giovanni"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Zombie with 2 life.\nZombie inflicts 1 damage on the opposing minion each round of combat during normal strike resolution at close range. This vampire can burn this retainer to gain 2 blood as a +1 stealth action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/zombie.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Final Nights",
+     "Print on Demand"
     ]
    },
    "supported": true

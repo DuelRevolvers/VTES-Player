@@ -310,8 +310,12 @@ describe("Target Vitals (101942)", () => {
     expect(walkTo(engine, "strike:hand")).toBe(true);
     const cf = combat(state)!;
     const side = cf.acting === "V1" ? "acting" : "opposing";
-    expect(cf.aimBonus?.[side]).toBe(2);
-    expect(cf.restrict[side === "acting" ? "opposing" : "acting"].press).toBe(true);
+    const victim = side === "acting" ? "opposing" : "acting";
+    expect(cf.aimRiders?.[side].length).toBe(1);
+    // WAVE 17: the press bar is part of "if any damage from this strike
+    // is successfully inflicted", so it is NOT in force yet — the strike
+    // has only been chosen. docs/aim-design.md §2
+    expect(cf.restrict[victim].press).toBe(false);
 
     const before = find(state, "M").blood;
     drain(engine, state);
@@ -355,7 +359,7 @@ describe("Target Vitals (101942)", () => {
       runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
     }
     expect(state.eventLog.some((e) => e.type === "CardCanceled")).toBe(true);
-    expect(combat(state)?.aimBonus?.acting ?? 0).toBe(0);
+    expect(combat(state)?.aimRiders?.acting.length ?? 0).toBe(0);
   });
 
   it("NEGATIVE SPACE: no buy-off without TWO combat cards to discard", () => {

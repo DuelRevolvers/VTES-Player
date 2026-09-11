@@ -258,6 +258,15 @@ describe("LocalTransport hidden information", () => {
       if (deck.seat === seat) continue;
       for (const name of deck.library) hidden.add(name);
     }
+    // …MINUS anything this viewer holds a copy of themselves. Their own
+    // pile's COMPOSITION is in the view by design (sorted, so never its
+    // order — `SeatState.ownPiles`), and a name that is in both decks
+    // cannot tell a leak from the viewer's own card, so it can support
+    // neither verdict. A name only the OTHERS have still fires, which is
+    // the whole of what this test is for.
+    for (const name of setup.decks.find((d) => d.seat === seat)?.library ?? []) {
+      hidden.delete(name);
+    }
     const json = JSON.stringify(raw);
     const leaked = [...hidden].filter((n) => json.includes(n));
     // Cards in play and minions are public, so a name can legitimately
