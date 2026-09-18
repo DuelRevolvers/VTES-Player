@@ -70,7 +70,7 @@ describe("Depravity (100526) — +1 stealth during DIABLERIE actions", () => {
   it("stops the bearer recruiting allies or employing retainers", () => {
     const state = game();
     state.seats[0]!.hand.push({ id: "ac", name: "Aggressive Corpse" });
-    state.seats[0]!.minions.push(makeMinion("V2", "Alice", { blood: 4 }));
+    state.seats[0]!.minions.push(makeMinion("V2", "Alice", { blood: 4, clan: "Hecata" }));
     const engine = new VtesEngine(state, testRegistry);
     const recruits = engine
       .decision()!
@@ -212,6 +212,7 @@ describe("Unlicensed Taxicab (102078)", () => {
     // a `cardEffect` action like any other action card.
     const state = equipped();
     state.seats[0]!.hand.push({ id: "ac", name: "Aggressive Corpse" });
+    state.seats[0]!.minions[0]!.clan = "Hecata"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
     runTrace(engine, [
       ["Alice", "play:Aggressive Corpse:basic:V1:ac"],

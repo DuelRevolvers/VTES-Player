@@ -15,6 +15,7 @@ describe("One With the Land (102256)", () => {
     const m = state.seats[1]!.minions.find((x) => x.id === "M")!;
     m.disciplines = { pro: "superior" };
     m.locked = true;
+    m.clan = "Tzimisce"; // the printed clan icon (p. 10)
     state.seats[1]!.hand.push({ id: "owl1", name: "One With the Land" });
     const engine = new VtesEngine(state, testRegistry);
 

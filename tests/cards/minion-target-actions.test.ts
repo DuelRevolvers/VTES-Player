@@ -32,7 +32,7 @@ function healingTouch(): PermanentInPlay {
 describe("Touch of Valeren (102262) — the action mode", () => {
   it("heals another minion up to its starting life, allies included", () => {
     const state = threeSeatGame();
-    Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4 });
+    Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4, clan: "Salubri" });
     state.seats[0]!.hand.push({ id: "tv1", name: "Touch of Valeren" });
     // A wounded ally of Alice's: capacity 5 is its printed starting life.
     const ally = makeAlly("A1", "Alice", 5);
@@ -57,7 +57,7 @@ describe("Touch of Valeren (102262) — the action mode", () => {
     // An ally's capacity is a reference, not a cap (p. 11), so nothing
     // else would have stopped this going to 6.
     const state = threeSeatGame();
-    Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4 });
+    Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4, clan: "Salubri" });
     state.seats[0]!.hand.push({ id: "tv1", name: "Touch of Valeren" });
     const ally = makeAlly("A1", "Alice", 4);
     ally.blood = 3; // one short of its starting life
@@ -75,7 +75,7 @@ describe("Touch of Valeren (102262) — the action mode", () => {
 
   it("does not offer a minion already at its starting life", () => {
     const state = threeSeatGame();
-    Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4 });
+    Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4, clan: "Salubri" });
     state.seats[0]!.hand.push({ id: "tv1", name: "Touch of Valeren" });
     const ally = makeAlly("A1", "Alice", 3);
     ally.blood = 3; // full

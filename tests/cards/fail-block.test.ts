@@ -15,7 +15,11 @@ import { makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fix
 /** Alice's V1 with the given disciplines, holding `card`; Bob has M and W. */
 function game(disc: Record<string, "basic" | "superior">, card: string): GameState {
   const state = threeSeatGame();
-  Object.assign(state.seats[0]!.minions[0]!, { disciplines: disc, blood: 4 });
+  Object.assign(state.seats[0]!.minions[0]!, {
+    disciplines: disc,
+    blood: 4,
+    clan: testRegistry[card]?.requiresClans?.()?.[0] ?? null, // the printed clan icon (p. 10)
+  });
   state.seats[0]!.hand.push({ id: "c", name: card });
   return state;
 }

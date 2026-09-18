@@ -45,6 +45,7 @@ describe("Elder Kindred Network (100619)", () => {
   it("on a FAIL, burns the caller 1 plus 1 per vote of difference", () => {
     const state = votingGame();
     state.seats[1]!.hand.push({ id: "ekn", name: "Elder Kindred Network" });
+    state.seats[1]!.minions[0]!.clan = "Ventrue"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
     runTrace(engine, [
       ...toPolling(),
@@ -73,6 +74,7 @@ describe("Elder Kindred Network (100619)", () => {
     const run = (withCard: boolean): number => {
       const state = votingGame();
       if (withCard) state.seats[1]!.hand.push({ id: "ekn", name: "Elder Kindred Network" });
+      state.seats[1]!.minions[0]!.clan = "Ventrue"; // the printed clan icon (p. 10)
       const engine = new VtesEngine(state, testRegistry);
       runTrace(engine, [
         ...toPolling(),
@@ -128,6 +130,7 @@ describe("the auto-pass grant", () => {
   it("Malkavian Rider Clause arms the NEXT referendum once this one passes", () => {
     const state = votingGame();
     state.seats[1]!.hand.push({ id: "mrc", name: "Malkavian Rider Clause" });
+    state.seats[1]!.minions[0]!.clan = "Malkavian"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
     runTrace(engine, [
       ...toPolling(),
@@ -146,6 +149,7 @@ describe("the auto-pass grant", () => {
   it("NEGATIVE SPACE: nothing is armed when the referendum fails", () => {
     const state = votingGame();
     state.seats[1]!.hand.push({ id: "mrc", name: "Malkavian Rider Clause" });
+    state.seats[1]!.minions[0]!.clan = "Malkavian"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
     runTrace(engine, [
       ...toPolling(),

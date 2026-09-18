@@ -26,11 +26,13 @@ import type {
   MinionId,
   MinionState,
   PermanentAura,
+  VampireTitle,
   PermanentCostSource,
   PermanentCounterSink,
   PermanentInPlay,
   PermanentStatics,
   PlayCostCardType,
+  DelayedDrawCondition,
   PlayCostMod,
   ReferendumFrame,
   Sect,
@@ -209,9 +211,10 @@ export interface EngineOps {
    *  docs/combat-attachments-design.md §2 */
   attachInCombat(
     play: CardPlayFrame,
-    to: "self" | "opposing",
+    to: "self" | "opposing" | "anyInCombat" | "gunOnSelf",
     statics: PermanentStatics,
     tags: string[],
+    extra?: { counters?: number; bearerId?: MinionId },
   ): MinionId | null;
   /** "Put this card in play and move up to N blood from the opposing
    *  vampire to this card" (Morbidity) — the store is the entry's
@@ -289,6 +292,18 @@ export interface EngineOps {
   /** "Ammo. … for the remainder of this combat" — load one ammo card into
    *  one gun, by the gun's card id (docs/ammo-design.md §4). */
   loadAmmo(gun: CardInstanceId, load: AmmoLoad): void;
+  /** A one-shot play-cost modifier on the COMBAT frame rather than the
+   *  action's (Focus the Blood). docs/before-range-attachments-design.md §3 */
+  addCombatPlayCostMod(mod: PlayCostMod): void;
+  /** Move a card stored on a card in play to its owner's ash heap — a
+   *  magazine's round, once fired. */
+  burnStoredCard(holder: CardInstanceId, cardId: CardInstanceId): void;
+  /** Move a card stored on a card in play to the top or bottom of its
+   *  owner's library (Maabara). docs/ash-heap-resource-design.md §3 */
+  storedToLibrary(holder: CardInstanceId, cardId: CardInstanceId, to: "top" | "bottom"): void;
+  /** Move a card straight from a seat's ash heap to its library
+   *  (Waste Management Operation). docs/ash-heap-resource-design.md §3 */
+  ashToLibrary(seat: SeatId, cardId: CardInstanceId, to: "top" | "bottom"): void;
   /** "Gains 1 optional press this combat" — a combat-persistent credit. */
   grantCombatPress(play: CardPlayFrame): void;
   /** The same per-combat press credit, from a card in play (Mob
@@ -339,7 +354,20 @@ export interface EngineOps {
   /** Prevent damage on the currently-resolving pending damage. */
   preventDamage(play: CardPlayFrame, amount: number): void;
   /** Grant a press credit spendable in this round's press step. */
+  /** "You gain the Edge" (Esteem) / "the chosen Methuselah gets the Edge"
+   *  (Regaining the Upper Hand). docs/the-edge-design.md §2 */
+  takeEdge(seat: SeatId): void;
+  /** "Burn the Edge to …" (Leverage) — a no-op if this seat does not hold
+   *  it, which the option gate has already made impossible. */
+  burnEdge(seat: SeatId): void;
+  /** "You cannot gain the Edge this action; if you would get the Edge, it
+   *  is burned instead" (Leverage). docs/the-edge-design.md §3 */
+  suppressEdgeGainThisAction(): void;
   grantPress(play: CardPlayFrame): void;
+  /** "If the opposing minion's strike successfully inflicts any damage on
+   *  this minion this round, the opposing minion gets an optional press"
+   *  (Backstep). docs/cancel-in-combat-design.md §4 */
+  grantPressToStrikerIfDamaged(play: CardPlayFrame): void;
   /** Cancel the card whose as-played window we are in (p. 7). With
    *  refund, its already-paid cost is returned (Sudden Reversal). */
   cancelPendingCard(refundCost: boolean): void;
@@ -653,6 +681,9 @@ export interface EngineOps {
   /** "You can use N transfers to …" (Wider View) — the influence phase's
    *  currency, spent by a card in play. §2 */
   spendTransfers(n: number): void;
+  /** "…(discarding and shuffling afterward)" (Inconnu Tutelage) — p. 7's
+   *  discard-down, asked of the engine, which owns the question. */
+  discardDownToHandSize(seat: SeatId, cardName: string, cardId: CardInstanceId): void;
   /** An integer in [0, n) from the seeded RNG — "a card at random"
    *  (Constant Revolution, The Gate of Acheron). Principle 2 says all
    *  randomness flows through the one generator, and this is the
@@ -664,9 +695,11 @@ export interface EngineOps {
    *  hand. docs/library-search-design.md §5 */
   storeCard(args: {
     holder: CardInstanceId;
-    from: "library" | "hand";
+    from: "library" | "hand" | "ashHeap";
     cardId?: CardInstanceId;
     faceUp: boolean;
+    /** Whose pile, when that is not the holder's controller. */
+    fromSeat?: SeatId;
   }): void;
   /** Draw the top library card with NO redirect check — for the redirect
    *  choice's own answer, which must not go back through the ordinary
@@ -754,6 +787,32 @@ export interface EngineOps {
      *  opens, earlier than the frame that holds it. */
     until?: "discardPhase";
   }): void;
+  /** "That minion's initial strike this round gets FIRST STRIKE"
+   *  (Haymaker) — a round-scoped grant, cleared with the round's other
+   *  riders. docs/first-strike-design.md §1 */
+  /** "Cancel the block and combat" — a combat that never happened.
+   *  docs/no-combat-design.md §1 */
+  cancelCombat(outcome: "continueAction" | "actionBlocked"): void;
+  /** "No vampires of that clan may block the acting vampire for the
+   *  remainder of the turn" (Clan Loyalty). docs/no-combat-design.md §2 */
+  barClanFromBlocking(acting: MinionId, clan: string): void;
+  /** "Put this card into play; it represents an ally" (Blood Brother
+   *  Ambush) — returns the new minion's id. docs/no-combat-design.md §3 */
+  putAllyFromCardInPlay(play: CardPlayFrame, mode: DisciplineLevel | null): MinionId | null;
+  grantFirstStrike(side: "acting" | "opposing"): void;
+  /** "If another round occurs, this minion gets first strike that round"
+   *  (Forearm Block). docs/first-strike-cards-design.md §2 */
+  grantFirstStrikeNextRound(play: CardPlayFrame): void;
+  /** "Prevent N damage from the opposing minion's next HAND strike this
+   *  round" (Forearm Block). docs/first-strike-cards-design.md §2 */
+  armHandStrikePrevention(play: CardPlayFrame, amount: number): void;
+  /** "This minion's initial strike this round will be strike: hand strike
+   *  at +N damage" (Haymaker). docs/first-strike-cards-design.md §3 */
+  forceHandStrike(play: CardPlayFrame, bonus: number): void;
+  /** "If either minion inflicts more damage than the other this round,
+   *  that minion gets an optional press" (Haymaker).
+   *  docs/first-strike-cards-design.md §3 */
+  armBiggerHitterPress(): void;
   /** Weapon maneuver: maneuvers AND commits the weapon's strike for the
    *  round; one weapon maneuver per combat (.44 ruling p. 47). */
   useWeaponManeuver(minion: MinionId, cardId: CardInstanceId): void;
@@ -771,6 +830,16 @@ export interface EngineOps {
       /** "For each damage inflicted by this strike (even if prevented),
        *  burn 1 counter from this card" (Weighted Walking Stick). */
       depletes?: boolean;
+      /** "Burn after use" (Grenade) — at strike RESOLUTION, not choice. */
+      burnAfterUse?: boolean;
+      /** "End combat as a strike" (Smoke Grenade). */
+      combatEnds?: boolean;
+      /** "…the bearer takes N damage" when used at close range (Grenade). */
+      selfDamageAtCloseRange?: { amount: number; aggravated?: boolean };
+      /** "…the bearer takes N damage during strike resolution when
+       *  striking with this gun, but only once each combat" (Zip Gun) —
+       *  the same damage, at any range, latched per combat. */
+      selfDamageOnStrike?: { amount: number; aggravated?: boolean; oncePerCombat?: boolean };
     },
   ): void;
 }
@@ -788,6 +857,10 @@ export interface CardStrikeParams {
     bearerUnlockBurn?: number;
     tags?: string[];
   };
+  /** "Ranged strike: put this card on THIS minion; it becomes a weapon
+   *  equipment" (Molotov Cocktail) — `attachToVictim` pointing the other
+   *  way. docs/armed-mid-combat-design.md §2 */
+  attachToSelf?: { statics?: PermanentStatics; tags?: string[] };
   /** "Strike: send the opposing vampire to torpor or burn the ally". */
   incapacitate?: boolean;
   combatEnds?: boolean;
@@ -809,6 +882,12 @@ export interface CardStrikeParams {
   /** Use this WEAPON instead of a hand strike, keeping the card's bonus
    *  (Anticipation: "hand strike OR use a melee weapon strike"). */
   useWeapon?: CardInstanceId;
+  /** "Strike: … WITH FIRST STRIKE" (Quick Jab) — this strike resolves
+   *  before a normal one (p. 33). docs/first-strike-design.md §1 */
+  firstStrike?: boolean;
+  /** "If more than N damage is inflicted with this strike, ignore the
+   *  excess" (Quick Jab). */
+  capDamage?: number;
 }
 
 /** Parameters an action-card handler passes back to the engine to
@@ -873,9 +952,29 @@ export interface CardHandler {
   isActionCard?: boolean;
   /** "Do not replace until …" — defer the replacement draw (p. 7 default
    *  is immediate replacement). */
-  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard";
+  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard" | "whileInPlay";
+  /** "Do not replace until a vampire commits diablerie" and its siblings —
+   *  the CONDITION form, which waits for an event rather than a phase.
+   *  docs/gehenna-taxes-design.md §1 */
+  delayedReplaceUntil?: DelayedDrawCondition;
+  /** The burn option icon (p. 17): true when `seat` controls NO minion
+   *  who meets this card's requirements or is a legal target for it, so
+   *  the card may be discarded and replaced in any unlock phase.
+   *  docs/burn-option-design.md */
+  burnOptionDiscardable?(state: GameState, seat: SeatId): boolean;
+  /** Does the chosen mode require a Discipline AT THE SUPERIOR LEVEL?
+   *  ("Cards requiring 1 or more Disciplines at the superior level cost +1
+   *  blood", The Slow Withering.) The sibling of `requiresDisciplines`,
+   *  which answers WHICH but not at what level. */
+  requiresSuperiorDiscipline?(mode: DisciplineLevel | null, variant?: string): boolean;
   /** Master cards: played by the Methuselah for a master phase action. */
   isMasterCard?: boolean;
+  /** An EVENT card: put into play with a discard phase action, once each
+   *  game (p. 37). docs/events-design.md §1 */
+  isEventCard?: boolean;
+  /** This card can CHANGE THE TARGET OF A BLEED (Deflection and its
+   *  family) — what Narrow Minds taxes. docs/events-design.md §3 */
+  redirectsBleed?: boolean;
   /** Trifles refund one master phase action per phase (p. 10). */
   isTrifle?: boolean;
   /** Out-of-turn masters: playable during another Methuselah's turn,
@@ -887,6 +986,12 @@ export interface CardHandler {
   /** Combat cards: recorded per round/combat for the "only one X each
    *  round/combat" limit; the limit itself is enforced in options(). */
   isCombatCard?: boolean;
+  /** The load an AMMO card puts into a gun, or undefined for every other
+   *  card. Exposed because Magazine reaches the same window holding an
+   *  ammo card that was never in a hand: without this, "use the effect of
+   *  the ammo card" would mean re-deriving five cards' effects in a
+   *  second place. docs/before-range-attachments-design.md §4 */
+  ammoLoad?(mode: DisciplineLevel | null): AmmoLoad | undefined;
   /** "A vampire can play only one X each round/combat" (p. 32). */
   combatLimit?: "round" | "combat";
   /** The same limit scoped to ONE MODE ("only one at superior each
@@ -896,6 +1001,33 @@ export interface CardHandler {
    *  counterpart of `isCombatCard`, so a cancel-as-played effect can name
    *  the type it cancels. docs/discipline-filtered-design.md §5 */
   isReactionCard?: boolean;
+  /** What this weapon would inflict WITH A REGULAR STRIKE against a
+   *  generic opponent [RTR 19980623] — the figure Concealed Weapon's
+   *  "cannot inflict 4 or more damage / aggravated damage" is measured
+   *  against, and the only question anyone asks a weapon card that is
+   *  still in a HAND. Denormalized here rather than looked up in the
+   *  spec, because the asker holds a `CardHandler` and nothing else, and
+   *  a card can become a weapon without being an equipment card.
+   *  docs/armed-mid-combat-design.md §4 */
+  weaponProfile?: {
+    /** Strength and other bonuses are NOT counted [LSJ 20020821]
+     *  [LSJ 20020904], so a strength-based weapon is measured off the
+     *  base 1 strength every minion has. A strike that ends combat
+     *  inflicts nothing. */
+    damage: number;
+    /** PRINTED and unconditional only: Poker's aggravated damage against
+     *  Kiasyd is conditional and does not count [LSJ 20020729]. */
+    aggravated: boolean;
+  };
+  /** Does this MODE restrict the opposing minion's CHOICE OF STRIKES?
+   *  Answered centrally in `compileSpec` and stamped onto
+   *  `CardPlayFrame.restrictsStrikeChoice` at push, so Groundfighting
+   *  never reads another card's spec.
+   *  docs/cancel-in-combat-design.md §3 */
+  restrictsStrikeChoice?(
+    mode: DisciplineLevel | null,
+    variant?: string,
+  ): "strikes" | "equipment" | null;
   /** Does this MODE declare a strike? Answered centrally in `compileSpec`
    *  from the mode's combat window, the same test `costTypes` uses to
    *  label a mode "strike". Stamped onto `CardPlayFrame.isStrike` at push
@@ -1004,6 +1136,11 @@ export interface CardHandler {
      *  (Tier of Souls' steal target).
      *  docs/action-attachments-design.md §9 */
     bearerFromTarget?: boolean;
+    /** "…to represent the unique Anarch title of Baron of Boston"
+     *  (Fee Stake) — the title the bearer holds while the card is on
+     *  them, and the CITY it contests on. docs/fee-stake-design.md §2 */
+    grantsTitle?: VampireTitle;
+    grantsTitleCity?: string;
   } | null;
   /**
    * Action card that, on success, puts its own card into play as a
@@ -1046,6 +1183,25 @@ export interface CardHandler {
    *  PermanentInPlay entry at entry time). */
   permanentStatics?: PermanentStatics;
   permanentTags?: string[];
+  /**
+   * "This Gangrel can play these cards AS IF FROM YOUR HAND" — this card
+   * in play holds a store (`entry.stored`) whose cards are playable.
+   *
+   * Read by the engine's ONE hand-play enumerator and by `playCard`, so a
+   * stored card is offered in every window its own handler would offer it
+   * in and plays by exactly the ordinary rules. The pile is the only
+   * difference, and the one consequence of it is that a card that was
+   * never in hand is never REPLACED. docs/store-plays-design.md §2
+   */
+  storePlay?: {
+    /** "THIS Gangrel can play these cards": the bearer and nobody else. */
+    bearerOnly?: boolean;
+    /** "TZIMISCE you control can play cards from this location." */
+    clan?: string;
+    /** "Burn this card if it has no cards on it" — checked as the store
+     *  shrinks, and playing out of it is a way for it to shrink. */
+    burnWhenEmpty?: boolean;
+  };
   /** Mode-aware entry payload for retainers/equipment whose printed
    *  versions differ (Raven Spy [ani]/[ANI] life) — the mode chosen at
    *  announcement fixes which version enters play (p. 22). Falls back to
@@ -1317,6 +1473,28 @@ export interface CardHandler {
    *  `onInfluencePhase`, fired for every card in play as a discard phase
    *  begins. docs/cross-table-masters-design.md §4 */
   onDiscardPhase?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    turnSeat: SeatId,
+    ops: EngineOps,
+  ): void;
+  /** "…at the BEGINNING of his or her minion phase" (Faithful Servant) —
+   *  the phase-hook family's missing opener. `onMinionPhaseEnd` existed
+   *  and `onMasterPhase` / `onInfluencePhase` / `onDiscardPhase` all fire
+   *  as their phase OPENS; the minion phase had only a closer.
+   *  docs/retainer-upkeep-design.md §1 */
+  onMinionPhase?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    turnSeat: SeatId,
+    ops: EngineOps,
+  ): void;
+  /** "After each Methuselah's MINION PHASE ENDS, …" (Thirst) — the fourth
+   *  sibling of `onMasterPhase` / `onInfluencePhase` / `onDiscardPhase`,
+   *  and the only one that fires as a phase CLOSES rather than opens, so
+   *  it can ask what happened during it.
+   *  docs/gehenna-events-design.md §2 */
+  onMinionPhaseEnd?(
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
     turnSeat: SeatId,

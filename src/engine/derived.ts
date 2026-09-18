@@ -119,10 +119,25 @@ export function disciplinesOf(m: MinionState): Record<string, DisciplineLevel> {
   const boosts = m.attached.flatMap((p) =>
     p.statics.disciplineBoost ? [p.statics.disciplineBoost] : [],
   );
-  if (boosts.length === 0) return m.disciplines;
+  // The same +1 level, bought with a card that is now burnt, so it sits on
+  // the minion until the controller's unlock sweep clears it
+  // (docs/burn-the-equipment-design.md §3).
+  if (m.disciplineBoostUntilUnlock) boosts.push(m.disciplineBoostUntilUnlock);
+  // "…HAS superior Celerity [CEL]" — a grant at a level, not a step up
+  // (docs/discipline-granting-equipment-design.md §1).
+  const grants = m.attached.flatMap((p) =>
+    p.statics.disciplineGrant ? [p.statics.disciplineGrant] : [],
+  );
+  if (boosts.length === 0 && grants.length === 0) return m.disciplines;
   const out: Record<string, DisciplineLevel> = { ...m.disciplines };
   for (const d of boosts) {
     out[d] = out[d] === undefined ? "basic" : "superior";
+  }
+  // Grants apply AFTER boosts and as a floor: "+1 level" on top of a
+  // granted superior has nowhere to go, and a printed superior is never
+  // pushed down to a granted basic.
+  for (const g of grants) {
+    if (out[g.discipline] !== "superior") out[g.discipline] = g.level;
   }
   return out;
 }
@@ -367,6 +382,19 @@ export function handSizeOf(state: GameState, seatId: SeatId): number {
     // Capuchin) — moves with the counters (docs/counter-sinks-design.md).
     if (p.statics.handSizePerCounter) size += p.counters ?? 0;
   }
+  // "EACH Methuselah gets +2 hand size for each victory point he or she
+  // has" (The Bitter and Sweet Story) — one card in play, read by every
+  // seat, against THEIR OWN victory points. The loop above sees only this
+  // seat's own permanents, which is right for every other hand-size
+  // static and wrong for this one (docs/events-design.md §2).
+  const vps = getSeat(state, seatId).victoryPoints;
+  if (vps > 0) {
+    for (const s of state.seats) {
+      for (const p of s.permanents) {
+        size += (p.statics.handSizePerVictoryPointAll ?? 0) * vps;
+      }
+    }
+  }
   // "While Carmelita is ready, you get +1 hand size" — a crypt card's own
   // text, which rides on the MINION rather than at seat level, and is
   // conditional on board state that moves under it (Khin Aye's compares
@@ -542,6 +570,8 @@ export function auraBonus(
       if (aura.clan !== undefined && minion.clan !== aura.clan) continue;
       if (aura.sect !== undefined && minion.sect !== aura.sect) continue;
       if (aura.titledOnly && minion.title === null) continue;
+      // "PRIMOGEN … get one less vote" — one named title.
+      if (aura.title !== undefined && minion.title !== aura.title) continue;
       // "WHILE your prey controls a vampire in torpor" (Raising the
       // Portcullis) — the first aura condition that reads another seat's
       // board, derived on every read so nothing has to notice when it
@@ -808,14 +838,37 @@ export function currentStealth(state: GameState, actionId: ActionId): number {
 /** "<clan> … do not hunt as normal" (Week of Nightmares) — an aura that
  *  takes the hunt action away rather than modifying it. */
 export function auraBlocksHunt(state: GameState, minion: MinionState): boolean {
+  return auraBlocks(state, minion, "cannotHunt");
+}
+
+/** "Primogen cannot attempt political actions" (Beyond Reproach) — the
+ *  political sibling of `auraBlocksHunt`. Written through the shared
+ *  helper rather than beside it: the pair above and below this one drifted
+ *  by exactly one filter the last time they were copied. */
+export function auraBlocksPolitical(state: GameState, minion: MinionState): boolean {
+  return auraBlocks(state, minion, "cannotActPolitical");
+}
+
+function auraBlocks(
+  state: GameState,
+  minion: MinionState,
+  key: "cannotHunt" | "cannotActPolitical",
+): boolean {
   for (const seat of state.seats) {
     for (const p of seat.permanents) {
-      const aura = p.aura;
-      if (!aura?.cannotHunt) continue;
-      if (aura.scope === "controller" && minion.controller !== (p.controller ?? seat.id)) continue;
-      if (aura.clan !== undefined && minion.clan !== aura.clan) continue;
-      if (aura.sect !== undefined && minion.sect !== aura.sect) continue;
-      return true;
+      // `auras` is additive with the singular `aura` everywhere else
+      // (New Carthage), and a bar is no different.
+      for (const aura of [...(p.aura ? [p.aura] : []), ...(p.auras ?? [])]) {
+        if (!aura[key]) continue;
+        if (aura.scope === "controller" && minion.controller !== (p.controller ?? seat.id)) {
+          continue;
+        }
+        if (aura.clan !== undefined && minion.clan !== aura.clan) continue;
+        if (aura.sect !== undefined && minion.sect !== aura.sect) continue;
+        if (aura.titledOnly && minion.title === null) continue;
+        if (aura.title !== undefined && minion.title !== aura.title) continue;
+        return true;
+      }
     }
   }
   return false;
@@ -1033,7 +1086,17 @@ export function currentIntercept(
       const kind = holder?.kind;
       if (ev.filter) {
         // "Allies AND younger vampires" — a union (see the event's note).
-        if (holder && blockerMatchesFilter(holder, actor, ev.filter)) {
+        //
+        // The yardstick for "younger" is usually the acting minion, but
+        // need not be: Zapaderin measures against the minion that PLAYED
+        // it, who is explicitly not the actor. Resolve whoever the filter
+        // names, falling back to the actor — `blockerMatchesFilter` only
+        // compares, so it cannot look anyone up itself.
+        const ref =
+          ev.filter.youngerThan !== undefined
+            ? (findMinion(state, ev.filter.youngerThan) ?? actor)
+            : actor;
+        if (holder && blockerMatchesFilter(holder, ref, ev.filter)) {
           intercept += ev.delta;
         }
       } else if (!ev.appliesTo || ev.appliesTo === kind) {
@@ -1184,6 +1247,12 @@ export interface PricedCard {
    *  docs/retainer-wave-design.md §4 */
   requiresClans?: string[];
   tags?: string[];
+  /** "Minion cards that CHANGE THE TARGET OF A BLEED" (Narrow Minds) —
+   *  what the card does, not what it is. docs/events-design.md §3 */
+  redirectsBleed?: boolean;
+  /** Does the CHOSEN MODE require a Discipline at the superior level?
+   *  (The Slow Withering.) docs/gehenna-taxes-design.md §2 */
+  requiresSuperior?: boolean;
 }
 
 /** Collect every play-cost modifier currently in force for `minion`. */
@@ -1269,6 +1338,11 @@ export function activePlayCostMods(
 export function playCostModApplies(mod: PlayCostMod, card: PricedCard): boolean {
   if (mod.cardName !== undefined && mod.cardName !== card.name) return false;
   if (mod.cardTypes && !mod.cardTypes.some((t) => card.types.includes(t))) return false;
+  if (mod.redirectsBleed && card.redirectsBleed !== true) return false;
+  // "Cards requiring 1 or more Disciplines AT THE SUPERIOR LEVEL" — the
+  // superior half is a fact about the mode being played, so a card with a
+  // superior printing charges nothing while its basic mode is chosen.
+  if (mod.requiresSuperiorDiscipline && card.requiresSuperior !== true) return false;
   const byDiscipline =
     mod.requiresDiscipline !== undefined &&
     mod.requiresDiscipline.some((d) => card.requires.includes(d));
@@ -1314,6 +1388,11 @@ export function playCostFor(
   let pool = card.poolCost;
   for (const mod of activePlayCostMods(state, minion, af, cf, target, payerSeat)) {
     if (!playCostModApplies(mod, card)) continue;
+    // "Vampires who commit diablerie IGNORE THIS EFFECT until a Gehenna
+    // event is played" (The Slow Withering) — a per-minion exemption, so
+    // it is asked here where the payer is known and not in
+    // `playCostModApplies`, which only ever sees the card.
+    if (mod.exemptDiablerists && minion?.ignoresGehennaTax === true) continue;
     if (mod.pays === "pool") {
       pool += mod.amount;
     } else if (mod.pays === "bloodOrPool") {

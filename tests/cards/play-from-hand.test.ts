@@ -61,7 +61,10 @@ function masterPhase(state: GameState, seat = "Alice"): GameState {
 describe("Angel's Gift (102349)", () => {
   const hand = [
     { id: "ag", name: "Angel's Gift" },
-    { id: "kf", name: "Kali's Fang" }, // melee
+    // Sengir Dagger: a 2-pool melee weapon with no clan icon. Kali's Fang (the
+    // old fixture) prints the Banu Haqim icon, and Angel's Gift says
+    // "requirements … apply as normal", so a Salubri cannot take it.
+    { id: "kf", name: "Sengir Dagger" }, // melee
     { id: "mag", name: ".44 Magnum" }, // gun
   ];
 
@@ -84,12 +87,12 @@ describe("Angel's Gift (102349)", () => {
       ["Alice", "play:Angel's Gift:basic:V1:equip:kf:basic:ag"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as played
     ]);
-    expect(find(state, "V1").attached.some((p) => p.card.name === "Kali's Fang")).toBe(true);
+    expect(find(state, "V1").attached.some((p) => p.card.name === "Sengir Dagger")).toBe(true);
     expect(state.seats[0]!.pool).toBe(pool - 2);
     expect(state.seats[0]!.hand.some((c) => c.id === "kf")).toBe(false);
     // It IS played (p. 9) — the log is what game-wide uniqueness reads.
     expect(
-      state.eventLog.some((e) => e.type === "CardPlayed" && e.name === "Kali's Fang"),
+      state.eventLog.some((e) => e.type === "CardPlayed" && e.name === "Sengir Dagger"),
     ).toBe(true);
   });
 
@@ -274,7 +277,7 @@ describe("Pack Alpha (101342)", () => {
 describe("Piper (101401)", () => {
   function game(): { state: GameState; engine: VtesEngine } {
     const state = masterPhase(threeSeatGame());
-    Object.assign(find(state, "V1"), { sect: "anarch" });
+    Object.assign(find(state, "V1"), { sect: "anarch", clan: "Ventrue" }); // Political Ally's icon
     state.seats[0]!.minions.push(
       makeMinion("A2", "Alice", { sect: "anarch", locked: true }),
     );

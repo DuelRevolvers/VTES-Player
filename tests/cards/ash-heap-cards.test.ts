@@ -51,7 +51,12 @@ function setup(
   tweak: (state: GameState) => void = () => {},
 ): { state: GameState; engine: VtesEngine } {
   const state = threeSeatGame();
-  Object.assign(find(state, "V1"), { disciplines: disc, blood: 4, capacity: 8 });
+  Object.assign(find(state, "V1"), {
+    disciplines: disc,
+    blood: 4,
+    capacity: 8,
+    clan: testRegistry[cards[0] ?? ""]?.requiresClans?.()?.[0] ?? null,
+  });
   cards.forEach((n, i) => state.seats[0]!.hand.push({ id: `a${i}`, name: n }));
   tweak(state);
   return { state, engine: new VtesEngine(state, testRegistry) };

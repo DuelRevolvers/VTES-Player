@@ -69,7 +69,10 @@ describe("Charisma (100332)", () => {
   /** Alice's V1 carries Charisma and recruits an ally. */
   function game(ally: string): { state: GameState; engine: VtesEngine } {
     const state = threeSeatGame();
-    Object.assign(find(state, "V1"), { blood: 4 });
+    Object.assign(find(state, "V1"), {
+      blood: 4,
+      clan: testRegistry[ally]?.requiresClans?.()?.[0] ?? null, // the ally's clan icon (p. 10)
+    });
     attach(find(state, "V1"), "ch", "Charisma", {
       playCostMod: {
         amount: -1,
@@ -276,7 +279,7 @@ describe("Unleashing the Bestial Soul (102263)", () => {
    *  unqualified, so it may even be one of the actor's own. */
   function game(mode: string, target: string): { state: GameState; engine: VtesEngine } {
     const state = threeSeatGame();
-    Object.assign(find(state, "V1"), { disciplines: { dom: "superior" }, blood: 4 });
+    Object.assign(find(state, "V1"), { disciplines: { dom: "superior" }, blood: 4, clan: "Salubri" });
     Object.assign(find(state, "M"), { disciplines: { aus: "superior" }, blood: 3 });
     Object.assign(find(state, "W"), { disciplines: { aus: "superior" }, blood: 3 });
     state.seats[0]!.hand.push({ id: "ubs", name: "Unleashing the Bestial Soul" });

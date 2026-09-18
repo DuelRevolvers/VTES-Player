@@ -1006,6 +1006,1294 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 63 — transfers as a currency (4 cards), 2026-09-17
+
+Library **718 → 722**. Ennoia's Theater, King's Rising, Whispers of the
+Nictuku, Inconnu Tutelage. Write-up:
+`docs/transfer-currency-design.md`.
+
+The influence phase's counter, which until now only ever went DOWN and only
+for its own controller. Four relationships to it: gained for a lock,
+banned for the seat that played the card, and spent — by ANY Methuselah,
+out of their own pocket — to burn a card or to find one.
+
+**What it found: a master that pays out AND stays on the table could not
+exist.** `compileMasterCard`'s resolve put the card in play and returned
+before the effects loop, so a one-shot clause written beside a `permanent`
+block was silently dropped: King's Rising gained no pool at all. The pool
+payouts now run first, which is also the order the card's own condition
+needs ("if you have 5 **or fewer** pool" is a question about the pool
+before its own gain). Same shape as wave 62's `onEnterPlay` finding — an
+early `return` on a path that looked complete.
+
+**And a ban is narrower than it reads.** "You cannot use transfers to move
+counters to or from your uncontrolled minions" bars two of the four things
+the phase offers: the crypt draw spends transfers but moves no counter onto
+a minion, and influencing a full vampire out is free (p. 36). Both legal
+cases are pinned, because "no transfers at all" passes a test that only
+checks the two it does bar.
+
+**Recorded reading, for the owner:** Whispers of the Nictuku says every
+Nosferatu "burns 1 additional blood to unlock". A vampire with no blood is
+treated as unable to pay and **does not unlock** (p. 17's "does not unlock
+as normal" family, and the `spendUnlockSink` precedent). The alternative —
+skip the cost, unlock free — would make the card do nothing to a starving
+Nosferatu. One line to change if the owner reads it the other way.
+
+### Wave 62 — the stores you play out of (2 cards), 2026-09-17
+
+Library **716 → 718**. Gift of Proteus, Storage Annex. Write-up:
+`docs/store-plays-design.md`.
+
+Two cards, not three to six, because **the family is mostly inert in a
+V5-only pool**: of the eight legacy cards that print a face-down store,
+Mokolé Blood filters on Serpentis (no card and no vampire in the pool has
+it), Blessing of the Beast on Ahrimane, Père Lachaise on a burnt vampire
+in the ash heap (deliberately unmodelled), and Research's "research area"
+is read by nothing. Two more (Light Intensifying Goggles, Inceptor) are
+real cards that need mechanics of their own and are named in the write-up
+for a later wave.
+
+**What it found: `onEnterPlay` has never fired for a card that puts
+ITSELF in play on a successful action.** `putsInPlayOnSuccess` and
+`attachOnSuccess` both emit `PermanentEnteredPlay` by hand and return, so
+neither goes through `notifyEnterPlay` — which is documented as firing
+"from both entry paths". Every Fee Stake, every Praxis Seizure, Heart of
+the City, Preternatural Strength and Tier of Souls arrived without their
+own arrival hook; it cost nothing only because none of them had an
+arrival clause to run. Third instance of this exact omission (the ally
+path had it, the token-vampire path is right), and the tell is the same
+every time: **the path emits the entry event itself instead of going
+through the shared helper.**
+
+**And "as if from your hand" was two routes, one of them half right.**
+The store's own `ability:<store>:…:play:` route offered stored cards only
+in `turn.minion` and could only bring a PERMANENT into play. The Erciyes
+Fragments takes any library card out of its prey's ash heap, so a stored
+combat card was unplayable — the card was partial and no test could have
+seen it. Fleshforge Chamber's ghoul, meanwhile, arrived with no employ
+ACTION at all, because the helper it borrowed reasons — correctly, about
+the Piper family it was written for — that "there is no action to block in
+this family". Now there is one route: the ordinary hand-play enumerator,
+with the pile swapped. **A new call beside an existing one should copy its
+GUARDS before its shape.**
+
+Also: the only thing the pile changes is the REPLACEMENT DRAW, and the
+guard goes around the whole delayed-replacement chain rather than into
+each branch — every branch there answers "when is it replaced", and the
+answer for a card that was never in hand is "never".
+
+### Wave 61 — table-wide pool swings (4 cards), 2026-09-17
+
+Library **712 → 716**. Treaty of Tyre Enforced, Political Stranglehold,
+Can't Take it with You, Mark of the Damned. Write-up:
+`docs/table-pool-swings-design.md`.
+
+Four referendums that bill or pay EVERY Methuselah at once, counted from
+something they control. `refPerMinion` already carried two of them behind
+a filter; the other two count things that are not minions, which is the
+new sibling primitive `refPerSeatCards`.
+
+**What it found: `if (hits.length === 0) continue;`.** `refPerMinion`
+skipped any seat whose tally was zero — correct for every card it had ever
+carried, and wrong the moment one prints a FLAT term. Treaty of Tyre
+Enforced is "each Methuselah burns **X+1** pool, where X is the number of
+Assamites he or she controls", and the whole point of the card is the
+Methuselah with none paying 1 anyway. The guard would have billed only the
+seats that deserved it, and read as sensible behaviour in a log. **An
+early return meaning "nothing to do" stops being true the day the effect
+gains a term that does not depend on the count** — the tell is a constant
+in the card's sentence.
+
+**And the tally reads ENTRIES, not `seat.permanents`.** "Each equipment,
+location or retainer card he or she controls": equipment and retainers
+live on MINIONS and only locations sit in the seat's own area, so a count
+off `seat.permanents` returns a smaller number that looks correct. The
+`allEntries` lesson in a tally rather than a hook.
+
+Also: `oncePerGameByName` ("only one can be played or called in a game")
+is a QUERY over the event log rather than a latch — nothing to reset,
+nothing to serialize, and no gap between "played" and "called". And the
+clan trap for the second wave running: the card prints "Assamite", the
+registry says Banu Haqim.
+
+### Wave 60 — the clan Justicars (6 cards), 2026-09-17
+
+Library **706 → 712**. Banu Haqim, Brujah, Lasombra, Nosferatu, Tremere
+and Ventrue Justicar. Write-up: `docs/justicars-design.md`.
+
+The Praxis Seizure treatment on a family that already had its helper:
+`titleGrant()` has carried the whole shape since wave 13 and two Justicars
+were using it, so the wave is a table that builds **both** the specs and
+the handlers — the list that cannot drift from its sibling.
+
+**What it found: the two Justicars already in the pool were shipped
+without `unique`.** "The UNIQUE Camarilla title of Malkavian Justicar" is
+a claim on the CARD as well as the title, and the card-control contest
+(p. 17) gates on `registry[name].isUnique`. This is **wave 13's Praxis
+Seizure lesson verbatim, in the card family immediately next to it** — the
+fix went into `praxisSeizure()` and the Justicars beside it went without.
+The third time a fix has landed in one place while its sibling went
+unvisited, and the first time in a card FACTORY rather than an option
+enumerator.
+
+What hid it: the TITLE contest was already right. `titleContestKey` keys
+`justicar` on the vampire's clan and always has, so two Brujah Justicars
+would contest their titles while their cards did not. **Half-right is the
+worst state for this kind of bug**, because the obvious test passes.
+
+**And one card held back as inert:** Gangrel Justicar prints "choose a
+ready CAMARILLA Gangrel" and every Gangrel in the V5 crypt is Anarch — 14
+of 14. Built, it would pass every test and never do anything (§0, the
+Tradition Upheld shape). It costs nothing the day a Camarilla Gangrel
+group opens.
+
+The Justicars also had **no scenario test at all** before this wave; the
+two in the pool were covered only by being in the fuzz decks.
+
+### Wave 59 — feeding from the blood bank (4 cards), 2026-09-17
+
+Library **702 → 706**. Blood Feast, Patshiv, Esbat, Khabar: Loyalty.
+Write-up: `docs/blood-bank-actions-design.md`.
+
+Four actions whose whole effect is blood arriving from the BANK, differing
+only in who gets fed. Two new primitives (`bankBloodSweep`,
+`bankBloodSplit`) over **one shared filter helper**, because the sweep and
+the split ask the same question and differ only in whether anybody chooses
+the answer.
+
+**What it found: an option offered to a minion that cannot satisfy the
+card's own condition.** Esbat feeds "unlocked Sabbat vampires", and
+options are enumerated BEFORE the actor locks at announcement (p. 25) — so
+the acting vampire was offered as a recipient of its own card, and would
+have been locked and unqualified by the time the blood moved. The engine
+already knew this: `actionStun`'s enumerator carries the reasoning in
+full, written down as a fact about stunning rather than as a fact about
+**any filter that says "unlocked"**. The sweep half was never wrong,
+because it re-derives at resolution. **A filter reading a state the
+ANNOUNCEMENT changes must be evaluated twice, and the two evaluations do
+not agree.**
+
+The split's apply now re-derives its recipients at resolution too, instead
+of trusting ids chosen at announcement.
+
+**And the clan trap, live.** Khabar: Loyalty prints "a younger
+**Assamite**"; the registry says **Banu Haqim**. Spelled from the card
+text it compiles, typechecks, matches nothing and offers the card to
+nobody. Both icon-bearing cards in the wave also took `requiresClan`
+(p. 10).
+
+`ownOnly` is the field that exists to be left OFF: Blood Feast says "you
+control", Patshiv and Esbat name no controller and feed the whole table.
+A "yours" default would have passed every single-seat test, so the tests
+seat a Ravnos and a Sabbat vampire at another Methuselah's table.
+
+### Wave 58 — the Powerbases that bank blood (5 cards), 2026-09-16
+
+Library **697 → 702**. Powerbase: Barranquilla, Chicago, Mexico City, New
+York and Washington, D.C. Write-up:
+`docs/blood-banking-locations-design.md`.
+
+Five unique locations that are one shape said five ways: blood sits on the
+card, the controller draws it down, and a minion of another Methuselah can
+take the whole pile as a Ⓓ action. One new spec block
+(`permanent.bloodStore`) pays for all five; the dials that differ — which
+window, how much, who may raid, whether an empty card burns — are what
+makes the negative-space assertions worth writing.
+
+**What it found: a FOURTH list of the same verbs, written as a regex.**
+Adding a `vulnerableTo` outcome means teaching three sites in
+`vulnerableGrant` that sit together and read as a set — the option-id verb
+segment, the `grantedEffect.key`, and `resolveGrantedAction`. It also
+means teaching a fourth, three thousand lines away:
+`owns: (id) => /:(burn|steal|shuffle|strip|vote):/.test(id)`, the
+dispatch predicate on the composed granted-action handler. Miss it and the
+card compiles, typechecks, enumerates its option, and is offered to
+exactly the right minions with exactly the right stealth — then **throws
+when anyone takes it**. "One question asked in two places will drift",
+with the second place spelled as a regex, which is why grepping the
+outcome names does not find it.
+
+**And one rule where two knobs were asking to be built.** "Burn this card
+if it has no blood" (Mexico City, Barranquilla) and "burn this card when
+the last blood counter on it is REMOVED" (New York) read like two rules,
+and the difference matters: New York enters play EMPTY by design. One rule
+covers both — the check runs after every change and never at put-in-play —
+so there is no second field to set the wrong way round.
+
+Also new: `stealthFor[].titled`, and the master put-in-play path finally
+passing the `counters` argument `putPermanentInPlay` has always taken.
+`start.capacityOfReady` takes the largest eligible vampire rather than
+raising a choice frame, and the spec comment records **why that is correct
+rather than convenient** (this card's counter-play burns it instead of
+taking the blood, so more counters is never worse) — because the next card
+of the shape may not have that property.
+
+### Wave 57 — the Edge as a currency (4 cards), 2026-09-16
+
+Library **693 → 697**. Esteem, Leverage, Instability, Regaining the Upper
+Hand. Write-up: `docs/the-edge-design.md`.
+
+`state.edge` has been in the kernel since the beginning and **nothing in
+the pool touched it** except the turn's optional 1 pool and Kalinda's
+`unlockForEdge`. These four are the first cards whose subject it is, and
+they take four different positions on it across four card types: one
+gains it, one spends it, one is gated on where it sits, one moves it by
+vote.
+
+**No engine defect** — the third wave running. What the cards found was
+the shape of two things:
+
+**An action reaches a seat TWO WAYS.** "Directed at the Methuselah with
+the Edge" has to read `af.target` (a bleed names the seat) *and* the
+controller of `af.targetMinion` (a rush names one of its minions). A card
+reading only the first would have been offered on bleeds and silently
+never on rushes — the `meetsRequirements` family in a new place.
+
+**And a test whose positive case was impossible.** Esteem's obvious
+scenario is a bleed, and on a bleed it can almost never fire: p. 21 gives
+the Edge to a bleeder of 1+, so by the after-resolution window the target
+no longer holds it. The first draft asserted three absences and would have
+passed with the card unimplemented. **When every case in a test is a
+negative, the test is telling you about the fixture, not the card.**
+
+Also: `takeEdge` / `burnEdge` ops, `ActionFrame.edgeBurnedInsteadOfTaken`
+(Leverage's rider is a REDIRECTION, not a suppression — the token still
+moves, to the middle of the table), `spec.requiresEdge`,
+`spec.oncePerTurnByName` with `TurnFrame.oncePerTurnCards` (the printed
+line scopes it to the TURN, not the seat), and `refGiveEdge` riding the
+`seats` term `refChooseSeatsBurn` already built.
+
+### Wave 56 — the cancel half of the basic combat cards (3 cards), 2026-09-16
+
+Library **690 → 693**. Backstep, Disengage, Groundfighting. Write-up:
+`docs/cancel-in-combat-design.md`.
+
+The "do not replace until after combat" cards wave 20 deferred by name,
+each of which adds a second clause to a plain maneuver or press — and for
+two of them that clause is a CANCEL.
+
+**It found nothing broken**, the second such wave in a row, and the first
+time in this run that a DEFERRAL turned out to be accurate: wave 20 named
+the blocker (a second clause per card) and named the shared piece already
+built (`delayedReplace: "afterCombat"`), and both claims held sixteen
+waves later. What made it survive is that it named a **mechanism** rather
+than a feeling.
+
+**One near-miss, caught by a ruling rather than by the code.**
+"Restricts this anarch's choice of strikes" is stamped centrally onto the
+play frame as `restrictsStrikeChoice`, joining `isStrike` and `keywords`.
+As a BOOLEAN it reads correctly, compiles and typechecks — and is wrong
+for an unarmed anarch, because *"can cancel cards preventing the use of
+equipment IF THE TARGET HAS A WEAPON"* [LSJ 20050221]. It is a named value
+(`"strikes" | "equipment"`), since the two bars are cancellable under
+different conditions.
+
+Also: `cancelCombatCard` gains `bloodCost` (a gate on the OPTION — *"the
+card cannot be played if the minion cannot afford to burn the blood"*
+[ANK 20210226]), `keywords`, `restrictsStrikeChoice` and `costIsStillPaid`
+— the refund being the CARD's printed clause, not the cancel's, so
+Disengage refunds and Groundfighting does not. New
+`pressToStrikerIfDamaged` with `cf.pressIfDamaged`: the only credit in the
+pool handed to the OPPONENT.
+
+### Wave 55 — armed mid-combat (3 cards), 2026-09-16
+
+Library **687 → 690**. Concealed Weapon, Zip Gun, Molotov Cocktail.
+Write-up: `docs/armed-mid-combat-design.md`.
+
+Three combat cards that each end with a weapon on the table that was not
+there a moment ago — one pulled out of your HAND, and two where the card
+itself becomes the weapon (one that stays, one that does not).
+
+**It found a weapon's abilities welded to the EQUIPMENT card type.**
+`spec.weapon` — the strike, the maneuver, the sniper's long range, the
+keyword cancel, the unlock-on-kill rider — was compiled inside
+`compileEquipment`, and nothing about it is particular to equipment: what
+a weapon does is a question about the ENTRY IN PLAY. Weighted Walking
+Stick's own doc comment had been recording the symptom since wave 8 —
+*"the weapon strike … which no other card shape provides"* — which is a
+description of where a function happened to sit, written down as though it
+were a fact about the game. It is `addWeaponAbilities(spec, handler)` now,
+called by both compilers, composing rather than assigning.
+
+Also: `weapon.selfDamageOnStrike` (Zip Gun's bearer damage, latched AFTER
+`resolves()` and not off `cf.gunUses`, which counts at declaration
+[LSJ 20100310]), `weapon.burnAtEndOfCombat`, `weapon.notUsableAttachRound`
+with a new `PermanentInPlay.attachedRound` (the CARD's age, which nothing
+could answer — `cf.round` and `notFirstRound` both ask about the COMBAT),
+`strikeAttachSelfWeapon`, a `"noAmmo"` tag read by wave 53's
+`ammoTargetGun`, and `CardHandler.weaponProfile` for the three printed
+limits Concealed Weapon reads off a card still in a hand.
+
+### Wave 54 — the ash heap as a resource (4 cards), 2026-09-15
+
+Library **683 → 687**. Redeem the Lost Soul, Waste Management Operation,
+Maabara, The Erciyes Fragments. Write-up:
+`docs/ash-heap-resource-design.md`.
+
+The ash heap has existed since 2026-09-01 and every card that touched it
+PUT things there. These four take things out, or spend what is in it —
+including the first card that reaches into a PREY's heap.
+
+**It found a zone that recorded only what its current readers needed.**
+An ash-heap entry was `{id, name, crypt?}` — right for every card that
+had ever read it, since the only questions were "how many" and "is it a
+library card". Redeem the Lost Soul is the first card to ask a **burnt
+vampire a question about itself** ("half of the capacity of that
+vampire"), and the answer was not there. The registry lookup that looks
+like the fix is wrong twice: a TOKEN vampire has no registry entry, and
+capacity is DERIVED, so a vampire carrying a capacity master was bigger
+than its printed card. The entry now records `capacity` as it burns.
+
+Also: `storeCard` gains `from: "ashHeap"` with a `fromSeat` (the
+Fragments reach into the prey's heap — the first stored card whose source
+pile is not the holder's own), `store.addFromAshHeap`,
+`store.toLibraryInMasterPhase`, and `permanent.ashToLibrary` for the one
+card with no store in between.
+
+### Wave 53 — before-range attachments (3 cards), 2026-09-15
+
+Library **680 → 683**. Focus the Blood, Nosferatu Putrescence, Magazine.
+Write-up: `docs/before-range-attachments-design.md`.
+
+Three combat cards played before range that do nothing on resolution and
+LAND somewhere to be cashed in later — on the vampire with its own blood
+on it, on either combatant whoever controls them, and on a GUN holding an
+ammo card.
+
+**It found the four ammo rules were not in one place after all.** Their
+enumerator's own comment said *"ONE PLACE FOR THE FOUR RULES EVERY AMMO
+CARD PRINTS"* — true only while every caller came from a HAND, because
+they were steps in a loop over hand cards rather than a question anyone
+could ask. Magazine reaches that window holding an ammo card that was
+never in a hand. They are now `ammoTargetGun(cf, side, minion,
+minGunUses)` and both callers ask it; Glaser's load-time gate moved onto
+`AmmoLoad`, since a gate both paths must see belongs on the load.
+
+**And that `usable` exists on the spec AND on the mode**, with the
+outside-combat gate reading the MODE's. Nosferatu Putrescence with it at
+spec level compiled, typechecked and was offered to nobody — the "offers
+the card to nobody, silently" failure, from a field that was real and in
+the wrong real place.
+
+### Wave 52 — referendums that become a table rule (3 cards), 2026-09-14
+
+Library **677 → 680**. Beyond Reproach, Camarilla Threat, Masquerade
+Enforcement. Write-up: `docs/table-referendums-design.md`.
+
+Three political actions whose success leaves a card in play that changes
+a rule for the whole table until somebody calls another referendum to
+burn it. The shell (`refPutInPlay` + `vulnerableTo via politicalAction`)
+already existed, so each card is one rule: an aura that bars primogen
+from political actions and docks their vote, a pool tax on the discard
+phase action, and the influence phase's first price.
+
+**It found a test that passed by doing nothing.** The Masquerade
+Enforcement test read `uncontrolled[0]` and bailed out if it found
+nothing — and `threeSeatGame`'s uncontrolled region is EMPTY, so it was
+green from the first run without asserting anything. **A guard clause in
+a test is a silent skip.**
+
+**And that `auraBlocksHunt` had drifted from `auraBonus` by two
+filters** — it read only the singular `p.aura`, ignoring the additive
+`auras` list, and knew nothing of `titledOnly`. Found by writing its
+sibling, which is now the same helper with a key argument rather than a
+copy beside it. The political bar also had to go into all THREE political
+enumerators, the `meetsRequirements` failure for the fifth time.
+
+### Wave 51 — Fee Stake (6 cards), 2026-09-14
+
+Library **671 → 677**. Fee Stake: Boston, Corte, Los Angeles, New York,
+Perth, Seattle. Write-up: `docs/fee-stake-design.md`.
+
+The Anarch title, and the first title in the pool taken by an ORDINARY
+ACTION rather than won by a referendum. One factory, the Praxis
+Seizure treatment.
+
+**It found the two put-a-card-in-play compilers had drifted**: the master
+path emitted `TitleGranted` (with the city) and tagged the entry
+`"title"`; the action path (`attachOnSuccess`) did neither, because no
+action card in the pool had ever granted a title. Same family shape as
+`onMasterPhase` and `PermanentShuffledIntoLibrary` — two paths that mean
+the same thing, written at different times, that do not agree.
+
+**And that a condition can be unanswerable in the layer you put it in.**
+"+1 vote during referendums THEY CALL" looks like a `ConditionalStatic`
+and would have compiled as one and silently never fired: the vote count
+asks the conditional layer with no action and no referendum in hand. A
+static that reads the FRAME belongs where the frame is. It is
+`PermanentStatics.votesWhenCalling`, read against `rf.callingMinion`.
+
+Also new: `voteModifiers` gains `titledOnly` / `notSect`, seeded through
+`referendumSetup`, for "during that referendum, non-Anarch titles are
+worth -1 vote" — a vote rider scoped to one referendum.
+
+### Wave 50 — the Gehenna unlock-phase trio (3 cards), 2026-09-14
+
+Library **668 → 671**. The New Inquisition, Becoming of Ennoia, Recalled
+to the Founder. Write-up: `docs/gehenna-unlock-design.md`.
+
+Three events that fire in every Methuselah's UNLOCK phase and each ask
+the phase's own Methuselah a question — a shape wave 32's three did not
+have. Two new `eachMethuselah` kinds (`damageReadyVampire` with
+`whose`/`optional`, `burnSameClanVampire`), plus `gehennaGateOthersOnly`
+("other Gehenna cards controlled by OTHER Methuselahs") and
+`vulnerableTo.who.titled`.
+
+**The "requires N other Gehenna events" gate has never been reachable by
+random play** — a tally over 120 seeds found Conquest of Humanity, which
+has carried it since wave 32, offered zero times. These three are proven
+by scenario tests in both spaces instead.
+
+**Two engine defects, both found by widening the fuzz to 120 seeds**, both
+unrelated to the cards:
+
+- **`preventDamage` threw when its own minion had burned itself paying
+  for the card.** A 1-life ally playing a 1-blood prevention pays with
+  the life that IS its blood (p. 11) — the "chosen in one window,
+  resolved in another" lesson reaching the prevention path. Now a no-op.
+- **`cancelPendingCard` addressed `this.top()`**, and paying for a cancel
+  by discarding pushes a replacement draw that can push a frame — so the
+  cancel hit a choice frame. The frame is captured before the payment
+  now. An assumption a function states in its own comment is still an
+  assumption.
+
+### Wave 49 — the mummies, closed (3 cards), 2026-09-14
+
+Library **665 → 668**. Akhenaten, Kherebutu, Tutu the Doubly Evil One —
+**all six mummies are now in**. Write-up: `docs/mummies-design.md` §§4–5.
+
+New `grantedAction` arm **`burnSelfAndBurnMinion`** (two of the three
+cards): its own arm rather than a priced `burnPermanent`, because "burn
+himself AND a Tremere" is one sentence with two burns — the actor goes
+whether or not the target is still there. Plus
+`allDamageAggravatedVsClan` (Akhenaten prints "any damage", which
+`handStrikesAggravated` is the wrong half of), `unlockAtMinionPhase` and
+`stealEquipment.fromTorporOnly`.
+
+**Tutu's dodge needed nothing built**: `grantsStrikePerCombat` (Treasured
+Samadji) already worked on a self-attached ally entry. The "it already
+exists is a claim to CHECK" rule paying off in the cheap direction for
+once.
+
+### Wave 48 — the mummies (3 cards), 2026-09-14
+
+Library **662 → 665**. Qetu the Evil Doer, Saatet-ta, Nephren-Ka. Write-up:
+`docs/mummies-design.md`.
+
+The family primitive — "if burned, shuffle into the owner's library" —
+landed in wave 47 with Amam, so each card here cost one knob:
+`endPressPerCombat` (a press credit that can ONLY end combat, the mirror
+of Righteous Blade's continue-only pool), `lockGrant.grants` (one lock,
+three answers — `useAbility` needed no change, it already dispatched on
+`params.grant`), and `preventNonAggOnly`.
+
+**The mirror needed a guard the original did not.** `press:continue` was
+enumerated whenever any credit existed — true and correct for a
+continue-only pool, true and WRONG for an end-only one, which has no
+press to cancel yet. It now tests the pools that can actually buy it.
+
+Three mummies remain (Akhenaten, Kherebutu, Tutu), each needing a
+self-burning kill grant or a minion-phase self-unlock.
+
+### Wave 47 — the deferrals, built (3 cards), 2026-09-14
+
+Library **659 → 662**. Young Bloods, Gregory Winter, Amam the Devourer —
+the three cards wave 46 deferred. Write-up:
+`docs/plain-allies-design.md` §5.
+
+Four mechanics: **several granted actions per card** (the compiler's
+granted-action block is now a loop, and every option/use/resolution
+carries the grant's INDEX so one grant's resolver cannot answer for
+another); `ally.burnBounty` (the burner DERIVED from the live combat or
+action frame); `ally.shuffleIntoLibraryOnBurn`;
+`ally.opposingBurnedGainLife`; and `statics.unlockBurnLife`.
+
+**`PermanentShuffledIntoLibrary` searched `seat.permanents` alone**, so
+shuffling an ALLY home would have left its self-attached entry in play
+while putting a copy of the card in the library. The `onMasterPhase`
+family bug in an *apply* this time, not a hook.
+
+### Wave 46 — plain allies II (3 cards), 2026-09-14
+
+Library **656 → 659**. Thadius Zho, ECTU Operative, Rom Gypsy. Write-up:
+`docs/plain-allies-design.md` §4.
+
+Two new `grantedAction` arms — `burnBlood` (a Ⓓ action that burns blood
+from another Methuselah's ready vampire; `steal` for the shape that keeps
+it) and `burnTorporVampire` (burns a vampire in torpor; `gainLife` for the
+feeders) — both reading their target at resolution with `findMinion`, so
+a rescue or a burn in the action's own windows leaves nothing to do
+rather than a throw.
+
+**`permanent.lockGrant` was compiled only inside `compileMasterCard`**, so
+Rom Gypsy's "Lock to give a Ravnos you control +1 stealth" — the Channel
+10 sentence on an ally — compiled to nothing and was offered to nobody,
+silently. The `delayedReplace` shape from wave 33 (a field wired in some
+compilers and not another). Extracted to `addLockGrant(spec, handler)`,
+called by the master compiler and by the shared tail for everything else.
+
+### Wave 45 — plain allies, and the clan icon (5 cards), 2026-09-14
+
+Library **651 → 656**. The Slashers, Outcast Mage, Rafastio Ghoul,
+Procurer, Muddled Vampire Hunter. Full write-up:
+`docs/plain-allies-design.md`.
+
+**The clan icon on a minion card is a REQUIREMENT (p. 10), and 57
+supported cards had none.** Dog Pack, Political Ally, War Ghoul, Zombie,
+the Vozhds, Psychophagia, Night Terrors, Kali's Fang … were playable by
+any minion. `requiresClan` now names the icon on all 86 icon-bearing
+minion-type cards; 68 tests were fixtures with no clan and are fixed;
+three negative-space fixtures that had been leaning on an icon card were
+swapped for one that prints none. **Fourteen of the 57 print a clan no V5
+vampire has and are now whole-but-inert until §7** — kept in the pool
+pending the owner's word (§0 of the design doc lists them).
+
+Two enumerator narrowings: `grantedAction.vampiresOnly` (Procurer:
+"vampire", where Seraphina says "minion") and `rush.othersOnly` (the
+Hunter: "another Methuselah", where War Ghoul reaches its own).
+
+### Wave 44 — one each round (3 cards), 2026-09-13
+
+Library **648 → 651**. Death Seeker, Leathery Hide, High Ground. Full
+write-up: `docs/one-each-round-design.md`.
+
+Three combat cards printing "a vampire can play only one X each round",
+picked to close a RECORDED DEVIATION.
+
+#### What the wave found
+
+**The deviation's fix had been sitting in the same function since wave
+29.** `spec.combatLimit` was enforced per combat FRAME — the gate read
+`playedThisRound`/`playedThisCombat`, which hold NAMES only — so one
+combatant playing a Leathery Hide barred the other from playing theirs.
+`cf.playedHistory` has recorded `{name, minion, round}` since Haymaker
+needed it, sits beside those lists, and the gate never looked at it. Four
+lines. *"One question asked in two places will drift"* in its purest
+form; the corollary recorded is **when you add a richer record, re-point
+the readers of the poorer one**.
+
+Still per frame, and now the only remainder of that deviation: the
+per-MODE limit (`modeCombatLimit`, Terror Frenzy), because
+`playedHistory` does not record modes.
+
+Second, smaller: High Ground's flight test cannot be `minionHasTag`,
+which reads the SELF-attached entry and so answers "what does this minion
+PRINT". No vampire in the pool prints flight, so the printed-only
+question would have made the clause permanently dead — whole by the
+letter of §0 and inert in fact.
+
+Also new: `cancelCombatCard` (`cancelStrikeCard` one condition wider) and
+`maneuver.onlyToLong` (the mirror of `onlyToClose`). Death Seeker's six
+rulings all turned out to describe behaviour the engine already had.
+
+### Wave 43 — retainer upkeep (3 cards), 2026-09-13
+
+Library **645 → 648**. Faithful Servant, Fortune Teller, Robert Carter.
+Full write-up: `docs/retainer-upkeep-design.md`.
+
+Three retainers whose whole text is a PHASE — the first wave outside
+Equipment since 38, and picked by the window they fire in.
+
+#### What the wave found
+
+**The phase-hook family had a hole, and a sibling with the bug this
+project has now fixed three times.**
+
+`onMasterPhase`, `onInfluencePhase` and `onDiscardPhase` all fire as
+their phase OPENS; `onMinionPhaseEnd` (wave 32) fires as one CLOSES.
+There was **no opener for the minion phase** — `tf.phase = "minion"` was
+a bare assignment — which is invisible until a card says "at the
+beginning of his or her minion phase". New `onMinionPhase`, over
+`allEntries()`.
+
+And `onMasterPhase` was iterating `seat.permanents`, so it **did not
+exist for attached cards** — every crypt ability and every retainer —
+despite a doc comment saying "every card in play". Same bug as
+`onAnyUnlock` (found by Fame) and `onBleedSuccess`. Corollary now
+recorded: **when you add a hook to a family, re-read the siblings** —
+they were written at different times and do not agree.
+
+Fortune Teller is also the first card to reveal exactly ONE card of a
+hand rather than all of it, and the first where WHICH card is a die roll;
+the pick goes through `ops.randomIndex` so a replay sees the same card.
+
+### Wave 42 — vehicles and havens (3 cards), 2026-09-13
+
+Library **642 → 645**. Helicopter, Delivery Truck, Body Bag. Full
+write-up: `docs/vehicles-and-havens-design.md`.
+
+Three equipment cards ending "a minion may have only one \<class\>" —
+the pool's first exclusivity CLASS shared across card NAMES, where
+`exclusiveKey` had only ever held a card's own name (Living Manse). It
+needed no code: the key is pushed onto the entry as a tag and the equip
+enumerator already asks for it.
+
+New: `PermanentStatics.locksOnEquip` (in `enterPermanent`, the shared
+equip pipeline — *"directly put, not locked; equipped in any fashion,
+locked"* [LSJ 20090415] [LSJ 20100119]), and two equipment abilities,
+`lockToUnlockAfterSuccess` and `burnBloodToFailAction`. The store gained
+`max` and `notTags` for Delivery Truck.
+
+#### What the wave found
+
+**One card that would have gone in wrong.** Body Bag prints *"only usable
+by an anarch"*, which reads exactly like a play requirement — and is not:
+*"can be equipped by a NON-ANARCH and would still count as a haven,
+although the rest of his effect does not apply"* [LSJ 20030607]. The sect
+gates the ABILITY, not the card. A `requiresSect` on the card would have
+been invisible, because the card works correctly every time an anarch
+wears it, which is every time anyone would play it. **"Only usable by" is
+not "Requires".**
+
+Otherwise nothing broken: the exclusivity key, the store and the equip
+pipeline all did what the cards needed with two small parameters between
+them. Three waves in, Equipment is mostly assembly.
+
+### Wave 41 — burn the equipment (3 cards), 2026-09-13
+
+Library **639 → 642**. Blood Tears of Kephran, Mummy's Tongue, Vial of
+Elder Vitae. Full write-up: `docs/burn-the-equipment-design.md`.
+
+Three equipment cards whose price is the CARD ITSELF — the
+generalisation of the one-off `burnForIntercept` wave 40 added. Four new
+arms on `equipmentAbilities`: prevent damage, gain blood, lock any
+vampire in your master phase (+ `skipNextUnlock`), and +1 level of a
+chosen Discipline until your next unlock phase. All burn the card FIRST.
+
+Vial of Elder Vitae buys a trait that OUTLIVES the card paying for it, so
+the boost sits on the minion as `disciplineBoostUntilUnlock` and is
+cleared at one place — the controller's unlock sweep, beside
+`skipNextUnlock`. An unlock phase is not a frame that ends four ways, so
+the "derive, never store" lesson does not bite here.
+
+#### What the wave found
+
+**A missing vocabulary, and it was missing quietly.** "Any one
+Discipline" is a rulebook phrase the way "every clan in the pool" is
+(p. 49), and the engine had `CLANS` with a registry drift guard and
+nothing equivalent for Disciplines. New `DISCIPLINES` (eleven codes), and
+the guard asks the registry TWICE — a Discipline a vampire HAS and a
+Discipline a library card REQUIRES are different sets that are equal
+today, which is exactly when one assertion passes for the wrong reason.
+The `clan-vocabulary` lesson in a new place.
+
+Also observed: wave 40 added `burnForIntercept` as a one-off; three cards
+later the same price has four payloads. `equipmentAbilities` is now a
+small "burn-this-card-to-X" vocabulary, and the NEXT one that arrives
+should be the refactor into `{ price, effect }` rather than a fifth
+field.
+
+### Wave 40 — discipline-granting equipment (3 cards), 2026-09-13
+
+Library **636 → 639**. Changeling Skin Mask, Drum of Xipe Totec,
+Veneficorum Artum Sanguis. Full write-up:
+`docs/discipline-granting-equipment-design.md`.
+
+Three equipment cards whose first sentence is *"the vampire with this
+equipment has superior \<D\>"*. The engine had `disciplineBoost` ("+1
+level of Celerity", the Discipline masters) and that is a different
+thing: a boost is a STEP, so a vampire with none gets basic where these
+cards say superior. New `PermanentStatics.disciplineGrant` carries the
+LEVEL and applies in `disciplinesOf` as a floor, after boosts.
+
+Second sentences: Changeling Skin Mask burns ITSELF for +2 intercept
+(`interceptForBlood` with the card where the blood was, so no repeat and
+no latch); the Drum's maneuver is the existing `maneuverPerCombat`;
+Veneficorum is `rushGrant` with `scope: "any"` — the card offering its Ⓓ
+action to every seat at the table.
+
+#### What the wave found
+
+A field that already existed, whose name and type FIT the new sentence
+and which is wrong by exactly one level — the "empty for the wrong
+reason" shape in a different costume. A card written with
+`disciplineBoost` would have compiled and tested green against any
+vampire that already printed the Discipline.
+
+Second, from the Drum's ruling rather than its text: **equipment statics
+that become combat credits are read once, when the combat is pushed**, so
+`restrict.equipment` arriving at block resolution cannot revoke them
+[RTR 20010710]. Pre-existing (Biothaumaturgic Experiment has had it since
+it landed) and recorded as a known deviation beside the `.44 Magnum` one.
+
+Also widened `rushGrant.who.clan` to a union — "Tremere **or Tremere
+antitribu**", where the single string would have looked right and been
+narrower than the card the day §7 opens that clan.
+
+### Wave 39 — conditional weapons (3 cards), 2026-09-13
+
+Library **633 → 636**. Deer Rifle, Blade of Bellona, RPG Launcher. Full
+write-up: `docs/conditional-weapons-design.md`.
+
+Three weapons whose whole text is a condition on WHEN they may be used —
+the Equipment bucket's first wave since 23. Damage, range and the
+once-per-combat latch already existed; what did not was a weapon with
+more than one maneuver, a maneuver restricted in direction, or a strike
+barred for a whole round.
+
+`CombatFrame.usedWeaponManeuver` is ONE SLOT per side, holding the card
+that maneuvered — it enforces "one weapon per side" and is what the .44
+committed-strike rule reads. Rather than widen it into a count map (fewer
+fields, but it would quietly change what `committedStrike` reads), the
+count went beside it as `weaponManeuversUsed`, keyed by card INSTANCE for
+the Chainsaw reason: two copies are two weapons [ANK 20230316].
+
+"Only usable to get to close range" needed no new state: a maneuver flips
+the range, so only a long round can reach close.
+
+#### What the wave found
+
+**Nothing broken** — the second wave running where the cards asked for
+extensions rather than repairs, each landing one line from an existing
+condition. **Writ of Acceptance is out of scope** ("is considered a
+Camarilla vampire" is a sect change).
+
+### Wave 38 — blood at the referendum (3 cards), 2026-09-13
+
+Library **630 → 633**. Mob Rule, Rant!, Cheval de Bataille. Full
+write-up: `docs/referendum-blood-design.md`.
+
+Three polling-step modifiers that move BLOOD. The engine models voting as
+SOURCES — a vampire spends its votes once and the source is then spent —
+so there is nowhere to hold a bought vote: a purchase burns 1 blood and
+casts immediately, which is exactly the ruling ("burn one blood at a time
+and wait to see"), and is why it does not spend a vote source. The offer
+lives on the referendum frame and is read by EVERY seat's enumeration:
+Mob Rule hands the table a lever, and your prey can pull it harder.
+
+§0: the pool holds 19 titled Sabbat vampires, so Cheval de Bataille is
+not inert — worth checking, since "titled Sabbat" is two filters at once.
+
+#### What the wave found
+
+**Nothing broken — but a distinction the pool forced.** Cheval de
+Bataille reads almost exactly like Alexander Silverson ("vampires burn
+blood to vote against"), which the engine already has as a per-cast toll.
+The ruling says otherwise: it "will cause the loss of blood to vampires
+voting 'no' BEFORE it is played, as well as after" [RTR 19951110], so it
+can only be a sweep at the TALLY. Building it as the toll would have
+passed any test written from the card text and been wrong in every game
+where it was played late — which is when it is played. **When a new card
+looks like one already built, the ruling is where the difference lives,
+and the difference is usually *when*, not *what*.**
+
+**Emissary is deferred**: "any Camarilla vampire older than that anarch
+can lock to cancel that anarch's votes and ballots" is a cross-seat
+optional response to a vote already granted, and the referendum frame has
+no such window.
+
+### Wave 37 — the lock as currency (3 cards), 2026-09-13
+
+Library **627 → 630**. Minor Irritation, Lost in Translation, Fillip.
+Full write-up: `docs/lock-as-currency-design.md`.
+
+Three reactions in which the lock is the price, the refund, or the thing
+being worked around. Two needed almost nothing: Lost in Translation is
+`redirectBleed` with `lockSelf` (and the existing enumerator already
+excludes the acting seat, which is the card's "other than the acting
+minion's controller"), and Fillip is a WAKE — `awake` is exactly "can
+react and block without being unlocked" (p. 44). New:
+`alsoByLockedMinion` ("USABLE by a locked vampire" allows both states,
+where `byLockedMinion` means ONLY locked), `oncePerTurnPerVampire`, and
+`noLockForBlocking`.
+
+#### What the wave found
+
+**An enumerator that returns an option without asking the card.** The
+`afterBlockResolution` branch finds the mode, checks the blocker is locked
+and can pay, and hands back the option — right while every card reaching
+it was unconditional (Cats' Guidance, Forced Vigilance), wrong for the
+first card with a condition, which was offered against anybody.
+
+The near-miss is worth as much: the obvious fix — call `effectsLegal` here
+too — broke Cats' Guidance at once, because those gates are written for
+state A, where `unlockAndAttemptBlock` is legal and no combat has started.
+**A shared helper is not automatically safe to call from a new window.**
+
+**Coterie Tactics is deferred**: two vampires blocking as one with pooled
+intercept, one then chosen as *the* blocker while the other is "still
+considered to have blocked" [LSJ 20090509] — a second blocker in the
+block-attempt frame, not a modifier on the first.
+
+### Wave 36 — buying a block (3 cards), 2026-09-13
+
+Library **624 → 627**. Legwork, Pack Tactics, Eluding the Arms of
+Morpheus. Full write-up: `docs/buying-a-block-design.md`.
+
+Three reactions that each pay a different price to get a block in, and the
+first non-event wave since 30. Eluding needed NO engine work —
+`unlockAndAttemptBlock` has existed since Sense the Savage Way, so the
+card is four lines of data. New: `onlyIfNoIntercept` (a gate on a DERIVED
+value of the reacting minion, so it cannot be a `UsabilityRule` — those
+are asked once per card play, not once per candidate minion) and
+`notWithThisAction`.
+
+#### What the wave found
+
+**A deferral note expired the moment its other half arrived.** Elder
+Intervention has carried the comment *"Pack Tactics clause is moot: that
+card is not in the V5 pool"* since the V5 build. Admitting Pack Tactics
+made Elder Intervention PARTIAL — silently, in the same pass, with nothing
+failing. `no-partial-cards.test.ts` asserts a card's own text is
+implemented, and its own text was, right up to the moment the card it
+names entered the pool. **A card whose text names another card by name is
+a two-ended dependency**, and admitting either end has to check the other.
+No other card in the pool names one this way (checked, not assumed).
+
+### Wave 35 — events that keep a counter (3 cards), 2026-09-12
+
+Library **621 → 624**. Dr. Marisa Fletcher CDC, FBI Special Affairs
+Division, Fueled by Heart's Blood. Full write-up:
+`docs/counter-clock-events-design.md`.
+
+Three directions on one mechanism: a clock that rises to a threshold and
+resets, one that rises until it burns its own card, and one that falls
+from 10 — whose falling count makes the shield it grants WIDER as the
+game goes on. New: `startsWithCounters` (applied in `notifyEnterPlay`,
+before the card's own `onEnterPlay`), `burnCounterOnGehennaEvent` (on the
+event-play site wave 33 built), and `CombatFrame.damageAfterCombat`,
+drained at the engine's one `CombatEnded` site.
+
+#### What the wave found
+
+**Burning the acting minion from inside a successful block threw.**
+`resolveBlockAttempt` pushes a combat the moment a block succeeds and
+`pushCombat` reads both combatants with `getMinion`; Dr. Marisa Fletcher
+removes the actor a few lines earlier, so the first time the card fired
+the game died with `unknown minion`. The fix is the same shape as the
+guard already sitting above it for a BLOCKER that has left play — written
+as defence in depth for a case the engine could not then reach. It can
+now.
+
+**Wormwood is deferred**: its capacity cap needs `capacityOf` to read the
+table, and that function takes only a minion. **Waiting Game** is out —
+"becomes Camarilla" is a sect change (recorded out-of-scope).
+
+25 events remain.
+
+### Wave 34 — events that are one table-wide rule (3 cards), 2026-09-12
+
+Library **618 → 621**. Port Authority, NRA PAC, Urban Jungle. Full
+write-up: `docs/table-rule-events-design.md`.
+
+The non-Gehenna events: one sentence each, no trigger and no requirement,
+each changing a rule the whole table plays under. Three subsystems — the
+replacement draw, the unlock sweep, the referendum tally — and each
+already had the hook the card needed.
+
+NRA PAC's two rulings pull opposite ways ("does not affect equips
+performed before it arrived" [LSJ 20061218]; "regardless of whether it is
+still in play" [LSJ 20080619]), which together say the card is read when
+the equip SUCCEEDS and never again — so the flag lives on the minion.
+
+#### What the wave found
+
+**Nothing broken, and that is the finding** — the first wave in a long
+run whose cards are simple rather than novel, which is evidence the
+primitives have caught up with this bucket. The one engine change with
+teeth is an ordering fix: "the cards are replaced BEFORE unlocking cards"
+[ANK 20200129] and the deferred-draw drain ran at the END of the unlock
+sweep. Nothing in the pool can tell the difference today; the ruling is
+explicit, so it moved.
+
+Two guards fired and both were right: the library audit refused three
+cards named by no test or fuzz deck, and `render.test.ts` refused
+**Government** and **Inconnu** as printed keywords the in-app rules never
+explain.
+
+28 events remain. **Blood Cult Awareness Network is inert by §0** — it
+requires a ready imbued.
+
+### Wave 33 — Gehenna taxes (3 cards), 2026-09-12
+
+Library **615 → 618**. Torpid Blood, The Slow Withering, The Rising. Full
+write-up: `docs/gehenna-taxes-design.md`.
+
+The other half of the Gehenna family: events whose text is a **rule the
+whole table plays under**, and whose replacement draw waits on a
+**condition** rather than a phase. `delayedReplaceUntil` +
+`GameState.drawWhenCondition`, released from inside `emit` — before the
+event is applied, because "until your PREY is ousted" must read the
+seating ring as it was when the oust happened.
+
+Two smaller additions: a play-cost filter on the **level** of the mode
+being played (`requiresSuperior`, the sibling of `requires`), with a
+per-minion exemption that a diablerie sets and any Gehenna event clears;
+and a pool-gain bar that DROPS the `PoolGained` event at `emit` rather
+than applying it as zero — the fuzz proves pool conservation by replaying
+the log, so a logged gain that never landed would break the replay.
+
+#### What the wave found
+
+**Narrow Minds shipped broken in wave 31.** `delayedReplace` was wired in
+the combat and modifier compilers and nowhere else; Narrow Minds is an
+EVENT, compiled through the master compiler, so its "do not replace until
+your next unlock phase" did nothing at all. A partial card in the pool
+that `no-partial-cards.test.ts` could not see — that test asserts the SPEC
+is complete, not that the compiler reads every field of it. Now wired once
+in `compileSpec`, where every card type passes.
+
+31 events remain.
+
+### Wave 32 — Gehenna: the recurring event (3 cards), 2026-09-12
+
+Library **612 → 615**. Dragonbound, Thirst, Conquest of Humanity. Full
+write-up: `docs/gehenna-events-design.md`.
+
+The family wave 31's card type exists for: **one card, in one Methuselah's
+play area, firing in EVERY Methuselah's phase, for that Methuselah**. The
+three hang off three different phases — discard, the END of the minion
+phase (a new hook, `onMinionPhaseEnd`, and the only one of its four
+siblings that fires as a phase closes, which is what lets Thirst ask "who
+did not hunt during that minion phase"), and unlock.
+
+"Gehenna" enters as a **printed keyword that counts itself**: Conquest of
+Humanity gates on 2 or more OTHER Gehenna events in play (a PLAY-TIME
+check only [PIB 20121031]), and Thirst's waterline is the number of
+Gehenna events in play **including itself**. §0 accordingly required the
+wave to put three on the table at once, which is why it is these three.
+
+`delayedReplace` gained `whileInPlay` — "do not replace as long as this
+card is in play" names no phase, no action and no combat, so it cannot be
+a counter on a seat; `GameState.drawWhenLeavesPlay` keys the wait by CARD
+and `burnPermanent` releases it.
+
+#### What the wave found
+
+**The in-app rules screen is part of the pool's vocabulary.**
+`render.test.ts` asserts every printed sub-type and keyword in the
+registry is explained in the rules text, and "Gehenna" was not. Worth
+noting wave 31 passed that test without an **Event** entry at all, purely
+because the word "event" appears in the log section's prose — the
+detector is a substring match, so it can pass for the wrong reason.
+
+**Waves 27–31's cards were never added to the fuzz decks.** Step 5 of the
+wave ritual was missed five waves running; the deck list ends at wave 26.
+Wave 32's three are in. Flagged rather than fixed: adding fifteen cards
+reshuffles every seeded game at once.
+
+34 events remain.
+
+### Wave 31 — EVENTS, the card type (3 cards), 2026-09-12
+
+Library **609 → 612**. The Bitter and Sweet Story, Hunger Moon, Narrow
+Minds. Full write-up: `docs/events-design.md`.
+
+The Event bucket was untouched — "expect this to need machinery, not just
+cards" — so this is the card type plus the three simplest events on it.
+p. 37: an event is put into play with a **discard phase action**, no more
+than one per phase, and **each event only once each game**.
+
+`cardType: "event"` compiles as a master card in a different window (an
+event goes into play, is controlled by whoever played it, and its text is
+a static or a hook — none of that differs). The once-per-game bar is
+`GameState.eventsPlayed`, by NAME and recorded at play time, so it
+outlives the card. **Hand cards had never been enumerated in the discard
+phase at all**, because until now nothing in hand could be played there.
+
+Two smaller additions: a hand-size static that every seat reads against
+its OWN victory points (one card, whole-table effect), and a
+`PlayCostMod` that matches on what a card DOES (`redirectsBleed`) rather
+than on its name, type or printed tag.
+
+#### What the wave found
+
+**`central-queries` was right and my shortcut was wrong.** I first mapped
+the event type to no cost types, reasoning that nothing in the pool
+prices an event; the test that every library card names a printed type
+caught it. The cost vocabulary is the PRINTED TYPE LINE, not the set of
+types somebody has written a modifier for.
+
+37 events remain, most of them Gehenna cards gated on how many other
+Gehenna events are in play.
+
+### Wave 30 — blocked, but no combat (3 cards), 2026-09-12
+
+Library **606 → 609**. Clan Loyalty, Blood Brother Ambush, Ghoul Escort.
+Full write-up: `docs/no-combat-design.md`.
+
+Three cards that replace the SECOND consequence of a successful block
+(p. 27): the blocker locks, and the minions enter combat. These leave the
+first and cancel the second. **Ghoul Escort was deferred by wave 26** and
+is built here, under the owner's standing rule that a missing mechanic is
+not a reason to defer a batch.
+
+`cancelCombat` drops the combat frame and emits **`CombatCancelled`** — a
+new event, distinct from `CombatEnded` so that End of Round does not run
+and no after-combat rider fires. Two outcomes: the action continues (Clan
+Loyalty unlocks the blocker again, [ANK 20180321]) or stays blocked
+(Ghoul Escort, Blood Brother Ambush). Also new: a block bar that outlives
+its action (`TurnFrame.clanBlockBars`), and a card that BECOMES a minion
+mid-combat — `allyEntry` is now shared rather than the ally compiler's
+alone.
+
+#### What the wave found
+
+**There are two effect-apply switches, not one** — one for combat cards,
+one for modifiers and reactions. The new case went into the wrong one, so
+Clan Loyalty played, paid its blood, emitted `CardResolved` and did
+nothing. An effect kind missing from a switch is a silent no-op in the
+switch that never sees it.
+
+**An unrestricted modifier is offered in the ordinary action window**, so
+Clan Loyalty was playable during the block attempt, where cancelling a
+combat means nothing. Caught by the negative-space test, which was
+passing through a path that never reached its clan check.
+
+### Wave 29 — the first-strike cards (3 cards), 2026-09-12
+
+Library **603 → 606**. Quick Jab, Forearm Block, Haymaker — the three
+wave 28 deferred, built on the first-strike kernel
+(`docs/first-strike-design.md`). Full write-up:
+`docs/first-strike-cards-design.md`.
+
+New: a damage CEILING on a strike ("ignore the excess", capped at
+infliction so only one point ever needs preventing [LSJ 20071117]); a
+round-scoped prevention pool filtered to HAND strikes, zeroed by the
+first one it meets because the card says "prevent", not "can prevent"
+[ANK 20200318]; a next-round first-strike grant promoted at the round
+boundary; a forced normal-round strike; and `cf.playedHistory`, the only
+record of WHO played WHAT in WHICH round — which is what "not usable if
+this minion played a Haymaker LAST round" needs.
+
+#### What the wave found
+
+**`strikeHandBonus` was not forwarding its new fields.** The spec, the
+engine and the card all agreed; the compiler's case passed neither
+`firstStrike` nor `capDamage` through, so Quick Jab struck for full
+damage and the test looked like a broken cap rather than an unread one.
+
+**`pendingSecondStrike` was cleared one line too early** — nulled before
+the call that reads it, so the second striker's blow silently vanished.
+The kernel's own tests could not see it: in all of them the second
+striker dies or dodges.
+
+**The range gates were checked inside `combat.chooseStrike` only**, so a
+card played in any other combat window carried an inert range clause.
+Hoisted above the window switch. Second time in two waves a range gate
+turned out to be in the wrong scope.
+
+### Wave 28 — what a strike is made of (4 cards), 2026-09-12
+
+Library **599 → 603**. Channeling the Beast, Lucky Blow, Up Yours!,
+Backflip. Full write-up: `docs/strike-sources-design.md`.
+
+Four combat cards that declare a strike, picked so the differences are
+the content. Channeling the Beast and Lucky Blow print the SAME strike
+and differ only in cost and "do not replace until after combat" — each is
+the other's control. Backflip is a dodge with a press. Both pairs are
+data on existing machinery.
+
+Up Yours! is not: it is **the first strike whose size is printed on
+somebody else's card** ("X damage, where X is the pool cost of the chosen
+weapon"). `strikeWeaponCost` enumerates one option per weapon on the
+opposing minion, so the choice is fixed as the card is played, and the
+cost is read at resolution through `ops.registry` — which exists for
+exactly this. With no weapon to name, the card is not offered at all.
+
+#### What the wave found
+
+No engine defect; two mistakes of mine, both about WHERE a thing belongs.
+
+**A rider is not a second effect.** Backflip's press was first written as
+a `press` effect beside `strikeDodge` in the same mode — but a mode
+resolves in ONE window, and those two kinds map to different ones, so one
+of them never fired. `strikeDamage` already had the answer (riders live
+inside the strike primitive); `strikeDodge` gained the same field.
+
+**The range gates are MODE rules.** `onlyAtLongRange` / `onlyAtCloseRange`
+are read from `mode.usable` and are silently ignored on the spec —
+`rulesHold` lists them as "checked elsewhere" and falls through. Written
+at spec level, Backflip was offered at close range. A gate that does
+nothing looks exactly like a gate that passes.
+
+### Wave 27 — a second minion helps the action (3 cards), 2026-09-12
+
+Library **596 → 599**. Suppressing Fire, Zapaderin, Stealth Ritus. Full
+write-up: `docs/second-minion-modifiers-design.md`.
+
+Three action modifiers played on the acting side by a minion that is NOT
+the actor: one lends an intercept penalty to the blocker, one taxes a
+whole class of would-be blockers, one has a third minion pay the price.
+
+Two real additions. `requiresAttachedTag` — "only usable by a minion WITH
+A GUN", a `meetsRequirements` clause reading equipment tags rather than a
+discipline or clan. And a **yardstick that is not the acting minion**:
+`ActionInterceptModified` already carried a `youngerThan` id, but it was
+hard-coded to `af.acting` and only resolved when the minion handed to the
+filter WAS the actor. Zapaderin measures against the Ravnos who played it,
+who by the card's first sentence is not the actor.
+
+#### What the wave found
+
+No engine defect; two mistakes of mine, both more instructive.
+
+**I rebuilt a primitive that already existed.** `modifyBlockerIntercept`
+has been in the pool since Forced Confessional, with a better gate than
+the one I wrote. It compiled only because `EFFECT_TAGS` is a total
+`Record` over the effect union — an exhaustive map is what turned a
+silent duplicate into a compile error. "It already exists" is a claim to
+CHECK, and so is its opposite.
+
+**A fixture that shared a card instance id.** `threeSeatGame` deals Alice
+a Conditioning with id `c1`, and the fixture pushed the wave's card with
+the same id — so the engine resolved the wrong card and three working
+cards looked like three broken ones. The event log said so plainly
+(`BleedAmountModified` from a card that modifies no bleeds); it is the
+first thing to read when an effect "does not happen".
+
+Also relearned: a modifier resolves when the impulse cycle it was played
+in COMPLETES, not when its as-played window closes.
+
+### Wave 26 — retainers bought with a price (3 cards), 2026-09-12
+
+Library **593 → 596**. Corpse Minion, Malajit Chandramouli, Omael Kuman.
+Full write-up: `docs/retainer-prices-design.md`.
+
+Wave 22 asked what a retainer does in a fight; this one asks what one
+**costs**. Three different answers: the employer's blood (Corpse Minion,
++1 intercept), the retainer's own lock (Malajit, +1 stealth), and blood
+again for something that is not a bonus at all (Omael Kuman, the range).
+
+Corpse Minion is the pool's first **repeatable** in-window price — *"may
+be used any number of times during a single action"* [TOM 19960109] — so
+it carries no latch, which is what makes "burn X for +X" and "burn 1 for
++1, repeatedly" the same offer rather than an approximation.
+
+Malajit's second clause, *"if that action is blocked, burn him"*, fires at
+the block-success site beside `blockedToll` and `blockedPoolToll` — the
+two statics that already meant "the actor pays for having been blocked" —
+and only for a LOCKED card, since locking him is how he is spent.
+
+#### What the wave found
+
+No engine defect; one test defect worth more than an engine one. The
+first draft built the retainer entry by hand with `statics: {}`, so
+Malajit's burn-when-blocked clause **was not in the fixture at all** and
+the test failed against a copy of the card that had never had it. That is
+"empty for the wrong reason" in its test-side form: a fixture assembled by
+hand is a second, silently drifting model of the card. The helper now
+takes its statics from the compiled handler.
+
+Also worth recording: with a bare blocker, +1 stealth simply WINS, so the
+action is not blocked and the burn clause is never reached. The blocker
+has to be given enough intercept to succeed anyway, or the test passes
+without testing anything.
+
+**Deferred: Ghoul Escort** — "burn this retainer and unlock instead of
+entering combat" replaces the block's second consequence (p. 27) rather
+than pricing a bonus, and wants a choice raised before `pushCombat`.
+
+### Wave 25 — destroyer allies (3 cards), 2026-09-12
+
+Library **590 → 593**. The Bruisers, Arcanum Investigator, Felix "Fix"
+Hessian. Full write-up: `docs/destroyer-allies-design.md`.
+
+Three allies that print stats and one clause: a Ⓓ action that **burns a
+card in play**. The action existed (`actionOnPermanent`, from Conceal and
+Arson) and the grant existed (`permanent.grantedAction`, from the crypt
+waves) — but none of `grantedAction`'s six arms **destroyed** anything,
+so the two had never met. `burnPermanent` is a seventh arm carrying
+`what` (location or equipment) and `scope` (prey / predator-or-prey /
+any other Methuselah), plus a `poolCost` field, because an ally's blood
+IS its life (p. 11) and Felix's pool price is not interchangeable with
+one.
+
+Scope gates the OPTION, not the resolution: announcing locks the ally and
+spends its action, so a target that was never legal must not be
+announceable. Never your own cards either — Felix's text is as
+unqualified as Arson's, and Arson has excluded the acting seat since it
+was built.
+
+#### What the wave found
+
+No engine change at all — three cards, three scopes, one switch case and
+one field, which is the `grantedAction` shape finally paying for itself
+(the previous ally wave needed a mechanism per card).
+
+One test lesson: a hand-written pass list pinned the wrong seat order,
+because the impulse cycle after an announcement does not begin at the
+acting seat. The test now walks whatever the engine asks and asserts
+**which seats were offered a block** — which is what Ⓓ means, and is
+immune to where the cycle starts.
+
+### Wave 24 — reactions that read the acting minion (4 cards), 2026-09-12
+
+Library **586 → 590**. Banner of Neutrality, Keep it Simple, Nest of
+Eagles, Venetian Conference. Full write-up:
+`docs/acting-minion-reactions-design.md`.
+
+`CardSpec` had eight `requires*` fields and every one asks about the
+vampire **playing** the card. These four ask about the minion being played
+**against** — "only usable if a Camarilla or Sabbat vampire is bleeding
+you", "not usable if the acting minion is an Assamite or wraith or has
+flight" — and nothing could say it. `UsabilityRule` was the near-miss: it
+already carries acting-side clauses, but it is a string union, so it can
+say "the acting minion is an undead ally" and can never say "…is one of
+these two sects". Hence `requiresActing`, a record checked in the one
+place `spec.usable` is.
+
+Two smaller firsts: a bleed modifier whose SIZE is read off the action
+(Keep it Simple, −1 per point of the actor's stealth, a snapshot that
+works because the bleed amount is a fold), and a `bonus.extra` that is
+**negative** — Nest of Eagles' "by 3 **instead**" is base −1 plus extra
+−2, which is the whole difference between "instead" and "as well".
+
+#### What the wave found
+
+No engine defect — the first wave in a while without one. It found a
+**shape** instead: a card's conditions were expressible either as a
+parameterless `UsabilityRule` or as a `requires*` about the player, and
+the acting minion had no home in either.
+
+**"Assamite" is the pool's BANU HAQIM.** The clan filter that matched
+nothing is already in the CLAUDE.md lessons; here the failure would have
+been backwards and silent, because Nest of Eagles' clause is a NEGATIVE
+one — the wrong name would not make the card unplayable, it would make it
+playable against precisely the minions it says it cannot answer.
+
+**Venetian Conference costs 1 blood**, which its printed text does not
+say; `supported.test.ts` caught the spec disagreeing with the registry.
+
+### Wave 23 — one-shot weapons (4 cards), 2026-09-12
+
+Library **582 → 586**. Grenade, White Phosphorus Grenade, Smoke Grenade,
+Waxen Poetica. Full write-up: `docs/one-shot-weapons-design.md`.
+
+Four weapons that print **"Burn after use"**, and the wave is about *when*
+"use" happens. `usableOnce` is spent when a strike is CHOSEN — on
+purpose, because a dodged strike was still a use of the weapon. These
+four burn when the strike **resolves**, and the rulings insist on the
+difference from both sides: *"does not burn nor inflict damage if combat
+ends before it resolves"* [LSJ 19981006], and yet the Smoke Grenade,
+whose own strike IS "combat ends", *"still burns when used"*
+[LSJ 20001127-2]. Both fall out of one loop in the combat-ends branch
+that burns a weapon only when the combat-ends strike is its own.
+
+The rest is three riders on `spec.weapon`: environmental self-damage at
+close range (`source: null`, [LSJ 19970801] — so no dodge, prevention or
+reaction that reads "damage from the opposing minion" can see it), a
+strike that ends combat, and a "not usable against" gate read off the
+opposing minion.
+
+#### What the wave found
+
+**`chooseWeaponStrike` pinned `combatEnds` to false.** The field had been
+on `Strike` since the start; every weapon that existed dealt damage, so
+the weapon path never passed it through.
+
+**Blood is not evidence of aggravated damage.** Both aggravated cards
+failed their first assertions: this engine sends a ready vampire to
+torpor on *any* aggravated damage, so 1 point and 2 look identical
+afterwards. The tests read `DamageInflicted` instead — which is also the
+only way to assert the environmental packet, the thing the wave adds.
+
+**Deferred:** Bomb (a Ⓓ action that burns a location, on top of the same
+one-shot machinery) and Improvised Flamethrower (burns on *being hit* at
+long range, a trigger no weapon has).
+
 ### Wave 22 — the combat retainers (3 cards), 2026-09-11
 
 Library **579 → 582**. Vengeful Spirit, Zombie, Resplendent Protector.

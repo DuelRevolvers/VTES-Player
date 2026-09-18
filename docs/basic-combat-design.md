@@ -93,7 +93,17 @@ and it cost one red run to notice.
 
 Fuzz: all five dealt in, green on the first run.
 
-## 4. Not done
+## 4. Not done — CLOSED 2026-09-16
+
+> This section is kept as written, because what it claimed turned out to
+> be exactly right and that is worth more than tidying it away. **All five
+> are now in the pool**: Quick Jab in wave 29
+> (`docs/first-strike-cards-design.md`), Lucky Blow with it, and
+> Backstep / Disengage / Groundfighting in wave 56
+> (`docs/cancel-in-combat-design.md`). Every one of them did use
+> `delayedReplace: "afterCombat"` as-is, and the second clauses were
+> indeed the work. **A deferral that names a MECHANISM survives; one that
+> names a feeling does not.**
 
 The rest of the "do not replace until after combat" cards each add a
 second clause and are separate builds, not more of this wave:

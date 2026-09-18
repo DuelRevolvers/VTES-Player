@@ -64,6 +64,7 @@ import type {
   ActionKind,
   BlockAttemptFrame,
   CardInstance,
+  DelayedDrawCondition,
   CardInstanceId,
   CardPlayFrame,
   AfterCombatRider,
@@ -397,6 +398,18 @@ export class VtesEngine implements EngineOps {
   // -- the mutation channel -------------------------------------------------
 
   emit(ev: GameEvent): void {
+    // "A Methuselah cannot gain pool during their own turn unless they
+    // have the Edge or at least 1 victory point — instead, any pool they
+    // would gain goes to the blood bank" (The Rising). The blood bank is
+    // unmodelled and infinite, so the gain simply does not happen — and
+    // the event is DROPPED rather than applied as zero, because the fuzz
+    // proves pool conservation by replaying the log, and a logged gain
+    // that never landed would make the replay disagree with the table.
+    if (ev.type === "PoolGained" && this.poolGainBarred(ev.seat)) return;
+    // "Do not replace until <condition>" comes due BEFORE the event is
+    // applied: "until your prey is ousted" has to read the seating ring
+    // as it was when the oust happened.
+    this.releaseConditionalDraws(ev);
     this.state.eventLog.push(ev);
     this.applyToEntities(ev);
     this.applyToFrames(ev);
@@ -614,6 +627,12 @@ export class VtesEngine implements EngineOps {
           statics: ev.statics,
           tags: [...ev.tags],
         };
+        // "Not usable the round it is put in play" (Molotov Cocktail) —
+        // stamped here rather than carried on the event, because the
+        // combat frame is part of the state a replay rebuilds, so the
+        // apply can read it and the event stays as it was.
+        const cfNow = this.state.frames.find((f) => f.kind === "combat");
+        if (cfNow?.kind === "combat") entry.attachedRound = cfNow.round;
         if (ev.life !== undefined) entry.life = ev.life;
         if (ev.counters !== undefined) entry.counters = ev.counters;
         if (ev.aura !== undefined) entry.aura = ev.aura;
@@ -711,13 +730,43 @@ export class VtesEngine implements EngineOps {
         break;
       }
       case "CardStored": {
-        const seat = getSeat(this.state, ev.seat);
-        const pile = ev.from === "hand" ? seat.hand : seat.library;
+        const seat = getSeat(this.state, ev.fromSeat ?? ev.seat);
+        const pile =
+          ev.from === "hand"
+            ? seat.hand
+            : ev.from === "ashHeap"
+              ? (seat.ashHeap ??= [])
+              : seat.library;
         const i = pile.findIndex((c) => c.id === ev.cardId);
         if (i >= 0) pile.splice(i, 1);
         const holder = this.findPermanent(ev.holder);
         (holder.stored ??= []).push({ id: ev.cardId, name: ev.name });
         holder.storedFaceUp = ev.faceUp;
+        break;
+      }
+      case "AshHeapCardToLibrary": {
+        const seat = getSeat(this.state, ev.seat);
+        const i = (seat.ashHeap ?? []).findIndex((c) => c.id === ev.cardId);
+        if (i >= 0) {
+          const [card] = seat.ashHeap!.splice(i, 1);
+          if (card) {
+            if (ev.to === "top") seat.library.unshift(card);
+            else seat.library.push(card);
+          }
+        }
+        break;
+      }
+      case "StoredCardToLibrary": {
+        const holder = this.findPermanent(ev.holder);
+        const i = (holder.stored ?? []).findIndex((c) => c.id === ev.cardId);
+        if (i >= 0) {
+          const [card] = holder.stored!.splice(i, 1);
+          if (card) {
+            const lib = getSeat(this.state, ev.seat).library;
+            if (ev.to === "top") lib.unshift(card);
+            else lib.push(card);
+          }
+        }
         break;
       }
       case "StoredCardDrawn": {
@@ -732,12 +781,27 @@ export class VtesEngine implements EngineOps {
       case "PermanentShuffledIntoLibrary": {
         // Leaves play and goes back into its owner's library, shuffled
         // (Aranthebes). Counters and attached cards do not survive.
+        // Seat-level AND attached: this searched `seat.permanents` alone,
+        // so shuffling an ATTACHED card (an ally's own entry — Amam, the
+        // mummies) left the entry in play and put a copy in the library.
+        // The `onMasterPhase` / `onAnyUnlock` family bug, in an apply.
+        let removed = false;
         for (const seat of this.state.seats) {
           const idx = seat.permanents.findIndex((p) => p.card.id === ev.cardId);
           if (idx >= 0) {
             seat.permanents.splice(idx, 1);
+            removed = true;
             break;
           }
+          for (const m of seat.minions) {
+            const ai = m.attached.findIndex((p) => p.card.id === ev.cardId);
+            if (ai >= 0) {
+              m.attached.splice(ai, 1);
+              removed = true;
+              break;
+            }
+          }
+          if (removed) break;
         }
         const home = getSeat(this.state, ev.seat);
         home.library.push({ id: ev.cardId, name: ev.name });
@@ -1032,6 +1096,10 @@ export class VtesEngine implements EngineOps {
             id: burnt.id,
             name: burnt.name,
             crypt: true,
+            // DERIVED capacity, not the printed field: a vampire that was
+            // carrying a +1-capacity master when it burned was that big,
+            // and a token vampire has no printed card to go back to.
+            capacity: capacityOf(burnt),
           });
         }
         for (const seat of this.state.seats) {
@@ -1739,6 +1807,13 @@ export class VtesEngine implements EngineOps {
     // 5. Red List trophies: Red List is unmodelled, and no V5 card grants
     //    it — still deferred (docs/diablerie-design.md §6).
     this.emit({ type: "DiablerieCommitted", diablerist, victim });
+    // "Vampires who commit diablerie ignore this effect until a Gehenna
+    // event is played" (The Slow Withering) — a mark on the vampire, not
+    // on the card, because it outlives the card that granted it.
+    {
+      const d = findMinion(this.state, diablerist);
+      if (d) d.ignoresGehennaTax = true;
+    }
     // Cards that answer a diablerie do so before the blood hunt is called
     // (Regent, docs/granted-rush-design.md §6). The victim is still in
     // play here, so a card on it can move itself off before the burn.
@@ -1759,8 +1834,21 @@ export class VtesEngine implements EngineOps {
     //    the deferred queue asking it once the action settles is exactly
     //    the right moment.
     this.offerDiablerieDiscipline(diablerist, victimCapacity);
+    // "Blood hunts cannot be called on vampires with capacity GREATER THAN
+    // the number of counters on this card who diablerize a YOUNGER
+    // vampire" (Fueled by Heart's Blood). Read here, where both capacities
+    // are still known — the victim's was captured above, before the burn.
+    const dm = findMinion(this.state, diablerist);
+    const shielded =
+      dm !== null &&
+      victimCapacity < capacityOf(dm) &&
+      this.state.seats.some((s) =>
+        s.permanents.some(
+          (p) => p.statics.barsBloodHuntAboveCounters && capacityOf(dm) > (p.counters ?? 0),
+        ),
+      );
     // The blood hunt: an automatic, immediate referendum (p. 35).
-    this.pushBloodHunt(diablerist);
+    if (!shielded) this.pushBloodHunt(diablerist);
   }
 
   /**
@@ -1875,8 +1963,17 @@ export class VtesEngine implements EngineOps {
           this.processOusts();
           return true;
         }
-        // "Unlock all of your cards" — then unlock-phase effects (p. 17).
+        // "Do not replace until your next unlock phase" comes due FIRST:
+        // "the cards are replaced BEFORE unlocking cards — other unlock
+        // effects cannot be ordered before" [ANK 20200129, LSJ 20091208].
+        // This used to run at the end of the sweep, which is the same
+        // result in every case the pool could produce but the wrong order
+        // the moment an unlock effect reads the hand.
+        // docs/table-rule-events-design.md §1
         const seat = getSeat(this.state, tf.seat);
+        for (let i = 0; i < seat.delayedDraws; i++) this.drawToReplace(seat.id);
+        seat.delayedDraws = 0;
+        // "Unlock all of your cards" — then unlock-phase effects (p. 17).
         for (const m of seat.minions) {
           // "Does not unlock as normal": persistent (a card in play names
           // this minion), one-shot ("during their next unlock phase"), or
@@ -1895,6 +1992,9 @@ export class VtesEngine implements EngineOps {
             m.skipNextUnlock === true ||
             unlockSuppressed(this.state, m.id);
           m.skipNextUnlock = false; // the one-shot form is spent either way
+          // "…until YOUR next unlock phase" — this sweep IS that phase,
+          // and it expires whether or not the minion actually unlocks.
+          delete m.disciplineBoostUntilUnlock;
           // Unconditional: the ruling burns them "during that unlock
           // phase", whether or not the minion was locked to begin with.
           if (stunCounters > 0) this.addMinionCounters(m.id, "stun", -stunCounters);
@@ -1903,12 +2003,26 @@ export class VtesEngine implements EngineOps {
           // would otherwise happen, so no counter is wasted on a minion
           // that is unlocked already or held down by something else.
           const paidFor = m.locked && !suppressed && this.spendUnlockSink(m);
-          if (m.locked && !suppressed && !paidFor) {
+          // "Every Nosferatu burns 1 ADDITIONAL blood to unlock during his
+          // or her controller's unlock phase" (Whispers of the Nictuku) —
+          // a price on the unlock itself, charged by a card that may sit in
+          // ANY seat's play area. A vampire who cannot pay does not unlock;
+          // an unlocked vampire is not unlocking and pays nothing.
+          // docs/transfer-currency-design.md §4
+          const surcharge =
+            m.locked && !suppressed && !paidFor ? this.unlockSurchargeFor(m) : 0;
+          if (m.locked && !suppressed && !paidFor && surcharge > m.blood) {
+            // Cannot pay: it stays locked, and nothing is burned.
+          } else if (m.locked && !suppressed && !paidFor) {
+            if (surcharge > 0) {
+              this.emit({ type: "BloodBurned", minion: m.id, amount: surcharge });
+            }
             this.emit({ type: "MinionUnlocked", minion: m.id });
           }
           m.awake = false;
           m.bledThisTurn = false;
           m.calledPoliticalThisTurn = false;
+          m.huntedThisPhase = false;
           m.usedHuntingGroundThisTurn = false;
           m.playedSinceUnlock = [];
           for (const p of m.attached) {
@@ -1959,9 +2073,6 @@ export class VtesEngine implements EngineOps {
         for (const { entry, owner } of this.allEntries()) {
           this.registry[entry.card.name]?.onAnyUnlock?.(entry, owner, seat.id, this);
         }
-        // "Do not replace until your next unlock phase" comes due now.
-        for (let i = 0; i < seat.delayedDraws; i++) this.drawToReplace(seat.id);
-        seat.delayedDraws = 0;
         tf.unlockDone = true;
         return true;
       }
@@ -1977,7 +2088,7 @@ export class VtesEngine implements EngineOps {
       const edgeNeeded = this.state.edge === tf.seat && !tf.edgeDone;
       const unlockAbilities =
         !tf.unlockAbilitiesDone &&
-        this.abilityOptionsFor(tf.seat, "turn.unlock").length > 0;
+        this.unlockWindowOptions(tf.seat).length > 0;
       // A withdrawal is ANNOUNCED in this phase (p. 38), so the phase must
       // not settle past it — the third reason the window stays open, and
       // it has to be named at all three sites that decide that (here,
@@ -1998,15 +2109,14 @@ export class VtesEngine implements EngineOps {
         tf.trifleGained = false;
         // "During each Methuselah's master phase, that Methuselah …"
         // (Brujah Debate) — every card in play sees the phase begin.
-        for (const s of this.state.seats) {
-          for (const p of [...s.permanents]) {
-            this.registry[p.card.name]?.onMasterPhase?.(
-              p,
-              { seat: p.controller ?? s.id, minion: null },
-              tf.seat,
-              this,
-            );
-          }
+        //
+        // `allEntries()`, not `seat.permanents`: this scanned only
+        // seat-level cards, which is the same bug `onAnyUnlock` had before
+        // Fame found it and `onBleedSuccess` had after that. Every crypt
+        // ability and every retainer is ATTACHED, so the hook did not
+        // exist for them (docs/retainer-upkeep-design.md §1).
+        for (const { entry, owner } of this.allEntries()) {
+          this.registry[entry.card.name]?.onMasterPhase?.(entry, owner, tf.seat, this);
         }
         return true;
       }
@@ -2021,7 +2131,7 @@ export class VtesEngine implements EngineOps {
     for (const seatId of sequencingOrder(this.state, tf.seat, [])) {
       if (seatId === tf.seat) continue;
       if (tf.unlockOthersDone.includes(seatId)) continue;
-      if (this.abilityOptionsFor(seatId, "turn.unlock").length > 0) return seatId;
+      if (this.unlockWindowOptions(seatId).length > 0) return seatId;
     }
     return null;
   }
@@ -2067,6 +2177,18 @@ export class VtesEngine implements EngineOps {
     // "Cannot act this turn" (recruited allies, p. 22) expires now.
     for (const seat of this.state.seats) {
       for (const m of seat.minions) m.cannotActThisTurn = false;
+    }
+    // "Any minion who successfully performs an equip action UNLOCKS AT THE
+    // END OF THE TURN" (NRA PAC). The flag is on the minion, so the promise
+    // is kept whether or not the card is still in play [LSJ 20080619].
+    for (const seat of this.state.seats) {
+      for (const m of seat.minions) {
+        if (m.unlocksAtEndOfTurn !== true) continue;
+        m.unlocksAtEndOfTurn = false;
+        if (m.locked && !unlockSuppressed(this.state, m.id)) {
+          this.emit({ type: "MinionUnlocked", minion: m.id });
+        }
+      }
     }
     // "…take control of them until the END OF YOUR TURN" (Puppet Master
     // superior) — the one borrowed-control card in the pool. Reverting is
@@ -2159,6 +2281,25 @@ export class VtesEngine implements EngineOps {
         // window is computed, so it never opens on an item nobody can
         // answer (docs/round-recurring-combat-design.md §5).
         if (this.drainAutoPrevented(cf)) return true;
+        if (cf.pendingDamage.length === 0 && cf.pendingSecondStrike) {
+          // THE SECOND HALF OF A FIRST-STRIKE ROUND. The first strike has
+          // finished resolving, damage and all, which is the first moment
+          // the engine can answer p. 33's question: *"if the opposing
+          // minion is burned or sent to torpor, their strike will not be
+          // resolved at all."*
+          const second = cf.pendingSecondStrike;
+          const striker = second === "acting" ? cf.acting : cf.opposing;
+          if (this.combatantReady(striker)) {
+            // CLEARED AFTER, not before: `resolveStrikes` reads this
+            // field to know whose strike the second phase is.
+            this.resolveStrikes(cf, "second");
+          }
+          cf.pendingSecondStrike = null;
+          // Not ready → the strike is simply lost, and the checks below
+          // end the round exactly as they would for any combatant who is
+          // no longer ready (p. 30).
+          return true;
+        }
         if (cf.pendingDamage.length === 0) {
           // A burned combatant (ally) no longer exists — "no longer
           // ready" covers it (p. 30).
@@ -2177,6 +2318,20 @@ export class VtesEngine implements EngineOps {
             cf.strikes = { acting: null, opposing: null };
             cf.step = "chooseStrike";
           } else {
+            // "If either minion inflicts MORE DAMAGE than the other this
+            // round, that minion gets an optional press this round"
+            // (Haymaker). Settled here, leaving damage resolution, which
+            // is the first moment both totals are final — and `damage
+            // TakenThisRound` is damage TAKEN, so each side's output is
+            // the other side's entry.
+            if (cf.pressToBiggerHitter) {
+              cf.pressToBiggerHitter = false;
+              const byActing = cf.damageTakenThisRound.opposing;
+              const byOpposing = cf.damageTakenThisRound.acting;
+              if (byActing !== byOpposing) {
+                cf.presses[byActing > byOpposing ? "acting" : "opposing"] += 1;
+              }
+            }
             cf.step = "press";
             cf.awaiting = "acting";
             cf.declines = 0;
@@ -2203,6 +2358,22 @@ export class VtesEngine implements EngineOps {
             cf.usedThisRound = []; // "each round" abilities recharge
             cf.playedThisRound = []; // "one X each round" resets
             cf.handStrikesAggravated = { acting: false, opposing: false };
+            // "…that minion's INITIAL STRIKE THIS ROUND gets first
+            // strike" (Haymaker) — a round-scoped grant, and the
+            // half-finished round it belongs to is over either way.
+            cf.firstStrikeRound = {
+              // "If ANOTHER ROUND occurs, this minion gets first strike
+              // on their initial strike that round" (Forearm Block) —
+              // promoted AFTER the clear, which is the whole reason it is
+              // a second field and not the same one.
+              acting: cf.firstStrikeNextRound?.acting ?? false,
+              opposing: cf.firstStrikeNextRound?.opposing ?? false,
+            };
+            cf.firstStrikeNextRound = { acting: false, opposing: false };
+            cf.pendingSecondStrike = null;
+            cf.preventHandStrike = { acting: 0, opposing: 0 };
+            cf.forcedHandStrike = { acting: null, opposing: null };
+            cf.pressToBiggerHitter = false;
             // "…cannot be used THIS ROUND (by either combatant)"
             // (Immortal Grapple) and the aim rider that rides one strike.
             cf.handStrikesOnly = false;
@@ -2275,6 +2446,10 @@ export class VtesEngine implements EngineOps {
               }
             }
           } else {
+            // "Burn this card at the END OF COMBAT" (Blood Brother
+            // Ambush) — an ally that exists only for one fight. Before
+            // the event, so the combatant list is still intact.
+            this.burnOneFightAllies(cf);
             this.emit({ type: "CombatEnded", rounds: cf.round });
             this.pop();
             // AFTER the pop, not before: a hook here may raise a choice
@@ -2284,6 +2459,14 @@ export class VtesEngine implements EngineOps {
             // outlives its place on the stack (Monster).
             this.applyAfterCombatRiders(cf);
             this.notifyCombatEnded(cf);
+            // "…inflict N unpreventable environmental damage on the acting
+            // vampire AFTER THE COMBAT ENDS" (FBI Special Affairs
+            // Division) — drained at the engine's ONE CombatEnded site,
+            // with a total read: the target can be gone by now.
+            for (const d of cf.damageAfterCombat ?? []) {
+              this.applyEnvironmentalDamage(d.minion, d.amount, false);
+            }
+            cf.damageAfterCombat = [];
             // "Do not replace until after combat" — flushed at the
             // engine's ONE CombatEnded site, which is what makes this
             // safe: combat ends four different ways and a deferral
@@ -2315,6 +2498,27 @@ export class VtesEngine implements EngineOps {
       for (const v of rf.votes) {
         if (v.inFavor) f += v.count;
         else a += v.count;
+      }
+      // "Blood hunt referendums get an additional N votes AGAINST the
+      // referendum" (Urban Jungle). Counted in the tally rather than cast
+      // by a seat: nobody owns these votes, so nothing that reads or
+      // redirects a ballot can touch them.
+      if (rf.variant === "bloodHunt") a += this.tableStatic("bloodHuntVotesAgainst");
+      // "Any vampire casting votes or ballots AGAINST this referendum
+      // burns N blood WHEN THE RESULTS ARE TALLIED" (Cheval de Bataille).
+      // Charged HERE rather than at each cast, because the card reaches
+      // votes made before it was played [RTR 19951110]. A vampire that
+      // voted against twice pays twice — the card taxes the casting, and
+      // the ledger of castings is what `rf.votes` is.
+      const tax = rf.againstBloodTaxAtTally ?? 0;
+      if (tax > 0) {
+        for (const v of rf.votes) {
+          if (v.inFavor) continue;
+          const voter = findMinion(this.state, v.source.replace(/^blood:/, ""));
+          if (!voter || voter.kind !== "vampire") continue;
+          const pay = Math.min(tax, voter.blood);
+          if (pay > 0) this.emit({ type: "BloodBurned", minion: voter.id, amount: pay });
+        }
       }
       rf.votesFor = f;
       rf.votesAgainst = a;
@@ -2531,6 +2735,38 @@ export class VtesEngine implements EngineOps {
         });
       }
     };
+    // "Each vampire with a capacity above N can burn blood to gain votes"
+    // (Mob Rule, Rant!). Offered to EVERY Methuselah's vampires, not just
+    // the card player's — and repeatable, so it does not spend a vote
+    // source. docs/referendum-blood-design.md §1
+    for (const offer of rf.bloodVoteOffers ?? []) {
+      for (const m of getSeat(this.state, seat).minions) {
+        if (!isReady(m) || m.kind !== "vampire" || m.blood < 1) continue;
+        if (offer.minCapacity !== undefined && capacityOf(m) <= offer.minCapacity) continue;
+        if (offer.sect !== undefined && m.sect !== offer.sect) continue;
+        const spent = rf.bloodVotesBought?.[m.id] ?? 0;
+        if (offer.maxBloodPerMinion !== undefined && spent >= offer.maxBloodPerMinion) continue;
+        const n =
+          offer.votesPerBlood +
+          (offer.bigCapacity !== undefined && capacityOf(m) > offer.bigCapacity
+            ? (offer.bigVotesPerBlood ?? 0)
+            : 0);
+        for (const inFavor of [true, false]) {
+          options.push({
+            id: `vote:blood:${m.id}:${inFavor ? "for" : "against"}`,
+            kind: "castVote",
+            label: `${m.name}: burn 1 blood for ${n} vote${n > 1 ? "s" : ""} ${
+              inFavor ? "for" : "against"
+            }`,
+            source: `blood:${m.id}`,
+            count: n,
+            inFavor,
+            toll: 1,
+            tollFrom: m.id,
+          });
+        }
+      }
+    }
     for (const m of getSeat(this.state, seat).minions) {
       if (!isReady(m)) continue;
       // Votes come from a printed title AND from cards that grant them
@@ -2546,10 +2782,28 @@ export class VtesEngine implements EngineOps {
       // Tyranny superior) — scoped to this referendum, and clamped by the
       // same Math.max: a negative takes votes away, it never hands the
       // other side votes against (docs/path-cards-design.md §4).
-      const refMod = (rf.voteModifiers ?? []).reduce(
-        (n, v) => (v.exceptPath !== undefined && m.path === v.exceptPath ? n : n + v.amount),
-        0,
-      );
+      const refMod = (rf.voteModifiers ?? []).reduce((n, v) => {
+        if (v.exceptPath !== undefined && m.path === v.exceptPath) return n;
+        // "Non-Anarch TITLES are worth -1 vote" (Fee Stake): a vampire
+        // with no title has no title to devalue, and the clamp below is
+        // what keeps a negative from handing anyone votes against.
+        if (v.titledOnly && m.title == null) return n;
+        if (v.notSect !== undefined && m.sect === v.notSect) return n;
+        return n + v.amount;
+      }, 0);
+      // "While this Anarch is Toreador, they get +1 vote during
+      // referendums THEY CALL" (Fee Stake: Boston/New York/Seattle) —
+      // scoped to the calling vampire, which is a question only the
+      // referendum frame can answer, so it cannot be a ConditionalStatic.
+      const callerBonus =
+        rf.callingMinion === m.id
+          ? m.attached.reduce((n, p) => {
+              const c = p.statics.votesWhenCalling;
+              if (!c) return n;
+              if (c.bearerClan && (m.clan === null || !c.bearerClan.includes(m.clan))) return n;
+              return n + c.amount;
+            }, 0)
+          : 0;
       const votes = Math.max(
         0,
         titleVotes +
@@ -2558,7 +2812,8 @@ export class VtesEngine implements EngineOps {
           // "While you control 1 or more locations, Neserian gets +1
           // vote" — a crypt card's conditional static, board-conditioned.
           conditionalStaticNoAction(this.state, m, "votes") +
-          refMod,
+          refMod +
+          callerBonus,
       );
       if (votes <= 0) continue;
       if (rf.usedSources.includes(m.id)) continue;
@@ -3024,6 +3279,19 @@ export class VtesEngine implements EngineOps {
     ];
   }
 
+  /** The card in play, controlled by `seat`, that holds `cardId` in its
+   *  store AND lets it be played from there. A store nobody may play out
+   *  of (Storage Annex) answers null, so its card cannot be played by an
+   *  id alone. docs/store-plays-design.md §3 */
+  private storeHolding(cardId: CardInstanceId, seat: SeatId): PermanentInPlay | null {
+    for (const { entry, owner } of this.allEntries()) {
+      if (!this.registry[entry.card.name]?.storePlay) continue;
+      if (owner.seat !== seat) continue;
+      if ((entry.stored ?? []).some((c) => c.id === cardId)) return entry;
+    }
+    return null;
+  }
+
   /** Every card in play with the owner record its hooks expect: seat-level
    *  cards and cards attached to a minion, the latter reporting their
    *  bearer. A snapshot, so a hook may burn or move entries safely. */
@@ -3055,9 +3323,42 @@ export class VtesEngine implements EngineOps {
   private notifyLeaveReady(minion: MinionId, how: "burned" | "torpor" | "removed"): void {
     const m = findMinion(this.state, minion);
     if (!m) return;
+    this.fbiAllyBurn(m, how);
     const info = { minion, controller: m.controller, how };
     for (const { entry, owner } of this.allEntries()) {
       this.registry[entry.card.name]?.onLeaveReady?.(entry, owner, info, this);
+    }
+  }
+
+  /**
+   * "If an ALLY is burned in combat with an acting vampire, add 1 counter
+   * to this card and inflict N unpreventable environmental damage on the
+   * acting vampire after the combat ends. If this card has M counters,
+   * burn it" (FBI Special Affairs Division).
+   *
+   * Hung on `notifyLeaveReady`, which fires BEFORE the minion is removed —
+   * so the leaver can still be read, which is the only way to know it was
+   * an ally. Two of the three rulings fall out of the frame rather than
+   * needing code: *"does not trigger if the ally is considered the ACTING
+   * minion"* [ANK 20180913-2] is `cf.opposing === leaver`, and *"does
+   * trigger if the ally burns by himself at the end of combat"*
+   * [LSJ 20100527] follows from asking about the burn rather than about
+   * damage. docs/counter-clock-events-design.md §3
+   */
+  private fbiAllyBurn(leaver: MinionState, how: "burned" | "torpor" | "removed"): void {
+    if (how !== "burned" || leaver.kind !== "ally") return;
+    const cf = this.combatFrame();
+    if (!cf || cf.opposing !== leaver.id) return;
+    const acting = findMinion(this.state, cf.acting);
+    if (!acting || acting.kind !== "vampire") return;
+    for (const s of this.state.seats) {
+      for (const p of [...s.permanents]) {
+        const rule = p.statics.allyBurnedInCombat;
+        if (!rule) continue;
+        this.addCounters(p.card.id, 1);
+        (cf.damageAfterCombat ??= []).push({ minion: acting.id, amount: rule.damage });
+        if ((p.counters ?? 0) >= rule.burnAt) this.burnPermanent(p.card.id);
+      }
     }
   }
 
@@ -3401,6 +3702,31 @@ export class VtesEngine implements EngineOps {
           const pay = Math.min(actor.blood, toll.amount);
           if (pay > 0) this.emit({ type: "BloodBurned", minion: actor.id, amount: pay });
         }
+        // "…If that action is blocked, burn Malajit" — the same moment,
+        // and only for a card that was actually SPENT on the action.
+        // Locking it is how it is spent, so a locked one is a used one;
+        // an untouched retainer pays nothing for a block it never
+        // answered. Collected first, because burning mutates `attached`.
+        for (const p of actor.attached.filter(
+          (x) => x.statics.burnIfEmployerBlocked && x.locked,
+        )) {
+          this.burnPermanent(p.card.id);
+        }
+        // "When a vampire with capacity less than X is blocked WHILE
+        // HUNTING, where X is the number of counters on this card, burn
+        // that vampire and all the counters on this card" (Dr. Marisa
+        // Fletcher, CDC). A triggered effect of a successful block, which
+        // is why it sits beside the tolls [ANK 20220116].
+        if (af.actionKind === "hunt" && actor.kind === "vampire") {
+          for (const s of this.state.seats) {
+            for (const p of [...s.permanents]) {
+              if (!p.statics.blockedHuntBurn) continue;
+              if (capacityOf(actor) >= (p.counters ?? 0)) continue;
+              this.addCounters(p.card.id, -(p.counters ?? 0));
+              this.burnMinion(actor.id);
+            }
+          }
+        }
         // The mirror: "the BLOCKING MINION'S CONTROLLER burns 1 pool before
         // block resolution" (Terrifying Visage). Same moment, other side of
         // the block, and paid in pool — hence its own static rather than a
@@ -3464,6 +3790,11 @@ export class VtesEngine implements EngineOps {
         }
         return;
       }
+      // A triggered effect of the successful block can have removed the
+      // ACTING minion (Dr. Marisa Fletcher burns a blocked hunter). There
+      // is then nobody to fight: the action is blocked and over, and
+      // pushing a combat would read a minion that is gone.
+      if (!findMinion(this.state, af.acting)) return;
       this.pushCombat(af.acting, af.actingSeat, ba.blocker, ba.blockerSeat, null, true);
       // "If this vampire blocks, it gets N maneuvers/presses" (Spirit's
       // Touch) — the blocker is the opposing side of this combat.
@@ -3547,6 +3878,15 @@ export class VtesEngine implements EngineOps {
       }
       return n;
     };
+    // The other restricted sibling: "1 optional press each combat, only
+    // usable to END combat" (Qetu, docs/mummies-design.md §1).
+    const endPresses = (minionId: MinionId): number => {
+      let n = 0;
+      for (const p of getMinion(this.state, minionId).attached) {
+        n += p.statics.endPressPerCombat ?? 0;
+      }
+      return n;
+    };
     // The maneuver sibling: "the attached minion gets 1 optional maneuver
     // each combat" (Biothaumaturgic Experiment superior).
     const combatManeuvers = (minionId: MinionId): number => {
@@ -3594,6 +3934,10 @@ export class VtesEngine implements EngineOps {
       pressesContinueOnly: {
         acting: continuePresses(acting),
         opposing: continuePresses(opposing),
+      },
+      pressesEndOnly: {
+        acting: endPresses(acting),
+        opposing: endPresses(opposing),
       },
       // Aura credits ("Brujah get … 1 optional maneuver each combat").
       maneuverCredits: {
@@ -3658,14 +4002,62 @@ export class VtesEngine implements EngineOps {
     return this.nextStriker(cf) === null;
   }
 
-  private resolveStrikes(cf: CombatFrame): void {
+  /**
+   * Does this side's strike resolve BEFORE a normal one (p. 33)?
+   *
+   * Three sources, folded here rather than at each construction site:
+   * the strike declaration itself (Quick Jab), a static on the striking
+   * minion (Muddled Vampire Hunter), and a round-scoped grant from a card
+   * (Haymaker). The `strikesUndodgeable` precedent: a flag that every
+   * site building a Strike has to remember is one a new site forgets.
+   * docs/first-strike-design.md §1
+   */
+  private hasFirstStrike(cf: CombatFrame, side: "acting" | "opposing"): boolean {
+    if (cf.strikes[side]?.firstStrike) return true;
+    if (cf.firstStrikeRound?.[side]) return true;
+    // TOTAL READ: a combatant can leave play between choosing a strike
+    // and resolving it, and a minion who is gone has no statics.
+    const m = findMinion(this.state, side === "acting" ? cf.acting : cf.opposing);
+    return (m?.attached ?? []).some((p) => p.statics.firstStrike === true);
+  }
+
+  /**
+   * Resolve the round's strikes.
+   *
+   * `phase` splits the work when exactly one side strikes first (p. 33):
+   *
+   * - `"both"` — the ordinary simultaneous case, and the case where BOTH
+   *   sides have first strike, which the rulebook resolves simultaneously.
+   * - `"first"` — only the first-striking side; the tail (additional
+   *   strikes, retainer output, round damage) is deliberately NOT run,
+   *   because the round is not over.
+   * - `"second"` — the other side's strike plus that tail. Reached from
+   *   the damage-resolution drain, which is the only moment the engine
+   *   knows whether the second striker survived.
+   */
+  private resolveStrikes(cf: CombatFrame, phase: "both" | "first" | "second" = "both"): void {
     // In an additional sub-round only the minions with additional strikes
     // strike (p. 32) — a non-striker's `strikes[side]` stays null.
     const sa = cf.strikes.acting;
     const so = cf.strikes.opposing;
-    if (cf.strikeRound === "normal" && (!sa || !so)) {
+    if (phase === "both" && cf.strikeRound === "normal" && (!sa || !so)) {
       throw new Error("strikes not both chosen");
     }
+    // FIRST STRIKE, decided once, before anything resolves. Both sides
+    // having it is the same as neither: "strikes are resolved
+    // simultaneously" (p. 33).
+    if (phase === "both") {
+      const fsA = this.hasFirstStrike(cf, "acting");
+      const fsO = this.hasFirstStrike(cf, "opposing");
+      if (fsA !== fsO && !(sa?.combatEnds || so?.combatEnds)) {
+        cf.pendingSecondStrike = fsA ? "opposing" : "acting";
+        this.resolveStrikes(cf, "first");
+        return;
+      }
+    }
+    const resolves = (side: "acting" | "opposing"): boolean =>
+      phase === "both" ||
+      (phase === "first" ? side !== cf.pendingSecondStrike : side === cf.pendingSecondStrike);
 
     // "Combat ends" strikes resolve first of all — before first strike
     // and before any damage (p. 33); End of Round still runs (p. 32).
@@ -3675,6 +4067,17 @@ export class VtesEngine implements EngineOps {
       }
       if (so?.combatEnds && so.unlockSelf) {
         this.emit({ type: "MinionUnlocked", minion: cf.opposing });
+      }
+      // "Burn after use" on a weapon whose OWN strike is the combat-ends
+      // strike (Smoke Grenade): *"still burns when used if the opponent
+      // uses a 'strike: combat ends' too"* [LSJ 20001127-2]. Its strike
+      // resolved — this branch IS its resolution. A grenade on the other
+      // side did NOT resolve and is deliberately left alone, which is the
+      // same rulings read the other way round.
+      for (const s of [sa, so]) {
+        if (s?.combatEnds && s.burnWeaponAfterStrike && s.weaponCard) {
+          this.burnPermanent(s.weaponCard);
+        }
       }
       cf.endedPrematurely = true;
       cf.step = "endOfRound";
@@ -3813,12 +4216,31 @@ export class VtesEngine implements EngineOps {
       // vampire's hand strikes are aggravated this round" (Claws of the
       // Dead) — the latter only affects hand strikes, not weapon strikes.
       let aggravated = strike.aggravated;
+      // "In combat with a <clan>, any damage he inflicts is aggravated"
+      // (Akhenaten). Read HERE, above the hand/weapon split, because the
+      // card says "any damage" — `handStrikesAggravated` below covers only
+      // half of it. docs/mummies-design.md §4
+      {
+        const striker = findMinion(this.state, from === "acting" ? cf.acting : cf.opposing);
+        const victim = findMinion(this.state, from === "acting" ? cf.opposing : cf.acting);
+        if (
+          striker &&
+          victim?.clan &&
+          striker.attached.some((p) => p.statics.allDamageAggravatedVsClan === victim.clan)
+        ) {
+          aggravated = true;
+        }
+      }
       if (strike.damage !== null) {
         if (cf.range === "long" && !strike.ranged) return;
         amount = strike.damage;
       } else {
         if (cf.range !== "close") return;
         amount = strengthOf(from) + strike.handBonus;
+        // "…will be strike: HAND STRIKE AT +N DAMAGE" (Haymaker) — the
+        // bonus rides the round, not the Strike, because the card forces
+        // the strike rather than declaring one.
+        if (strike.source === "hand") amount += cf.forcedHandStrike?.[from] ?? 0;
         if (cf.handStrikesAggravated[from]) aggravated = true;
       }
       // AMMO, read here rather than stamped on the Strike when it was
@@ -3845,6 +4267,12 @@ export class VtesEngine implements EngineOps {
       // strike that deals none has no effect, which the `amount > 0` gate
       // below already is. docs/aim-design.md §3
       amount += cf.aimStrikeBonus?.[from] ?? 0;
+      // "If more than N damage is INFLICTED with this strike, ignore the
+      // excess" (Quick Jab). Applied here, after every bonus and BEFORE
+      // the packet exists, which is [LSJ 20071117]: *"only one damage is
+      // inflicted means only one damage needs be prevented"* — a cap
+      // applied at prevention time would leave two points to prevent.
+      if (strike.capDamage !== undefined) amount = Math.min(amount, strike.capDamage);
       if (amount > 0) {
         this.pushPendingDamage(cf, {
           minion: victim,
@@ -3853,6 +4281,7 @@ export class VtesEngine implements EngineOps {
           aggravated,
           ...(strike.noPreventBy?.length ? { noPreventBy: strike.noPreventBy } : {}),
           ...(this.isGunStrike(strike) ? { fromGun: true } : {}),
+          ...(strike.source === "hand" ? { fromHandStrike: true } : {}),
         });
       }
       if (load?.aggravatedDamage) {
@@ -3871,6 +4300,22 @@ export class VtesEngine implements EngineOps {
         });
       }
       if (amount <= 0) return;
+      // "If the opposing minion's strike SUCCESSFULLY INFLICTS ANY DAMAGE
+      // on this minion this round, the opposing minion gets an optional
+      // press" (Backstep). Here, at infliction, for the same reason the
+      // counter spend below is: "successfully inflicts" is this moment,
+      // and prevention afterwards does not take it back. The rider is
+      // SPENT, so a second strike in the same round pays nothing more —
+      // the card says "an optional press", singular.
+      const pid = cf.pressIfDamaged;
+      if (pid?.length) {
+        const idx = pid.findIndex((r) => r.minion === victim && r.round === cf.round);
+        if (idx >= 0) {
+          pid.splice(idx, 1);
+          cf.presses[from] += 1;
+          this.emit({ type: "PressGranted", minion: source });
+        }
+      }
       // "For each damage inflicted by this strike (even if prevented),
       // burn 1 counter from this card" (Weighted Walking Stick) — spent
       // here, at infliction, so prevention never gets the counters back.
@@ -3882,8 +4327,11 @@ export class VtesEngine implements EngineOps {
         }
       }
     };
-    inflict("opposing", so);
-    inflict("acting", sa);
+    // Which side's blow lands is the ONLY thing `phase` changes here: the
+    // other side's Strike stays on the frame and is still read, so a
+    // dodge still cancels a first strike's effects (p. 33).
+    if (resolves("opposing")) inflict("opposing", so);
+    if (resolves("acting")) inflict("acting", sa);
     // AMMO EFFECTS THAT ARE NOT DAMAGE, applied once per gun strike that
     // actually resolved.
     //
@@ -3922,8 +4370,88 @@ export class VtesEngine implements EngineOps {
       // commitment to a card that has gone as no commitment.
       if (load.burnGunAfterStrike) this.burnPermanent(strike.weaponCard);
     };
-    ammoRiders("opposing", so);
-    ammoRiders("acting", sa);
+    if (resolves("opposing")) ammoRiders("opposing", so);
+    if (resolves("acting")) ammoRiders("acting", sa);
+    // ONE-SHOT WEAPONS — the weapon's own riders, in the same place and
+    // for the same reason as the ammo ones: outside `inflict`, which
+    // returns early on a dodge, a range mismatch and zero damage. p. 33
+    // cancels the effects of a dodged strike ON THE DODGING MINION, and
+    // both of these land on the striker's own side of the table.
+    // docs/one-shot-weapons-design.md §1–§2
+    const oneShotRiders = (from: "acting" | "opposing", strike: Strike | null): void => {
+      if (!strike?.weaponCard) return;
+      // "If Grenade is used at CLOSE RANGE, the minion with this weapon
+      // takes 1 damage." Environmental [LSJ 19970801]: source null, so it
+      // is nobody's damage and no "damage from the opposing minion"
+      // prevention or reaction can read it.
+      const self = strike.bearerSelfDamage;
+      // Zip Gun's rider has no range condition at all, and fires only on
+      // the gun's first RESOLVED strike this combat — the latch is here,
+      // after `resolves()`, and not on `cf.gunUses`, which counts at
+      // declaration: a first strike that never resolves would otherwise
+      // eat the one use [LSJ 20100310].
+      const done = cf.bearerSelfDamageDone ?? [];
+      if (
+        self &&
+        (self.anyRange || cf.range === "close") &&
+        !(self.oncePerCombat && done.includes(strike.weaponCard))
+      ) {
+        if (self.oncePerCombat) {
+          cf.bearerSelfDamageDone = [...done, strike.weaponCard];
+        }
+        const bearer = from === "acting" ? cf.acting : cf.opposing;
+        // A strike can remove its own striker before this runs.
+        if (findMinion(this.state, bearer)) {
+          this.pushPendingDamage(cf, {
+            minion: bearer,
+            amount: self.amount,
+            source: null,
+            aggravated: self.aggravated,
+          });
+        }
+      }
+      // "Burn after use" — last, after every rider that names the card.
+      if (strike.burnWeaponAfterStrike) this.burnPermanent(strike.weaponCard);
+    };
+    if (resolves("opposing")) oneShotRiders("opposing", so);
+    if (resolves("acting")) oneShotRiders("acting", sa);
+    // "RANGED STRIKE: put this card on THIS minion" (Molotov Cocktail) —
+    // the mirror of `attachToVictim`, and it lives out here with the
+    // other riders that land on the striker's own side rather than inside
+    // `inflict`, which never runs for a strike that does no damage. The
+    // `resolves()` gate is the whole of [ANK 20200203-1]: an opposing
+    // "combat ends" strike returns above, so the Cocktail is never put
+    // down.
+    const selfAttachRider = (from: "acting" | "opposing", strike: Strike | null): void => {
+      const a = strike?.attachToSelf;
+      if (!a) return;
+      const bearer = findMinion(this.state, from === "acting" ? cf.acting : cf.opposing);
+      if (!bearer) return;
+      this.putPermanentInPlay({
+        card: { id: a.cardId, name: a.name },
+        seat: bearer.controller,
+        attachTo: bearer.id,
+        statics: a.statics ?? {},
+        tags: [a.name, ...(a.tags ?? [])],
+        controller: a.controller,
+      });
+    };
+    if (resolves("opposing")) selfAttachRider("opposing", so);
+    if (resolves("acting")) selfAttachRider("acting", sa);
+    // THE ROUND'S TAIL — additional-strike bookkeeping, retainer output
+    // and "each round" damage. Deliberately skipped while a first strike
+    // is resolving on its own: the round is not over, and every one of
+    // these is "each round", not "each strike".
+    if (phase === "first") {
+      cf.pendingDamage.sort((a, b) => {
+        if (a.minion !== b.minion) {
+          return a.minion === cf.acting ? -1 : b.minion === cf.acting ? 1 : 0;
+        }
+        return Number(a.aggravated) - Number(b.aggravated);
+      });
+      cf.step = "damageResolution";
+      return;
+    }
     // An additional sub-round consumes one additional strike from each
     // minion that struck (p. 32).
     if (cf.strikeRound === "additional") {
@@ -4007,6 +4535,8 @@ export class VtesEngine implements EngineOps {
           aggravated: strike.aggravated ?? false,
           stealBlood: 0,
           ...(strike.undodgeable ? { undodgeable: true } : {}),
+          ...(strike.firstStrike ? { firstStrike: true } : {}),
+          ...(strike.capDamage !== undefined ? { capDamage: strike.capDamage } : {}),
         };
         this.emit({
           type: "StrikeChosen",
@@ -4028,6 +4558,23 @@ export class VtesEngine implements EngineOps {
       aggravated: strike.aggravated ?? false,
       stealBlood: strike.stealBlood ?? 0,
       ...(strike.undodgeable ? { undodgeable: true } : {}),
+          ...(strike.firstStrike ? { firstStrike: true } : {}),
+          ...(strike.capDamage !== undefined ? { capDamage: strike.capDamage } : {}),
+      ...(strike.attachToSelf
+        ? {
+            attachToSelf: {
+              cardId: play.card.id,
+              name: play.card.name,
+              controller: play.seat,
+              ...(strike.attachToSelf.statics !== undefined
+                ? { statics: strike.attachToSelf.statics }
+                : {}),
+              ...(strike.attachToSelf.tags !== undefined
+                ? { tags: strike.attachToSelf.tags }
+                : {}),
+            },
+          }
+        : {}),
       ...(strike.attachToVictim
         ? {
             attachToVictim: {
@@ -4615,6 +5162,11 @@ export class VtesEngine implements EngineOps {
   notifyEnterPlay(cardId: CardInstanceId): void {
     const found = this.allEntries().find((e) => e.entry.card.id === cardId);
     if (!found) return;
+    // "This card comes into play WITH N COUNTERS" (Fueled by Heart's
+    // Blood). Before the card's own onEnterPlay, so a clause that reads
+    // its counters on arrival sees them.
+    const start = found.entry.statics.startsWithCounters ?? 0;
+    if (start > 0 && (found.entry.counters ?? 0) === 0) this.addCounters(cardId, start);
     this.registry[found.entry.card.name]?.onEnterPlay?.(found.entry, found.owner, this);
   }
 
@@ -4750,6 +5302,92 @@ export class VtesEngine implements EngineOps {
       if (bearer) this.emit({ type: "TitleLost", minion: bearer.id });
     }
     this.emit({ type: "PermanentBurned", cardId, name: entry.card.name });
+    this.releaseDrawForLeavingCard(cardId);
+  }
+
+  /**
+   * A numeric static summed over EVERY seat's seat-level permanents.
+   *
+   * The Gehenna events rule the whole table from one play area, so "cost
+   * +1 blood" is not the payer's own card speaking. One helper, because
+   * each of these is asked at an option gate AND again where the cost is
+   * actually paid, and those two drifting apart is how a player is offered
+   * an action they cannot pay for (docs/play-cost-design.md §3).
+   */
+  private tableStatic(
+    key:
+      | "torporActionTax"
+      | "olderRescueTax"
+      | "bloodHuntVotesAgainst"
+      | "discardActionPoolTax"
+      | "influenceOutPoolTax",
+  ): number {
+    let n = 0;
+    for (const s of this.state.seats) {
+      for (const p of s.permanents) n += p.statics[key] ?? 0;
+    }
+    return n;
+  }
+
+  /** "Rescuing an OLDER vampire from torpor costs +N blood" (Torpid
+   *  Blood). Older is greater capacity, and the RESCUER pays the extra. */
+  private olderRescueTax(actor: MinionState, victim: MinionState): number {
+    return capacityOf(victim) > capacityOf(actor) ? this.tableStatic("olderRescueTax") : 0;
+  }
+
+  /** The Rising's bar, asked at the one point every pool gain passes
+   *  through. It reads EVERY seat's permanents, because one Methuselah's
+   *  card rules the whole table. */
+  private poolGainBarred(seat: SeatId): boolean {
+    const tf = this.state.frames[0];
+    if (!tf || tf.kind !== "turn" || tf.seat !== seat) return false;
+    const barred = this.state.seats.some((s) =>
+      s.permanents.some((p) => p.statics.barsPoolGainOnOwnTurn),
+    );
+    if (!barred) return false;
+    const me = this.state.seats.find((s) => s.id === seat);
+    if (!me) return false;
+    return this.state.edge !== seat && me.victoryPoints < 1;
+  }
+
+  /** "Do not replace until a vampire commits diablerie / leaves torpor /
+   *  until your prey is ousted" — released by the one event that answers
+   *  each. */
+  private releaseConditionalDraws(ev: GameEvent): void {
+    const waiting = this.state.drawWhenCondition;
+    if (!waiting || waiting.length === 0) return;
+    const met = (w: { seat: SeatId; until: DelayedDrawCondition }): boolean => {
+      if (w.until === "diablerie") return ev.type === "DiablerieCommitted";
+      if (w.until === "vampireLeavesTorpor") return ev.type === "LeftTorpor";
+      // "…until a TITLED vampire goes to torpor" (The New Inquisition).
+      // Read here, before the event is applied, which is also the ruling:
+      // *"when a vampire goes to torpor, the card is replaced before any
+      // other effect"* [LSJ 20100527]. A vampire loses nothing on the way
+      // in, but reading it after the apply would make the order of two
+      // unrelated clauses decide whether a title was still there.
+      if (w.until === "titledVampireTorpor") {
+        if (ev.type !== "WentToTorpor") return false;
+        const m = findMinion(this.state, ev.minion);
+        return !!m && m.kind === "vampire" && m.title != null;
+      }
+      // "…until your PREY is ousted": the ring is read here, before the
+      // oust is applied and the seating closes up around the gap.
+      return ev.type === "Ousted" && preyOf(this.state, w.seat) === ev.seat;
+    };
+    const due = waiting.filter(met);
+    if (due.length === 0) return;
+    this.state.drawWhenCondition = waiting.filter((w) => !met(w));
+    for (const w of due) this.drawToReplace(w.seat);
+  }
+
+  /** "Do not replace as long as this card is in play" (Dragonbound) comes
+   *  due HERE — the card left play, so the wait is over. */
+  private releaseDrawForLeavingCard(cardId: CardInstanceId): void {
+    const waiting = this.state.drawWhenLeavesPlay ?? [];
+    const held = waiting.filter((w) => w.cardId === cardId);
+    if (held.length === 0) return;
+    this.state.drawWhenLeavesPlay = waiting.filter((w) => w.cardId !== cardId);
+    for (const w of held) this.drawToReplace(w.seat);
   }
 
   lockPermanent(cardId: string): void {
@@ -4800,11 +5438,33 @@ export class VtesEngine implements EngineOps {
 
   /** "You can use N transfers to …" (Wider View) — the influence phase's
    *  currency, spent by a card in play. The `spendMasterAction` shape.
-   *  docs/crypt-and-uncontrolled-design.md §2 */
+   *  A NEGATIVE n grants transfers ("lock to get +1 transfer", Ennoia's
+   *  Theater): one funnel, so the two directions cannot disagree about
+   *  where the count lives. docs/crypt-and-uncontrolled-design.md §2 */
   spendTransfers(n: number): void {
     const tf = this.state.frames[0];
     if (tf?.kind !== "turn") throw new Error("spendTransfers outside a turn");
     tf.transfersLeft -= n;
+  }
+
+  /** "Discard down afterward" (p. 7) — asked of the ENGINE, which owns the
+   *  question, rather than re-answered per card. */
+  discardDownToHandSize(seat: SeatId, cardName: string, cardId: CardInstanceId): void {
+    this.reconcileHandSizeDown(seat, cardName, cardId);
+  }
+
+  /** The blood a vampire must burn to unlock, summed over every seat's
+   *  cards in play — the card is not necessarily in the vampire's
+   *  controller's play area. `allEntries`, because a clause like this one
+   *  is exactly as true of an attached card as of a location. */
+  private unlockSurchargeFor(m: MinionState): number {
+    if (m.kind !== "vampire") return 0;
+    let n = 0;
+    for (const { entry } of this.allEntries()) {
+      const s = entry.statics.clanUnlockSurcharge;
+      if (s && m.clan === s.clan) n += s.blood;
+    }
+    return n;
   }
 
   /** "Move a card from your hand to the bottom of your library" (Heart of
@@ -4851,10 +5511,16 @@ export class VtesEngine implements EngineOps {
   useWeaponManeuver(minion: MinionId, cardId: string): void {
     const cf = this.requireCombat();
     const side = this.sideOf(cf, minion);
-    if (cf.usedWeaponManeuver[side] !== null) {
+    // One WEAPON per side per combat — but a weapon printed with two
+    // maneuvers may go again, so the same card is not a repeat.
+    if (cf.usedWeaponManeuver[side] !== null && cf.usedWeaponManeuver[side] !== cardId) {
       throw new Error("weapon maneuver already used this combat");
     }
     cf.usedWeaponManeuver[side] = cardId;
+    cf.weaponManeuversUsed = {
+      ...(cf.weaponManeuversUsed ?? {}),
+      [cardId]: (cf.weaponManeuversUsed?.[cardId] ?? 0) + 1,
+    };
     // Using the weapon's maneuver commits its strike (.44 ruling p. 47).
     cf.committedStrike[side] = cardId;
     cf.range = cf.range === "close" ? "long" : "close";
@@ -4875,6 +5541,15 @@ export class VtesEngine implements EngineOps {
       /** "For each damage inflicted by this strike, burn 1 counter from
        *  this card" (Weighted Walking Stick). */
       depletes?: boolean;
+      /** "Burn after use" (Grenade and friends). */
+      burnAfterUse?: boolean;
+      /** "End combat as a strike" (Smoke Grenade). */
+      combatEnds?: boolean;
+      /** "…the minion with this weapon takes N damage" at close range. */
+      selfDamageAtCloseRange?: { amount: number; aggravated?: boolean };
+      /** "…during strike resolution when striking with this gun, but only
+       *  once each combat" (Zip Gun) — the same damage at any range. */
+      selfDamageOnStrike?: { amount: number; aggravated?: boolean; oncePerCombat?: boolean };
     },
   ): void {
     const cf = this.requireCombat();
@@ -4888,13 +5563,32 @@ export class VtesEngine implements EngineOps {
       handBonus: strike.handBonus ?? 0,
       damage: strike.damage,
       ranged: strike.ranged,
-      combatEnds: false,
+      combatEnds: strike.combatEnds ?? false,
       unlockSelf: false,
       dodge: false,
       aggravated: strike.aggravated ?? false,
       stealBlood: 0,
       weaponCard: cardId,
       ...(strike.depletes ? { depletesCard: cardId } : {}),
+      ...(strike.burnAfterUse ? { burnWeaponAfterStrike: true } : {}),
+      ...(strike.selfDamageAtCloseRange
+        ? {
+            bearerSelfDamage: {
+              amount: strike.selfDamageAtCloseRange.amount,
+              aggravated: strike.selfDamageAtCloseRange.aggravated ?? false,
+            },
+          }
+        : {}),
+      ...(strike.selfDamageOnStrike
+        ? {
+            bearerSelfDamage: {
+              amount: strike.selfDamageOnStrike.amount,
+              aggravated: strike.selfDamageOnStrike.aggravated ?? false,
+              anyRange: true,
+              ...(strike.selfDamageOnStrike.oncePerCombat ? { oncePerCombat: true } : {}),
+            },
+          }
+        : {}),
     };
     // COUNTED AT DECLARATION, which is what "the first time the gun is
     // used in a given combat" means for Glaser Rounds ([RTR 19941109]).
@@ -4933,6 +5627,59 @@ export class VtesEngine implements EngineOps {
     const af = this.action();
     if (!af) throw new Error("addPlayCostMod outside an action");
     af.playCostMods.push(mod);
+  }
+
+  /** The same thing on the COMBAT frame (Focus the Blood): a combat card's
+   *  cost is read there, and an action frame may not even be the one this
+   *  combat hangs from. */
+  addCombatPlayCostMod(mod: PlayCostMod): void {
+    this.requireCombat().playCostMods.push(mod);
+  }
+
+  /** A card goes straight from an ash heap back to its owner's library
+   *  (Waste Management Operation). */
+  ashToLibrary(seat: SeatId, cardId: CardInstanceId, to: "top" | "bottom"): void {
+    const card = (getSeat(this.state, seat).ashHeap ?? []).find((c) => c.id === cardId);
+    if (!card) return;
+    this.emit({
+      type: "AshHeapCardToLibrary",
+      seat,
+      cardId: card.id,
+      name: card.name,
+      to,
+    });
+  }
+
+  /** A card stored on a card in play goes back to its owner's library,
+   *  top or bottom (Maabara). */
+  storedToLibrary(holder: CardInstanceId, cardId: CardInstanceId, to: "top" | "bottom"): void {
+    const entry = this.findEntry(holder);
+    const card = (entry?.stored ?? []).find((c) => c.id === cardId);
+    if (!entry || !card) return;
+    this.emit({
+      type: "StoredCardToLibrary",
+      seat: this.controllerOfEntry(holder) ?? this.state.seats[0]!.id,
+      holder,
+      cardId: card.id,
+      name: card.name,
+      to,
+    });
+  }
+
+  /** A card stored on a card in play goes to its owner's ash heap. Its
+   *  owner is the holder's controller, which is who put it there. */
+  burnStoredCard(holder: CardInstanceId, cardId: CardInstanceId): void {
+    const entry = this.findEntry(holder);
+    const i = (entry?.stored ?? []).findIndex((c) => c.id === cardId);
+    if (!entry || i < 0) return;
+    const [card] = entry.stored!.splice(i, 1);
+    if (!card) return;
+    this.emit({
+      type: "CardToAshHeap",
+      seat: this.controllerOfEntry(holder) ?? this.state.seats[0]!.id,
+      cardId: card.id,
+      name: card.name,
+    });
   }
 
   /** "Those cards are not replaced until the end of the action" (Consign
@@ -4976,6 +5723,10 @@ export class VtesEngine implements EngineOps {
         requires: handler.requiresDisciplines?.(mode, variant) ?? [],
         requiresClans: handler.requiresClans?.() ?? [],
         tags: handler.permanentTags ?? [],
+        ...(handler.redirectsBleed ? { redirectsBleed: true } : {}),
+        ...(handler.requiresSuperiorDiscipline?.(mode, variant)
+          ? { requiresSuperior: true }
+          : {}),
       },
       minion,
       this.action(),
@@ -5004,6 +5755,8 @@ export class VtesEngine implements EngineOps {
       requires: handler.requiresDisciplines?.(mode, variant) ?? [],
       requiresClans: handler.requiresClans?.() ?? [],
       tags: handler.permanentTags ?? [],
+      ...(handler.redirectsBleed ? { redirectsBleed: true } : {}),
+      ...(handler.requiresSuperiorDiscipline?.(mode, variant) ? { requiresSuperior: true } : {}),
     };
     for (const frame of [this.action(), this.combatFrame()]) {
       if (!frame) continue;
@@ -5034,10 +5787,14 @@ export class VtesEngine implements EngineOps {
     (seat.playCostMods ??= []).push(mod);
   }
 
-  cancelPendingCard(refundCost: boolean): void {
+  cancelPendingCard(refundCost: boolean, frame?: CardPlayFrame): void {
     // Called while the canceling card resolves: its own frame is already
-    // popped, so the card being canceled is the top frame.
-    const top = this.top();
+    // popped, so the card being canceled is the top frame — UNLESS the
+    // caller names it. Paying for a cancel can itself push a frame (a
+    // discarded payment is replaced, p. 7, and the draw can ask a
+    // question), and then "the top frame" is no longer the card being
+    // cancelled. A caller that already holds the frame passes it.
+    const top = frame ?? this.top();
     if (!top || top.kind !== "cardPlay") {
       throw new Error("no pending card play to cancel");
     }
@@ -5378,13 +6135,22 @@ export class VtesEngine implements EngineOps {
    *  docs/library-search-design.md §5 */
   storeCard(args: {
     holder: CardInstanceId;
-    from: "library" | "hand";
+    from: "library" | "hand" | "ashHeap";
     cardId?: CardInstanceId;
     faceUp: boolean;
+    /** Whose pile to take it from, when that is not the holder's
+     *  controller — "from your PREY's ash heap" (Erciyes). */
+    fromSeat?: SeatId;
   }): void {
     const seatId = this.controllerOfEntry(args.holder) ?? this.state.seats[0]!.id;
-    const seat = getSeat(this.state, seatId);
-    const pile = args.from === "hand" ? seat.hand : seat.library;
+    const fromSeatId = args.fromSeat ?? seatId;
+    const seat = getSeat(this.state, fromSeatId);
+    const pile =
+      args.from === "hand"
+        ? seat.hand
+        : args.from === "ashHeap"
+          ? (seat.ashHeap ??= [])
+          : seat.library;
     const card = args.cardId ? pile.find((c) => c.id === args.cardId) : pile[0];
     if (!card) return; // an empty library is simply nothing to move
     this.emit({
@@ -5394,6 +6160,7 @@ export class VtesEngine implements EngineOps {
       cardId: card.id,
       name: card.name,
       from: args.from,
+      ...(fromSeatId !== seatId ? { fromSeat: fromSeatId } : {}),
       faceUp: args.faceUp,
     });
   }
@@ -5559,7 +6326,14 @@ export class VtesEngine implements EngineOps {
   modifyFilteredIntercept(
     delta: number,
     source: string,
-    filter: { kinds?: Array<"vampire" | "ally">; younger?: boolean; sects?: Sect[] },
+    filter: {
+      kinds?: Array<"vampire" | "ally">;
+      younger?: boolean;
+      sects?: Sect[];
+      /** Whom "younger" is measured against, when it is not the acting
+       *  minion (Zapaderin: "younger than this modifying Ravnos"). */
+      youngerThan?: MinionId;
+    },
   ): void {
     const af = this.action();
     if (!af) throw new Error("modifyFilteredIntercept outside an action");
@@ -5570,7 +6344,9 @@ export class VtesEngine implements EngineOps {
       source,
       filter: {
         ...(filter.kinds ? { kinds: filter.kinds } : {}),
-        ...(filter.younger ? { youngerThan: af.acting } : {}),
+        ...(filter.younger || filter.youngerThan
+          ? { youngerThan: filter.youngerThan ?? af.acting }
+          : {}),
         ...(filter.sects ? { sects: filter.sects } : {}),
       },
     });
@@ -5665,15 +6441,26 @@ export class VtesEngine implements EngineOps {
    */
   attachInCombat(
     play: CardPlayFrame,
-    to: "self" | "opposing",
+    to: "self" | "opposing" | "anyInCombat" | "gunOnSelf",
     statics: PermanentStatics,
     tags: string[],
+    extra?: { counters?: number; bearerId?: MinionId },
   ): MinionId | null {
     const cf = this.requireCombat();
-    if (!play.minion) return null;
-    const side = this.sideOf(cf, play.minion);
+    // "Put this card on A NOSFERATU IN COMBAT" names its own bearer, and
+    // the player may have no minion in the fight at all — which is the
+    // whole point of the clause, so `play.minion` cannot be the anchor.
     const bearerId =
-      to === "self" ? play.minion : side === "acting" ? cf.opposing : cf.acting;
+      to === "anyInCombat"
+        ? extra?.bearerId
+        : !play.minion
+          ? null
+          : to === "self" || to === "gunOnSelf"
+            ? play.minion
+            : this.sideOf(cf, play.minion) === "acting"
+              ? cf.opposing
+              : cf.acting;
+    if (!bearerId) return null;
     const bearer = findMinion(this.state, bearerId);
     if (!bearer) return null;
     this.putPermanentInPlay({
@@ -5686,6 +6473,16 @@ export class VtesEngine implements EngineOps {
       // the player who played it.
       controller: play.seat,
     });
+    // "Put this card AND 1 BLOOD on this Assamite": the blood MOVES off
+    // the bearer, so it is a burn plus counters, not counters from air —
+    // the fuzz proves pool/blood conservation by replaying the log.
+    if (extra?.counters) {
+      const move = Math.min(extra.counters, bearer.blood);
+      if (move > 0) {
+        this.emit({ type: "BloodBurned", minion: bearer.id, amount: move });
+        this.addCounters(play.card.id, move);
+      }
+    }
     return bearer.id;
   }
 
@@ -5813,6 +6610,49 @@ export class VtesEngine implements EngineOps {
     this.requireCombat().pressesCombat[side] += 1;
   }
 
+  /** "That minion's initial strike this round gets FIRST STRIKE"
+   *  (Haymaker). docs/first-strike-design.md §1 */
+  grantFirstStrike(side: "acting" | "opposing"): void {
+    const cf = this.requireCombat();
+    cf.firstStrikeRound ??= { acting: false, opposing: false };
+    cf.firstStrikeRound[side] = true;
+  }
+
+  /** "If another round occurs, this minion gets first strike on their
+   *  initial strike that round" (Forearm Block). */
+  grantFirstStrikeNextRound(play: CardPlayFrame): void {
+    const cf = this.requireCombat();
+    cf.firstStrikeNextRound ??= { acting: false, opposing: false };
+    cf.firstStrikeNextRound[this.sideOf(cf, play.minion)] = true;
+  }
+
+  /** "Prevent N damage from the opposing minion's next hand strike this
+   *  round" (Forearm Block). */
+  armHandStrikePrevention(play: CardPlayFrame, amount: number): void {
+    const cf = this.requireCombat();
+    cf.preventHandStrike ??= { acting: 0, opposing: 0 };
+    cf.preventHandStrike[this.sideOf(cf, play.minion)] = amount;
+  }
+
+  /** "This minion's initial strike this round will be strike: hand strike
+   *  at +N damage" (Haymaker). */
+  forceHandStrike(play: CardPlayFrame, bonus: number): void {
+    const cf = this.requireCombat();
+    const side = this.sideOf(cf, play.minion);
+    cf.forcedHandStrike ??= { acting: null, opposing: null };
+    cf.forcedHandStrike[side] = bonus;
+    // "…and the OPPOSING minion's initial strike this round gets first
+    // strike." One op, because the two halves are one sentence and a
+    // caller that set only one of them would be a card played wrong.
+    this.grantFirstStrike(side === "acting" ? "opposing" : "acting");
+  }
+
+  /** "If either minion inflicts more damage than the other this round,
+   *  that minion gets an optional press this round" (Haymaker). */
+  armBiggerHitterPress(): void {
+    this.requireCombat().pressToBiggerHitter = true;
+  }
+
   /**
    * The three grants a card IN PLAY can hand its bearer mid-combat
    * (Monstrous Form superior). The card-play ops beside them
@@ -5934,8 +6774,15 @@ export class VtesEngine implements EngineOps {
 
   preventDamage(play: CardPlayFrame, amount: number): void {
     const cf = this.requireCombat();
+    // A prevention is CHOSEN in one window and RESOLVES in another, and
+    // the minion it protects can leave in between: an ALLY paying the
+    // card's own blood cost pays it with the life that IS its blood
+    // (p. 11), so a 1-life ally playing a 1-blood prevention burns itself
+    // and takes its pending damage off the queue with it. Nothing left to
+    // prevent is the card resolving with no effect, not an error.
+    if (!play.minion || !findMinion(this.state, play.minion)) return;
     const pd = cf.pendingDamage[0];
-    if (!pd) throw new Error("no damage to prevent");
+    if (!pd) return;
     if (pd.minion !== play.minion) {
       throw new Error("only the minion taking damage may prevent it");
     }
@@ -5970,6 +6817,103 @@ export class VtesEngine implements EngineOps {
 
   /** "End a combat involving another minion you control" (Saulot's
    *  Guiding Wisdom) — ended from OUTSIDE, by a minion not in it. */
+  /**
+   * "Cancel the block and combat" / "combat does not occur" — a combat
+   * that never happened (docs/no-combat-design.md §1).
+   *
+   * Not `endCombatFromOutside`, which jumps to End of Round: that step
+   * still runs for a combat that ENDED, and every "after combat" rider
+   * hangs off it. Here there was no combat, so the frame is dropped and
+   * the action is put back where the card says it belongs.
+   */
+  /** "…or if the combat is CANCELED" — the other half of Blood Brother
+   *  Ambush's last sentence. docs/no-combat-design.md §3 */
+  private burnOneFightAllies(cf: CombatFrame): void {
+    for (const id of [cf.acting, cf.opposing]) {
+      const m = findMinion(this.state, id);
+      if (!m) continue;
+      if (m.attached.some((p) => p.statics.burnAtCombatEnd)) this.burnMinion(m.id);
+    }
+  }
+
+  cancelCombat(outcome: "continueAction" | "actionBlocked"): void {
+    const idx = this.state.frames.findIndex((f) => f.kind === "combat");
+    if (idx < 0) return;
+    const cf = this.state.frames[idx];
+    if (!cf || cf.kind !== "combat") return;
+    this.burnOneFightAllies(cf);
+    this.state.frames.splice(idx, 1);
+    this.emit({ type: "CombatCancelled", acting: cf.acting, opposing: cf.opposing });
+    const af = this.action();
+    if (!af) return;
+    if (outcome === "continueAction") {
+      // "The action continues as normal" (Clan Loyalty). The block is
+      // cancelled, so the blocker is not locked for it either
+      // [ANK 20180321] — it locked when the block succeeded, and that is
+      // being undone. Back to state A: another minion may still try.
+      const blocker = findMinion(this.state, cf.opposing);
+      if (blocker?.locked) this.emit({ type: "MinionUnlocked", minion: blocker.id });
+      af.blockedBy = null;
+      af.step = "A";
+      cycleRewind(af.cycle);
+    } else {
+      // "…unlock INSTEAD OF entering combat" (Ghoul Escort). The action
+      // is still blocked and still fails; only the fight is skipped, and
+      // "this does not unlock the blocker" is simply not doing anything
+      // to them.
+      af.step = "blocked";
+      af.cycle = newCycle(af.cycle.order);
+    }
+  }
+
+  /** "No vampires of that clan may block the acting vampire for the
+   *  remainder of the turn" (Clan Loyalty). docs/no-combat-design.md §2 */
+  barClanFromBlocking(acting: MinionId, clan: string): void {
+    const tf = this.state.frames.find((f) => f.kind === "turn");
+    if (tf?.kind !== "turn") return;
+    (tf.clanBlockBars ??= []).push({ acting, clan });
+  }
+
+  /**
+   * "Combat does not occur. PUT THIS CARD INTO PLAY … this card
+   * represents an ally … this ally enters combat with the blocking
+   * minion" (Blood Brother Ambush) — the first card that becomes a minion
+   * in the middle of the combat it is cancelling.
+   *
+   * The card's own `allyEntry` answers what it is, exactly as a recruit
+   * would; what differs is that nothing was recruited, so p. 22's
+   * "cannot act the turn it is recruited" never applies.
+   * docs/no-combat-design.md §3
+   */
+  putAllyFromCardInPlay(play: CardPlayFrame, mode: DisciplineLevel | null): MinionId | null {
+    const handler = this.registry[play.card.name];
+    const ally = handler?.allyEntry?.(mode ?? "basic");
+    if (!ally) return null;
+    this.emit({
+      type: "AllyEnteredPlay",
+      seat: play.seat,
+      minion: play.card.id,
+      cardId: play.card.id,
+      name: play.card.name,
+      life: ally.life,
+      strength: ally.strength,
+      bleed: ally.bleed,
+      recruited: false,
+      cost: 0,
+      ...(ally.disciplines ? { disciplines: ally.disciplines } : {}),
+    });
+    this.emit({
+      type: "PermanentEnteredPlay",
+      seat: play.seat,
+      cardId: play.card.id,
+      name: play.card.name,
+      attachedTo: play.card.id,
+      statics: handler?.permanentStatics ?? {},
+      tags: handler?.permanentTags ?? [],
+    });
+    return play.card.id;
+  }
+
   endCombatFromOutside(): void {
     const cf = this.combatFrame();
     if (!cf) return;
@@ -5978,6 +6922,26 @@ export class VtesEngine implements EngineOps {
     cf.endedPrematurely = true;
     cf.step = "endOfRound";
     cf.cycle = newCycle(cf.cycle.order);
+  }
+
+  /** "You gain the Edge" — one shared token (p. 28), so taking it is
+   *  always taking it from whoever held it. */
+  takeEdge(seat: SeatId): void {
+    if (this.state.edge === seat) return;
+    this.emit({ type: "EdgeTaken", seat });
+  }
+
+  /** "Burn the Edge to …" — p. 28: it returns uncontrolled to the centre. */
+  burnEdge(seat: SeatId): void {
+    if (this.state.edge !== seat) return;
+    this.emit({ type: "EdgeBurned", seat });
+  }
+
+  /** "You cannot gain the Edge this action" (Leverage) — recorded on the
+   *  ACTION frame, which is the scope the card names. */
+  suppressEdgeGainThisAction(): void {
+    const af = this.state.frames.find((f) => f.kind === "action");
+    if (af?.kind === "action") af.edgeBurnedInsteadOfTaken = true;
   }
 
   grantPress(play: CardPlayFrame): void {
@@ -5989,12 +6953,40 @@ export class VtesEngine implements EngineOps {
     }
   }
 
+  /**
+   * "If the opposing minion's strike successfully inflicts any damage on
+   * this minion this round, the opposing minion gets an optional press"
+   * (Backstep) — a rider on the ROUND, paid out where the damage is
+   * inflicted. Backstep gives the press to the player's OPPONENT, which
+   * is the price of its maneuver; nothing else in the pool hands a credit
+   * across the table, so the rider records the minion to be HIT rather
+   * than the one to be paid, and the payer is whoever struck them.
+   * docs/cancel-in-combat-design.md §4
+   */
+  grantPressToStrikerIfDamaged(play: CardPlayFrame): void {
+    const cf = this.requireCombat();
+    if (!play.minion) return;
+    (cf.pressIfDamaged ??= []).push({ minion: play.minion, round: cf.round });
+  }
+
   /** A successful equip/employ attaches the card; a successful recruit
    *  makes the ally a minion with its card text self-attached (p. 20,
    *  p. 22). Returns true if the card entered play (i.e. is not burned). */
   private enterPermanentFromAction(af: ActionFrame): boolean {
     if (!af.card) return false;
     const handler = this.handler(af.card.instance.name);
+    // "Any minion who successfully performs an EQUIP action unlocks at the
+    // end of the turn" (NRA PAC). Recorded here, where the equip has
+    // actually succeeded — "does not affect equip actions performed prior
+    // to its arrival in play" [LSJ 20061218] follows from reading the
+    // table now rather than at end of turn.
+    if (
+      handler.isEquipment &&
+      this.state.seats.some((s) => s.permanents.some((p) => p.statics.unlockAfterEquip))
+    ) {
+      const actor = findMinion(this.state, af.acting);
+      if (actor) actor.unlocksAtEndOfTurn = true;
+    }
     if (handler.becomesVampireOnSuccess) {
       // "Put this card in play. It becomes a 1-capacity vampire" — the
       // ally machinery with `kind: "vampire"`. Its own card rides as a
@@ -6047,6 +7039,13 @@ export class VtesEngine implements EngineOps {
       };
       if (entry.counters !== undefined) ev.counters = entry.counters;
       this.emit(ev);
+      // `onEnterPlay` is documented as firing "from both entry paths", and
+      // these two action paths were neither of them: a card that puts
+      // ITSELF in play on a successful action arrived without its own
+      // arrival hook ever running. The token-vampire path above fires it;
+      // these were written beside it and did not. Gift of Proteus is the
+      // first card to need it (docs/store-plays-design.md §5).
+      this.notifyEnterPlay(af.card.instance.id);
       return true;
     }
     if (handler.attachOnSuccess) {
@@ -6083,6 +7082,21 @@ export class VtesEngine implements EngineOps {
       if (entry.locked) {
         this.emit({ type: "PermanentLocked", cardId: af.card.instance.id });
       }
+      // "…to represent the unique Anarch title of Baron of Boston" (Fee
+      // Stake) — the same `TitleGranted` the referendum path emits, with
+      // the CITY, which is what `titleContestKey` keys a baron on (p. 39).
+      if (entry.grantsTitle) {
+        this.emit({
+          type: "TitleGranted",
+          minion: bearer,
+          title: entry.grantsTitle,
+          ...(entry.grantsTitleCity !== undefined ? { city: entry.grantsTitleCity } : {}),
+        });
+      }
+      // The same omission as `putsInPlayOnSuccess` above, for the same
+      // reason: this path emits its own event instead of going through
+      // `enterPermanent`, so nothing fired the arrival hook.
+      this.notifyEnterPlay(af.card.instance.id);
       return true;
     }
     return this.enterPermanent({
@@ -6135,6 +7149,13 @@ export class VtesEngine implements EngineOps {
       }
       this.emit(ev);
       this.notifyEnterPlay(card.id);
+      // "When a minion EQUIPS with the Helicopter, lock it." HERE, not in
+      // `notifyEnterPlay`: this function IS the equip pipeline, which is
+      // the line the rulings draw — equipped in any fashion, locked;
+      // directly put into play, not (docs/vehicles-and-havens-design.md §2).
+      if (entry.statics.locksOnEquip) {
+        this.emit({ type: "PermanentLocked", cardId: card.id });
+      }
       return true;
     }
     if (handler.isAlly && handler.allyEntry) {
@@ -6340,7 +7361,17 @@ export class VtesEngine implements EngineOps {
         if (bleed >= 1) {
           // Successful bleed of 1+ → the acting minion's controller takes
           // the Edge, whoever the final target is (p. 21; FAQ p. 46).
-          this.emit({ type: "EdgeTaken", seat: af.actingSeat });
+          // "If you would get the Edge, it is BURNED INSTEAD" (Leverage):
+          // the token still moves, it just goes to the middle of the
+          // table. Here rather than at the card, because THIS is the
+          // moment the card is talking about.
+          if (af.edgeBurnedInsteadOfTaken) {
+            if (this.state.edge !== null) {
+              this.emit({ type: "EdgeBurned", seat: this.state.edge });
+            }
+          } else {
+            this.emit({ type: "EdgeTaken", seat: af.actingSeat });
+          }
           // "Burn 2 of your corruption from a minion of the target to
           // unlock" (Revelation of the Serpent) — auto-taken if affordable.
           for (const cu of af.corruptionUnlocks) {
@@ -6386,7 +7417,11 @@ export class VtesEngine implements EngineOps {
       } else if (af.actionKind === "leaveTorpor") {
         // Cost (2 blood) is paid at resolution, only on success (p. 24,
         // p. 27); the vampire is no longer wounded.
-        this.emit({ type: "BloodBurned", minion: af.acting, amount: 2 });
+        this.emit({
+          type: "BloodBurned",
+          minion: af.acting,
+          amount: 2 + this.tableStatic("torporActionTax"),
+        });
         this.emit({ type: "LeftTorpor", minion: af.acting });
       } else if (af.actionKind === "rescue" && af.targetMinion) {
         // The 2-blood cost, split as fixed at announcement (p. 23) — the
@@ -6398,7 +7433,9 @@ export class VtesEngine implements EngineOps {
           actorM && victimM
             ? rescueDiscountFor(actorM, victimM)
             : { discount: 0, bonusBlood: 0 };
-        const actorPays = Math.max(0, split.fromActor - discount);
+        const actorPays =
+          Math.max(0, split.fromActor - discount) +
+          (actorM && victimM ? this.olderRescueTax(actorM, victimM) : 0);
         if (actorPays > 0) {
           this.emit({ type: "BloodBurned", minion: af.acting, amount: actorPays });
         }
@@ -6887,7 +7924,7 @@ export class VtesEngine implements EngineOps {
         const edgeNeeded = this.state.edge === tf.seat && !tf.edgeDone;
         const ownAbilities = tf.unlockAbilitiesDone
           ? []
-          : this.abilityOptionsFor(tf.seat, "turn.unlock");
+          : this.unlockWindowOptions(tf.seat);
         // "Announce your intent to withdraw during your unlock phase"
         // (p. 38). Offered only while it is actually available, so a
         // player is never shown a button that cannot work.
@@ -6915,7 +7952,7 @@ export class VtesEngine implements EngineOps {
         const other = this.nextUnlockAbilitySeat(tf);
         if (other === null) throw new Error("unlock decision with nothing to decide");
         return this.dp(other, "turn.unlock", [
-          ...this.abilityOptionsFor(other, "turn.unlock"),
+          ...this.unlockWindowOptions(other),
           passOption("Decline"),
         ]);
       }
@@ -6941,12 +7978,24 @@ export class VtesEngine implements EngineOps {
         // "You receive by default one discard phase action… Discard phase
         // actions not used are lost" (p. 37) — one discard unless an
         // effect granted more (Powerbase: Los Angeles).
-        if ((tf.discardActionsLeft ?? 1) > 0) {
+        // "Each Methuselah must pay an ADDITIONAL POOL to use a discard
+        // phase action to discard a card" (Camarilla Threat). Asked at
+        // the option gate and again where it is paid — the pair
+        // docs/play-cost-design.md §3 says must not drift. Nobody ousts
+        // themselves to discard, so the pool must SURVIVE the payment.
+        const discardTax = this.tableStatic("discardActionPoolTax");
+        if (
+          (tf.discardActionsLeft ?? 1) > 0 &&
+          (discardTax === 0 || getSeat(this.state, tf.seat).pool > discardTax)
+        ) {
           for (const card of getSeat(this.state, tf.seat).hand) {
             options.push({
               id: `discard:${card.id}`,
               kind: "discard",
-              label: `Discard ${card.name}`,
+              label:
+                discardTax > 0
+                  ? `Discard ${card.name} (${discardTax} pool)`
+                  : `Discard ${card.name}`,
               card: card.id,
             });
           }
@@ -6965,6 +8014,11 @@ export class VtesEngine implements EngineOps {
             minion: m.id,
           });
         }
+        // EVENTS: "you may use a discard phase action to put an event
+        // card into play" (p. 37). Hand cards are enumerated in the
+        // master window and had never been enumerated here, because
+        // until events there was nothing in hand to play in this phase.
+        options.push(...this.handlerOptions(tf.seat, "turn.discard"));
         options.push(...this.abilityOptionsFor(tf.seat, "turn.discard"));
         return this.dp(tf.seat, "turn.discard", options);
       }
@@ -6974,6 +8028,33 @@ export class VtesEngine implements EngineOps {
   /** In-play activated/phase abilities available to `seat` right now.
    *  Never inside the as-played period (only cancels and wakes there,
    *  p. 7). */
+  /**
+   * The unlock-phase window for `seat`: its "during (any) Methuselah's
+   * unlock phase" abilities on cards in play, plus the BURN OPTION (p. 17)
+   * on cards in HAND — "a Methuselah who does not control a minion who
+   * meets the requirements of this card … may discard it during ANY
+   * Methuselah's unlock phase and replace it. Each Methuselah is limited
+   * to one such discard each unlock phase." One helper for every site
+   * that asks, so the turn seat and the other seats cannot drift.
+   * docs/burn-option-design.md
+   */
+  private unlockWindowOptions(seat: SeatId): LegalOption[] {
+    const out = this.abilityOptionsFor(seat, "turn.unlock");
+    const tf = this.state.frames[0];
+    if (!tf || tf.kind !== "turn" || (tf.burnOptionUsed ?? []).includes(seat)) return out;
+    for (const card of getSeat(this.state, seat).hand) {
+      if (!this.registry[card.name]?.burnOptionDiscardable?.(this.state, seat)) continue;
+      out.push({
+        id: `burnOption:${card.id}`,
+        kind: "burnOptionDiscard",
+        label: `${card.name}: burn option — discard and replace`,
+        card: card.id,
+        seat,
+      });
+    }
+    return out;
+  }
+
   private abilityOptionsFor(seat: SeatId, window: WindowId): LegalOption[] {
     // p. 7: only cancels and wakes live in the as-played period. A card in
     // play that IS a cancel (Meditative Grove) opts in per handler — the
@@ -7107,12 +8188,18 @@ export class VtesEngine implements EngineOps {
   private influenceOptions(tf: TurnFrame): LegalOption[] {
     const seat = getSeat(this.state, tf.seat);
     const options: LegalOption[] = [passOption("End influence phase")];
+    // "You cannot use transfers to move counters TO OR FROM your
+    // uncontrolled minions" (King's Rising). It bars the two counter
+    // transfers and nothing else: the crypt draw spends transfers without
+    // moving a counter onto a minion, and influencing a full vampire out
+    // is free (p. 36). docs/transfer-currency-design.md §3
+    const barred = seat.permanents.some((p) => p.statics.barsUncontrolledTransfers);
     for (const u of seat.uncontrolled) {
       // Not past capacity: those counters "drain back to the blood bank"
       // the instant the vampire enters play (p. 6), so the transfer would
       // burn a pool counter for nothing. Found in an owner playtest —
       // 8 counters onto a 7-capacity vampire (docs/futile-options-design.md).
-      if (tf.transfersLeft >= 1 && seat.pool >= 1 && uncontrolledCanTakeCounters(u)) {
+      if (!barred && tf.transfersLeft >= 1 && seat.pool >= 1 && uncontrolledCanTakeCounters(u)) {
         options.push({
           id: `inf:add:${u.card.id}`,
           kind: "transferToVampire",
@@ -7121,7 +8208,7 @@ export class VtesEngine implements EngineOps {
           playableCards: this.playableFromHand(seat, u.card),
         });
       }
-      if (tf.transfersLeft >= 2 && u.counters >= 1) {
+      if (!barred && tf.transfersLeft >= 2 && u.counters >= 1) {
         options.push({
           id: `inf:take:${u.card.id}`,
           kind: "transferToPool",
@@ -7129,7 +8216,11 @@ export class VtesEngine implements EngineOps {
           minion: u.card.id,
         });
       }
-      if (u.counters >= capacityOf(u.card)) {
+      if (
+        u.counters >= capacityOf(u.card) &&
+        (this.tableStatic("influenceOutPoolTax") === 0 ||
+          seat.pool > this.tableStatic("influenceOutPoolTax"))
+      ) {
         options.push({
           id: `inf:out:${u.card.id}`,
           kind: "influenceOut",
@@ -7253,7 +8344,9 @@ export class VtesEngine implements EngineOps {
     for (const m of seat.minions) {
       // "Vampires with any hostage counters cannot be moved to the ready
       // region" (Carver's Meat Packing).
-      if (m.inTorpor && !m.locked && m.blood >= 2 && !heldHostage(m)) {
+      // "Actions performed by vampires in torpor cost +N blood" (Torpid
+      // Blood) joins the printed 2, here and where it is paid.
+      if (m.inTorpor && !m.locked && m.blood >= 2 + this.tableStatic("torporActionTax") && !heldHostage(m)) {
         options.push({
           id: `leave:${m.id}`,
           kind: "takeAction",
@@ -7292,8 +8385,9 @@ export class VtesEngine implements EngineOps {
         // at payment, so an actor who could not otherwise afford a split
         // is still offered it.
         const { discount } = rescueDiscountFor(actor, victim);
+        const olderTax = this.olderRescueTax(actor, victim);
         for (let fromActor = 0; fromActor <= 2; fromActor++) {
-          const actorPays = Math.max(0, fromActor - discount);
+          const actorPays = Math.max(0, fromActor - discount) + olderTax;
           if (actor.blood < actorPays) continue;
           if (victim.blood < 2 - fromActor) continue;
           options.push({
@@ -7376,6 +8470,19 @@ export class VtesEngine implements EngineOps {
       if (br.noVampires && m.kind === "vampire") continue;
       if (br.noTitled && m.kind === "vampire" && m.title !== null) continue;
       if (br.cannotBlock.includes(m.id)) continue;
+      // "No vampires of that CLAN may block the acting vampire for the
+      // remainder of the TURN" (Clan Loyalty) — a bar that outlives the
+      // action it was played in, so it is read off the turn frame.
+      if (
+        m.kind === "vampire" &&
+        m.clan !== null &&
+        ((this.state.frames.find((f) => f.kind === "turn") as TurnFrame | undefined)
+          ?.clanBlockBars ?? []).some(
+          (b: { acting: MinionId; clan: string }) => b.acting === af.acting && b.clan === m.clan,
+        )
+      ) {
+        continue;
+      }
       // "Minions must burn 1 blood to attempt to block this action" — a
       // minion that cannot pay the toll cannot attempt at all
       // (docs/block-tax-design.md).
@@ -7426,6 +8533,33 @@ export class VtesEngine implements EngineOps {
     for (const card of getSeat(this.state, seat).hand) {
       const handler = this.registry[card.name];
       if (handler) options.push(...handler.options(card, ctx));
+    }
+    // "…can play cards from this card AS IF FROM YOUR HAND" (Gift of
+    // Proteus, Mokolé Blood, Fleshforge Chamber). The same enumerator with
+    // the pile swapped — which is the whole point: a stored combat card is
+    // offered in the strike window and a stored action card announces an
+    // action, because the card's own handler decides that, not the store.
+    // docs/store-plays-design.md §2
+    for (const { entry, owner } of this.allEntries()) {
+      const sp = this.registry[entry.card.name]?.storePlay;
+      if (!sp || (entry.stored ?? []).length === 0) continue;
+      if (owner.seat !== seat) continue;
+      // "THIS Gangrel can play these cards": a store on a bearer that has
+      // somehow lost it offers nothing rather than offering it to the table.
+      if (sp.bearerOnly && owner.minion === null) continue;
+      for (const c of entry.stored ?? []) {
+        const handler = this.registry[c.name];
+        if (!handler) continue;
+        for (const opt of handler.options(c, ctx)) {
+          if (opt.kind !== "playCard") continue;
+          if (sp.bearerOnly && opt.minion !== owner.minion) continue;
+          if (sp.clan !== undefined) {
+            const m = opt.minion === null ? null : findMinion(this.state, opt.minion);
+            if (m?.clan !== sp.clan) continue;
+          }
+          options.push(opt);
+        }
+      }
     }
     return options;
   }
@@ -7510,22 +8644,29 @@ export class VtesEngine implements EngineOps {
         // Blade) — a restricted pool that can only ever buy the first of
         // the two options below (docs/weapon-riders-design.md §4).
         const continueOnly = cf.pressesContinueOnly?.[cf.awaiting] ?? 0;
+        // "…only usable to END combat" (Qetu): the mirror pool, which can
+        // only ever buy the `press:end` option below.
+        const endOnly = cf.pressesEndOnly?.[cf.awaiting] ?? 0;
         if (
           !gated &&
           cf.step === "press" &&
           !cf.restrict[cf.awaiting].press &&
-          cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly > 0
+          cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly + endOnly > 0
         ) {
           // A press credit continues combat — or cancels a press to
           // continue (p. 32).
           if (!cf.willContinue) {
-            options.push({
-              id: "press:continue",
-              kind: "usePress",
-              label: "Press: continue combat",
-              toContinue: true,
-            });
-          } else if (cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] > 0) {
+            // An END-only credit buys nothing here: there is no press to
+            // continue for it to cancel yet.
+            if (cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly > 0) {
+              options.push({
+                id: "press:continue",
+                kind: "usePress",
+                label: "Press: continue combat",
+                toContinue: true,
+              });
+            }
+          } else if (cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + endOnly > 0) {
             options.push({
               id: "press:end",
               kind: "usePress",
@@ -7555,6 +8696,21 @@ export class VtesEngine implements EngineOps {
             kind: "chooseStrike",
             label: "Strike: dodge (forced)",
             strike: "dodge",
+          });
+          options.push(...this.abilityOptionsFor(seat, "combat.chooseStrike"));
+          return this.dp(seat, "combat.chooseStrike", options);
+        }
+        // "This minion's INITIAL STRIKE this round WILL BE strike: hand
+        // strike at +N damage" (Haymaker) — the normal round's twin of
+        // the forced additional strike above: offered alone, so nothing
+        // has to enforce it again at resolution. The bonus rides the
+        // frame and is added where hand damage is computed.
+        if (cf.strikeRound === "normal" && cf.forcedHandStrike?.[side] !== null && cf.forcedHandStrike?.[side] !== undefined) {
+          options.push({
+            id: "strike:hand",
+            kind: "chooseStrike",
+            label: `Hand strike at +${cf.forcedHandStrike[side]} damage (forced)`,
+            strike: "hand",
           });
           options.push(...this.abilityOptionsFor(seat, "combat.chooseStrike"));
           return this.dp(seat, "combat.chooseStrike", options);
@@ -7741,6 +8897,12 @@ export class VtesEngine implements EngineOps {
         return;
       case "endMinionPhase": {
         const tf = top as TurnFrame;
+        // "After each Methuselah's minion phase ENDS, …" (Thirst) — fired
+        // before the influence phase opens, and before `tf.phase` moves,
+        // because the clause asks about the phase that is closing.
+        for (const { entry, owner } of this.allEntries()) {
+          this.registry[entry.card.name]?.onMinionPhaseEnd?.(entry, owner, tf.seat, this);
+        }
         tf.phase = "influence";
         // Transfers are granted at the start of the influence phase:
         // 1/2/3 on the game's first three turns, then 4 (p. 35) — plus
@@ -7840,6 +9002,11 @@ export class VtesEngine implements EngineOps {
       case "influenceOut": {
         const tf = top as TurnFrame;
         const entry = findUncontrolled(this.state, tf.seat, option.minion);
+        // "When any Methuselah moves a vampire from uncontrolled to
+        // controlled, he or she burns 1 ADDITIONAL POOL" (Masquerade
+        // Enforcement).
+        const moveTax = this.tableStatic("influenceOutPoolTax");
+        if (moveTax > 0) this.emit({ type: "PoolBurned", seat: tf.seat, amount: moveTax });
         this.emit({
           type: "VampireEnteredPlay",
           seat: tf.seat,
@@ -7863,11 +9030,24 @@ export class VtesEngine implements EngineOps {
         this.emit({ type: "WithdrawalAnnounced", seat: (top as TurnFrame).seat });
         return;
       }
+      case "burnOptionDiscard": {
+        // p. 17: discard and replace, once per Methuselah per unlock
+        // phase. `top` is the turn frame whether the turn seat or another
+        // seat holds the window. docs/burn-option-design.md
+        const tf = top as TurnFrame;
+        this.discardFromHand(option.seat, option.card, true);
+        tf.burnOptionUsed = [...(tf.burnOptionUsed ?? []), option.seat];
+        return;
+      }
       case "discard": {
         const tf = top as TurnFrame;
         // A discard spends a discard phase action (p. 37); with only the
         // default one, this ends the turn exactly as before.
         tf.discardActionsLeft = (tf.discardActionsLeft ?? 1) - 1;
+        const discardTax = this.tableStatic("discardActionPoolTax");
+        if (discardTax > 0) {
+          this.emit({ type: "PoolBurned", seat: tf.seat, amount: discardTax });
+        }
         this.discardCard(tf.seat, option.card);
         if ((tf.discardActionsLeft ?? 0) <= 0) this.endTurn(tf);
         return;
@@ -7877,6 +9057,9 @@ export class VtesEngine implements EngineOps {
         return;
       case "payToCancel": {
         if (top.kind !== "cardPlay") throw new Error("payToCancel outside a card play");
+        // Held BEFORE the payment: discarding the price replaces the card
+        // (p. 7), and that draw can push a frame of its own.
+        const cp = top;
         const payer = top.payToCancel?.seat;
         if (!payer) throw new Error("payToCancel with no payer");
         if (option.pool > 0) {
@@ -7891,7 +9074,7 @@ export class VtesEngine implements EngineOps {
         // "Cancel this card as it is played". The cost is NOT refunded:
         // Sudden Reversal prints "its cost is not paid" and Golconda
         // prints nothing of the kind (§2, reading 1).
-        this.cancelPendingCard(false);
+        this.cancelPendingCard(false, cp);
         return;
       }
       case "cancelBlock": {
@@ -8043,7 +9226,11 @@ export class VtesEngine implements EngineOps {
         // Silverson) — paid by the casting vampire, and affordability was
         // already settled at enumeration.
         if (option.toll) {
-          this.emit({ type: "BloodBurned", minion: option.source, amount: option.toll });
+          this.emit({
+            type: "BloodBurned",
+            minion: option.tollFrom ?? option.source,
+            amount: option.toll,
+          });
         }
         top.votes.push({
           seat,
@@ -8070,6 +9257,15 @@ export class VtesEngine implements EngineOps {
           this.drawToReplace(seat);
         } else if (option.source === "grant") {
           top.usedSources.push(`grant:${seat}`); // card-granted votes
+        } else if (option.source.startsWith("blood:")) {
+          // A bought vote spends blood, not a vote SOURCE — the vampire's
+          // own title votes are still theirs to cast, and the offer stays
+          // open for another blood (Mob Rule's "one blood at a time").
+          const who = option.source.slice("blood:".length);
+          top.bloodVotesBought = {
+            ...(top.bloodVotesBought ?? {}),
+            [who]: (top.bloodVotesBought?.[who] ?? 0) + 1,
+          };
         } else {
           top.usedSources.push(option.source); // a titled vampire
         }
@@ -8173,7 +9369,9 @@ export class VtesEngine implements EngineOps {
         // rule, docs/weapon-riders-design.md §4). Then round credits,
         // then per-combat ones (retainer statics).
         const restricted = top.pressesContinueOnly;
+        const endOnly = top.pressesEndOnly;
         if (option.toContinue && restricted && restricted[side] > 0) restricted[side] -= 1;
+        else if (!option.toContinue && endOnly && endOnly[side] > 0) endOnly[side] -= 1;
         else if (top.presses[side] > 0) top.presses[side] -= 1;
         else top.pressesCombat[side] -= 1;
         top.willContinue = option.toContinue;
@@ -8238,7 +9436,7 @@ export class VtesEngine implements EngineOps {
         const edgeNeeded = this.state.edge === tf.seat && !tf.edgeDone;
         const ownAbilities =
           !tf.unlockAbilitiesDone &&
-          this.abilityOptionsFor(tf.seat, "turn.unlock").length > 0;
+          this.unlockWindowOptions(tf.seat).length > 0;
         // The withdrawal offer opens this window too, so declining it has
         // to close the turn seat's turn at it — otherwise the pass falls
         // through and the OTHER seats' "during any unlock phase" cards
@@ -8255,6 +9453,13 @@ export class VtesEngine implements EngineOps {
       }
       case "master":
         tf.phase = "minion";
+        // "…at the beginning of his or her MINION PHASE" (Faithful
+        // Servant). The family had openers for master, influence and
+        // discard and a CLOSER for the minion phase, and nothing here
+        // (docs/retainer-upkeep-design.md §1).
+        for (const { entry, owner } of this.allEntries()) {
+          this.registry[entry.card.name]?.onMinionPhase?.(entry, owner, tf.seat, this);
+        }
         return;
       case "minion":
         throw new Error("minion phase uses endMinionPhase, not pass");
@@ -8480,6 +9685,29 @@ export class VtesEngine implements EngineOps {
       const pd = cf.pendingDamage[0];
       if (!pd) return moved;
       const side = pd.minion === cf.acting ? "acting" : pd.minion === cf.opposing ? "opposing" : null;
+      // "Prevent N damage from the opposing minion's next HAND STRIKE
+      // this round" (Forearm Block). Automatic, like every other
+      // prevention the engine applies without asking: the card was
+      // already played, and its points are not optional.
+      const pool = side ? (cf.preventHandStrike?.[side] ?? 0) : 0;
+      if (side && pool > 0 && pd.fromHandStrike) {
+        const stopped = Math.min(pool, pd.amount);
+        // "If FEWER points are being resolved, the effect prevents all of
+        // those points" [RTR 20041202] — and the remainder is then LOST,
+        // because the card says "prevent", not "can prevent"
+        // [ANK 20200318]. One strike, one use.
+        cf.preventHandStrike![side] = 0;
+        this.emit({ type: "DamagePrevented", minion: pd.minion, amount: stopped });
+        if (stopped >= pd.amount) {
+          cf.pendingDamage.shift();
+        } else {
+          pd.amount -= stopped;
+        }
+        delete cf.damageCycle;
+        delete cf.damageCycleLen;
+        moved = true;
+        continue;
+      }
       const rule = side ? cf.autoPreventAfterFirst[side] : null;
       const auto =
         !!side &&
@@ -8604,6 +9832,10 @@ export class VtesEngine implements EngineOps {
       directed = true;
     } else if (kind === "hunt" || kind === "leaveTorpor") {
       inherentStealth = 1; // +1 inherent stealth (p. 21, p. 24)
+      // "…who did not hunt during that minion phase" (Thirst) is answered
+      // by ANNOUNCING one: "the hunt need not be successful for a vampire
+      // to avoid the effect" [LSJ 20050727].
+      if (kind === "hunt") m.huntedThisPhase = true;
     } else if (kind === "diablerize" || kind === "rescue") {
       // Directed at the torpor vampire's controller if different, else
       // undirected; +1 stealth when same controller, 0 when different
@@ -8622,6 +9854,14 @@ export class VtesEngine implements EngineOps {
         const fromActor = opts.rescueActorPortion ?? 2;
         rescueSplit = { fromActor, fromVictim: 2 - fromActor };
       }
+    }
+    // "Actions performed by vampires in torpor cost +N blood" (Torpid
+    // Blood). Leave-torpor pays its whole cost at RESOLUTION (p. 24), so
+    // the tax rides with it there; every other action a card might let a
+    // torpid vampire take pays at announcement, like its printed cost.
+    if (m.inTorpor && kind !== "leaveTorpor") {
+      const tax = Math.min(this.tableStatic("torporActionTax"), m.blood);
+      if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
     }
     this.emit({
       type: "ActionAnnounced",
@@ -8814,7 +10054,18 @@ export class VtesEngine implements EngineOps {
     if (!card) throw new Error("unreachable");
     this.emit({ type: "CardDiscarded", seat: seatId, cardId: card.id });
     this.toAshHeap(seatId, card);
-    if (replace) this.drawToReplace(seatId);
+    if (replace) {
+      // "When a Methuselah uses a discard phase action to discard a card,
+      // they don't draw to replace that card until their next unlock
+      // phase" (Port Authority). `replace` is exactly "this was a discard
+      // phase ACTION" — a discard-down to hand size passes false, and is
+      // not a play at all (p. 7).
+      const barred = this.state.seats.some((s) =>
+        s.permanents.some((p) => p.statics.barsDiscardReplacement),
+      );
+      if (barred) seat.delayedDraws += 1;
+      else this.drawToReplace(seatId);
+    }
     // "If you use that discard phase action to discard a card requiring an
     // Anarch…" (Powerbase: Los Angeles) — cards in play see the discard.
     for (const s of this.state.seats) {
@@ -8925,8 +10176,20 @@ export class VtesEngine implements EngineOps {
     const dpSeat = this.currentSeatOfTop();
     const seat = getSeat(this.state, dpSeat);
     const idx = seat.hand.findIndex((c) => c.id === option.card);
-    if (idx < 0) throw new Error(`card not in hand: ${option.card}`);
-    const [card] = seat.hand.splice(idx, 1);
+    // "…as if from your hand": the card may be sitting in a STORE instead
+    // (docs/store-plays-design.md §3). Everything below is identical —
+    // cost, the once-per-turn records, the as-played window, cancels — and
+    // the only thing the pile changes is the REPLACEMENT DRAW, because a
+    // card that was never in hand leaves no gap in it.
+    const store = idx < 0 ? this.storeHolding(option.card, dpSeat) : null;
+    if (idx < 0 && !store) throw new Error(`card not in hand: ${option.card}`);
+    const [card] =
+      store === null
+        ? seat.hand.splice(idx, 1)
+        : store.stored!.splice(
+            store.stored!.findIndex((c) => c.id === option.card),
+            1,
+          );
     if (!card) throw new Error("unreachable");
     const handler = this.handler(card.name);
 
@@ -8935,6 +10198,19 @@ export class VtesEngine implements EngineOps {
     // "A vampire can play only one X each round/combat" (p. 32): record
     // the play against the current combat now.
     const modeLimit = handler.modeCombatLimit?.(option.mode, option.params["variant"]);
+    if (handler.isCombatCard && option.minion) {
+      // WHO played WHAT in WHICH ROUND. `playedThisRound` is cleared at
+      // the round boundary and holds names only, so it cannot answer
+      // "not usable if THIS MINION played one LAST round" (Haymaker).
+      const cf = this.combatFrame();
+      if (cf) {
+        (cf.playedHistory ??= []).push({
+          name: card.name,
+          minion: option.minion,
+          round: cf.round,
+        });
+      }
+    }
     if (handler.isCombatCard && (handler.combatLimit || modeLimit)) {
       const cf = this.combatFrame();
       if (cf) {
@@ -8954,6 +10230,12 @@ export class VtesEngine implements EngineOps {
       minion: option.minion,
       mode: option.mode,
     });
+    // "Burn this card if it has no cards on it" — after the play is on
+    // record, and whatever becomes of the card: it was played, so the
+    // store lost it even if the play is cancelled.
+    if (store && this.registry[store.card.name]?.storePlay?.burnWhenEmpty) {
+      if ((store.stored ?? []).length === 0) this.burnPermanent(store.card.id);
+    }
     // Non-action cards pay their cost when played, win or lose; action
     // cards defer cost to resolution (p. 27) and the once-per-turn record
     // to announcement (a canceled action card is replayable, p. 16).
@@ -8986,6 +10268,37 @@ export class VtesEngine implements EngineOps {
     if (price.pool > 0) {
       this.emit({ type: "PoolBurned", seat: seat.id, amount: price.pool });
     }
+    if (handler.isEventCard) {
+      // "You may use a DISCARD PHASE ACTION to put an event card into
+      // play, but no more than one per phase" (p. 37) — the same action
+      // a discard spends, so the two compete.
+      const top = this.top();
+      if (top && top.kind === "turn" && top.phase === "discard") {
+        top.discardActionsLeft = Math.max(0, (top.discardActionsLeft ?? 1) - 1);
+      }
+      // "Each event card may only be played ONCE EACH GAME" — recorded
+      // when it is played, not when it enters play, so a cancelled event
+      // is still spent.
+      (this.state.eventsPlayed ??= []).push(card.name);
+      // "…until a GEHENNA EVENT is played" (The Slow Withering) ends every
+      // diablerist's exemption, whoever played the event and whatever it
+      // does.
+      if ((handler.permanentTags ?? []).includes("gehenna")) {
+        for (const s of this.state.seats) {
+          for (const m of s.minions) m.ignoresGehennaTax = false;
+        }
+        // "After ANOTHER Gehenna event is played, burn 1 counter from this
+        // card" (Fueled by Heart's Blood, Wormwood) — "another" is free
+        // here: the card being played is not in play yet.
+        for (const s of this.state.seats) {
+          for (const p of [...s.permanents]) {
+            if (p.statics.burnCounterOnGehennaEvent && (p.counters ?? 0) > 0) {
+              this.addCounters(p.card.id, -1);
+            }
+          }
+        }
+      }
+    }
     if (isMaster) {
       if (handler.isOutOfTurnMaster) {
         // Counts against the next master phase, even if cancelled (p. 8).
@@ -9014,7 +10327,13 @@ export class VtesEngine implements EngineOps {
         afForDraw.delayReplaceTypes.includes(t),
       );
     const cfForDraw = this.combatFrame();
-    if (handler.delayedReplace === "afterCombat" && cfForDraw) {
+    // A card played out of a store is NOT replaced: replacement refills a
+    // HAND ("draw a replacement card", p. 8), and this card never left one.
+    // Every branch below is a question about WHEN the replacement comes, so
+    // the guard belongs around all of them rather than in each.
+    if (store !== null) {
+      // nothing to replace
+    } else if (handler.delayedReplace === "afterCombat" && cfForDraw) {
       // "Do not replace until AFTER COMBAT" (Dodge, Fake Out, Boxed In).
       // Held on the combat frame, not the action's, because combat ends
       // first — and if there is no combat at all the card replaces
@@ -9022,6 +10341,19 @@ export class VtesEngine implements EngineOps {
       (cfForDraw.drawAfterCombat ??= []).push(seat.id);
     } else if (handler.delayedReplace === "unlock") {
       seat.delayedDraws += 1;
+    } else if (handler.delayedReplaceUntil) {
+      // "Do not replace until a vampire commits diablerie" and its
+      // siblings. Held on the GAME, because "it is not replaced until the
+      // condition is met, EVEN IF IT IS BURNED" [LSJ 20080805].
+      (this.state.drawWhenCondition ??= []).push({
+        seat: seat.id,
+        until: handler.delayedReplaceUntil,
+      });
+    } else if (handler.delayedReplace === "whileInPlay") {
+      // "Do not replace AS LONG AS THIS CARD IS IN PLAY" (Dragonbound).
+      // The wait has no phase and no action to hang off, so it is keyed
+      // by the card and released wherever a permanent leaves play.
+      (this.state.drawWhenLeavesPlay ??= []).push({ seat: seat.id, cardId: card.id });
     } else if (handler.delayedReplace === "discard") {
       // "Do not replace until your next DISCARD phase" (Mirror Walk).
       seat.delayedDrawsDiscard = (seat.delayedDrawsDiscard ?? 0) + 1;
@@ -9058,6 +10390,13 @@ export class VtesEngine implements EngineOps {
       // per-MODE, since a dual-mode combat card can have a strike mode and
       // a non-strike one. docs/vozhd-allies-design.md §5
       isStrike: !!this.handler(card.name).isStrikeCard?.(option.mode),
+      // "…cancel a combat card that would RESTRICT THIS ANARCH'S CHOICE
+      // OF STRIKES" (Groundfighting) — per-MODE for the same reason
+      // `isStrike` is. docs/cancel-in-combat-design.md §3
+      ...(() => {
+        const bar = this.handler(card.name).restrictsStrikeChoice?.(option.mode);
+        return bar ? { restrictsStrikeChoice: bar } : {};
+      })(),
       // Printed keywords ("Grapple.", "Aim.") — Sword of the Archangel
       // cancels by them. docs/weapon-riders-design.md §5
       ...(() => {

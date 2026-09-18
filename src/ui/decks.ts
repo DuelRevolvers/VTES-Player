@@ -211,9 +211,22 @@ for (const entry of Object.values(reg.entries)) {
   }
 }
 
-/** Validate every card in every deck — library names and crypt ids
- *  (design §6). Nothing is ever silently dropped. */
-export function validateDecks(decks: DeckDef[]): DeckValidation {
+/**
+ * Validate every card in every deck — library names and crypt ids
+ * (design §6). Nothing is ever silently dropped.
+ *
+ * `halfDeckSeats` names seats playing a deck that is half-size ON PURPOSE
+ * — the New Blood starters, which print six crypt cards and about fifty
+ * library cards. They are exempt from p. 14's two MINIMUMS and from
+ * nothing else: the library MAXIMUM, the group rule and "every card is
+ * implemented" are still checked, because those are the rules a half deck
+ * is not an exception to. The exemption is per SEAT rather than a flag on
+ * the validation, so a table can mix a half deck with three real ones.
+ */
+export function validateDecks(
+  decks: DeckDef[],
+  halfDeckSeats: ReadonlySet<string> = new Set(),
+): DeckValidation {
   const unknown = new Set<string>();
   const unsupported = new Set<string>();
   const badCryptIds = new Set<number>();
@@ -252,13 +265,14 @@ export function validateDecks(decks: DeckDef[]): DeckValidation {
   const illegalDecks: DeckValidation["illegalDecks"] = [];
   for (const deck of decks) {
     if (!isDeckList(deck)) continue;
-    if (deck.crypt.length < MIN_CRYPT) {
+    const half = halfDeckSeats.has(deck.seat);
+    if (deck.crypt.length < MIN_CRYPT && !half) {
       illegalDecks.push({
         seat: deck.seat,
         problem: `crypt has ${deck.crypt.length} cards; at least ${MIN_CRYPT} are needed`,
       });
     }
-    if (deck.library.length < MIN_LIBRARY || deck.library.length > MAX_LIBRARY) {
+    if (deck.library.length > MAX_LIBRARY || (deck.library.length < MIN_LIBRARY && !half)) {
       illegalDecks.push({
         seat: deck.seat,
         problem: `library has ${deck.library.length} cards; it must hold between ${MIN_LIBRARY} and ${MAX_LIBRARY}`,

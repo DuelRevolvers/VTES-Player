@@ -72,6 +72,11 @@ function intoCombat(
     if (seat === "Alice") state.seats[0]!.hand.push({ id: `a${a++}`, name });
     else state.seats[1]!.hand.push({ id: `b${b++}`, name });
   }
+  // Each combatant carries the printed clan icon of the first card it holds
+  // (p. 10: a clan symbol on a minion card is a requirement).
+  const firstOf = (seat: string): string => cards.find((c) => c[0] === seat)?.[1] ?? "";
+  find(state, "V1").clan = testRegistry[firstOf("Alice")]?.requiresClans?.()?.[0] ?? null;
+  find(state, "M").clan = testRegistry[firstOf("Bob")]?.requiresClans?.()?.[0] ?? null;
   tweak(state);
   const engine = new VtesEngine(state, testRegistry);
   runTrace(engine, [

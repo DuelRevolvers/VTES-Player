@@ -36,6 +36,7 @@ function setup(mode: "basic" | "superior"): { state: ReturnType<typeof threeSeat
   const m = state.seats[1]!.minions.find((x) => x.id === "M")!;
   m.disciplines = { ani: "superior" };
   m.locked = true;
+  m.clan = "Ravnos"; // the printed clan icon (p. 10)
   state.seats[1]!.hand.push({ id: "dp1", name: "Dogged Pursuit" });
   return { state, engine: new VtesEngine(state, testRegistry) };
 }
@@ -62,6 +63,7 @@ describe("Dogged Pursuit (102353)", () => {
     const m = state.seats[1]!.minions.find((x) => x.id === "M")!;
     m.disciplines = { ani: "superior" };
     m.locked = true;
+    m.clan = "Ravnos"; // the printed clan icon (p. 10)
     state.seats[1]!.hand.push({ id: "dp1", name: "Dogged Pursuit" });
     const engine = new VtesEngine(state, testRegistry);
 

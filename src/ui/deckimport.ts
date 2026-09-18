@@ -410,6 +410,17 @@ export interface PreconSummary {
   playable: boolean;
   /** Why not, when it is not. */
   problems: string[];
+  /**
+   * Every card in it is implemented and the only thing wrong with it is
+   * that it is SMALL ON PURPOSE — a New Blood starter, half a deck by
+   * design.
+   *
+   * Kept apart from `playable` because the two answer different questions:
+   * `playable` is "legal as printed (p. 14)", this is "the platform can
+   * deal every card in it". A deck can be the second without being the
+   * first, and the chooser offers those, labelled.
+   */
+  halfDeck: boolean;
 }
 
 /**
@@ -439,12 +450,21 @@ function summarisePrecon(p: PreconDeck): PreconSummary {
     }
   }
   const problems: string[] = [];
-  if (cryptCount < MIN_CRYPT) problems.push(`only ${cryptCount} crypt cards`);
-  if (libraryCount < MIN_LIBRARY) problems.push(`only ${libraryCount} library cards`);
-  if (libraryCount > MAX_LIBRARY) problems.push(`${libraryCount} library cards`);
+  // Tracked as the problems are ADDED rather than recognised afterwards by
+  // the shape of their sentences: a half deck is one whose every problem is
+  // a size shortfall, and a set of reasons kept in a string match is a list
+  // nobody greps.
+  let onlyShortfall = true;
+  const add = (problem: string, shortfall = false): void => {
+    problems.push(problem);
+    if (!shortfall) onlyShortfall = false;
+  };
+  if (cryptCount < MIN_CRYPT) add(`only ${cryptCount} crypt cards`, true);
+  if (libraryCount < MIN_LIBRARY) add(`only ${libraryCount} library cards`, true);
+  if (libraryCount > MAX_LIBRARY) add(`${libraryCount} library cards`);
   const { problem } = groupProblem(cryptDefs);
-  if (problem) problems.push(problem);
-  if (unsupported.length > 0) problems.push(`${unsupported.length} cards not implemented`);
+  if (problem) add(problem);
+  if (unsupported.length > 0) add(`${unsupported.length} cards not implemented`);
   return {
     set: p.set,
     name: p.name,
@@ -453,6 +473,7 @@ function summarisePrecon(p: PreconDeck): PreconSummary {
     unsupported: unsupported.sort(),
     playable: problems.length === 0,
     problems,
+    halfDeck: problems.length > 0 && onlyShortfall,
   };
 }
 

@@ -50,6 +50,43 @@ describe("the default table", () => {
     expect(buildTable({ ...config, seed: 1 }).problems).toEqual([]);
   });
 
+  it("lets a seat play a New Blood starter, and holds the rest to p. 14", () => {
+    // The starters are half decks BY DESIGN, and the chooser offers them
+    // labelled as such — so a table with one has to deal. What must not
+    // travel with the exemption is the rest of the table: a pasted deck
+    // six cards short is still six cards short.
+    const half = supportedPrecons().find((p) => p.halfDeck)!;
+    const config = table();
+    config.seats[1]!.deck = { kind: "precon", set: half.set, name: half.name };
+    const build = buildTable(config);
+    expect(build.problems).toEqual([]);
+    expect(build.setup).not.toBeNull();
+    const dealt = build.setup!.decks.find((d) => d.seat === config.seats[1]!.name)!;
+    expect(dealt.crypt.length).toBe(half.cryptCount);
+
+    // The same cards PASTED rather than chosen are refused, and refused
+    // for the size: what exempts a seat is the precon it picked, not the
+    // shape of the list it hands in.
+    const cheat = table();
+    const list = preconDeck(half.set, half.name, cheat.seats[1]!.name)!;
+    const crypt = new Map<number, number>();
+    for (const v of list.crypt) crypt.set(v.id, (crypt.get(v.id) ?? 0) + 1);
+    const lib = new Map<string, number>();
+    for (const n of list.library) lib.set(n, (lib.get(n) ?? 0) + 1);
+    cheat.seats[1]!.deck = {
+      kind: "paste",
+      text: [
+        "Crypt:",
+        ...[...crypt].map(([id, n]) => `${n}x ${cryptName(id)}`),
+        "",
+        "Library:",
+        ...[...lib].map(([name, n]) => `${n}x ${name}`),
+      ].join("\n"),
+    };
+    const pasted = buildTable(cheat).problems;
+    expect(pasted.some((p) => /at least \d+ are needed/.test(p.problem))).toBe(true);
+  });
+
   it("gives each seat a DIFFERENT precon", () => {
     // A first game that is four copies of one deck playing itself teaches
     // a new player nothing about the game.

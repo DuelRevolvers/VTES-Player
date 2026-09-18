@@ -4,7 +4,7 @@
  * data; compileSpec() turns it into the engine's CardHandler.
  */
 
-import type { ActionKind, ConditionalStatic, DisciplineLevel, OutcomeCondition, PermanentAura, PermanentCostSource, PermanentCounterSink, PermanentStatics, PlayCostCardType, PlayCostMod, Sect, VampireTitle } from "../../engine/index.ts";
+import type { ActionKind, DelayedDrawCondition, ConditionalStatic, DisciplineLevel, OutcomeCondition, PermanentAura, PermanentCostSource, PermanentCounterSink, PermanentStatics, PlayCostCardType, PlayCostMod, Sect, VampireTitle } from "../../engine/index.ts";
 
 /**
  * Which cards in hand a `playFromHand` effect may bring into play, and on
@@ -29,6 +29,22 @@ export interface PlayFromHandFilter {
   /** Piper: the bearer is a CHOSEN ready unlocked vampire of this sect,
    *  locked to do it, rather than the playing or acting minion. */
   actor?: { sect?: Sect; unlockedOnly?: boolean; lock?: boolean };
+  /** "The weapon CANNOT COST 3 OR MORE POOL" (Concealed Weapon) — read
+   *  against the cost this bearer would actually pay, because the ruling
+   *  is explicit that cost modifications not limited to cards "played"
+   *  count: Black Cat can conceal a Combat Shotgun, and Centralized
+   *  Background Check makes a .44 Magnum too costly
+   *  [LSJ 20040701] [ANK 20181216].
+   *  docs/armed-mid-combat-design.md §4 */
+  maxPoolCost?: number;
+  /** "…or inflict (WITH A REGULAR STRIKE) 4 OR MORE DAMAGE" — the
+   *  weapon's damage against a generic opponent [RTR 19980623], with no
+   *  strength or other bonus counted [LSJ 20020821] [LSJ 20020904]. */
+  maxDamage?: number;
+  /** "…or inflict (WITH A REGULAR STRIKE) AGGRAVATED DAMAGE" — printed
+   *  and unconditional only: Poker's aggravated damage against Kiasyd is
+   *  a conditional effect and does not disqualify it [LSJ 20020729]. */
+  noAggravated?: boolean;
 }
 
 /** A conditional extra on a bleed/stealth/intercept modifier: "+N more if
@@ -37,7 +53,12 @@ export type ModifierCondition =
   | { kind: "selfClan"; clan: string }
   | { kind: "selfTitled" }
   | { kind: "actingTitled" }
-  | { kind: "targetPoolAtMost"; value: number };
+  | { kind: "targetPoolAtMost"; value: number }
+  /** "…if the acting minion is an ALLY or a VAMPIRE WITH CAPACITY N OR
+   *  LESS" (Nest of Eagles). An ally qualifies whatever its stats, which
+   *  is why this is one condition and not a capacity test with a special
+   *  case bolted on. docs/acting-minion-reactions-design.md §3 */
+  | { kind: "actingSmall"; capacity: number };
 
 export type EffectPrimitive =
   | {
@@ -45,6 +66,14 @@ export type EffectPrimitive =
       amount: number;
       limited: boolean;
       bonus?: { extra: number; when: ModifierCondition };
+      /** "Reduce a bleed against you by 1 FOR EACH POINT OF STEALTH the
+       *  acting minion has WHEN THIS CARD IS PLAYED" (Keep it Simple) —
+       *  the amount is read off the action at play time and `amount` is
+       *  ignored. A snapshot, not a subscription: stealth played
+       *  afterwards does not grow the reduction, and because the bleed
+       *  amount is a fold the emitted delta stands on its own.
+       *  docs/acting-minion-reactions-design.md §2 */
+      perActingStealth?: boolean;
       /** "+X bleed (limited). X must be 1, 2 or 3" (Monkey Wrench) — the
        *  amount is chosen as the card is played, so one option per X with
        *  `x=N` in the option id (the `bankStealth` shape). `amount` is
@@ -53,6 +82,23 @@ export type EffectPrimitive =
       xRange?: { min: number; max: number };
     }
   | { kind: "modifyStealth"; amount: number }
+  /** "Choose another ready \<sect\> vampire you control. THE CHOSEN
+   *  VAMPIRE BURNS N BLOOD, or this card has no effect" (Stealth Ritus) —
+   *  a price paid by a minion that is neither the actor nor the card's
+   *  target. The chooser rides in the option id, so an unaffordable
+   *  helper is simply not offered rather than fizzling later.
+   *  docs/second-minion-modifiers-design.md §3 */
+  | {
+      kind: "otherMinionPaysBlood";
+      amount: number;
+      sect?: Sect;
+      clan?: string;
+      /** What the payment buys. It lives INSIDE this primitive rather than
+       *  beside it as a `modifyStealth`, because "or this card has no
+       *  effect" has to be able to withhold it — two independent effects
+       *  in one mode cannot, and the stealth would land unpaid for. */
+      thenStealth?: number;
+    }
   | { kind: "modifyIntercept"; amount: number; bonus?: { extra: number; when: ModifierCondition } }
   /** "This vampire gets +N votes" during the polling step (p. 28). */
   | { kind: "modifyVotes"; amount: number }
@@ -72,7 +118,7 @@ export type EffectPrimitive =
    *  be locked — the superior drops the "Only" from "Only usable by a
    *  locked vampire" — and the target rides in the option id.
    *  docs/wraith-zombie-design.md §4 */
-  | { kind: "wakeOther"; who: "undeadAlly" }
+  | { kind: "wakeOther"; who: "undeadAlly" | "youngerLockedVampire" }
   /** "If the action is successful, this vampire can burn 1 blood to unlock
    *  AFTER ACTION RESOLUTION" (Paths in Two Worlds superior), and "after
    *  action resolution, this vampire can burn 1 blood to unlock THE
@@ -165,7 +211,34 @@ export type EffectPrimitive =
        *  both sides, so a granted capacity counts.
        *  docs/bleed-answers-design.md §2 */
       youngerOnly?: boolean;
+      /** "Only usable when an ALLY OR YOUNGER vampire is bleeding you"
+       *  (Lost in Translation) — the same comparison one step wider: an
+       *  ally has no capacity to compare, and always qualifies.
+       *  docs/lock-as-currency-design.md §2 */
+      allyOrYoungerOnly?: boolean;
     }
+  /** "This vampire doesn't lock for successfully blocking" (Minor
+   *  Irritation) — played in the first window after the block succeeded,
+   *  so the lock has already happened and this undoes it.
+   *  docs/lock-as-currency-design.md §1 */
+  | { kind: "noLockForBlocking" }
+  /** "Each vampire with a capacity above N can burn blood to gain votes"
+   *  (Mob Rule), "each ready anarch may burn 1 blood to gain 1 additional
+   *  vote" (Rant!) — an open offer registered on the referendum frame.
+   *  docs/referendum-blood-design.md §1 */
+  | {
+      kind: "bloodForVotes";
+      minCapacity?: number;
+      sect?: Sect;
+      votesPerBlood: number;
+      bigCapacity?: number;
+      bigVotesPerBlood?: number;
+      maxBloodPerMinion?: number;
+    }
+  /** "Any vampire casting votes or ballots against this referendum burns
+   *  N blood when the results are tallied" (Cheval de Bataille).
+   *  docs/referendum-blood-design.md §2 */
+  | { kind: "taxVotesAgainst"; blood: number }
   /** "Reduce a bleed against you to 0. (The acting minion can still
    *  increase the bleed amount.)" (Visions of Zapathasura superior) — the
    *  `currentBleed` twin of `setStealthZero`, and it works for the same
@@ -408,6 +481,13 @@ export type EffectPrimitive =
       target?: "ownMinion" | "anyMinion";
       /** "Put this card on this vampire, LOCKED" (Rutor's Hand). */
       locked?: boolean;
+      /** "…to represent the unique Anarch title of Baron OF BOSTON"
+       *  (Fee Stake) — the Praxis Seizure clause on an ACTION rather than
+       *  on a referendum. The city is what the title contests on (p. 39),
+       *  exactly as it is for `refPutInPlay`.
+       *  docs/fee-stake-design.md §2 */
+      grantsTitle?: VampireTitle;
+      grantsTitleCity?: string;
       /** Extra statics the attached card grants, beyond the shorthand
        *  fields above (Phantasmagoria's −1 stealth, Tier of Souls'
        *  bleed-against-prey). */
@@ -499,6 +579,12 @@ export type EffectPrimitive =
       /** "This strike CANNOT BE DODGED" (Dust Up `[ani]`) — a property of
        *  the blow. docs/last-combat-design.md §1 */
       undodgeable?: boolean;
+      /** "…WITH FIRST STRIKE" (Quick Jab) — resolved before a normal
+       *  strike (p. 33). docs/first-strike-design.md §1 */
+      firstStrike?: boolean;
+      /** "If more than N damage is inflicted with this strike, ignore the
+       *  excess" (Quick Jab). docs/first-strike-cards-design.md §1 */
+      capDamage?: number;
       /** "Strike: hand strike OR USE A MELEE WEAPON STRIKE, at +N damage"
        *  (Anticipation) — one option per legal weapon alongside the hand
        *  strike, the choice riding in the option id. §4 */
@@ -512,10 +598,64 @@ export type EffectPrimitive =
         noPreventBy?: string[];
       };
     }
+  /** "Choose a weapon possessed by the opposing minion. Strike: X damage,
+   *  where X is THE POOL COST OF THE CHOSEN WEAPON" (Up Yours!) — the
+   *  first strike whose size is printed on somebody else's card. The
+   *  weapon is chosen as the card is played and rides in the option id,
+   *  so a weapon burned before resolution cannot change the figure.
+   *  docs/strike-sources-design.md §2 */
+  | { kind: "strikeWeaponCost" }
+  /** "Strike: PREVENT N DAMAGE from the opposing minion's next hand
+   *  strike this round (including any currently-resolving hand strike).
+   *  If another round of combat occurs, this minion gets first strike on
+   *  their initial strike that round" (Forearm Block) — a strike that
+   *  deals nothing and arms two riders instead.
+   *  docs/first-strike-cards-design.md §2 */
+  | {
+      kind: "strikePreventHandStrike";
+      amount: number;
+      firstStrikeNextRound?: boolean;
+    }
+  /** "This minion's initial strike this round will be strike: hand strike
+   *  at +N damage, and the OPPOSING minion's initial strike this round
+   *  gets first strike. If either minion inflicts more damage than the
+   *  other this round, that minion gets an optional press this round"
+   *  (Haymaker) — three riders that only make sense together, so one
+   *  primitive rather than three that must be kept in step.
+   *  docs/first-strike-cards-design.md §3 */
+  | {
+      kind: "haymaker";
+      bonus: number;
+      /** "Not usable if this minion played a <this card> LAST round." */
+      notAfterOwnLastRound?: boolean;
+    }
+  /**
+   * "Cancel the block and combat" (Clan Loyalty), "Combat does not occur"
+   * (Blood Brother Ambush) — played in the first window of a combat that
+   * came from a block, and the combat never happened.
+   * docs/no-combat-design.md §1
+   */
+  | {
+      kind: "cancelBlockCombat";
+      /** `continueAction`: "the action continues as normal" (Clan
+       *  Loyalty). `ambush`: the card itself becomes an ally and fights
+       *  the blocker instead (Blood Brother Ambush). */
+      outcome: "continueAction" | "ambush";
+      /** "Only usable when this vampire is successfully blocked BY A
+       *  VAMPIRE OF THE SAME CLAN." */
+      requiresSameClanBlocker?: boolean;
+      /** "…and no vampires of that clan may block the acting vampire for
+       *  the remainder of the turn." */
+      barBlockerClanThisTurn?: boolean;
+    }
   | { kind: "strikeCombatEnds"; unlockSelf: boolean }
   /** "Strike: dodge" — no damage, cancels the opposing strike's effects
-   *  on this minion (p. 33). */
-  | { kind: "strikeDodge" }
+   *  on this minion (p. 33). `riders` is "…WITH AN OPTIONAL PRESS"
+   *  (Backflip): a rider ON the strike, not a second effect in the mode,
+   *  because the mode resolves in ONE window and a standalone `press`
+   *  belongs to the press step. The shape `strikeDamage` already uses.
+   *  docs/strike-sources-design.md §3 */
+  | { kind: "strikeDodge"; riders?: { press?: number; maneuver?: number } }
   /** "Strike: N (R) (aggravated) damage" — a card weapon-like strike
    *  (Body Flare); optional maneuver/press riders (Aid from Bats). */
   | {
@@ -576,6 +716,14 @@ export type EffectPrimitive =
    *  weapon equipment" (Weighted Walking Stick) — a combat card that
    *  becomes equipment on its own player mid-combat. */
   | { kind: "attachSelfWeapon"; counters: number }
+  /** "RANGED STRIKE: put this card on this minion; it becomes a weapon
+   *  equipment" (Molotov Cocktail) — `attachSelfWeapon`'s sibling for the
+   *  card whose attachment IS its strike. The distinction is not
+   *  cosmetic: the attach happens when the strike RESOLVES, which is what
+   *  makes *"if the opponent strikes: combat ends, this strike is not
+   *  resolved and the Cocktail is not put on this minion"* fall out
+   *  [ANK 20200203-1]. docs/armed-mid-combat-design.md §2 */
+  | { kind: "strikeAttachSelfWeapon"; ranged: boolean }
   /** "Instead, the bleed … is unsuccessful" (Spying Mission). The action
    *  simply fails where it stands: no block attempt is underway, so there
    *  is no blocker to spare — which is what separates this from
@@ -636,6 +784,33 @@ export type EffectPrimitive =
   /** "Add N blood to a <sect> vampire in your uncontrolled region"
    *  (Magnetic Authority); `each` is the superior half. */
   | { kind: "uncontrolledSectBlood"; amount: number; sect: Sect; each?: boolean }
+  /**
+   * "EACH ready \<filter\> vampire gains N blood from the blood bank"
+   * (Blood Feast, Patshiv) — no choice at all, so no announced target
+   * (docs/blood-bank-actions-design.md §2).
+   *
+   * `who.ownOnly` is the field to get right and the easy one to assume:
+   * Blood Feast says "each ready Sabbat vampire YOU CONTROL", Patshiv
+   * says "each ready unlocked Ravnos" and names no controller, so it
+   * feeds the whole table's Ravnos — including a predator's.
+   */
+  | { kind: "bankBloodSweep"; amount: number; who: BankBloodFilter }
+  /**
+   * "Move N blood from the blood bank to an \<filter\> vampire, OR move M
+   * blood to each of K such vampires" (Esbat) — the player picks the
+   * split AND the vampires, both at announcement, the Fifth Tradition:
+   * Hospitality precedent (docs/blood-bank-actions-design.md §3).
+   *
+   * Each split rides in the announced `target` param as its recipients
+   * joined by `|`, so the existing one-target rider carries a two-target
+   * card without new plumbing.
+   */
+  | {
+      kind: "bankBloodSplit";
+      who: BankBloodFilter;
+      /** One entry per way the card lets the blood be divided. */
+      splits: Array<{ amount: number; targets: number }>;
+    }
   /** "Put this card on this vampire" from the after-resolution window —
    *  the action-MODIFIER form of `attachSelf`, cashed in later
    *  (docs/after-resolution-design.md §5). */
@@ -874,7 +1049,86 @@ export type EffectPrimitive =
    *  lifts itself however the combat ended and p. 7's discard-down runs
    *  at the pop. docs/temporary-hand-size-design.md */
   | { kind: "handSizeBonus"; amount: number }
-  | { kind: "maneuver"; onlyToClose?: boolean }
+  /** `onlyToLong` is the mirror of `onlyToClose` — "Maneuver, only usable
+   *  to go to LONG range" (High Ground, Backstep). Same reasoning: worth
+   *  nothing once the range is already long.
+   *  docs/one-each-round-design.md §3 */
+  | { kind: "maneuver"; onlyToClose?: boolean; onlyToLong?: boolean }
+  /** "Cancel a COMBAT CARD played by the opposing minion as it is played,
+   *  and its cost is not paid" (Death Seeker) — `cancelStrikeCard` with
+   *  the strike condition dropped, so it reaches any combat card the foe
+   *  plays. `CardPlayFrame.isCombat` is already denormalized for exactly
+   *  this family, so no card reads another card's spec.
+   *  docs/one-each-round-design.md §2 */
+  | {
+      kind: "cancelCombatCard";
+      /** "BURN 1 BLOOD to cancel …" (Disengage, Groundfighting) — a
+       *  play-time gate, not just a payment: *"the card cannot be played
+       *  if the minion cannot afford to burn the blood"*, and the burn is
+       *  NOT reduced by cost reducers, because it is an effect rather
+       *  than the card's cost [ANK 20210226].
+       *  docs/cancel-in-combat-design.md §2 */
+      bloodCost?: number;
+      /** "…cancel A GRAPPLE CARD as it is played" (Disengage) — matched
+       *  against `CardPlayFrame.keywords`, which is denormalized at push
+       *  precisely so no card reads another card's spec. */
+      keywords?: string[];
+      /** "…cancel a combat card that would RESTRICT THIS ANARCH'S CHOICE
+       *  OF STRIKES this round" (Groundfighting) — matched against
+       *  `CardPlayFrame.restrictsStrikeChoice`, which the compiler
+       *  answers centrally. The rulings draw the line tightly: it reaches
+       *  "cannot use equipment" and "hand strikes only", and NOT range,
+       *  maneuvers, dodges, additional strikes, equipment destruction or
+       *  Discipline restrictions [LSJ 20050221].
+       *  docs/cancel-in-combat-design.md §3 */
+      restrictsStrikeChoice?: boolean;
+      /** Death Seeker and Disengage print "(no cost is paid for that
+       *  card)"; Groundfighting does not, and the general rule is that a
+       *  cancelled non-action card's cost IS still paid
+       *  [RBK cancel-a-card] [ANK 20260216]. The refund is therefore the
+       *  card's own clause, not the cancel's — but the existing callers
+       *  all refund, so the flag names the exception.
+       *  docs/cancel-in-combat-design.md §2 */
+      costIsStillPaid?: boolean;
+    }
+  /** "If the OPPOSING minion's strike successfully inflicts any damage on
+   *  this minion this round, the opposing minion gets an optional press"
+   *  (Backstep) — a rider installed on the round, paid out at infliction.
+   *  Needs no round bookkeeping of its own: press credits are per-round
+   *  already, so *"the optional press can only be used during the current
+   *  round"* [TOM 19960521] falls out.
+   *  docs/cancel-in-combat-design.md §4 */
+  | { kind: "pressToStrikerIfDamaged" }
+  /** "YOU GAIN THE EDGE" (Esteem) — the Edge is a single shared token
+   *  (p. 28), so taking it is always taking it FROM whoever held it, and
+   *  `EdgeTaken` already says so. docs/the-edge-design.md §2 */
+  | { kind: "takeEdge" }
+  /** "BURN THE EDGE to get +1 bleed that does not count against the
+   *  limit. You cannot gain the Edge this action; if you would get the
+   *  Edge, it is burned instead" (Leverage). One primitive, because the
+   *  three clauses are one bargain: the bleed bonus is bought with the
+   *  Edge, and the rider exists so the successful bleed cannot hand it
+   *  straight back (p. 21 gives the Edge to a bleeder of 1+).
+   *  docs/the-edge-design.md §3 */
+  | { kind: "burnEdgeForBleed"; amount: number }
+  /** "Only usable if your prey controls the Edge OR THE EDGE IS
+   *  UNCONTROLLED. Your prey MAY TAKE THE EDGE if it is uncontrolled"
+   *  (Instability) — a master whose gate is where the Edge sits and whose
+   *  first effect is an offer to somebody else.
+   *  docs/the-edge-design.md §4 */
+  | { kind: "preyMayTakeEdge" }
+  /** "Successful referendum means THE CHOSEN METHUSELAH GETS THE EDGE"
+   *  (Regaining the Upper Hand) — the referendum outcome that moves the
+   *  token. docs/the-edge-design.md §5 */
+  | { kind: "refGiveEdge" }
+  /** "Play before range is determined to SET THE RANGE for the round to
+   *  long" (High Ground's flight clause). Setting is not maneuvering:
+   *  *"once the range is set, no other effect can be used to reset the
+   *  range that round"* and the Determine Range step is skipped
+   *  [RTR 19970630] [ANK 20180720], which `setCombatRange` already does.
+   *  `requiresFlightAdvantage` is "if THIS minion has flight and the
+   *  opposing minion does not". docs/one-each-round-design.md §3 */
+  | { kind: "setRangeLong"; requiresFlightAdvantage?: boolean }
   /** `continueOnly` is "only usable to CONTINUE combat" (Dead-End Alley,
    *  Righteous Blade); `endOnly` is its mirror, "only usable to END
    *  combat" (Open Grate, Disengage) — which can only ever cancel a
@@ -928,15 +1182,35 @@ export type EffectPrimitive =
    *  mechanic is printed with two different timings (§2). */
   | {
       kind: "attachInCombat";
-      to: "self" | "opposing";
+      /** `anyInCombat` is "put this card on A NOSFERATU IN COMBAT" — either
+       *  combatant, whoever controls them, which is what lets a seat not in
+       *  the fight play it at all. `gunOnSelf` lands on a GUN this minion
+       *  carries rather than on the minion (Magazine).
+       *  docs/before-range-attachments-design.md §2, §4 */
+      to: "self" | "opposing" | "anyInCombat" | "gunOnSelf";
       when: "beforeRange" | "endOfRound";
       statics?: PermanentStatics;
       tags?: string[];
+      /** "…on a NOSFERATU in combat" — the target's clan, not the
+       *  player's, so it is not `requiresClan`. */
+      targetClan?: string;
       /** "…and send them to torpor" (Disarm). */
       torporTarget?: boolean;
       /** "This vampire can burn this card to prevent N damage"
        *  (Wall of Filth) — an ability of the attached card. */
       burnToPrevent?: { amount: number; nonAggravated?: boolean };
+      /** "Put this card AND 1 BLOOD on this Assamite" (Focus the Blood) —
+       *  the bearer's own blood moves onto the entry as counters, the
+       *  Wasserschloss Anif precedent. docs/before-range-attachments-design.md §3 */
+      bloodOnCard?: number;
+      /** "…burn this card to reduce the cost of a combat card they play by
+       *  N blood" — a one-shot `playCostMod` the BEARER spends, offered as
+       *  an ability of the attached entry. */
+      burnToDiscountCombatCard?: number;
+      /** "…and put an AMMO CARD FROM YOUR HAND on this card" (Magazine).
+       *  An ammo card is one whose handler answers `ammoLoad`, so the
+       *  filter cannot drift from what the ammo cards actually are. */
+      storeAmmoFromHand?: boolean;
     }
   /**
    * "Ammo. Only usable before resolution of a gun's strike … for the
@@ -1063,9 +1337,54 @@ export type EffectPrimitive =
         inTorpor?: boolean;
         /** "…with capacity BELOW 4" is `maxCapacity: 3`. */
         maxCapacity?: number;
+        /** "…with capacity of 8 OR MORE" (Political Stranglehold). */
+        minCapacity?: number;
+        /** "…the number of Assamites he or she controls" (Treaty of Tyre
+         *  Enforced) — THE REGISTRY CLAN, which is Banu Haqim. */
+        clan?: string;
         /** "…Independent OR Anarch" — a union, one modifier per minion. */
         sects?: Sect[];
       };
+      /** "Each Methuselah burns **X+1** pool, where X is …" (Treaty of
+       *  Tyre Enforced) — a flat term on top of the tally, charged even
+       *  to a Methuselah whose tally is ZERO, which is the whole point of
+       *  the card and the one thing an `if (hits.length === 0) continue;`
+       *  guard gets wrong (docs/table-pool-swings-design.md §3). */
+      plus?: number;
+    }
+  /**
+   * "Each Methuselah gains/burns N pool for each \<card\> they control",
+   * where the thing counted is NOT a minion
+   * (docs/table-pool-swings-design.md §2).
+   *
+   * `refPerMinion`'s sibling. Two primitives rather than one with a
+   * discriminated count, because the payment rule is shared in a helper
+   * and the COUNT is the only part that differs — merging them would put
+   * a union inside a filter that four existing cards read.
+   */
+  | {
+      kind: "refPerSeatCards";
+      effect: "gainPool" | "burnPool";
+      amount: number;
+      /** "Each Methuselah GAINS 1 POOL. Each Methuselah THEN burns 1 pool
+       *  for each …" (Can't Take it with You) — the flat gain everybody
+       *  receives before the tally is charged. Both halves resolve for
+       *  every standing Methuselah, so a seat with nothing in play comes
+       *  out 1 pool ahead. */
+      everyoneGains?: number;
+      count:
+        /** "…for each equipment, location or retainer card he or she
+         *  controls" — matched on the permanent TAGS that already answer
+         *  "location / equipment / retainer" elsewhere, rather than by
+         *  asking the registry: an equipment or retainer entry lives on a
+         *  MINION, not in `seat.permanents`, and the tag travels with the
+         *  entry wherever it sits. */
+        | { of: "permanents"; tags: string[] }
+        /** "…the number of vampires in his or her PREY's ash heap"
+         *  (Mark of the Damned). Each Methuselah's own count is read off
+         *  somebody else's zone, which is what makes it not a
+         *  `refPerMinion`. */
+        | { of: "preyAshHeapCrypt" };
     }
   /** "Choose a Methuselah OR a location — or BOTH if the acting vampire
    *  is one of \<titles\>" (Cold War). §2 */
@@ -1097,6 +1416,12 @@ export type EffectPrimitive =
       amount: number;
       kinds?: Array<"vampire" | "ally">;
       younger?: boolean;
+      /** "…younger than THIS MODIFYING RAVNOS" (Zapaderin) — the yardstick
+       *  is the minion PLAYING the card, who is explicitly not the acting
+       *  minion. Every earlier card measured against the actor, so the
+       *  reference was hard-coded to them.
+       *  docs/second-minion-modifiers-design.md §2 */
+      youngerThanPlayer?: boolean;
       /** "ANARCHS get −1 intercept during this action" (Fiendish Tongue)
        *  — a third arm of the same union. */
       sects?: Sect[];
@@ -1255,6 +1580,16 @@ export type EffectPrimitive =
   /** "Gain N pool" (Ascendance) — the whole card, and the simplest
    *  possible master (docs/pool-widening-design.md §6, tranche 3 wave 7). */
   | { kind: "gainPool"; amount: number }
+  /** "If you have N or fewer pool, gain X pool. Otherwise, gain Y"
+   *  (King's Rising) — the pool is read BEFORE anything is gained, and the
+   *  card is played, so the master-phase action is spent either way. */
+  | { kind: "gainPoolThreshold"; atOrBelow: number; ifAtOrBelow: number; otherwise: number }
+  /** "Choose a vampire in your ash heap. Gain X pool, where X is HALF OF
+   *  THE CAPACITY of that vampire (round down). Remove that vampire from
+   *  the game" (Redeem the Lost Soul). The capacity is read off the ash
+   *  entry, which records it as the vampire burns — see
+   *  `CardInstance.capacity`. docs/ash-heap-resource-design.md §2 */
+  | { kind: "redeemVampireFromAsh"; divisor: number }
   /** "Burn a vampire in torpor" (Vulnerability) — ANY Methuselah's, and
    *  torpor is the whole filter: a vampire in torpor is still in play. */
   | { kind: "burnTorpidVampire" }
@@ -1322,6 +1657,55 @@ export type EffectPrimitive =
       youngerOnly: boolean;
     };
 
+/**
+ * One thing a `permanent.bloodStore` location offers its controller
+ * (docs/blood-banking-locations-design.md §2).
+ *
+ * The window is named rather than the option being built per card,
+ * because the five Powerbases differ ONLY in which window their offer
+ * sits in and how much moves — Chicago banks in the unlock phase, New
+ * York buys in the master phase for a pool, and that is the whole
+ * difference between them.
+ */
+export type BloodStoreOffer = {
+  /** "During your unlock phase" / "as a master phase action". */
+  window: "unlock" | "master";
+  /** "As a MASTER PHASE ACTION" — spends the turn's one (p. 8). A card
+   *  that merely says "during your master phase" does not. */
+  usesMasterAction?: boolean;
+  /** "…burn 1 pool to…" — a price, paid on use, not a cost of the card. */
+  poolCost?: number;
+} & (
+  /** "Move N blood from the blood bank to this card." The bank is
+   *  unbounded (p. 5), so this is a gain, not a transfer. */
+  | { kind: "bankToCard"; amount: number }
+  /** "Move N blood from this card to your pool", or ALL of it. */
+  | { kind: "cardToPool"; amount: number | "all" }
+  /** "Move up to N pool to this card and add 1 blood from the blood bank
+   *  for each pool you move" (Powerbase: Washington, D.C.) — one option
+   *  per amount, each leaving 2 counters per pool spent. */
+  | { kind: "poolToCardMatched"; max: number }
+);
+
+/**
+ * Which vampires a blood-bank action may feed
+ * (docs/blood-bank-actions-design.md §2).
+ *
+ * ONE filter for both primitives, because "who qualifies" is the only
+ * question the three cards answer differently and a second copy of it is
+ * a second place to forget `ownOnly`.
+ */
+export interface BankBloodFilter {
+  clan?: string;
+  sect?: Sect;
+  /** "each ready UNLOCKED Ravnos" (Patshiv). Ready is always required:
+   *  a vampire in torpor is not ready (p. 6). */
+  unlockedOnly?: boolean;
+  /** "…you control". ABSENT MEANS EVERY METHUSELAH'S — Patshiv names no
+   *  controller and so feeds a predator's Ravnos too. */
+  ownOnly?: boolean;
+}
+
 /** Card-text timing clauses, as data (docs/card-primitives.md §3). */
 export type UsabilityRule =
   | "onlyDuringBleed"
@@ -1359,6 +1743,10 @@ export type UsabilityRule =
    *  whichever `byOther…` rule says who may play it. */
   | "actingIsUndeadAlly"
   | "byLockedMinion"
+  /** "USABLE by a locked vampire" (Fillip) — locked is ALLOWED, where
+   *  `byLockedMinion` is "ONLY usable by a locked vampire" and excludes an
+   *  unlocked one. docs/lock-as-currency-design.md §3 */
+  | "alsoByLockedMinion"
   /** "Only usable by a ready vampire other than the acting minion" (Cloak
    *  the Gathering superior). Still the ACTING Methuselah's card, played
    *  by one of their other vampires — p. 12: "only minions controlled by
@@ -1416,6 +1804,12 @@ export type UsabilityRule =
   | "ifActionBlocked"
   /** "…of a successful DIRECTED action" (Shadow Cast). */
   | "ifActionDirected"
+  /** "Only usable at the end of a successful action DIRECTED AT THE
+   *  METHUSELAH WITH THE EDGE" (Esteem). The target Methuselah is the
+   *  bleed's `target` or the controller of a targeted minion — the Edge
+   *  belongs to a seat, and an action reaches a seat both ways.
+   *  docs/the-edge-design.md §2 */
+  | "targetHasTheEdge"
   /** "…if the bleed is successful (for 1 or more)" (Fever Pitch). */
   | "ifBleedSucceeded"
   | "onlyAsAnnounced"
@@ -1504,6 +1898,10 @@ export interface CardSpec {
     | "action"
     | "combat"
     | "master"
+    /** An EVENT: put into play with a DISCARD phase action, once each
+     *  game (p. 37). Compiled as a master that lives in a different
+     *  window. docs/events-design.md §1 */
+    | "event"
     | "equipment"
     | "retainer"
     | "ally"
@@ -1578,6 +1976,12 @@ export interface CardSpec {
          *  unlock the acting minion" (Warsaw Station) — a rider, not a
          *  measurable bonus, so `amount` is ignored. */
         | "unlockOnSuccess";
+      /** "…to give a Follower of Set you control +1 stealth, +1 intercept,
+       *  OR +1 bleed" (Saatet-ta) — one lock, three answers, so the CHOICE
+       *  is the option list rather than a frame. `grant` above stays the
+       *  first of them, so no existing card moves.
+       *  docs/mummies-design.md §2 */
+      grants?: Array<"stealth" | "intercept" | "bleed">;
       amount: number;
       clan?: string;
       sect?: Sect;
@@ -1743,11 +2147,23 @@ export interface CardSpec {
       faceUp: boolean;
       /** How the store is filled the moment the card enters play. */
       fillOnEntry?: {
-        /** "Search your library for up to N …" vs "move the top N cards". */
-        from: "search" | "libraryTop";
-        count: number;
+        /** "Search your library for up to N …" vs "move the top N cards"
+         *  vs "with any number of cards requiring Protean from YOUR HAND"
+         *  (Gift of Proteus, Storage Annex). The hand fill is asked ONE
+         *  CARD AT A TIME rather than as a subset: a subset choice over a
+         *  hand is a power set of it (docs/store-plays-design.md §4). */
+        from: "search" | "libraryTop" | "hand";
+        /** "Up to four"; `"all"` is "any number" (Gift of Proteus). */
+        count: number | "all";
         cardTypes?: PlayCostCardType[];
         nonUniqueOnly?: boolean;
+        /** "…cards REQUIRING Protean [pro]" — the discipline a candidate
+         *  must require in SOME mode, which is the printed requirement
+         *  (a card requiring it only at superior still requires it). */
+        requires?: string;
+        /** "PUT a card from your hand face down on this card when you play
+         *  it" (Storage Annex) — no "find nothing" answer. */
+        mandatory?: boolean;
       };
       /** "If you would draw a card from your library, you can draw one of
        *  those cards instead." */
@@ -1761,11 +2177,56 @@ export interface CardSpec {
       addTopInUnlockPhase?: boolean;
       /** "During your master phase, you can put a <ghoul> from your hand
        *  on this location." */
-      addFromHandInMasterPhase?: { cardTypes?: PlayCostCardType[]; tags?: string[] };
+      addFromHandInMasterPhase?: {
+        cardTypes?: PlayCostCardType[];
+        tags?: string[];
+        /** "…IF IT DOESN'T ALREADY HAVE ONE" (Delivery Truck) — a store
+         *  that holds at most this many. */
+        max?: number;
+        /** "…a NON-LOCATION equipment card" (Delivery Truck). The printed
+         *  sub-types a candidate must NOT carry, the mirror of `tags`. */
+        notTags?: string[];
+      };
       /** "<Clan> you control can play cards from this location as if from
-       *  your hand (requirements and cost apply as normal)." */
-      playableFrom?: { clan?: string };
+       *  your hand (requirements and cost apply as normal)."
+       *
+       *  "AS IF FROM YOUR HAND" is exactly that: the card is offered
+       *  wherever the ordinary hand-play enumerator would offer it — in
+       *  combat, in a reaction window, as an action — and not in one
+       *  hand-picked window. `bearer` is "THIS Gangrel / THIS Follower of
+       *  Set can play these cards", a store that only its own bearer may
+       *  draw on. docs/store-plays-design.md §2 */
+      playableFrom?: { clan?: string; bearer?: boolean };
+      /** "During your master phase, you may EXCHANGE a card in your hand
+       *  for the card on this Storage Annex" — a one-for-one swap, so the
+       *  store never grows and never empties. */
+      exchangeWithHandInMasterPhase?: boolean;
+      /** "Lock this card to move a LIBRARY CARD FROM YOUR ASH HEAP (or
+       *  your PREY's) to this card, face down" (Maabara, The Erciyes
+       *  Fragments). The ash heap is public (p. 16), so the choice is a
+       *  real one and the card names which heap.
+       *  docs/ash-heap-resource-design.md §3 */
+      addFromAshHeap?: {
+        whose: "own" | "prey";
+        /** "Only 1 card can be on this card at a time" (Erciyes). */
+        max?: number;
+      };
+      /** "You may use a master phase action to move a card from this
+       *  location to the TOP of your library" (Maabara) — the way back
+       *  out, and the reason the store is worth filling. */
+      toLibraryInMasterPhase?: "top" | "bottom";
+      /** "When that card is burned, REMOVE IT FROM THE GAME instead"
+       *  (Erciyes) — a card taken from a prey's ash heap never goes back
+       *  into one. docs/ash-heap-resource-design.md §4 */
+      removeFromGameWhenBurned?: boolean;
     };
+    /** "Lock during your discard phase to move a card from your ash heap
+     *  to the BOTTOM of your library" (Waste Management Operation) — the
+     *  same family as `store.addFromAshHeap` with no store at all: the
+     *  card goes straight back to the library. `window` is printed on the
+     *  card and is not the master phase.
+     *  docs/ash-heap-resource-design.md §3 */
+    ashToLibrary?: { to: "top" | "bottom"; window: "discard" | "master" };
     /** "<Some Methuselah> burns N pool during their unlock phase" — the
      *  standing tax this whole family is built around
      *  (docs/pool-drain-design.md §3). */
@@ -1810,6 +2271,43 @@ export interface CardSpec {
        *  if it ousts you", so it is not gated on being able to afford it. */
       fromPool?: boolean;
     };
+    /**
+     * The Powerbases whose text is a BLOOD BANK on the table: blood sits
+     * on the card, the controller draws it down a little each turn, and a
+     * minion of another Methuselah can take the whole pile as a Ⓓ action
+     * (docs/blood-banking-locations-design.md).
+     *
+     * The store is `PermanentInPlay.counters` — the Wasserschloss Anif
+     * precedent. A blood on a card and a counter on a card are the same
+     * physical counter (p. 5); nothing downstream needs to tell them
+     * apart, and the raid clause (`vulnerableTo.outcome: "takeCounters"`)
+     * reads the same field.
+     */
+    bloodStore?: {
+      /** "Put 5 blood on this card when it is played" (Mexico City), or
+       *  "put X blood on this card, where X is the capacity of a ready
+       *  Sabbat vampire you control" (Barranquilla).
+       *
+       *  The second takes the LARGEST eligible vampire rather than raising
+       *  a choice frame. That is not a shortcut: this card pays its
+       *  controller 1 pool a turn and its counter-play BURNS it rather
+       *  than stealing the blood, so more counters is strictly better in
+       *  every line of play and the question has exactly one answer. A
+       *  frame here would only ask it. */
+      start?: number | { capacityOfReady: { sect?: Sect; clan?: string } };
+      /** What the controller may do with the store, and in which window. */
+      offers?: BloodStoreOffer[];
+      /** "During each of your unlock phases, move N blood from this card
+       *  to your pool" — no "may" (Powerbase: Mexico City). */
+      unlockToPool?: number;
+      /** "Burn this card if it has no blood" (Mexico City, Barranquilla)
+       *  and "burn this card when the last blood counter on it is
+       *  removed" (New York) are ONE rule here: the check runs after every
+       *  CHANGE and never at put-in-play. That is what lets New York —
+       *  which enters empty by design and is bought up later — survive its
+       *  own first turn, without a second knob to get backwards. */
+      burnWhenEmpty?: boolean;
+    };
     /** "Lock this card and burn 1 pool OR 1 blood from a ready \<clan\>
      *  you control during your master phase to move a \<clan\> from
      *  torpor to THEIR CONTROLLER's ready region" (Chantry). Any
@@ -1822,7 +2320,31 @@ export interface CardSpec {
     transferAbilities?: {
       cryptDraw?: { transfers: number };
       cashOut?: { transfers: number; gainPool: number };
+      /** "Lock during your influence phase to get +1 transfer" (Ennoia's
+       *  Theater) — the currency GAINED rather than spent, and the only
+       *  thing in the pool that adds to it after the phase has opened.
+       *  `burnEdge` is Mapatano Utando's price for four of them.
+       *  docs/transfer-currency-design.md §2 */
+      gain?: { transfers: number; lock?: boolean; burnEdge?: boolean };
+      /** "ANY Methuselah can burn this card by burning N pool and spending
+       *  M transfers during HIS OR HER influence phase" (Whispers of the
+       *  Nictuku) — the counter-play to a card that taxes the table, paid
+       *  in the payer's own currency on the payer's own turn. §4 */
+      burnByAnySeat?: { transfers: number; poolCost: number };
+      /** "A Methuselah may spend N transfers and remove a vampire in his or
+       *  her uncontrolled region from the game to search for any card in
+       *  his or her library and put it in his or her hand (discarding and
+       *  shuffling afterward)" (Inconnu Tutelage). §5 */
+      tutor?: { transfers: number };
     };
+    /** "Lock to get +1 hand size this turn" (Ennoia's Theater) — a grant
+     *  on the TURN frame, which is what makes it lapse after the discard
+     *  phase rather than before it (docs/temporary-hand-size-design.md). */
+    handSizeLock?: { amount: number };
+    /** "If you control the Edge during your unlock phase, burn this card"
+     *  (King's Rising) — a card that pays out and then leaves the moment
+     *  its controller is doing well. §3 */
+    burnWhenControllerHasEdgeAtUnlock?: boolean;
     /** "Reveal the top card of your crypt. If it is a \<clan\>, draw it
      *  and add N blood to it; otherwise, move it to the bottom of your
      *  crypt" (Family Gathering) — an instruction, not a choice. §1 */
@@ -1903,10 +2425,62 @@ export interface CardSpec {
       /** "They can burn this card before range is determined to end
        *  combat" (Living Manse). */
       burnToEndCombat?: boolean;
+      /** "The vampire with this equipment MAY BURN IT to get +N intercept
+       *  for the current action" (Changeling Skin Mask) —
+       *  `interceptForBlood` with the CARD as the price instead of blood,
+       *  and therefore no repeat: the card is gone. Offered on the same
+       *  p. 26 terms, only while the bearer is the minion attempting the
+       *  block and their intercept still falls short.
+       *  docs/discipline-granting-equipment-design.md §2 */
+      burnForIntercept?: number;
+      /** "…may burn this card to PREVENT N POINTS OF DAMAGE in combat"
+       *  (Blood Tears of Kephran). *"If fewer points of (preventable)
+       *  damage are being resolved, then the effect prevents all of
+       *  those points"* [RTR 20041202] and *"unused prevention points
+       *  can't be carried over"* [ANK 20200318] — which is what
+       *  `preventDamageFor` already does, so the ruling costs nothing.
+       *  docs/burn-the-equipment-design.md §1 */
+      burnToPrevent?: number;
+      /** "…or to GAIN N BLOOD (ignore excess blood)" (Blood Tears of
+       *  Kephran) — the second half of one "or", and the reason the price
+       *  is a field of its own rather than part of either effect: one
+       *  card, one card-shaped price, two unrelated windows.
+       *  docs/burn-the-equipment-design.md §1 */
+      burnForBlood?: number;
+      /** "…can burn this card DURING YOUR MASTER PHASE to LOCK ANY
+       *  VAMPIRE" (Mummy's Tongue). "Any" is the whole table, including
+       *  your own; `skipNextUnlock` carries the second sentence.
+       *  docs/burn-the-equipment-design.md §2 */
+      burnToLockVampire?: { skipNextUnlock?: boolean };
+      /** "…may burn this card to gain 1 level of ANY ONE DISCIPLINE until
+       *  your next unlock phase. The vampire cannot choose a Discipline he
+       *  or she already has AT THE SUPERIOR LEVEL" (Vial of Elder Vitae) —
+       *  one option per Discipline in `DISCIPLINES`, minus the ones the
+       *  bearer already maxes. docs/burn-the-equipment-design.md §3 */
+      burnForDiscipline?: { levels: number; until: "nextUnlock" };
+      /** "After resolving a successful action, this minion may LOCK THE
+       *  HELICOPTER to UNLOCK" — the card is the price and the bearer is
+       *  what it buys back. Offered in `action.afterResolution`, which is
+       *  the only window that can say the action succeeded.
+       *  docs/vehicles-and-havens-design.md §2 */
+      lockToUnlockAfterSuccess?: boolean;
+      /** "If the anarch with this card is ready, he or she can BURN 2
+       *  BLOOD to cause an action DIRECTED AT HIM OR HER to fail" (Body
+       *  Bag). `requiresSect` is on the ABILITY, not on the card: *"can be
+       *  equipped by a non-Anarch and would still count as a haven,
+       *  although the rest of his effect does not apply"* [LSJ 20030607] —
+       *  "only usable by" is not "requires".
+       *  docs/vehicles-and-havens-design.md §3 */
+      burnBloodToFailAction?: { blood: number; requiresSect?: Sect };
     };
     /** Abilities a RETAINER's own card text gives its employer
      *  (docs/retainer-wave-design.md). Keyed on the retainer entry, the
      *  way `allyAbilities` is keyed on an ally's self-attached one. */
+    /** "If a vampire SUCCESSFULLY HUNTS, move N blood from that vampire
+     *  to this card after resolution. Burn this card if it has M blood"
+     *  (Hunger Moon) — any vampire's hunt, not just the controller's.
+     *  docs/events-design.md §2 */
+    huntTax?: { blood: number; burnAt: number };
     retainerAbilities?: {
       /** "If this \<sect\> is blocked, they can burn N life from this
        *  retainer BEFORE BLOCK RESOLUTION to lock the blocking minion and
@@ -1937,6 +2511,46 @@ export interface CardSpec {
        *  the retainer is not spent either way: only the latch differs.
        *  docs/combat-retainers-design.md §3 */
       preventPerCombat?: number;
+      /** "…can prevent 1 NON-AGGRAVATED damage each combat" (Nephren-Ka).
+       *  Gates the option, so an aggravated blow simply does not offer it.
+       *  docs/mummies-design.md §3 */
+      preventNonAggOnly?: boolean;
+      /** "Vampire with this retainer may BURN X BLOOD to get +X intercept
+       *  for the current action" (Corpse Minion). Offered one point at a
+       *  time and repeatable, which is *"may be used any number of times
+       *  during a single action"* [TOM 19960109] — and the retainer is
+       *  never spent, so there is no latch.
+       *  docs/retainer-prices-design.md §1 */
+      burnBloodForIntercept?: boolean;
+      /** "The employer may LOCK this retainer to get +N stealth for the
+       *  current action. If that action is BLOCKED, burn it" (Malajit
+       *  Chandramouli). docs/retainer-prices-design.md §2 */
+      lockForStealth?: { amount: number; burnIfBlocked?: boolean };
+      /** "The employer can BURN N BLOOD to set the range for the round,
+       *  before range is determined, during the FIRST round of combat"
+       *  (Omael Kuman). docs/retainer-prices-design.md §3 */
+      burnBloodToSetRange?: { blood: number };
+      /** "When this vampire is BLOCKED, they may burn this retainer and
+       *  UNLOCK INSTEAD OF ENTERING COMBAT" (Ghoul Escort). The block
+       *  still succeeded and the action still fails; only the fight is
+       *  skipped. docs/no-combat-design.md §2 */
+      burnToAvoidCombat?: boolean;
+      /** "If the vampire with this retainer is IN TORPOR, he or she gains
+       *  N blood at the beginning of his or her minion phase" (Faithful
+       *  Servant). Automatic — the card says "gains", not "you can".
+       *  docs/retainer-upkeep-design.md §2 */
+      torporBloodAtMinionPhase?: number;
+      /** "During your unlock phase, \<this retainer\>'s employer burns N
+       *  blood, OR \<the retainer\> is burned" (Robert Carter) — an
+       *  upkeep, and a real choice only while the employer can afford it.
+       *  docs/retainer-upkeep-design.md §3 */
+      unlockUpkeep?: { blood: number };
+      /** "During your minion phase, you may LOOK AT ONE CARD PICKED AT
+       *  RANDOM from your prey's hand" (Fortune Teller). The look is the
+       *  event (`CardsRevealed`), and the pick goes through
+       *  `ops.randomIndex` so a replay sees the same card.
+       *  docs/retainer-upkeep-design.md §4 */
+      peekPreyRandomCard?: boolean;
     };
     /** "Once each combat, the bearer can prevent N damage from GUN
      *  strikes or M damage from any other source" (Kevlar Vest) — the
@@ -2120,7 +2734,11 @@ export interface CardSpec {
       who: {
         scope: "bearer" | "chosen" | "controller" | "any";
         kind?: "vampire" | "ally";
-        clan?: string;
+        /** A UNION when several clans are named: "any Tremere OR TREMERE
+         *  ANTITRIBU" (Veneficorum Artum Sanguis). The second clan is not
+         *  in the pool today, which is why writing the single string would
+         *  have looked right — and been narrower than the card. */
+        clan?: string | string[];
         sect?: Sect;
       };
       /** What they may enter combat with; "prey" is the *card
@@ -2371,14 +2989,65 @@ export interface CardSpec {
          *  gain N blood" (Zombie). The cost is the card granting the
          *  action, which is why it is its own arm rather than `addBlood`
          *  with a price. */
-        | "burnSelfForBlood";
+        | "burnSelfForBlood"
+        /** `burnPermanent` — "\<this ally\> may take a Ⓓ action to burn a
+         *  LOCATION controlled by your prey" (The Bruisers), "…to burn an
+         *  EQUIPMENT possessed by a minion controlled by your predator or
+         *  prey" (Arcanum Investigator), "…burn a location as a +1
+         *  stealth Ⓓ action that costs 1 pool" (Felix "Fix" Hessian).
+         *  `what` and `scope` say which cards are legal targets.
+         *  docs/destroyer-allies-design.md §1 */
+        | "burnPermanent"
+        /** `burnBlood` — "can burn 1 blood from a vampire as a +1 stealth
+         *  Ⓓ action" (Thadius Zho). Another Methuselah's ready vampire
+         *  with blood to burn; `amount` is how much, `steal` moves it to
+         *  the actor as life instead (Gregory Winter's shape, unbuilt).
+         *  docs/plain-allies-design.md §4 */
+        | "burnBlood"
+        /** `burnTorporVampire` — "can burn a vampire in torpor as a Ⓓ
+         *  action" (ECTU Operative); `gainLife` for the shapes that feed
+         *  on it. docs/plain-allies-design.md §4 */
+        | "burnTorporVampire"
+        /** `burnSelfAndBurnMinion` — "can burn HIMSELF and a \<clan\>
+         *  \[with capacity N or less\] controlled by your prey as a Ⓓ
+         *  action" (Akhenaten, Kherebutu). The price is the actor, so it
+         *  is its own arm rather than a priced `burnPermanent`: both die,
+         *  and the actor dies whether or not the target is still there.
+         *  `targetClan`, `maxCapacity` and `scope` say who is legal.
+         *  docs/mummies-design.md §4 */
+        | "burnSelfAndBurnMinion";
+      /** `burnSelfAndBurnMinion`: the clan the victim must be. */
+      targetClan?: string;
+      /** `burnBlood`: the blood becomes the actor's life. */
+      steal?: boolean;
+      /** `burnTorporVampire`: life the actor gains on success. */
+      gainLife?: number;
+      /** `stealEquipment`: "…from a vampire IN TORPOR" (Tutu). Gates the
+       *  option. docs/mummies-design.md §5 */
+      fromTorporOnly?: boolean;
+      /** `burnPermanent`: which kind of card in play it destroys. */
+      what?: "location" | "equipment";
+      /** `burnPermanent`: whose cards are legal targets. Omitted = any
+       *  other Methuselah's, the scope every `actionOnPermanent` action
+       *  card already uses. Never your own: these are Ⓓ actions, and the
+       *  convention is set by Arson, whose text is equally unqualified.
+       *  docs/destroyer-allies-design.md §2 */
+      scope?: "prey" | "predatorOrPrey";
       stealth?: number;
       bloodCost?: number;
+      /** "…as a Ⓓ action THAT COSTS 1 POOL" (Felix). Pool, not blood: an
+       *  ally's blood IS its life (p. 11), so charging this one in blood
+       *  would make the card cost a third of the ally. */
+      poolCost?: number;
       /** Ⓓ — directed at the target's controller, who alone may block
        *  (p. 25). Undirected otherwise, so anyone may. */
       directed?: boolean;
       /** Blood added (`addBlood`) or cards looked at (`reorderTop`). */
       amount?: number;
+      /** `addBlood`: "…to a ready VAMPIRE you control" (Procurer), where
+       *  Seraphina's arm says "minion" and reaches allies too.
+       *  docs/plain-allies-design.md §2 */
+      vampiresOnly?: boolean;
       /** "…NOT TO EXCEED STARTING LIFE" — `capacityOf` is the ceiling for
        *  vampires and allies alike, since an ally's `capacity` already
        *  holds its printed starting life. */
@@ -2390,7 +3059,20 @@ export interface CardSpec {
       /** "…and UNLOCK" (Eulogio) — a real effect, since the actor locked
        *  at announcement (p. 25). */
       unlockActor?: boolean;
+      /** `burnBlood`: "…from a LOCKED vampire" (Young Bloods). */
+      lockedOnly?: boolean;
+      /** `burnBlood`: "…with a capacity LESS THAN N" (Young Bloods).
+       *  Exclusive, which is what the card prints; read through
+       *  `capacityOf` so a granted +1 capacity counts. */
+      maxCapacity?: number;
     };
+    /** A SECOND (and third) granted action on the same card — "Gregory can
+     *  steal 1 blood … as a +1 stealth Ⓓ action. He can burn a vampire in
+     *  torpor to gain 2 life as a Ⓓ action." Each compiles independently
+     *  and carries its index in the option params, so one grant's resolver
+     *  never answers for another. `grantedAction` stays the first grant so
+     *  no existing card moves. docs/plain-allies-design.md §5 */
+    grantedActions?: Array<NonNullable<NonNullable<CardSpec["permanent"]>["grantedAction"]>>;
     /** "If \<this vampire\> is ready during your DISCARD phase, you can
      *  \<do Y\>" — a phase hook that asks its controller a question
      *  (Mora, Luciano). Optional, because both cards say "you can": an
@@ -2530,6 +3212,11 @@ export interface CardSpec {
         sect?: Sect;
         /** "Vampires with capacity 5 or more". */
         minCapacity?: number;
+        /** "TITLED vampires can call a referendum to burn this card" (The
+         *  New Inquisition) — any printed or card-granted title, which is
+         *  the same `m.title` every other titled-vampire filter reads.
+         *  docs/gehenna-unlock-design.md §5 */
+        titled?: boolean;
         /** "Anarchs controlled by other Methuselahs" — excludes the
          *  card's own controller. */
         othersOnly?: boolean;
@@ -2552,20 +3239,30 @@ export interface CardSpec {
       cost?: { pool?: number; blood?: number };
       /** Per-actor stealth riders: "Tremere get +1 stealth during that
        *  action"; "Nosferatu get −1 stealth during that action". */
-      stealthFor?: Array<{ clan?: string; sect?: Sect; delta: number }>;
+      stealthFor?: Array<{ clan?: string; sect?: Sect; titled?: boolean; delta: number }>;
       /** What success does: burn the card (default), or move control of it
        *  to the acting minion's controller — "Vampires can steal this
        *  location as a Ⓓ action" (docs/control-change-design.md §6) — or
        *  strip its counters and leave it in play, "burn ALL THE COUNTERS
        *  from this card" (Powerbase: Madrid, docs/unlock-tolls-design.md
-       *  §5). */
-      outcome?: "burn" | "steal" | "shuffleIntoLibrary" | "burnCounters";
+       *  §5) — or move every counter on it to the ACTING minion's
+       *  controller's pool, "a vampire controlled by another Methuselah
+       *  can move all the blood on this card to his or her controller's
+       *  pool as a Ⓓ action" (the Powerbase raid,
+       *  docs/blood-banking-locations-design.md §4). The raid is not
+       *  `burnCounters`: the counters go somewhere. */
+      outcome?: "burn" | "steal" | "shuffleIntoLibrary" | "burnCounters" | "takeCounters";
       /** "Vampires can call a REFERENDUM to burn this card as a +1 stealth
        *  political action" (Anarch Revolt, War of Ages) — the action is
        *  political and undirected, and the referendum decides, rather than
        *  success burning the card outright.
        *  docs/pool-drain-design.md §6 */
       via?: "politicalAction";
+      /** "…; DURING THAT REFERENDUM, non-Anarch titles are worth -1 vote"
+       *  (Fee Stake) — a rider on the referendum the card's own burn
+       *  action calls, seeded in `referendumSetup`, which is the one hook
+       *  that fires as a referendum opens. docs/fee-stake-design.md §3 */
+      refVoteModifier?: { amount: number; titledOnly?: boolean; notSect?: Sect };
       /** "…if that action is successful, this Anarch is LOCKED and does
        *  not unlock as normal during their next unlock phase" (Stolen
        *  Police Cruiser) — a rider on the bearer, on top of the burn.
@@ -2643,6 +3340,22 @@ export interface CardSpec {
      *  Servitor) — the exemption from p. 22, which `cannotActThisTurn`
      *  otherwise sets from `recruited`. */
     actsWhenRecruited?: boolean;
+    /** "If a vampire controlled by ANOTHER Methuselah burns \<this ally\>
+     *  in combat or as an action, he or she gains N blood" (Young Bloods).
+     *  The burner is DERIVED at the moment the ally leaves the ready
+     *  region — the other combatant, or the acting minion of an action
+     *  aimed at it — rather than plumbed through every burn path.
+     *  docs/plain-allies-design.md §5 */
+    burnBounty?: { blood: number };
+    /** "If \<this ally\> is burned, shuffle him into his owner's library"
+     *  (Amam and the other mummies). Fired before the burn, so the entry
+     *  leaves play through `shuffleIntoLibrary` instead of the ash heap.
+     *  docs/plain-allies-design.md §5 */
+    shuffleIntoLibraryOnBurn?: boolean;
+    /** "If a minion OPPOSING \<this ally\> in combat is burned, \<the
+     *  ally\> can gain N life" (Amam). Optional — the card says "can" —
+     *  and capped at starting life like every other life gain. */
+    opposingBurnedGainLife?: number;
   };
   /** Weapon equipment (docs/weapons-design.md): a strike it provides —
    *  fixed `damage` (gun) or strength-based (`damage: null, handBonus`);
@@ -2653,6 +3366,18 @@ export interface CardSpec {
     ranged: boolean;
     aggravated: boolean;
     maneuverPerCombat?: boolean;
+    /** "…with TWO optional maneuvers each combat" (Deer Rifle). The
+     *  counted form of the flag above; 1 and the flag mean the same.
+     *  docs/conditional-weapons-design.md §1 */
+    maneuversPerCombat?: number;
+    /** "…only usable to get to CLOSE RANGE" (Blade of Bellona) — offered
+     *  only while the range is long, which is the only state the maneuver
+     *  could change to close. docs/conditional-weapons-design.md §1 */
+    maneuverToCloseOnly?: boolean;
+    /** "Only usable AFTER THE FIRST ROUND of combat" (RPG Launcher) — a
+     *  gate on the strike option, beside the range gates.
+     *  docs/conditional-weapons-design.md §2 */
+    notFirstRound?: boolean;
     /** "Strike: 2R damage, ONLY USABLE AT LONG RANGE" (Sniper Rifle) — a
      *  gate on options, so a close round simply does not list it.
      *  docs/weapon-riders-design.md §3 */
@@ -2692,6 +3417,45 @@ export interface CardSpec {
      *  bearer can unlock at the end of combat" (Sword of the Archangel).
      *  docs/weapon-riders-design.md §6 */
     unlockOnKill?: boolean;
+    /** "BURN AFTER USE" (Grenade, Smoke Grenade, White Phosphorus
+     *  Grenade, Waxen Poetica) — the weapon is burned when its strike
+     *  RESOLVES, not when it is chosen. The rulings are emphatic that
+     *  these are different moments: *"does not burn if combat ends
+     *  before it resolves"* [LSJ 19981006] [LSJ 20001127-2].
+     *  docs/one-shot-weapons-design.md §1 */
+    burnAfterUse?: boolean;
+    /** "If \<this\> is used at CLOSE RANGE, the minion with this weapon
+     *  takes N damage" (Grenade 1, White Phosphorus Grenade 1
+     *  aggravated). Environmental damage [LSJ 19970801] — source null,
+     *  so no one inflicted it. docs/one-shot-weapons-design.md §2 */
+    selfDamageAtCloseRange?: { amount: number; aggravated?: boolean };
+    /** "END COMBAT as a strike" (Smoke Grenade) — a strike that ends
+     *  combat instead of dealing damage (p. 33). `damage` is ignored.
+     *  docs/one-shot-weapons-design.md §3 */
+    combatEndsStrike?: boolean;
+    /** "NOT USABLE AGAINST a vampire with Celerity, an ally, or a
+     *  retainer" (Waxen Poetica) — a gate on the option, read from the
+     *  OPPOSING minion. docs/one-shot-weapons-design.md §4 */
+    notUsableAgainst?: { disciplines?: string[]; allies?: boolean };
+    /** "Bearer takes N damage during strike resolution when striking with
+     *  this gun, but only ONCE EACH COMBAT" (Zip Gun). The close-range
+     *  sibling above is `selfDamageAtCloseRange`; this one fires at any
+     *  range, which is why it is a second field rather than a flag on the
+     *  first — the two cards' gates have nothing in common.
+     *  Environmental, like every other bearer self-damage
+     *  [LSJ 19970801]. docs/armed-mid-combat-design.md §3 */
+    selfDamageOnStrike?: { amount: number; aggravated?: boolean; oncePerCombat?: boolean };
+    /** "Burn after use OR AT THE END OF COMBAT" (Molotov Cocktail) — the
+     *  second half of a one-shot weapon that is a combat card, and so has
+     *  no business surviving the fight it was played in.
+     *  docs/armed-mid-combat-design.md §2 */
+    burnAtEndOfCombat?: boolean;
+    /** "…NOT USABLE THE ROUND IT IS PUT IN PLAY" (Molotov Cocktail). Read
+     *  against `entry.attachedRound`, which the engine records when a
+     *  card enters play during a combat — `notFirstRound` is a different
+     *  question (the combat's first round, not the card's).
+     *  docs/armed-mid-combat-design.md §2 */
+    notUsableAttachRound?: boolean;
   };
   /** Printed KEYWORDS — a line above the card text, like "Grapple." or
    *  "Aim.", which are neither card types nor Disciplines. Answered
@@ -2714,6 +3478,11 @@ export interface CardSpec {
      *  `enumerateRushTargets` has always understood this; no crypt card
      *  had asked for it (docs/crypt-wave-2.md §1). */
     lockedOnly?: boolean;
+    /** "…may enter combat with a ready vampire CONTROLLED BY ANOTHER
+     *  METHUSELAH as a Ⓓ action" (Muddled Vampire Hunter). War Ghoul's
+     *  rush is unqualified and reaches its own controller's vampires;
+     *  this one may not. docs/plain-allies-design.md §2 */
+    othersOnly?: boolean;
   };
   /** "Requires a prince or justicar" — the acting vampire's title must be
    *  one of these (p. 28 titles). */
@@ -2733,8 +3502,51 @@ export interface CardSpec {
   requiresSect?: Sect[];
   /** "Requires a Ravnos" etc. — the playing vampire's clan. */
   requiresClan?: string[];
+  /** "Only usable by a … minion WITH A GUN" (Suppressing Fire) — the
+   *  playing minion must carry a card in play with one of these tags.
+   *  Not a discipline, not a clan: a piece of equipment.
+   *  docs/second-minion-modifiers-design.md §1 */
+  requiresAttachedTag?: string[];
+  /** A condition on the ACTING minion, which is a different question from
+   *  every `requires*` above: those gate who may PLAY the card, this gates
+   *  who the card may be played AGAINST. "Only usable if a Camarilla or
+   *  Sabbat vampire is bleeding you" (Banner of Neutrality), "…if a
+   *  Camarilla vampire is acting" (Venetian Conference), "NOT usable if
+   *  the acting minion is an Assamite or wraith or has flight" (Nest of
+   *  Eagles). Every field is ANDed; a list inside one field is an OR.
+   *  docs/acting-minion-reactions-design.md §1 */
+  requiresActing?: {
+    /** The acting minion must be a vampire of one of these sects. */
+    sects?: Sect[];
+    /** "…a VAMPIRE is bleeding you" — an ally acting fails the clause. */
+    vampire?: boolean;
+    /** Clans the acting minion must NOT be. Use the name the REGISTRY
+     *  uses: "Assamite" is printed, and the pool calls that clan Banu
+     *  Haqim (the CLAUDE.md lesson about clan names, which has cost this
+     *  project a filter that matched nothing before). */
+    notClans?: string[];
+    /** "…or a WRAITH" — read with `isUndeadAlly`, which is the engine's
+     *  one answer to that question. */
+    notUndeadAlly?: boolean;
+    /** "…or has FLIGHT" — a printed advantage. No minion in the pool has
+     *  it today, so this correctly excludes nobody; it is here because
+     *  the card prints it and a clause that is not built is not built. */
+    notTags?: string[];
+  };
   /** "…with capacity N or more". */
   requiresCapacity?: number;
+  /** "Requires a (ready) VAMPIRE" (Surprise Influence, Sense the Savage
+   *  Way, Ghoul Escort) — the playing or employing minion must be a
+   *  vampire, not an ally. Read by `meetsRequirements`. */
+  requiresVampire?: boolean;
+  /** The printed BURN OPTION icon (p. 17): "a Methuselah who does not
+   *  control a minion who meets the requirements of this card or who is a
+   *  legal target for it, may discard it during ANY Methuselah's unlock
+   *  phase and replace it. Each Methuselah is limited to one such discard
+   *  each unlock phase." Compiled into `burnOptionDiscardable`, which
+   *  reads the spec's own requirement and attach filters.
+   *  docs/burn-option-design.md */
+  burnOption?: boolean;
   /** "Requires a prince, justicar or Inner Circle member" on a polling-step
    *  modifier — the *controller* must have a ready vampire with one of these
    *  titles (Closed Session, Private Audience), not the calling vampire. */
@@ -2765,11 +3577,116 @@ export interface CardSpec {
    *  A CANCELLED referendum is not a failed one (docs/abstain-gate-design.md):
    *  it never resolves, so this never fires for it, which is what "if this
    *  referendum fails" says. */
-  referendumFail?: { callingVampireBurnsBlood: number };
+  referendumFail?: {
+    callingVampireBurnsBlood?: number;
+    /** "If the referendum fails, this acting vampire takes N UNPREVENTABLE
+     *  damage" (Rant!) — the same hook, a different currency.
+     *  docs/referendum-blood-design.md §3 */
+    callingVampireDamage?: number;
+  };
   /** Frenzy keyword (p. 32): marks the card so frenzy-referencing effects
    *  (cancel/immunity) can find it. Adds a "frenzy" tag to the handler. */
   frenzy?: boolean;
-  /** "Do not replace until …" — defers the replacement draw. */
-  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard";
+  /** "Do not replace until …" — defers the replacement draw.
+   *  `whileInPlay` is "do not replace AS LONG AS THIS CARD IS IN PLAY"
+   *  (Dragonbound): the draw comes when the card leaves play, however it
+   *  leaves. docs/gehenna-events-design.md §3 */
+  /** "ONLY ONE <card> MAY BE PLAYED EACH TURN" (Instability) — by NAME
+   *  and across the whole table, which is what the printed line means:
+   *  the turn is the scope, not the seat. Recorded on the turn frame as
+   *  the card resolves. docs/the-edge-design.md §4 */
+  oncePerTurnByName?: boolean;
+  /** "Only one \<card\> can be played or called in a GAME" (Political
+   *  Stranglehold) — `oncePerTurnByName` with no reset, so it is a QUERY
+   *  over the event log rather than a latch anywhere: a `CardPlayed` with
+   *  this name, ever, bars it. Nothing to clear at a phase boundary and
+   *  nothing to forget to serialize.
+   *  docs/table-pool-swings-design.md §4 */
+  oncePerGameByName?: boolean;
+  /** "Only usable if your prey controls the Edge OR THE EDGE IS
+   *  UNCONTROLLED" (Instability) — a gate on where the token sits, read
+   *  at play time. docs/the-edge-design.md §4 */
+  requiresEdge?: "preyOrUncontrolled" | "self";
+  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard" | "whileInPlay";
+  /** "Do not replace until a vampire commits diablerie" / "…moves from
+   *  torpor to the ready region" / "…until your prey is ousted" — the
+   *  CONDITION form of the clause above, which waits on an event rather
+   *  than a phase. docs/gehenna-taxes-design.md §1 */
+  delayedReplaceUntil?: DelayedDrawCondition;
+  /** "Not usable by a vampire with more than 0 intercept" (Legwork) — a
+   *  gate on the REACTING minion, which is why it cannot be a
+   *  `UsabilityRule`: those are asked once per card play, and this has to
+   *  be asked once per candidate minion.
+   *  docs/buying-a-block-design.md §1 */
+  onlyIfNoIntercept?: boolean;
+  /** "A vampire may play only one \<this card\> each turn" (Fillip) — per
+   *  VAMPIRE, read off `playedSinceUnlock`, which the unlock phase clears.
+   *  Distinct from `oncePerTurnAtSuperior`, which is per SEAT.
+   *  docs/lock-as-currency-design.md §3 */
+  oncePerTurnPerVampire?: boolean;
+  /** "A vampire cannot play both \<this\> and \<that\> during the same
+   *  action" (Pack Tactics / Elder Intervention). Per VAMPIRE, per
+   *  action — so it reads the action frame's `played` list, and BOTH
+   *  cards have to name the other or the bar only works one way.
+   *  docs/buying-a-block-design.md §2 */
+  notWithThisAction?: string[];
+  /** "Requires N or more OTHER Gehenna events in play" — a play-time gate
+   *  only: *"the 'other Gehenna cards in play' requirement is only checked
+   *  when playing the card"* [PIB 20121031], so the card stays in play and
+   *  keeps working once the others are gone.
+   *  docs/gehenna-events-design.md §1 */
+  requiresOtherGehennaEvents?: number;
+  /** "…other Gehenna cards CONTROLLED BY OTHER METHUSELAHS in play"
+   *  (Becoming of Ennoia) — the same play-time gate, counting only the
+   *  play areas that are not yours. docs/gehenna-unlock-design.md §2 */
+  gehennaGateOthersOnly?: boolean;
+  /** "During each Methuselah's PHASE, that Methuselah …" — the recurring
+   *  event trigger. One card in one play area that fires in EVERY seat's
+   *  phase, for that seat. docs/gehenna-events-design.md §2 */
+  eachMethuselah?: {
+    when: "unlock" | "discard" | "afterMinionPhase";
+    effect:
+      | {
+          /** "…burns 1 pool for each vampire in torpor they control"
+           *  (Dragonbound). */
+          kind: "burnPoolPerTorpidVampire";
+          amount: number;
+        }
+      | {
+          /** "…each ready vampire they control with capacity less than the
+           *  number of Gehenna events in play who did not hunt during that
+           *  minion phase burns 1 blood" (Thirst). */
+          kind: "burnBloodUnlessHunted";
+          amount: number;
+        }
+      | {
+          /** "…can choose a location controlled by their prey; it is burned
+           *  unless its controller burns N pool" (Conquest of Humanity). */
+          kind: "burnPreyLocation";
+          ransom: number;
+        }
+      | {
+          /** "…chooses a ready vampire, who takes N unpreventable
+           *  damage." `whose` says which ready region is read — the
+           *  phase's own Methuselah (Becoming of Ennoia) or their prey
+           *  (The New Inquisition) — and `optional` is the difference
+           *  between "can choose" and "chooses".
+           *  docs/gehenna-unlock-design.md §3 */
+          kind: "damageReadyVampire";
+          whose: "self" | "prey";
+          amount: number;
+          optional?: boolean;
+        }
+      | {
+          /** "…if that Methuselah controls N or more vampires of the same
+           *  clan, they burn one of those vampires. If that vampire's
+           *  capacity is M or more, that Methuselah ignores this effect
+           *  until the end of the game" (Recalled to the Founder).
+           *  docs/gehenna-unlock-design.md §4 */
+          kind: "burnSameClanVampire";
+          sameClan: number;
+          exemptFromCapacity: number;
+        };
+  };
   modes: CardMode[];
 }

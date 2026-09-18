@@ -258,6 +258,61 @@ describe("what this client can play", () => {
     for (const p of all) expect(p.unsupported).toEqual([]);
   });
 
+  it("marks the half decks, and only the ones that are whole apart from size", () => {
+    const all = supportedPrecons();
+    const half = all.filter((p) => p.halfDeck);
+    // A POSITIVE case, not just the negatives: the New Blood starters are
+    // the half decks, and there are some.
+    expect(half.length).toBeGreaterThan(0);
+    for (const p of half) {
+      // Half and playable are different questions and must never both be
+      // true — that is what tells the chooser which label to hang on it.
+      expect(p.playable).toBe(false);
+      expect(p.unsupported).toEqual([]);
+      expect(p.cryptCount).toBeLessThan(12);
+      // Every problem it has is about SIZE. A deck held back for an
+      // unimplemented card, or for a crypt-group clash, is not a half
+      // deck and must not be offered as one.
+      for (const problem of p.problems) expect(problem).toMatch(/^only \d+ (crypt|library) cards$/);
+    }
+    // Nothing is both, and nothing implemented is neither: every precon in
+    // the pool is either legal as printed or a labelled half deck.
+    for (const p of all) expect(p.playable && p.halfDeck).toBe(false);
+    expect(all.filter((p) => p.playable || p.halfDeck).length).toBe(all.length);
+  });
+
+  it("deals a half deck only when its seat is named as one", () => {
+    const halfDeck = supportedPrecons().find((p) => p.halfDeck)!;
+    const decks = ["Alice", "Bob", "Carol"].map((seat) =>
+      seat === "Alice"
+        ? preconDeck(halfDeck.set, halfDeck.name, seat)!
+        : preconDeck(SET, PRECON, seat)!,
+    );
+    // p. 14 is enforced by default: a half deck is not a legal deck.
+    const strict = validateDecks(decks);
+    expect(strict.ok).toBe(false);
+    expect(strict.illegalDecks.map((d) => d.seat)).toEqual(["Alice", "Alice"]);
+    // Exempted by seat, the same table deals — and the exemption reaches
+    // only the seat named, never the whole table.
+    const lenient = validateDecks(decks, new Set(["Alice"]));
+    expect(lenient.ok).toBe(true);
+    expect(lenient.illegalDecks).toEqual([]);
+    const state = buildGame({ decks, seed: 11, maxTurns: 40 });
+    expect(state.seats[0]!.hand).toHaveLength(7);
+    expect(state.seats[0]!.uncontrolled).toHaveLength(4);
+  });
+
+  it("still holds a half deck to every rule that is NOT about size", () => {
+    const halfDeck = supportedPrecons().find((p) => p.halfDeck)!;
+    const deck = preconDeck(halfDeck.set, halfDeck.name, "Alice")!;
+    // An unimplemented card and an over-size library are refused whether
+    // or not the seat is exempt: the exemption is the two MINIMUMS.
+    const tooBig = { ...deck, library: [...deck.library, ...Array(60).fill(deck.library[0]!)] };
+    const check = validateDecks([tooBig], new Set(["Alice"]));
+    expect(check.ok).toBe(false);
+    expect(check.illegalDecks[0]!.problem).toMatch(/library has \d+ cards/);
+  });
+
   it("hands back a precon that actually deals a legal game", () => {
     const decks = ["Alice", "Bob", "Carol"].map((seat) => preconDeck(SET, PRECON, seat)!);
     expect(validateDecks(decks).ok).toBe(true);

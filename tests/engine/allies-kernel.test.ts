@@ -68,6 +68,7 @@ describe("blocked recruit", () => {
     const state = threeSeatGame();
     const alice = state.seats[0]!;
     alice.hand.push({ id: "pa1", name: "Political Ally" });
+    alice.minions[0]!.clan = "Ventrue"; // the printed clan icon (p. 10)
     // M needs +1 intercept to beat the recruit action's +1 stealth.
     const m = state.seats[1]!.minions.find((x) => x.id === "M")!;
     m.attached.push(entry("sb1", "Sport Bike", { statics: { intercept: 1 } }));

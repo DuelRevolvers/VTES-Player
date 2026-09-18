@@ -131,6 +131,11 @@ export type LegalOption =
   | { id: string; kind: "announceWithdrawal"; label: string }
   | { id: string; kind: "gainEdgePool"; label: string }
   | { id: string; kind: "discard"; label: string; card: CardInstanceId }
+  /** The burn option icon (p. 17): discard a hand card whose requirements
+   *  no minion you control meets, during ANY Methuselah's unlock phase,
+   *  and replace it — once per Methuselah per unlock phase.
+   *  docs/burn-option-design.md */
+  | { id: string; kind: "burnOptionDiscard"; label: string; card: CardInstanceId; seat: SeatId }
   | {
       id: string;
       kind: "playCard";
@@ -280,6 +285,10 @@ export type LegalOption =
        *  toll the voter cannot pay is not enumerated.
        *  docs/crypt-wave-6.md §2 */
       toll?: number;
+      /** Who pays the toll, when it is not the vote's own source — a vote
+       *  BOUGHT with blood has source `blood:<minion>`, which is not a
+       *  minion id. docs/referendum-blood-design.md §1 */
+      tollFrom?: MinionId;
     }
   /** A blocking vampire's chance to diablerise the acting torpor vampire
    *  after a blocked leave-torpor (p. 24). */

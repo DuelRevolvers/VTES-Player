@@ -433,6 +433,11 @@ export class HeuristicAgent implements Agent {
       case "discard":
         return w.discard;
 
+      case "burnOptionDiscard":
+        // A card no minion of ours can use, swapped for a fresh draw at no
+        // cost (p. 17) — always worth more than holding it.
+        return w.discard + 1;
+
       case "transferToVampire":
         return this.scoreInfluence(o, view, me);
       case "influenceOut":

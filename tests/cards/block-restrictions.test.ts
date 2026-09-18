@@ -27,6 +27,7 @@ describe("Visions of Gehenna (102264) — allies cannot block", () => {
     state.seats[1]!.minions.push(makeAlly("A1", "Bob", 3));
     // Give Alice a copy of the card in hand.
     state.seats[0]!.hand.push({ id: "vg1", name: "Visions of Gehenna" });
+    state.seats[0]!.minions[0]!.clan = "Ravnos"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
 
     // Alice's V1 bleeds; in the acting-seat modifier window she plays the

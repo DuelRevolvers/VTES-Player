@@ -393,7 +393,7 @@ describe("Fleshforge Chamber (102354)", () => {
     ]);
   });
 
-  it("a Tzimisce can play a stored card as if from hand, paying its cost", () => {
+  it("a Tzimisce plays a stored card through the ORDINARY play route — as the employ action it is", () => {
     const { state, engine } = game();
     runTrace(engine, [["Alice", "ability:Fleshforge Chamber:ffc:store:h1"]]);
     const entry = alice(state).permanents.find((p) => p.card.id === "ffc");
@@ -404,23 +404,31 @@ describe("Fleshforge Chamber (102354)", () => {
     const tf = state.frames[0]!;
     if (tf.kind === "turn") tf.phase = "minion";
     const e2 = new VtesEngine(state, testRegistry);
-    expect(
-      e2.decision()!.options.some((o) => o.id.includes("Fleshforge Chamber") && o.id.includes(":play:")),
-    ).toBe(false);
+    expect(e2.decision()!.options.some((o) => o.id.startsWith("play:Revenant"))).toBe(false);
 
     find(state, "V1").clan = "Tzimisce";
     const e3 = new VtesEngine(state, testRegistry);
-    const opt = e3
-      .decision()!
-      .options.find((o) => o.id.includes("Fleshforge Chamber") && o.id.includes(":play:"));
+    // "As if from your hand" is the ORDINARY play option, with the ordinary
+    // id — not an ability of the store (docs/store-plays-design.md §2).
+    const opt = e3.decision()!.options.find((o) => o.id.startsWith("play:Revenant"));
     expect(opt).toBeDefined();
 
     const blood = find(state, "V1").blood;
-    runTrace(e3, [["Alice", opt!.id]]);
-    // Revenant is a 1-blood ghoul retainer: it attaches to V1 and is paid for.
+    const hand = alice(state).hand.length;
+    runTrace(e3, [
+      ["Alice", opt!.id],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as played
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // announce
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // state A
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // blocks declined
+    ]);
+    // Revenant is a 1-blood ghoul retainer: it attaches to V1 and is paid for
+    // at resolution, because employing is an action (p. 27).
     expect(find(state, "V1").attached.some((p) => p.card.name === "Revenant")).toBe(true);
     expect(find(state, "V1").blood).toBe(blood - 1);
     expect(alice(state).permanents.find((p) => p.card.id === "ffc")?.stored?.length).toBe(0);
+    // A card that was never in hand leaves no gap in it: no replacement draw.
+    expect(alice(state).hand.length).toBe(hand);
   });
 });
 

@@ -15,6 +15,7 @@ import type {
   CardInstanceId,
   CardPlayFrame,
   ChoiceFrame,
+  DisciplineLevel,
   EngineOps,
   GameState,
   HandlerRegistry,
@@ -30,10 +31,12 @@ import type {
   PlayCostCardType,
   ReferendumFrame,
   Sect,
+  VampireTitle,
   WindowId,
 } from "../../engine/index.ts";
 import {
   blockEligibleSeats,
+  auraBlocksPolitical,
   canAct,
   canReact,
   canRepeatAction,
@@ -42,6 +45,7 @@ import {
   uncontrolledCanTakeCounters,
   CITY_TITLES,
   CLANS,
+  DISCIPLINES,
   disciplinesOf,
   currentBleed,
   currentIntercept,
@@ -148,12 +152,25 @@ function rulesHold(
       case "ifActionDirected":
         if (!af.directed || af.target === null) return false;
         break;
+      case "targetHasTheEdge": {
+        // "…directed at the METHUSELAH WITH THE EDGE" (Esteem). An action
+        // reaches a seat two ways — a bleed names it, a rush names one of
+        // its minions — and the Edge belongs to the seat either way.
+        if (!af.directed) return false;
+        const targetSeat =
+          af.target ??
+          (af.targetMinion ? findMinion(ctx.state, af.targetMinion)?.controller : undefined) ??
+          null;
+        if (targetSeat === null || ctx.state.edge !== targetSeat) return false;
+        break;
+      }
       case "ifBleedSucceeded":
         // "…if the bleed is successful (for 1 or more)" (Fever Pitch).
         if (af.actionKind !== "bleed" || af.resolvedSuccess !== true) return false;
         if (currentBleed(ctx.state, af) < 1) return false;
         break;
       case "byLockedMinion":
+      case "alsoByLockedMinion":
       case "oncePerUnlockPhase":
       case "byVampire":
       case "onlyAtLongRange":
@@ -193,6 +210,18 @@ export function meetsRequirements(m: MinionState, spec: CardSpec): boolean {
     return false;
   }
   if (spec.requiresCapacity !== undefined && capacityOf(m) < spec.requiresCapacity) {
+    return false;
+  }
+  // "Requires a (ready) VAMPIRE" (Surprise Influence, Sense the Savage
+  // Way, Ghoul Escort) — an ally is a minion and may otherwise play
+  // reactions or employ retainers. Found by the 2026-09-14 library audit.
+  if (spec.requiresVampire && m.kind !== "vampire") return false;
+  // "Only usable by a … minion WITH A GUN" (Suppressing Fire) — a card in
+  // play on them, read off the tags the equipment compiler already sets.
+  if (
+    spec.requiresAttachedTag &&
+    !m.attached.some((p) => spec.requiresAttachedTag!.some((t) => p.tags.includes(t)))
+  ) {
     return false;
   }
   return true;
@@ -291,6 +320,7 @@ function disciplineOk(m: MinionState, mode: CardMode): boolean {
  *  docs/play-cost-design.md §2 */
 const COST_TYPES_BY_CARD_TYPE: Record<CardSpec["cardType"], PlayCostCardType[]> = {
   action: ["action"],
+  event: ["event"],
   actionModifier: ["actionModifier"],
   reaction: ["reaction"],
   modifierOrReaction: ["actionModifier", "reaction"],
@@ -502,6 +532,14 @@ export function playFromHandChoices(
       // "a NON-UNIQUE equipment" (Contraband) — the printed keyword, a
       // different question from whether this seat already has a copy.
       if (filter.nonUniqueOnly && h.isUnique) continue;
+      // "The weapon cannot inflict (WITH A REGULAR STRIKE) aggravated
+      // damage or 4 or more damage" (Concealed Weapon, §4). A card with
+      // no weapon profile at all is not a weapon, and the `tags` filter
+      // above has already excluded it; these two only ever narrow.
+      if (filter.maxDamage !== undefined && (h.weaponProfile?.damage ?? 0) > filter.maxDamage) {
+        continue;
+      }
+      if (filter.noAggravated && h.weaponProfile?.aggravated) continue;
       // Own-copy uniqueness, and "a minion can have only one vehicle".
       if (h.isUnique && seatControlsCopy(ctx.state, ctx.seat, card.name)) continue;
       if (tags.includes("vehicle") && bearer.attached.some((p) => p.tags.includes("vehicle"))) {
@@ -533,6 +571,13 @@ export function playFromHandChoices(
           bearer.id,
           ctx.seat,
         );
+        // "The weapon CANNOT COST 3 OR MORE POOL" (Concealed Weapon, §4)
+        // — measured on `cost`, the figure this bearer would actually
+        // pay, which is what the ruling asks for: Black Cat's reduction
+        // is not limited to cards "played", so it counts, and Centralized
+        // Background Check's increase counts the other way
+        // [LSJ 20040701] [ANK 20181216].
+        if (filter.maxPoolCost !== undefined && cost.pool > filter.maxPoolCost) continue;
         // "…can pay up to half the cost rounded down with their blood"
         // (Contraband superior): one option per legal split.
         const maxBlood = filter.halfCostInBlood ? Math.floor(cost.pool / 2) : 0;
@@ -831,6 +876,23 @@ function searchMatches(
   return cardTypes.some((t) => types.includes(t));
 }
 
+/**
+ * "…cards REQUIRING Protean [pro]" — a card that requires the discipline in
+ * ANY of its modes. The requirement is printed per mode (a card requiring
+ * [pro] only at superior still "requires Protean"), and a handler answers
+ * per mode, so all three are asked. docs/store-plays-design.md §4
+ */
+function requiresDiscipline(
+  registry: HandlerRegistry,
+  card: CardInstance,
+  discipline: string,
+): boolean {
+  const h = registry[card.name];
+  if (!h) return false;
+  const modes: Array<DisciplineLevel | null> = [null, "basic", "superior"];
+  return modes.some((m) => (h.requiresDisciplines?.(m, undefined) ?? []).includes(discipline));
+}
+
 /** Does an unlock drain apply to the Methuselah whose phase it is?
  *  (docs/pool-drain-design.md §3). */
 function drainConditionHolds(
@@ -931,14 +993,53 @@ function conditionalExtra(
       holds = af.target !== null && getSeat(ops.state, af.target).pool <= cond.value;
       break;
     }
+    case "actingSmall": {
+      // "…an ALLY or a vampire with capacity N or less" (Nest of Eagles).
+      // `capacityOf` rather than the printed capacity, so a granted one
+      // counts — the same read `redirectBleed.youngerOnly` takes.
+      const a = findMinion(ops.state, af.acting);
+      holds = a !== null && (a.kind === "ally" || capacityOf(a) <= cond.capacity);
+      break;
+    }
   }
   return holds ? bonus.extra : 0;
+}
+
+/**
+ * "Only usable if a \<kind of\> minion is acting" — the ACTING minion's
+ * traits, as against every `requires*`, which ask about the PLAYER'S.
+ *
+ * One helper, called from the one place `spec.usable` is checked, because
+ * the lesson this project keeps relearning is that a question asked in
+ * two enumerators drifts between them.
+ * docs/acting-minion-reactions-design.md §1
+ */
+function actingConditionHolds(
+  cond: CardSpec["requiresActing"],
+  state: GameState,
+  af: ActionFrame,
+): boolean {
+  if (!cond) return true;
+  // A DERIVED READ MUST BE TOTAL: the acting minion can leave play
+  // mid-action (an ally paying with the life that is its blood), and a
+  // card whose condition cannot be evaluated is not playable.
+  const a = findMinion(state, af.acting);
+  if (!a) return false;
+  if (cond.vampire && a.kind !== "vampire") return false;
+  if (cond.sects && !(a.sect !== null && cond.sects.includes(a.sect))) return false;
+  if (cond.notClans && a.clan !== null && cond.notClans.includes(a.clan)) return false;
+  if (cond.notUndeadAlly && isUndeadAlly(a)) return false;
+  if (cond.notTags?.some((t) => minionHasTag(a, t))) return false;
+  return true;
 }
 
 /** The one effect in a mode that needs an announced target, if any. */
 function targetRider(mode: CardMode): EffectPrimitive | null {
   for (const e of mode.effects) {
     if (
+      // The SWEEP has no target — "each ready X gains 1 blood" asks
+      // nobody anything — so only the split appears here.
+      e.kind === "bankBloodSplit" ||
       e.kind === "addUncontrolledBlood" ||
       e.kind === "bloodOnBleedSuccess" ||
       e.kind === "actionEnterCombat" ||
@@ -962,7 +1063,9 @@ function targetRider(mode: CardMode): EffectPrimitive | null {
 function enumerateRushTargets(
   state: GameState,
   actor: MinionState,
-  e: Extract<EffectPrimitive, { kind: "actionEnterCombat" }> | { targets: "minion" | "vampire"; lockedOnly?: boolean },
+  e:
+    | Extract<EffectPrimitive, { kind: "actionEnterCombat" }>
+    | { targets: "minion" | "vampire"; lockedOnly?: boolean; othersOnly?: boolean },
 ): string[] {
   const targets: string[] = [];
   for (const s of state.seats) {
@@ -974,6 +1077,8 @@ function enumerateRushTargets(
       if (untargetableBy(m, actor.controller, actor)) continue;
       if (e.targets === "vampire" && m.kind !== "vampire") continue;
       if (e.lockedOnly && !m.locked) continue;
+      // "…controlled by ANOTHER Methuselah" (Muddled Vampire Hunter).
+      if ("othersOnly" in e && e.othersOnly && m.controller === actor.controller) continue;
       targets.push(m.id);
     }
   }
@@ -1054,6 +1159,47 @@ function ashHeapPicks(
   return out;
 }
 
+/**
+ * The vampires a blood-bank action may feed
+ * (docs/blood-bank-actions-design.md §2).
+ *
+ * ONE PLACE for the filter, shared by the sweep and the split. They ask
+ * the same question and only one of them takes a target, which is exactly
+ * how a filter ends up written twice and drifting on the third card.
+ *
+ * A vampire already at capacity is left out: p. 6 drains the excess back
+ * to the bank, so feeding it is worth nothing and, for the split, would
+ * waste one of the card's two recipients (docs/futile-options-design.md).
+ */
+function bankBloodRecipients(
+  state: GameState,
+  seatId: string,
+  who: import("./spec.ts").BankBloodFilter,
+  /** The acting minion, excluded from an UNLOCKED-only card. It locks at
+   *  announcement (p. 25), so it can never satisfy that condition when
+   *  the effect resolves — the `actionStun` precedent. Enumeration runs
+   *  BEFORE the lock, which is the only reason this argument is needed:
+   *  at resolution `m.locked` already answers it. */
+  actor?: MinionState,
+): MinionState[] {
+  const out: MinionState[] = [];
+  for (const s of state.seats) {
+    if (s.ousted) continue;
+    // "…you control" — absent, the card names no controller and the whole
+    // table qualifies (Patshiv).
+    if (who.ownOnly && s.id !== seatId) continue;
+    for (const m of s.minions) {
+      if (m.kind !== "vampire" || !isReady(m)) continue;
+      if (who.unlockedOnly && (m.locked || m.id === actor?.id)) continue;
+      if (who.clan !== undefined && m.clan !== who.clan) continue;
+      if (who.sect !== undefined && m.sect !== who.sect) continue;
+      if (!canGainBlood(m)) continue;
+      out.push(m);
+    }
+  }
+  return out;
+}
+
 function enumerateActionTargets(
   state: GameState,
   seatId: string,
@@ -1070,6 +1216,22 @@ function enumerateActionTargets(
   // gains nothing: the excess drains to the blood bank the moment it
   // enters play (p. 6). The same rule the influence phase now applies
   // (docs/futile-options-design.md).
+  if (e.kind === "bankBloodSplit") {
+    // One option per (split × set of recipients). The recipients ride in
+    // the target param joined by `|`, which is what lets a two-recipient
+    // card travel on the one-target rider every other action uses.
+    const pool = bankBloodRecipients(state, seatId, e.who, actor);
+    for (const sp of e.splits) {
+      for (const combo of combinations(
+        pool.map((m) => m.id),
+        sp.targets,
+      )) {
+        if (combo.length < sp.targets) continue;
+        targets.push(combo.join("|"));
+      }
+    }
+    return targets;
+  }
   if (e.kind === "addUncontrolledBlood") {
     for (const u of seat.uncontrolled) {
       if (e.clan !== undefined && u.card.clan !== e.clan) continue;
@@ -1683,6 +1845,38 @@ function compileActionCard(spec: CardSpec): CardHandler {
             if (t && findMinion(ops.state, t)) ops.stun(t);
             break;
           }
+          case "bankBloodSweep": {
+            // "Each ready <filter> vampire gains N blood from the blood
+            // bank" — re-derived AT RESOLUTION, never from a list taken at
+            // announcement: the action locks the actor (p. 25) and a
+            // reaction can burn, lock or torpor a vampire in between.
+            for (const m of bankBloodRecipients(ops.state, af.actingSeat, e.who)) {
+              ops.emit({ type: "BloodGained", minion: m.id, amount: e.amount });
+            }
+            break;
+          }
+          case "bankBloodSplit": {
+            const chosen = (af.card?.params["target"] ?? "").split("|").filter(Boolean);
+            if (chosen.length === 0) throw new Error(`${spec.name}: no blood recipients`);
+            // The split is identified by HOW MANY it feeds, which is what
+            // the option id already carries. Both printed splits differ in
+            // that number, and a card whose two splits fed the same count
+            // would need the index in the id instead.
+            const sp = e.splits.find((x) => x.targets === chosen.length);
+            if (!sp) break;
+            // Re-derived, not trusted: a recipient chosen at announcement
+            // can be burned, locked or filled up before the action
+            // resolves, and the card's filter is a condition on the
+            // MOMENT THE BLOOD MOVES.
+            const still = new Set(
+              bankBloodRecipients(ops.state, af.actingSeat, e.who).map((m) => m.id),
+            );
+            for (const id of chosen) {
+              if (!still.has(id)) continue;
+              ops.emit({ type: "BloodGained", minion: id, amount: sp.amount });
+            }
+            break;
+          }
           case "actionAddBloodToVampire": {
             // "Add N blood to another vampire" — the chosen in-play
             // vampire (Fifth Tradition: Hospitality).
@@ -2059,8 +2253,19 @@ function compileActionCard(spec: CardSpec): CardHandler {
         tags: string[];
         locked?: boolean;
         bearerFromTarget?: boolean;
+        grantsTitle?: VampireTitle;
+        grantsTitleCity?: string;
       } = { statics, tags: [spec.name] };
       if (eff.locked) r.locked = true;
+      // "…to represent the unique Anarch title of Baron of Boston" — the
+      // "title" tag is what the master path already sets, so a card in
+      // play that IS a title is recognisable the same way whichever
+      // compiler put it there.
+      if (eff.grantsTitle) {
+        r.grantsTitle = eff.grantsTitle;
+        r.tags = [...r.tags, "title"];
+        if (eff.grantsTitleCity !== undefined) r.grantsTitleCity = eff.grantsTitleCity;
+      }
       // Only a card that names its own bearer reads `params.target` as
       // one; otherwise that param belongs to a different clause (§9).
       if (eff.target !== undefined) r.bearerFromTarget = true;
@@ -2152,8 +2357,11 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       case "strikeCombatEnds":
       case "strikeDodge":
       case "strikeDamage":
+      case "strikeWeaponCost":
+      case "strikePreventHandStrike":
       case "strikeStealBlood":
       case "strikeAttachToVictim":
+      case "strikeAttachSelfWeapon":
       case "strikeIncapacitate":
       case "additionalStrike":
         return "combat.chooseStrike";
@@ -2163,6 +2371,15 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       // and splitting it into two identically-resolving primitives to
       // satisfy this switch is how `modifyVotes`/`restrictVotes` drifted.
       // docs/combat-attachments-design.md §2
+      case "cancelBlockCombat":
+        // "Play BEFORE COMBAT" / "when an action is blocked" — the first
+        // window of the combat the block produced, which is where the
+        // engine already puts every "after block resolution" card.
+        return "combat.beforeRange";
+      case "haymaker":
+        // "Play AFTER RANGE IS DETERMINED" — the step between the range
+        // and the strikes, which is exactly what beforeStrikes is.
+        return "combat.beforeStrikes";
       case "attachInCombat":
         return e.when === "endOfRound" ? "combat.endOfRound" : "combat.beforeRange";
       case "setStrength":
@@ -2209,10 +2426,16 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       // A combat card that acts inside ANOTHER card's as-played period,
       // which p. 7 reserves for cancels — and this is one (§4).
       case "cancelStrikeCard":
+      // The same window, one condition wider: any combat card the foe
+      // plays, not only a strike (Death Seeker).
+      case "cancelCombatCard":
         return "card.asPlayed";
       case "maneuver":
       case "grantCloseManeuver":
         return "combat.range";
+      // "Play BEFORE RANGE IS DETERMINED to set the range for the round."
+      case "setRangeLong":
+        return "combat.beforeRange";
       // "Only usable if combat would end" — the End of Round window,
       // where `willContinue` is already decided (§1).
       case "startNewRound":
@@ -2317,6 +2540,28 @@ function compileCombatCard(spec: CardSpec): CardHandler {
     poolCost: spec.poolCost ?? 0,
     isCombatCard: true,
 
+    // What this card puts into a gun, if it is an ammo card at all. Read
+    // by Magazine, which holds one and must use "the effect of the ammo
+    // card" without re-deriving it (§4).
+    ammoLoad(modeLevel) {
+      for (const mode of spec.modes) {
+        if (modeLevel !== null && mode.level !== modeLevel) continue;
+        const e = mode.effects.find((x) => x.kind === "loadAmmo");
+        if (e?.kind !== "loadAmmo") continue;
+        return {
+          cardId: "",
+          name: spec.name,
+          ...(e.damage !== undefined ? { damage: e.damage } : {}),
+          ...(e.damageByRange ? { damageByRange: e.damageByRange } : {}),
+          ...(e.aggravatedDamage !== undefined ? { aggravatedDamage: e.aggravatedDamage } : {}),
+          ...(e.burnGunAfterStrike ? { burnGunAfterStrike: true } : {}),
+          ...(e.additionalStrikeSelf ? { additionalStrikeSelf: true } : {}),
+          ...(e.minGunUses !== undefined ? { minGunUses: e.minGunUses } : {}),
+        };
+      }
+      return undefined;
+    },
+
     options(card, ctx) {
       const cf = ctx.combat;
       if (!cf) return [];
@@ -2340,6 +2585,20 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           if (!meetsRequirements(v, spec)) continue;
           if (!canPlayMode(v, mode, spec)) continue;
           outside.push(...outsidePreventOptions(spec, card, ctx, cf, v, mode));
+          // "Put this card on a Nosferatu IN COMBAT. … You may play this
+          // card even if you are not involved in the current combat."
+          // The bearer is a combatant, not this vampire, so it rides in
+          // the option id like every other chosen target (p. 25).
+          const att = mode.effects.find((x) => x.kind === "attachInCombat");
+          if (att?.kind === "attachInCombat" && att.to === "anyInCombat") {
+            for (const id of [cf.acting, cf.opposing]) {
+              const t = findMinion(ctx.state, id);
+              if (!t) continue;
+              if (att.targetClan !== undefined && t.clan !== att.targetClan) continue;
+              if (t.attached.some((p) => p.tags.includes(spec.name))) continue;
+              outside.push(makeOption(spec, card, v, mode, { target: t.id }));
+            }
+          }
         }
       }
 
@@ -2359,12 +2618,22 @@ function compileCombatCard(spec: CardSpec): CardHandler {
       // (Ensnare a Beast) applies only to the modes that set a strike.
       // "Requires an Anarch" etc. (Diversion) — the combatant must qualify.
       if (!meetsRequirements(m, spec)) return outside;
-      // "A vampire can play only one X each round/combat" (p. 32).
-      if (spec.combatLimit === "round" && cf.playedThisRound.includes(spec.name)) {
-        return outside;
-      }
-      if (spec.combatLimit === "combat" && cf.playedThisCombat.includes(spec.name)) {
-        return outside;
+      // "A VAMPIRE can play only one X each round/combat" (p. 32) — per
+      // VAMPIRE, which is what the card says and what this gate did not
+      // do. It read `playedThisRound`/`playedThisCombat`, which hold NAMES
+      // only and are frame-wide, so one combatant playing a Leathery Hide
+      // barred the other from playing their own. `playedHistory` has
+      // carried {name, minion, round} since wave 29 (it was added for
+      // Haymaker) and answers the question exactly.
+      // docs/one-each-round-design.md §1
+      if (spec.combatLimit) {
+        const mine = (cf.playedHistory ?? []).filter(
+          (h) => h.minion === m.id && h.name === spec.name,
+        );
+        if (spec.combatLimit === "round" && mine.some((h) => h.round === cf.round)) {
+          return outside;
+        }
+        if (spec.combatLimit === "combat" && mine.length > 0) return outside;
       }
 
       const options: LegalOption[] = [...outside];
@@ -2402,6 +2671,12 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           continue;
         }
         if (m.blood < costOf(spec, ctx, m, mode).blood) continue;
+        // RANGE GATES, hoisted above the window switch. They used to sit
+        // inside `combat.chooseStrike`, so a card played in any other
+        // combat window (Haymaker: "play after range is determined")
+        // carried a range clause that did nothing.
+        if (mode.usable?.includes("onlyAtLongRange") && cf.range !== "long") continue;
+        if (mode.usable?.includes("onlyAtCloseRange") && cf.range !== "close") continue;
         switch (ctx.window) {
           case "combat.chooseStrike": {
             if (cf.strikes[side] !== null) continue;
@@ -2425,14 +2700,8 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             ) {
               continue;
             }
-            // "Only usable at long range" (No Trace basic).
-            if (mode.usable?.includes("onlyAtLongRange") && cf.range !== "long") {
-              continue;
-            }
-            // "Only usable at close range" (Blood Fury, Blood Rage).
-            if (mode.usable?.includes("onlyAtCloseRange") && cf.range !== "close") {
-              continue;
-            }
+            // (The two range gates now sit above the window switch, so
+            // every combat window gets them.)
             // "Not usable during the first round" (Walk of Flame).
             if (mode.usable?.includes("onlyAfterFirstRound") && cf.round <= 1) {
               continue;
@@ -2487,6 +2756,18 @@ function compileCombatCard(spec: CardSpec): CardHandler {
                 );
               }
             }
+            // "Choose A WEAPON POSSESSED BY THE OPPOSING MINION. Strike:
+            // X damage, where X is its pool cost" (Up Yours!, §2). One
+            // option per weapon; with none there is nothing to choose and
+            // the card is not offered at all.
+            if (mode.effects.some((x) => x.kind === "strikeWeaponCost")) {
+              const foe = findMinion(ctx.state, side === "acting" ? cf.opposing : cf.acting);
+              for (const p of foe?.attached ?? []) {
+                if (!p.tags.includes("weapon")) continue;
+                options.push(makeOption(spec, card, m, mode, { weapon: p.card.id }));
+              }
+              break;
+            }
             options.push(makeOption(spec, card, m, mode, {}));
             break;
           }
@@ -2495,10 +2776,42 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // as it is played" (Anticipation superior, §4). `isStrike`
             // is denormalized onto the frame, so no card reads another
             // card's spec.
-            const cs = mode.effects.find((x) => x.kind === "cancelStrikeCard");
-            if (cs?.kind !== "cancelStrikeCard") continue;
             const pending = ctx.pendingCard;
             const foe = side === "acting" ? cf.opposing : cf.acting;
+            // "Cancel a COMBAT CARD played by the opposing minion" (Death
+            // Seeker) — the same window with the strike condition dropped.
+            const cc = mode.effects.find((x) => x.kind === "cancelCombatCard");
+            if (cc?.kind === "cancelCombatCard") {
+              if (!pending || pending.isCombat !== true || pending.minion !== foe) continue;
+              // "…cancel A GRAPPLE CARD as it is played" (Disengage) —
+              // read off the frame's denormalized keywords, never the
+              // other card's spec.
+              if (cc.keywords && !cc.keywords.some((k) => pending.keywords?.includes(k))) {
+                continue;
+              }
+              // "…that would RESTRICT THIS ANARCH'S CHOICE OF STRIKES
+              // this round" (Groundfighting, §3). The equipment bar
+              // restricts nothing for a minion holding no weapon —
+              // *"can cancel cards preventing the use of equipment IF THE
+              // TARGET HAS A WEAPON"* [LSJ 20050221] — which is why this
+              // is a question about THIS minion and not only about the
+              // card being played.
+              if (cc.restrictsStrikeChoice) {
+                const bar = pending.restrictsStrikeChoice;
+                if (!bar) continue;
+                if (bar === "equipment" && !m.attached.some((p) => p.tags.includes("weapon"))) {
+                  continue;
+                }
+              }
+              // "The card cannot be played if the minion cannot afford to
+              // burn the blood" [ANK 20210226] — a gate on the OPTION,
+              // which is what that ruling means in a legal-move engine.
+              if (m.blood < (cc.bloodCost ?? 0)) continue;
+              options.push(makeOption(spec, card, m, mode, {}));
+              break;
+            }
+            const cs = mode.effects.find((x) => x.kind === "cancelStrikeCard");
+            if (cs?.kind !== "cancelStrikeCard") continue;
             if (
               !pending ||
               pending.isStrike !== true ||
@@ -2522,6 +2835,10 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // the same gate `closeManeuvers` uses (§4).
             const man = mode.effects.find((e) => e.kind === "maneuver");
             if (man?.kind === "maneuver" && man.onlyToClose && cf.range === "close") {
+              continue;
+            }
+            // The mirror: "only usable to go to LONG range" (High Ground).
+            if (man?.kind === "maneuver" && man.onlyToLong && cf.range === "long") {
               continue;
             }
             options.push(makeOption(spec, card, m, mode, {}));
@@ -2548,6 +2865,23 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           case "combat.beforeRange": {
             // "Only usable during the first round" (Terror Frenzy).
             if (mode.usable?.includes("onlyFirstRound") && cf.round > 1) continue;
+            // "If THIS minion has flight and the opposing minion does
+            // not" (High Ground) — an asymmetry, not a property, so both
+            // sides are read.
+            const srl = mode.effects.find((e) => e.kind === "setRangeLong");
+            if (srl?.kind === "setRangeLong" && srl.requiresFlightAdvantage) {
+              const foe = findMinion(ctx.state, side === "acting" ? cf.opposing : cf.acting);
+              // ANY attached card, not `minionHasTag` — that reads the
+              // SELF-attached entry, which is "what does this minion
+              // PRINT". No vampire in the pool prints flight (the
+              // Gargoyles are not in it), so flight only ever arrives
+              // GRANTED, and the printed-only question is the wrong one
+              // here. docs/one-each-round-design.md §3
+              const flies = (x: MinionState): boolean =>
+                x.attached.some((p) => p.tags.includes("flight"));
+              if (!flies(m)) continue;
+              if (!foe || flies(foe)) continue;
+            }
             // "Equip this vampire with a melee weapon from your hand" —
             // one option per legal (hand card × version × payment split),
             // all of it in the option id (docs/play-from-hand-design.md).
@@ -2580,6 +2914,30 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             ) {
               break;
             }
+            // "Put this card on A GUN on this minion, and put an ammo card
+            // from your hand on this card" (Magazine) — two choices, both
+            // fixed at play time and both riding in the option id, so the
+            // card never opens a decision point of its own.
+            if (selfAttach?.kind === "attachInCombat" && selfAttach.to === "gunOnSelf") {
+              const ammo = getSeat(ctx.state, ctx.seat).hand.filter(
+                (c) => ctx.registry[c.name]?.ammoLoad?.(null) !== undefined,
+              );
+              if (ammo.length === 0) break;
+              for (const p of m.attached) {
+                if (!p.tags.includes("gun")) continue;
+                // "A gun may have only one Magazine" is not printed, but a
+                // second one on the same gun would leave two magazines
+                // claiming the same shot; the card's own name gate is what
+                // every other attachment here uses.
+                if (m.attached.some((q) => q.tags.includes(`gun:${p.card.id}`))) continue;
+                for (const a of ammo) {
+                  options.push(
+                    makeOption(spec, card, m, mode, { gun: p.card.id, ammo: a.id }),
+                  );
+                }
+              }
+              break;
+            }
             // "Put this card in play and move UP TO N blood from the
             // opposing vampire to this card" (Morbidity) — the amount is
             // the player's choice, one option each (§6).
@@ -2597,31 +2955,30 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             options.push(makeOption(spec, card, m, mode, {}));
             break;
           }
-          case "combat.beforeStrikes":
+          case "combat.beforeStrikes": {
+            // "NOT USABLE if this minion played a <this card> LAST round"
+            // (Haymaker). Checked here, in the combat enumerator, because
+            // combat cards never reach `effectsLegal` — and the only
+            // record that survives the round reset is `playedHistory`,
+            // which is why it exists. docs/first-strike-cards-design.md §3
+            const hm = mode.effects.find((x) => x.kind === "haymaker");
+            if (
+              hm?.kind === "haymaker" &&
+              hm.notAfterOwnLastRound &&
+              (cf.playedHistory ?? []).some(
+                (h) => h.name === spec.name && h.minion === m.id && h.round === cf.round - 1,
+              )
+            ) {
+              continue;
+            }
             options.push(makeOption(spec, card, m, mode, {}));
             break;
+          }
           case "combat.beforeResolution": {
             const load = mode.effects.find((e) => e.kind === "loadAmmo");
             if (load?.kind !== "loadAmmo") continue;
-            // ONE PLACE FOR THE FOUR RULES EVERY AMMO CARD PRINTS, so a
-            // sixth ammo card cannot ship having forgotten one:
-            //
-            //  1. it goes on a gun THIS minion just declared a strike
-            //     with — "before resolution of A GUN'S STRIKE";
-            //  2. never an opponent's weapon [LSJ 20020425], which falls
-            //     out of (1) because `m` is this seat's own combatant;
-            //  3. "no more than one ammo card can be used on a gun each
-            //     combat";
-            //  4. Glaser's "not the first time the gun is used".
-            const strike = cf.strikes[side];
-            const gun = strike?.weaponCard;
-            if (!gun || strike.source !== "weapon") continue;
-            // A weapon is a gun only if the card in play says so; the
-            // strike alone cannot tell a gun from a sword.
-            const entry = m.attached.find((p) => p.card.id === gun);
-            if (!entry || !entry.tags.includes("gun")) continue;
-            if (cf.ammo[gun]) continue;
-            if ((cf.gunUses[gun] ?? 0) < (load.minGunUses ?? 1)) continue;
+            const gun = ammoTargetGun(cf, side, m, load.minGunUses);
+            if (!gun) continue;
             options.push(makeOption(spec, card, m, mode, { gun }));
             break;
           }
@@ -2740,6 +3097,8 @@ function compileCombatCard(spec: CardSpec): CardHandler {
               handBonus: e.bonus,
               ...(e.aggravated ? { aggravated: true } : {}),
               ...(e.undodgeable ? { undodgeable: true } : {}),
+              ...(e.firstStrike ? { firstStrike: true } : {}),
+              ...(e.capDamage !== undefined ? { capDamage: e.capDamage } : {}),
               ...(play.params["weapon"] ? { useWeapon: play.params["weapon"] } : {}),
               ...(e.riders?.noPreventBy ? { noPreventBy: e.riders.noPreventBy } : {}),
             });
@@ -2756,8 +3115,25 @@ function compileCombatCard(spec: CardSpec): CardHandler {
               unlockSelf: e.unlockSelf,
             });
             break;
+          case "strikePreventHandStrike": {
+            // The strike itself deals nothing; what it does is arm two
+            // riders on the round (§2).
+            ops.chooseCardStrike(play, { damage: 0, ranged: true });
+            ops.armHandStrikePrevention(play, e.amount);
+            if (e.firstStrikeNextRound) ops.grantFirstStrikeNextRound(play);
+            break;
+          }
+          case "haymaker": {
+            // One op sets both halves of the sentence: this minion's
+            // forced strike and the OPPOSING minion's first strike.
+            ops.forceHandStrike(play, e.bonus);
+            ops.armBiggerHitterPress();
+            break;
+          }
           case "strikeDodge":
             ops.chooseCardStrike(play, { dodge: true });
+            for (let i = 0; i < (e.riders?.press ?? 0); i++) ops.grantCombatPress(play);
+            for (let i = 0; i < (e.riders?.maneuver ?? 0); i++) ops.grantManeuverCredit(play);
             break;
           case "grantStealBloodStrike":
             // A grant, not a strike: offered later in the round, and
@@ -2781,6 +3157,27 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // which refunds. "The minion chooses a strike again" is the
             // settle loop's own doing: the slot was never filled (§4).
             ops.cancelPendingCard(true);
+            break;
+          case "cancelCombatCard":
+            // "BURN 1 BLOOD to cancel …" — an effect, not the card's
+            // cost, so cost reducers do not touch it [ANK 20210226].
+            if (e.bloodCost && play.minion) {
+              ops.emit({ type: "BloodBurned", minion: play.minion, amount: e.bloodCost });
+            }
+            // "…and its cost is not paid" — the refunding cancel, which
+            // is the CARD's clause and not the cancel's: Death Seeker and
+            // Disengage print it, Groundfighting does not, and without it
+            // the general rule stands — a cancelled non-action card's
+            // cost is still paid [RBK cancel-a-card] [ANK 20260216].
+            // Either way the card has still been PLAYED, which is the ash
+            // heap's business and not this call's [ANK 20190104].
+            ops.cancelPendingCard(!e.costIsStillPaid);
+            break;
+          case "pressToStrikerIfDamaged":
+            ops.grantPressToStrikerIfDamaged(play);
+            break;
+          case "setRangeLong":
+            ops.setCombatRange("long");
             break;
           case "nullifyOpposingWeaponDamage":
             ops.nullifyOpposingWeaponDamage(play);
@@ -2830,6 +3227,22 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           case "combatCostModOnOpponent":
             ops.addCombatCostModOnOpponent(play, e.mod);
             break;
+          case "strikeWeaponCost": {
+            // X is read AT RESOLUTION from the card chosen at play time.
+            // A weapon burned in between leaves X at 0 — the strike still
+            // happens, it just deals nothing, which is what a strike with
+            // no damage already does ([RTR 19960221]).
+            const chosen = play.params["weapon"];
+            const owner = chosen
+              ? ops.state.seats
+                  .flatMap((s) => s.minions)
+                  .find((mm) => mm.attached.some((p) => p.card.id === chosen))
+              : undefined;
+            const wep = owner?.attached.find((p) => p.card.id === chosen);
+            const cost = wep ? (ops.registry[wep.card.name]?.poolCost ?? 0) : 0;
+            ops.chooseCardStrike(play, { damage: cost, ranged: false });
+            break;
+          }
           case "strikeDamage":
             ops.chooseCardStrike(play, {
               damage: e.amount,
@@ -2872,7 +3285,8 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           }
           case "attachSelfWeapon": {
             // "Put this card with N counters on it on this minion; it
-            // becomes a … weapon equipment" (Weighted Walking Stick).
+            // becomes a … weapon equipment" (Weighted Walking Stick,
+            // Zip Gun).
             if (!play.minion) throw new Error(`${spec.name}: no combatant`);
             ops.putPermanentInPlay({
               card: play.card,
@@ -2884,6 +3298,19 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             });
             break;
           }
+          case "strikeAttachSelfWeapon":
+            // "Ranged strike: put this card on this minion; it becomes a
+            // weapon equipment" (Molotov Cocktail) — the attach IS the
+            // strike, so it waits for strike resolution rather than
+            // happening here.
+            ops.chooseCardStrike(play, {
+              ranged: e.ranged,
+              attachToSelf: {
+                statics: spec.permanent?.statics ?? {},
+                tags: spec.permanent?.tags ?? [],
+              },
+            });
+            break;
           case "strikeAttachToVictim":
             ops.chooseCardStrike(play, {
               // "…at +1 damage AND put this card on the opposing minion"
@@ -2911,7 +3338,33 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // the first mode's (§3).
             const statics: PermanentStatics = { ...(e.statics ?? {}) };
             if (e.burnToPrevent) statics.burnToPrevent = e.burnToPrevent;
-            const bearer = ops.attachInCombat(play, e.to, statics, e.tags ?? []);
+            if (e.burnToDiscountCombatCard !== undefined) {
+              statics.burnToDiscountCombatCard = e.burnToDiscountCombatCard;
+            }
+            const tags = [...(e.tags ?? [])];
+            // "Put this card ON A GUN on this minion": the engine attaches
+            // cards to MINIONS, so the gun is recorded as a link rather
+            // than modelled as a second attachment point. Nothing in the
+            // rules asks where the card physically sits — only "when using
+            // THIS gun", which the link answers (§4).
+            if (e.to === "gunOnSelf") tags.push(`gun:${play.params["gun"] ?? ""}`);
+            const bearer = ops.attachInCombat(play, e.to, statics, tags, {
+              ...(e.bloodOnCard ? { counters: e.bloodOnCard } : {}),
+              ...(e.to === "anyInCombat" && play.params["target"]
+                ? { bearerId: play.params["target"] }
+                : {}),
+            });
+            // "…and put an ammo card from your hand ON THIS CARD" — the
+            // card-onto-card zone `storeCard` already owns (Black Market
+            // Cache), face up: everybody can see what is in the magazine.
+            if (e.storeAmmoFromHand && bearer && play.params["ammo"]) {
+              ops.storeCard({
+                holder: play.card.id,
+                from: "hand",
+                cardId: play.params["ammo"],
+                faceUp: true,
+              });
+            }
             // "…and send them to torpor" (Disarm). Ordering matters the
             // way Rewilding's did: the card has to be ON them first, or
             // `onLeaveReady` fires with nothing attached to see.
@@ -3109,7 +3562,13 @@ function compileCombatCard(spec: CardSpec): CardHandler {
     },
   };
   if (spec.combatLimit) handler.combatLimit = spec.combatLimit;
-  if (spec.delayedReplace) handler.delayedReplace = spec.delayedReplace;
+  // A combat card that BECOMES a weapon (Zip Gun, Molotov Cocktail) gets
+  // the same ability block an equipment card does. Until wave 55 this
+  // block was welded inside `compileEquipment`, which is why Weighted
+  // Walking Stick needed a bespoke handler for a strike that is nothing
+  // but `spec.weapon` (docs/armed-mid-combat-design.md §1).
+  addWeaponAbilities(spec, handler);
+  // (`delayedReplace` is wired centrally in compileSpec — see there.)
   return handler;
 }
 
@@ -3127,6 +3586,10 @@ function effectsLegal(
     switch (e.kind) {
       case "modifyBleed":
         if (af.actionKind !== "bleed") return false;
+        // "…by 1 for each point of stealth" with no stealth on the table
+        // reduces the bleed by nothing, and the card costs a blood. A
+        // futile option is not a choice (docs/futile-options-design.md).
+        if (e.perActingStealth && currentStealth(ctx.state, af.actionId) <= 0) return false;
         // "+X bleed (limited)" is always an increase, whatever X turns out
         // to be, so a variable bonus is gated the same way a fixed one is.
         if (
@@ -3166,6 +3629,19 @@ function effectsLegal(
       case "wake":
         if (!minion.locked) return false;
         break;
+      case "noLockForBlocking": {
+        // "Only usable when THIS vampire successfully blocks an ally or a
+        // younger vampire." The window (`afterBlockResolution`) already
+        // says the block succeeded and that this minion is the blocker;
+        // what is left is who it blocked. An ally has no capacity to
+        // compare and always qualifies.
+        const actor = findMinion(ctx.state, af.acting);
+        if (!actor) return false;
+        if (actor.kind === "vampire" && capacityOf(actor) >= capacityOf(minion)) return false;
+        // Nothing to refund if the block did not lock it after all.
+        if (!minion.locked) return false;
+        break;
+      }
       case "unlockAndAttemptBlock": {
         // Only while blocks may still be declared (state A, no attempt in
         // progress). Whether the vampire must be locked is governed by the
@@ -3238,6 +3714,12 @@ function effectsLegal(
         if (ba.blocker === minion.id) return false;
         break;
       }
+      case "cancelBlockCombat":
+        // Handled by its own branch, in the first window of the combat a
+        // block produced. The generic modifier path would otherwise
+        // offer it in the ordinary action window, where there is no
+        // block to cancel. docs/no-combat-design.md §1
+        return false;
       case "modifyBlockerIntercept": {
         // Pushing the blocker down is only legal while there is a blocker,
         // and only while the block would otherwise succeed — the mirror of
@@ -3262,6 +3744,14 @@ function effectsLegal(
         if (e.youngerOnly) {
           const actor = findMinion(ctx.state, af.acting);
           if (!actor || capacityOf(actor) >= capacityOf(minion)) return false;
+        }
+        // "…an ALLY OR younger vampire is bleeding you" (Lost in
+        // Translation): an ally has no capacity to compare and always
+        // qualifies, so only a vampire is measured.
+        if (e.allyOrYoungerOnly) {
+          const actor = findMinion(ctx.state, af.acting);
+          if (!actor) return false;
+          if (actor.kind === "vampire" && capacityOf(actor) >= capacityOf(minion)) return false;
         }
         break;
       }
@@ -3290,6 +3780,18 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
     // As in compileActionCard: enumeration reads the spec, payment reads
     // the handler, and the two must not disagree.
     poolCost: spec.poolCost ?? 0,
+    // "Cards that change the target of a bleed" (what Narrow Minds
+    // taxes) — declared by the handler so the price reads a fact about
+    // the card rather than re-deriving its effects.
+    ...(spec.modes.some((m) => m.effects.some((e) => e.kind === "redirectBleed"))
+      ? { redirectsBleed: true }
+      : {}),
+    // "Put this card into play; it represents an ally" (Blood Brother
+    // Ambush) — a MODIFIER that becomes a minion, so it answers the same
+    // stats question an ally card does. docs/no-combat-design.md §3
+    ...(spec.ally
+      ? { allyEntry: allyEntryFor(spec), permanentTags: allyTags(spec) }
+      : {}),
 
     options(card, ctx) {
       // "After block resolution: unlock the vampire that blocked" (Cats'
@@ -3297,11 +3799,50 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       // combat that a successful block produced, to the locked blocker.
       if (ctx.window === "combat.beforeRange") {
         const cf = ctx.combat;
+        // "Cancel the block and combat" / "combat does not occur" — the
+        // ACTING side's answer, in the same window the blocker's
+        // `afterBlockResolution` cards use. Both cards print as action
+        // modifiers and both say "play before combat", which in this
+        // engine is the first window of the combat the block produced.
+        // docs/no-combat-design.md §1
+        const cbcMode = spec.modes.find((mo) =>
+          mo.effects.some((e) => e.kind === "cancelBlockCombat"),
+        );
+        if (cbcMode && cf?.fromBlock && cf.round === 1 && ctx.seat === cf.actingSeat) {
+          const eff = cbcMode.effects.find((e) => e.kind === "cancelBlockCombat");
+          const actor = findMinion(ctx.state, cf.acting);
+          const blocker = findMinion(ctx.state, cf.opposing);
+          if (!actor || !blocker) return [];
+          if (!canPlayMode(actor, cbcMode, spec)) return [];
+          if (actor.blood < costOf(spec, ctx, actor, cbcMode).blood) return [];
+          if (
+            eff?.kind === "cancelBlockCombat" &&
+            eff.requiresSameClanBlocker &&
+            (blocker.kind !== "vampire" ||
+              blocker.clan === null ||
+              blocker.clan !== actor.clan)
+          ) {
+            return [];
+          }
+          return [makeOption(spec, card, actor, cbcMode, {})];
+        }
         const abrMode = spec.modes.find((mo) => mo.usable?.includes("afterBlockResolution"));
         if (!cf || !cf.fromBlock || !abrMode || ctx.seat !== cf.opposingSeat) return [];
         const m = getMinion(ctx.state, cf.opposing);
         if (!m.locked || !canPlayMode(m, abrMode, spec)) return [];
         if (m.blood < costOf(spec, ctx, m, abrMode).blood) return [];
+        // "…blocks an ALLY OR A YOUNGER vampire" (Minor Irritation). This
+        // branch never consulted a card's own conditions, because every
+        // card that reached it was unconditional. It still does not call
+        // `effectsLegal` wholesale: the effect gates there are written for
+        // state A (an `unlockAndAttemptBlock` is illegal once a combat has
+        // started, and Cats' Guidance would fail its own window). So the
+        // condition is asked directly. docs/lock-as-currency-design.md §1
+        if (abrMode.effects.some((e) => e.kind === "noLockForBlocking")) {
+          const actor = findMinion(ctx.state, cf.acting);
+          if (!actor) return [];
+          if (actor.kind === "vampire" && capacityOf(actor) >= capacityOf(m)) return [];
+        }
         return [makeOption(spec, card, m, abrMode, {})];
       }
       // Vote-granting cards live in the polling step (p. 28).
@@ -3445,6 +3986,15 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
         if (!windowOk) return [];
       }
       if (!rulesHold(spec.usable, ctx, af)) return [];
+      // "BURN THE EDGE to …" (Leverage) — you cannot burn what you do not
+      // hold, so this is a gate on the option. Same shape as the blood
+      // gate on a cancel: in a legal-move engine "you may only play this
+      // if you can pay" means the option is not there.
+      if (spec.requiresEdge === "self" && ctx.state.edge !== ctx.seat) return [];
+      // "Only usable if a <kind of> minion is acting" — beside
+      // `rulesHold` rather than inside it, because `UsabilityRule` is a
+      // string union and this clause carries parameters.
+      if (!actingConditionHolds(spec.requiresActing, ctx.state, af)) return [];
 
       // A dual-typed card can have a MODIFIER mode (played by the acting
       // minion) and a REACTION mode (played by anyone else). Candidates
@@ -3511,7 +4061,10 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
           .minions.filter((m) =>
             spec.usable.includes("byLockedMinion")
               ? isReady(m) && m.locked
-              : canReact(m) || (anyModeLocked && isReady(m) && m.locked),
+              : canReact(m) ||
+                ((anyModeLocked || spec.usable.includes("alsoByLockedMinion")) &&
+                  isReady(m) &&
+                  m.locked),
           )
           .filter(
             (m) => !spec.usable.includes("byVampire") || m.kind === "vampire",
@@ -3608,7 +4161,11 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
               spec.usable.includes("byLockedMinion") ||
               (mode.usable?.includes("byLockedMinion") ?? false);
             if (modeLocked && !(isReady(m) && m.locked)) continue;
-            if (!modeLocked && !canReact(m)) continue;
+            // "USABLE by a locked vampire" allows both states, so the
+            // ordinary canReact gate would throw the locked half away.
+            if (!modeLocked && !canReact(m) && !spec.usable.includes("alsoByLockedMinion")) {
+              continue;
+            }
           }
           // "Only one <card> can be played at superior each turn" — per
           // seat, per turn, and only the superior mode is limited.
@@ -3621,6 +4178,28 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             continue;
           }
           if (!rulesHold(mode.usable, ctx, af)) continue;
+          // "Not usable by a vampire with more than 0 intercept"
+          // (Legwork). Per-minion, so it lives here rather than in
+          // `rulesHold`, which is asked once per card.
+          if (spec.onlyIfNoIntercept && currentIntercept(ctx.state, af.actionId, m.id) > 0) {
+            continue;
+          }
+          // "A vampire may play only one <this> each turn" (Fillip) — per
+          // VAMPIRE, so it reads the minion's own history and not the
+          // seat's. `playedSinceUnlock` is cleared by the unlock phase.
+          if (spec.oncePerTurnPerVampire && m.playedSinceUnlock.includes(spec.name)) {
+            continue;
+          }
+          // "A vampire cannot play both X and Y during the same action"
+          // (Pack Tactics / Elder Intervention) — per VAMPIRE, so the
+          // action's `played` list is filtered by minion, not just by name.
+          if (
+            spec.notWithThisAction?.some((n) =>
+              af.played.some((p) => p.minion === m.id && p.card === n),
+            )
+          ) {
+            continue;
+          }
           // "even if stealth is not yet needed" (Form of the Cobra) skips
           // the p. 26 only-when-needed gate for this mode.
           if (
@@ -3667,12 +4246,38 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
                 options.push(makeOption(spec, card, m, mode, { target: mm.id }));
               }
             }
+          } else if (mode.effects.some((e) => e.kind === "otherMinionPaysBlood")) {
+            // "Choose ANOTHER ready <sect> vampire you control; they burn
+            // N blood" (Stealth Ritus) — one option per helper who can
+            // actually pay. An unaffordable helper is not offered, which
+            // is what keeps "or this card has no effect" from being a
+            // trap the player can walk into (§3).
+            const eff = mode.effects.find(
+              (e) => e.kind === "otherMinionPaysBlood",
+            ) as Extract<EffectPrimitive, { kind: "otherMinionPaysBlood" }>;
+            for (const mm of getSeat(ctx.state, ctx.seat).minions) {
+              if (mm.id === m.id || !isReady(mm)) continue;
+              if (eff.sect && mm.sect !== eff.sect) continue;
+              if (eff.clan && mm.clan !== eff.clan) continue;
+              if (mm.blood < eff.amount) continue;
+              options.push(makeOption(spec, card, m, mode, { helper: mm.id }));
+            }
           } else if (mode.effects.some((e) => e.kind === "wakeOther")) {
             // "Choose a LOCKED wraith or zombie ally you control. The
             // chosen ally wakes." A woken ally is not unlocked (p. 44), so
             // the target must be locked for the card to do anything.
+            const who = (mode.effects.find((e) => e.kind === "wakeOther") as
+              Extract<EffectPrimitive, { kind: "wakeOther" }>).who;
             for (const mm of getSeat(ctx.state, ctx.seat).minions) {
-              if (!mm.locked || !isUndeadAlly(mm)) continue;
+              if (!mm.locked) continue;
+              if (who === "undeadAlly" && !isUndeadAlly(mm)) continue;
+              // "Choose a YOUNGER locked vampire you control" (Fillip) —
+              // younger than the vampire playing the card, and never the
+              // player itself.
+              if (who === "youngerLockedVampire") {
+                if (mm.kind !== "vampire" || mm.id === m.id) continue;
+                if (capacityOf(mm) >= capacityOf(m)) continue;
+              }
               options.push(makeOption(spec, card, m, mode, { target: mm.id }));
             }
           } else if (mode.effects.some((e) => e.kind === "noReactionsFromChosen")) {
@@ -3744,7 +4349,9 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             e.kind === "burnPoolVotedAgainst" ||
             e.kind === "burnCallerOnFail" ||
             e.kind === "payVotedForOnly" ||
-            e.kind === "autoPassNextOnPass",
+            e.kind === "autoPassNextOnPass" ||
+            e.kind === "bloodForVotes" ||
+            e.kind === "taxVotesAgainst",
         )
       ) {
         for (const e of mode.effects) {
@@ -3772,6 +4379,27 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             ops.cancelReferendum();
             if (e.unlockCaller && caller) {
               ops.emit({ type: "MinionUnlocked", minion: caller });
+            }
+          } else if (e.kind === "bloodForVotes") {
+            const rf1 = ops.state.frames.find((f) => f.kind === "referendum");
+            if (rf1?.kind === "referendum") {
+              (rf1.bloodVoteOffers ??= []).push({
+                ...(e.minCapacity !== undefined ? { minCapacity: e.minCapacity } : {}),
+                ...(e.sect !== undefined ? { sect: e.sect } : {}),
+                votesPerBlood: e.votesPerBlood,
+                ...(e.bigCapacity !== undefined ? { bigCapacity: e.bigCapacity } : {}),
+                ...(e.bigVotesPerBlood !== undefined
+                  ? { bigVotesPerBlood: e.bigVotesPerBlood }
+                  : {}),
+                ...(e.maxBloodPerMinion !== undefined
+                  ? { maxBloodPerMinion: e.maxBloodPerMinion }
+                  : {}),
+              });
+            }
+          } else if (e.kind === "taxVotesAgainst") {
+            const rf2 = ops.state.frames.find((f) => f.kind === "referendum");
+            if (rf2?.kind === "referendum") {
+              rf2.againstBloodTaxAtTally = (rf2.againstBloodTaxAtTally ?? 0) + e.blood;
             }
           } else if (e.kind === "burnPoolVotedAgainst") {
             ops.addPostTally({ kind: "burnPoolVotedAgainst", amount: e.amount });
@@ -3841,16 +4469,70 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       if (!af) throw new Error(`${spec.name} resolved outside an action`);
       for (const e of mode.effects) {
         switch (e.kind) {
+          case "cancelBlockCombat": {
+            const cf2 = ops.state.frames.find((f) => f.kind === "combat");
+            const blocker =
+              cf2?.kind === "combat" ? findMinion(ops.state, cf2.opposing) : null;
+            if (e.outcome === "ambush") {
+              // "Combat does not occur … this ally enters combat with the
+              // blocking minion." The card leaves the cancelled combat
+              // and starts its own.
+              ops.cancelCombat("actionBlocked");
+              const ally = ops.putAllyFromCardInPlay(play, "basic");
+              if (ally && blocker) ops.queueCombat(ally, blocker.id);
+              break;
+            }
+            // "…and no vampires of that clan may block the acting
+            // vampire for the remainder of the turn" — read BEFORE the
+            // cancel, while the blocker is still the one we know about.
+            if (e.barBlockerClanThisTurn && blocker?.clan && play.minion) {
+              ops.barClanFromBlocking(play.minion, blocker.clan);
+            }
+            ops.cancelCombat("continueAction");
+            break;
+          }
           case "modifyBleed":
             ops.emit({
               type: "BleedAmountModified",
               actionId: af.actionId,
               delta:
-                (e.xRange ? Number(play.params["x"] ?? "0") : e.amount) +
-                conditionalExtra(e.bonus, play, af, ops),
+                // "…by 1 for each point of stealth the acting minion has
+                // WHEN THIS CARD IS PLAYED" (Keep it Simple) — read now,
+                // once. `currentStealth` is the same fold the block
+                // machinery reads, so a modifier already played counts
+                // and one played later does not.
+                (e.perActingStealth
+                  ? -currentStealth(ops.state, af.actionId)
+                  : e.xRange
+                    ? Number(play.params["x"] ?? "0")
+                    : e.amount) + conditionalExtra(e.bonus, play, af, ops),
               source: spec.name,
               limited: e.limited,
             });
+            break;
+          case "takeEdge":
+            ops.takeEdge(play.seat);
+            break;
+          case "burnEdgeForBleed":
+            // "BURN THE EDGE to get +1 bleed that does not count against
+            // the limit." The burn first: it is the price, and the option
+            // gate has already established this seat holds it.
+            ops.burnEdge(play.seat);
+            ops.emit({
+              type: "BleedAmountModified",
+              actionId: af.actionId,
+              delta: e.amount,
+              source: spec.name,
+              // "…that DOES NOT COUNT AGAINST THE LIMIT" — so an ordinary
+              // limited modifier can still be played before or after
+              // [LSJ 20100218] [RTR 20180511-2].
+              limited: false,
+            });
+            // "You cannot gain the Edge this action. If you would get the
+            // Edge, it is burned instead" — without this, p. 21 hands the
+            // token straight back on the successful bleed this card was
+            // played to swell.
+            ops.suppressEdgeGainThisAction();
             break;
           case "modifyStealth":
             ops.emit({
@@ -3880,6 +4562,15 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             const target = play.params["target"];
             if (!target) throw new Error(`${spec.name}: no wake target`);
             ops.emit({ type: "MinionWoke", minion: target });
+            break;
+          }
+          case "noLockForBlocking": {
+            // "This vampire doesn't lock for successfully blocking." The
+            // lock has already happened — p. 27's two consequences are
+            // simultaneous and this card is played after them — so the
+            // card is an UNDO, not a suppression.
+            if (!play.minion) throw new Error(`${spec.name}: no playing minion`);
+            ops.emit({ type: "MinionUnlocked", minion: play.minion });
             break;
           }
           case "unlockAfterResolution": {
@@ -4154,8 +4845,32 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
               ...(e.kinds ? { kinds: e.kinds } : {}),
               ...(e.younger ? { younger: true } : {}),
               ...(e.sects ? { sects: e.sects } : {}),
+              // "…younger than this MODIFYING Ravnos" (§2).
+              ...(e.youngerThanPlayer && play.minion ? { youngerThan: play.minion } : {}),
             });
             break;
+          case "otherMinionPaysBlood": {
+            // "The chosen vampire burns N blood, OR THIS CARD HAS NO
+            // EFFECT" (§3). The helper is chosen at play time and rides in
+            // the option id; the option was only offered while they could
+            // afford it, so the "no effect" branch is unreachable by
+            // construction rather than by a check here — except that the
+            // helper can have left play in between, which is the total
+            // read below.
+            const helper = play.params["helper"];
+            const m = helper ? findMinion(ops.state, helper) : null;
+            if (!m || m.blood < e.amount) break;
+            ops.emit({ type: "BloodBurned", minion: m.id, amount: e.amount });
+            if (e.thenStealth) {
+              ops.emit({
+                type: "StealthModified",
+                actionId: af.actionId,
+                delta: e.thenStealth,
+                source: spec.name,
+              });
+            }
+            break;
+          }
           case "actorCombatRider": {
             const riders: {
               prevent?: number;
@@ -4195,7 +4910,7 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       }
     },
   };
-  if (spec.delayedReplace) handler.delayedReplace = spec.delayedReplace;
+  // (`delayedReplace` is wired centrally in compileSpec — see there.)
   return handler;
 }
 
@@ -4263,400 +4978,133 @@ export function attachTargets(
   return out;
 }
 
-function compileMasterCard(spec: CardSpec): CardHandler {
-  const handler: CardHandler = {
-    name: spec.name,
-    bloodCost: 0,
-    poolCost: spec.poolCost ?? 0,
-    isMasterCard: true,
-    isTrifle: spec.trifle === true,
+/**
+ * An EVENT card (docs/events-design.md). p. 37: put into play with a
+ * DISCARD phase action, no more than one per phase, and each event only
+ * once each game.
+ *
+ * Everything after that is a master card's life — it goes into play, it
+ * is controlled by whoever played it, its text is a static or a hook —
+ * so this is the master compiler with a different window and two extra
+ * gates, rather than a second way to put a card into play.
+ */
+/** Every Gehenna event in play, anywhere on the table. The keyword is a
+ *  printed tag, so the count is a tag count — and it includes the asking
+ *  card, which is why the cards that gate on it say "other".
+ *  docs/gehenna-events-design.md §1 */
+function gehennaEventsInPlay(state: GameState): PermanentInPlay[] {
+  return state.seats.flatMap((s) => s.permanents).filter((p) => p.tags.includes("gehenna"));
+}
 
+/** The ready vampires one seat controls — the region a "chooses a ready
+ *  vampire" clause reads. docs/gehenna-unlock-design.md §3 */
+function readyVampiresOf(state: GameState, seat: SeatId): MinionState[] {
+  return getSeat(state, seat).minions.filter((m) => m.kind === "vampire" && isReady(m));
+}
+
+/** "If that Methuselah controls N or more vampires of the SAME CLAN, they
+ *  burn one of THOSE vampires" — the legal targets are the members of the
+ *  clans that reached N, not every vampire they control, and a clanless
+ *  vampire is in no such group. docs/gehenna-unlock-design.md §4 */
+function sameClanBurnTargets(state: GameState, seat: SeatId, n: number): MinionState[] {
+  const vamps = getSeat(state, seat).minions.filter((m) => m.kind === "vampire");
+  const counts = new Map<string, number>();
+  for (const m of vamps) if (m.clan) counts.set(m.clan, (counts.get(m.clan) ?? 0) + 1);
+  return vamps.filter((m) => !!m.clan && (counts.get(m.clan) ?? 0) >= n);
+}
+
+/**
+ * THE FOUR RULES EVERY AMMO CARD PRINTS, in one place, so a sixth ammo
+ * card cannot ship having forgotten one:
+ *
+ *  1. it goes on a gun THIS minion just declared a strike with — "before
+ *     resolution of A GUN'S STRIKE";
+ *  2. never an opponent's weapon [LSJ 20020425], which falls out of (1)
+ *     because `m` is this seat's own combatant;
+ *  3. "no more than one ammo card can be used on a gun each combat";
+ *  4. Glaser's "not the first time the gun is used".
+ *
+ * It USED to live inside the hand enumerator, and its own comment claimed
+ * "one place" — true only while every caller came from a hand. Magazine
+ * reaches this window holding an ammo card that was never in one, so the
+ * rules had to become a question about a (gun, load) pair rather than a
+ * step in enumerating cards. docs/before-range-attachments-design.md §4
+ */
+function ammoTargetGun(
+  cf: CombatFrame,
+  side: "acting" | "opposing",
+  m: MinionState,
+  minGunUses: number | undefined,
+): CardInstanceId | null {
+  const strike = cf.strikes[side];
+  const gun = strike?.weaponCard;
+  if (!gun || strike.source !== "weapon") return null;
+  // A weapon is a gun only if the card in play says so; the strike alone
+  // cannot tell a gun from a sword.
+  const entry = m.attached.find((p) => p.card.id === gun);
+  if (!entry || !entry.tags.includes("gun")) return null;
+  // "AMMO CARDS CANNOT BE USED WITH THIS GUN" (Zip Gun) — a tag, for the
+  // same reason "gun" is one: this is the combat layer asking a card in
+  // play what it is, with no handler and no spec in hand.
+  if (entry.tags.includes("noAmmo")) return null;
+  if (cf.ammo[gun]) return null;
+  if ((cf.gunUses[gun] ?? 0) < (minGunUses ?? 1)) return null;
+  return gun;
+}
+
+function compileEventCard(spec: CardSpec): CardHandler {
+  const master = compileMasterCard(spec);
+  return {
+    ...master,
+    isMasterCard: false,
+    isEventCard: true,
     options(card, ctx) {
-      // The engine only surfaces this window while a master phase action
-      // remains; requirements beyond cost are card-specific.
-      if (ctx.window !== "turn.master") return [];
-      const seat = getSeat(ctx.state, ctx.seat);
-      // A master's cost can be raised by a card in play (Villein's own
-      // "+1 pool to play on this vampire"), so read the live cost.
-      const masterMode =
-        spec.modes[0] ?? { level: "basic" as const, discipline: null, effects: [] };
-      if (seat.pool <= costOf(spec, ctx, null, masterMode).pool) return []; // never oust yourself
-      if (spec.unique && seatControlsCopy(ctx.state, ctx.seat, spec.name)) {
-        return [];
-      }
-      // "Requires a ready Anarch" / "…a ready Sabbat vampire" — a
-      // condition on the METHUSELAH, not on any acting minion: you must
-      // control a ready vampire of that sect/clan to play the card
-      // (docs/lock-grant-locations-design.md §6).
+      if (ctx.window !== "turn.discard") return [];
+      const tf = ctx.state.frames.find((f) => f.kind === "turn");
+      if (tf?.kind !== "turn" || (tf.discardActionsLeft ?? 1) <= 0) return [];
+      // "Each event card may only be played once each game" — by NAME,
+      // and it stays barred after the card leaves play.
+      if ((ctx.state.eventsPlayed ?? []).includes(spec.name)) return [];
+      // "Requires N or more OTHER Gehenna events in play" — "other" means
+      // this card is not in play yet, so every one counted is another.
+      // A PLAY-TIME gate only [PIB 20121031]: nothing re-checks it later.
+      const needed = spec.requiresOtherGehennaEvents ?? 0;
+      // "…controlled by OTHER Methuselahs" narrows the same count to the
+      // play areas that are not the player's own. An event sits in a SEAT
+      // play area, so "controlled by" is which seat holds it.
+      const pool = spec.gehennaGateOthersOnly
+        ? ctx.state.seats
+            .filter((s) => s.id !== ctx.seat)
+            .flatMap((s) => s.permanents)
+            .filter((p) => p.tags.includes("gehenna"))
+        : gehennaEventsInPlay(ctx.state);
+      if (needed > 0 && pool.length < needed) return [];
       if (!controllerMeetsRequirements(ctx.state, ctx.seat, spec)) return [];
-      const options: LegalOption[] = [];
-      // "Lock a ready unlocked Anarch you control. That Anarch recruits or
-      // employs an ally or retainer from your hand" (Piper) — the chosen
-      // Anarch and the chosen card both ride in the option id
-      // (docs/play-from-hand-design.md §5).
-      const fromHand = masterMode.effects.find((e) => e.kind === "playFromHand");
-      if (fromHand?.kind === "playFromHand") {
-        for (const c of playFromHandChoices(ctx, fromHand, null)) {
-          options.push(makeMasterOption(spec, card, c.params, c.label));
-        }
-        return options;
-      }
-      if (spec.permanent?.attachClan) {
-        // "Put this card on a [clan] you control" (Sight Beyond Sight).
-        for (const m of seat.minions) {
-          if (m.kind === "vampire" && m.clan === spec.permanent.attachClan) {
-            options.push(makeMasterOption(spec, card, { target: m.id }, `on ${m.name}`));
-          }
-        }
-        return options;
-      }
-      if (spec.permanent?.attachAnyMinion) {
-        // "Put this card on a ready minion" — anyone's (Pentex™
-        // Subversion); the card stays controlled by its player (p. 16).
-        for (const s of ctx.state.seats) {
-          if (s.ousted) continue;
-          for (const m of s.minions) {
-            if (!isReady(m)) continue;
-            options.push(
-              makeMasterOption(spec, card, { target: m.id }, `on ${m.name} (${s.id})`),
-            );
-          }
-        }
-        return options;
-      }
-      if (spec.permanent?.attach) {
-        // The general "put this card on <a minion>" targeting
-        // (docs/granted-rush-design.md §5).
-        for (const m of attachTargets(ctx.state, ctx.seat, spec)) {
-          // Priced PER TARGET: a card in play can raise the cost of
-          // cards aimed at the minion it sits on (Secure Haven), and
-          // Villein raises its own price on a vampire already carrying
-          // one (design §2).
-          const cost = costOf(spec, ctx, null, masterMode, m.id);
-          if (seat.pool <= cost.pool) continue;
-          const move = spec.permanent.bloodToPool;
-          if (move) {
-            // "Move 2 to 5 blood from that vampire to your pool"
-            // (Villein) — the amount is chosen as the card is played, so
-            // one option per legal amount, capped by what they have (§4).
-            const most = Math.min(move.max, m.blood);
-            for (let x = move.min; x <= most; x++) {
-              options.push(
-                makeMasterOption(
-                  spec,
-                  card,
-                  { target: m.id, x: String(x) },
-                  `on ${m.name} — move ${x} blood to your pool`,
-                ),
-              );
-            }
-            continue;
-          }
-          options.push(
-            makeMasterOption(
-              spec,
-              card,
-              { target: m.id },
-              `on ${m.name} (${m.controller})`,
-            ),
-          );
-        }
-        return options;
-      }
-      if (spec.permanent) {
-        options.push(makeMasterOption(spec, card, {}, "put in play"));
-        return options;
-      }
-      const mode = spec.modes[0];
-      if (!mode) return [];
-      for (const e of mode.effects) {
-        switch (e.kind) {
-          case "lockMinion":
-            for (const s of ctx.state.seats) {
-              if (s.ousted) continue;
-              for (const m of s.minions) {
-                if (isReady(m) && !m.locked) {
-                  options.push(makeMasterOption(spec, card, { target: m.id }, `Lock ${m.name}`));
-                }
-              }
-            }
-            return options;
-          case "addBloodToReadyVampire":
-            // "Add 1 blood to a ready vampire" — vampires only (allies
-            // are not vampires, p. 11).
-            for (const s of ctx.state.seats) {
-              if (s.ousted) continue;
-              for (const m of s.minions) {
-                if (m.kind === "vampire" && isReady(m)) {
-                  options.push(
-                    makeMasterOption(spec, card, { target: m.id }, `Blood to ${m.name}`),
-                  );
-                }
-              }
-            }
-            return options;
-          case "bloodToUncontrolledKin":
-            // "Move up to N blood from a ready vampire you control to a
-            // YOUNGER vampire of the same clan in your uncontrolled
-            // region" (Grooming the Protégé). One option per (donor,
-            // recipient, amount) — the choice rides in the option id, so
-            // the card needs no ChoiceFrame (§3).
-            for (const donor of seat.minions) {
-              if (donor.kind !== "vampire" || !isReady(donor) || donor.blood < 1) continue;
-              for (const u of seat.uncontrolled) {
-                if (u.card.clan === null || u.card.clan !== donor.clan) continue;
-                // "Younger" compares the RECIPIENT to the DONOR (§3).
-                if (capacityOf(u.card) >= capacityOf(donor)) continue;
-                const most = Math.min(e.max, donor.blood);
-                for (let x = 1; x <= most; x++) {
-                  options.push(
-                    makeMasterOption(
-                      spec,
-                      card,
-                      { from: donor.id, target: u.card.id, x: String(x) },
-                      `${x} blood: ${donor.name} → ${u.card.name}`,
-                    ),
-                  );
-                }
-              }
-            }
-            return options;
-          case "addUncontrolledBlood":
-            // "Add N blood to a [titled] [clan/sect] vampire in your
-            // uncontrolled region" (Unholy Sacrament).
-            for (const u of seat.uncontrolled) {
-              if (e.clan !== undefined && u.card.clan !== e.clan) continue;
-              if (e.sect !== undefined && u.card.sect !== e.sect) continue;
-              if (e.titledOnly && u.card.title === null) continue;
-              options.push(
-                makeMasterOption(spec, card, { target: u.card.id }, `${e.amount} blood to ${u.card.name}`),
-              );
-            }
-            return options;
-          case "burnTorpidVampire":
-            for (const s of ctx.state.seats) {
-              if (s.ousted) continue;
-              for (const m of s.minions) {
-                if (m.kind === "vampire" && m.inTorpor) {
-                  options.push(makeMasterOption(spec, card, { target: m.id }, `Burn ${m.name}`));
-                }
-              }
-            }
-            return options;
-          case "burnLocation":
-            // Keyed on the printed `location` TAG, not on the card type:
-            // an equipment card can print "represents a location" (Living
-            // Manse), and it is a location for every card that names one.
-            for (const s of ctx.state.seats) {
-              if (s.ousted) continue;
-              for (const p of s.permanents) {
-                if (p.tags.includes("location")) {
-                  options.push(
-                    makeMasterOption(spec, card, { target: p.card.id }, `Burn ${p.card.name}`),
-                  );
-                }
-              }
-              for (const m of s.minions) {
-                for (const p of m.attached) {
-                  if (p.tags.includes("location")) {
-                    options.push(
-                      makeMasterOption(spec, card, { target: p.card.id }, `Burn ${p.card.name}`),
-                    );
-                  }
-                }
-              }
-            }
-            return options;
-          case "cryptToUncontrolled":
-            // "Cannot be played when the target crypt is empty"
-            // [RTR 20000501] — a gate on OPTIONS, so an empty crypt makes
-            // the card unplayable rather than a wasted master phase.
-            if (seat.crypt.length === 0) return [];
-            break;
-          case "moveOwnVampireBloodToPool":
-            for (const m of seat.minions) {
-              if (m.kind !== "vampire") continue;
-              for (let x = 1; x <= m.blood; x++) {
-                options.push(
-                  makeMasterOption(
-                    spec,
-                    card,
-                    { target: m.id, x: String(x) },
-                    `Move ${x} from ${m.name}`,
-                  ),
-                );
-              }
-            }
-            return options;
-          default:
-            break;
-        }
-      }
-      options.push(makeMasterOption(spec, card, {}, spec.name));
-      return options;
-    },
-
-    resolve(play, ops) {
-      // A master whose whole text is "that minion plays a card from your
-      // hand" (Piper) puts no card of its own in play.
-      const fromHand = (spec.modes[0]?.effects ?? []).find((e) => e.kind === "playFromHand");
-      if (fromHand?.kind === "playFromHand") {
-        applyPlayFromHand(ops, fromHand, play.seat, null, play.params);
-        return;
-      }
-      if (spec.permanent) {
-        const attaches =
-          spec.permanent.attachClan ||
-          spec.permanent.attachAnyMinion ||
-          spec.permanent.attach !== undefined;
-        const tags = [...(spec.permanent.tags ?? [])];
-        // "A vampire can have only one archetype" — the exclusivity key
-        // rides as a tag so the next copy can see it (§5).
-        if (spec.permanent.exclusiveKey) tags.push(spec.permanent.exclusiveKey);
-        if (spec.permanent.grantsTitle) tags.push("title");
-        const args: Parameters<EngineOps["putPermanentInPlay"]>[0] = {
-          card: play.card,
-          seat: play.seat,
-          // attachClan / attachAnyMinion / attach masters go on the
-          // chosen minion.
-          attachTo: attaches ? (play.params["target"] ?? null) : null,
-          statics: spec.permanent.statics,
-          tags,
-        };
-        if (spec.permanent.aura) args.aura = spec.permanent.aura;
-        if (spec.permanent.auras) args.auras = spec.permanent.auras;
-        if (spec.permanent.costSource) args.costSource = spec.permanent.costSource;
-        // "A master card in play is controlled by the Methuselah who played
-        // it, even if it is played on a card controlled by another
-        // Methuselah" (p. 16).
-        const foreign =
-          spec.permanent.attach !== undefined && spec.permanent.attach.scope !== "own";
-        if (spec.permanent.attachAnyMinion || foreign) {
-          args.controller = play.seat;
-        }
-        ops.putPermanentInPlay(args);
-        // "…to represent the unique Sabbat title of regent" (§7).
-        const target = play.params["target"];
-        if (spec.permanent.grantsTitle && target) {
-          ops.emit({ type: "TitleGranted", minion: target, title: spec.permanent.grantsTitle });
-        }
-        // "Move N blood from that vampire to your pool" (Villein) — the
-        // amount was chosen as the card was played.
-        if (spec.permanent.bloodToPool && target) {
-          const x = Number(play.params["x"] ?? "0");
-          if (x > 0) {
-            ops.emit({ type: "BloodBurned", minion: target, amount: x });
-            ops.emit({ type: "PoolGained", seat: play.seat, amount: x });
-          }
-        }
-        return;
-      }
-      const mode = spec.modes[0];
-      if (!mode) return;
-      for (const e of mode.effects) {
-        switch (e.kind) {
-          case "lockMinion": {
-            const t = play.params["target"];
-            if (!t) throw new Error(`${spec.name}: no target`);
-            ops.emit({ type: "MinionLocked", minion: t });
-            break;
-          }
-          case "addBloodToReadyVampire": {
-            const t = play.params["target"];
-            if (!t) throw new Error(`${spec.name}: no target`);
-            ops.emit({ type: "BloodGained", minion: t, amount: e.amount });
-            break;
-          }
-          case "gainPool":
-            ops.emit({ type: "PoolGained", seat: play.seat, amount: e.amount });
-            break;
-          case "burnTorpidVampire": {
-            const t = play.params["target"];
-            if (!t) throw new Error(`${spec.name}: no target`);
-            // TOTAL, not `getMinion`: the chosen vampire was fixed when
-            // the card was played and can have left play since.
-            if (findMinion(ops.state, t)) ops.burnMinion(t);
-            break;
-          }
-          case "burnLocation": {
-            const t = play.params["target"];
-            if (!t) throw new Error(`${spec.name}: no target`);
-            if (ops.controllerOfEntry(t) !== null) ops.burnPermanent(t);
-            break;
-          }
-          case "cryptToUncontrolled":
-            ops.drawFromCrypt(play.seat);
-            break;
-          case "eachOwnReadyVampireBloodToPool": {
-            // EACH ready vampire, so no target and no choice — and a
-            // vampire with no blood contributes nothing rather than
-            // blocking the card [ANK 20210717].
-            for (const m of getSeat(ops.state, play.seat).minions) {
-              if (m.kind !== "vampire" || !isReady(m)) continue;
-              const n = Math.min(e.amount, m.blood);
-              if (n <= 0) continue;
-              ops.emit({ type: "BloodBurned", minion: m.id, amount: n });
-              ops.emit({ type: "PoolGained", seat: play.seat, amount: n });
-            }
-            break;
-          }
-          case "lockAllMatching":
-            for (const s of ops.state.seats) {
-              if (s.ousted) continue;
-              for (const m of s.minions) {
-                if (e.clan !== undefined && m.clan !== e.clan) continue;
-                if (e.sect !== undefined && m.sect !== e.sect) continue;
-                if (!isReady(m) || m.locked) continue;
-                ops.emit({ type: "MinionLocked", minion: m.id });
-              }
-            }
-            break;
-          case "addUncontrolledBlood": {
-            const t = play.params["target"];
-            if (!t) throw new Error(`${spec.name}: no uncontrolled target`);
-            ops.emit({ type: "UncontrolledBloodAdded", seat: play.seat, minion: t, amount: e.amount });
-            break;
-          }
-          case "bloodToUncontrolledKin": {
-            const from = play.params["from"];
-            const to = play.params["target"];
-            const x = Number(play.params["x"] ?? "0");
-            if (!from || !to || x <= 0) throw new Error(`${spec.name}: bad groom params`);
-            // The blood MOVES: burnt from the donor, added to the
-            // uncontrolled vampire's counters — which p. 35–36 says
-            // "become its blood on taking control", so that pile is the
-            // blood, not a separate one (§3).
-            ops.emit({ type: "BloodBurned", minion: from, amount: x });
-            ops.emit({ type: "UncontrolledBloodAdded", seat: play.seat, minion: to, amount: x });
-            break;
-          }
-          case "moveOwnVampireBloodToPool": {
-            const t = play.params["target"];
-            const x = Number(play.params["x"] ?? "0");
-            if (!t || x <= 0) throw new Error(`${spec.name}: bad move params`);
-            ops.emit({ type: "BloodBurned", minion: t, amount: x });
-            ops.emit({ type: "PoolGained", seat: play.seat, amount: x });
-            break;
-          }
-          case "autoPassReferendum":
-            // "…on this turn" is Día de los Muertos' own clause, and so is
-            // the sect it names; both ride on the grant rather than being
-            // written into the engine.
-            ops.armAutoPassReferendum(play.seat, {
-              ...(e.sect ? { sect: e.sect } : {}),
-              thisTurnOnly: true,
-            });
-            break;
-          default:
-            break;
-        }
-      }
+      // The master compiler's own enumeration answers the rest, but it
+      // only speaks in the master window — so ask it as if we were there.
+      return master.options?.(card, { ...ctx, window: "turn.master" }) ?? [];
     },
   };
-  // Clan/sect-locked location: "Lock to give a [clan/sect] minion you
-  // control +N stealth/intercept" (docs/clan-sect-design.md §4).
-  const lg = spec.permanent?.lockGrant;
-  if (lg) {
+}
+
+/**
+ * "Lock to give a [clan/sect] minion you control +N stealth/intercept"
+ * and the rest of the `permanent.lockGrant` family (docs/clan-sect-design.md
+ * §4). Shared by the master compiler (locations) and the ally compiler
+ * (Rom Gypsy, wave 46): it lived inside `compileMasterCard` alone, so an
+ * ally printing the same sentence compiled to nothing — the
+ * `delayedReplace` shape (docs/table-rule-events-design.md) again.
+ */
+function addLockGrant(spec: CardSpec, handler: CardHandler): void {
+  const lg0 = spec.permanent?.lockGrant;
+  if (!lg0) return;
+  // "…to give a Follower of Set you control +1 stealth, +1 intercept, OR
+  // +1 bleed" (Saatet-ta): ONE lock, three answers. The option list is the
+  // choice — `useAbility` already dispatches on `params.grant`, so only
+  // the enumerator needs to run once per grant.
+  // docs/mummies-design.md §2
+  const grantList = lg0.grants ?? [lg0.grant];
+  const lg = lg0;
     const matches = (m: MinionState): boolean =>
       (lg.clan === undefined || m.clan === lg.clan) &&
       (lg.sect === undefined || m.sect === lg.sect) &&
@@ -4682,7 +5130,12 @@ function compileMasterCard(spec: CardSpec): CardHandler {
       );
       return lg.amount + (inPlay ? 0 : extra.amount);
     };
-    handler.abilityOptions = (entry, owner, ctx) => {
+    const optionsForGrant = (
+      lg: NonNullable<NonNullable<CardSpec["permanent"]>["lockGrant"]>,
+      entry: PermanentInPlay,
+      owner: { seat: SeatId; minion: MinionId | null },
+      ctx: PlayContext,
+    ): LegalOption[] => {
       // Club Illusion is a standing permission, not a lock: being locked
       // (it never is) does not gate it (§2).
       if (entry.locked && !lg.noLock) return [];
@@ -4883,6 +5336,10 @@ function compileMasterCard(spec: CardSpec): CardHandler {
         },
       ];
     };
+    handler.abilityOptions = (entry, owner, ctx) =>
+      grantList.flatMap((g) =>
+        optionsForGrant(g === lg0.grant ? lg0 : { ...lg0, grant: g }, entry, owner, ctx),
+      );
     handler.useAbility = (entry, owner, choice, ops) => {
       if (choice.params["grant"] === "votes") {
         // Ferraille pays in pool and never locks; everything else locks.
@@ -4979,7 +5436,545 @@ function compileMasterCard(spec: CardSpec): CardHandler {
         }
       }
     };
+}
+
+function compileMasterCard(spec: CardSpec): CardHandler {
+  const handler: CardHandler = {
+    name: spec.name,
+    bloodCost: 0,
+    poolCost: spec.poolCost ?? 0,
+    isMasterCard: true,
+    isTrifle: spec.trifle === true,
+
+    options(card, ctx) {
+      // The engine only surfaces this window while a master phase action
+      // remains; requirements beyond cost are card-specific.
+      if (ctx.window !== "turn.master") return [];
+      const seat = getSeat(ctx.state, ctx.seat);
+      // A master's cost can be raised by a card in play (Villein's own
+      // "+1 pool to play on this vampire"), so read the live cost.
+      const masterMode =
+        spec.modes[0] ?? { level: "basic" as const, discipline: null, effects: [] };
+      if (seat.pool <= costOf(spec, ctx, null, masterMode).pool) return []; // never oust yourself
+      if (spec.unique && seatControlsCopy(ctx.state, ctx.seat, spec.name)) {
+        return [];
+      }
+      // "Requires a ready Anarch" / "…a ready Sabbat vampire" — a
+      // condition on the METHUSELAH, not on any acting minion: you must
+      // control a ready vampire of that sect/clan to play the card
+      // (docs/lock-grant-locations-design.md §6).
+      if (!controllerMeetsRequirements(ctx.state, ctx.seat, spec)) return [];
+      // "Only one Instability may be played each turn" — by NAME and
+      // across the table, so the record is on the turn frame.
+      if (spec.oncePerTurnByName) {
+        const tf = ctx.state.frames.find((f) => f.kind === "turn");
+        if (tf?.kind === "turn" && (tf.oncePerTurnCards ?? []).includes(spec.name)) return [];
+      }
+      // "Only usable if your prey controls the Edge or the Edge is
+      // UNCONTROLLED" (Instability, §4) — a gate on where the token sits.
+      if (spec.requiresEdge === "preyOrUncontrolled") {
+        const e = ctx.state.edge;
+        if (e !== null && e !== preyOf(ctx.state, ctx.seat)) return [];
+      } else if (spec.requiresEdge === "self" && ctx.state.edge !== ctx.seat) {
+        return [];
+      }
+      const options: LegalOption[] = [];
+      // "Lock a ready unlocked Anarch you control. That Anarch recruits or
+      // employs an ally or retainer from your hand" (Piper) — the chosen
+      // Anarch and the chosen card both ride in the option id
+      // (docs/play-from-hand-design.md §5).
+      const fromHand = masterMode.effects.find((e) => e.kind === "playFromHand");
+      if (fromHand?.kind === "playFromHand") {
+        for (const c of playFromHandChoices(ctx, fromHand, null)) {
+          options.push(makeMasterOption(spec, card, c.params, c.label));
+        }
+        return options;
+      }
+      if (spec.permanent?.attachClan) {
+        // "Put this card on a [clan] you control" (Sight Beyond Sight).
+        for (const m of seat.minions) {
+          if (m.kind === "vampire" && m.clan === spec.permanent.attachClan) {
+            options.push(makeMasterOption(spec, card, { target: m.id }, `on ${m.name}`));
+          }
+        }
+        return options;
+      }
+      if (spec.permanent?.attachAnyMinion) {
+        // "Put this card on a ready minion" — anyone's (Pentex™
+        // Subversion); the card stays controlled by its player (p. 16).
+        for (const s of ctx.state.seats) {
+          if (s.ousted) continue;
+          for (const m of s.minions) {
+            if (!isReady(m)) continue;
+            options.push(
+              makeMasterOption(spec, card, { target: m.id }, `on ${m.name} (${s.id})`),
+            );
+          }
+        }
+        return options;
+      }
+      if (spec.permanent?.attach) {
+        // The general "put this card on <a minion>" targeting
+        // (docs/granted-rush-design.md §5).
+        for (const m of attachTargets(ctx.state, ctx.seat, spec)) {
+          // Priced PER TARGET: a card in play can raise the cost of
+          // cards aimed at the minion it sits on (Secure Haven), and
+          // Villein raises its own price on a vampire already carrying
+          // one (design §2).
+          const cost = costOf(spec, ctx, null, masterMode, m.id);
+          if (seat.pool <= cost.pool) continue;
+          const move = spec.permanent.bloodToPool;
+          if (move) {
+            // "Move 2 to 5 blood from that vampire to your pool"
+            // (Villein) — the amount is chosen as the card is played, so
+            // one option per legal amount, capped by what they have (§4).
+            const most = Math.min(move.max, m.blood);
+            for (let x = move.min; x <= most; x++) {
+              options.push(
+                makeMasterOption(
+                  spec,
+                  card,
+                  { target: m.id, x: String(x) },
+                  `on ${m.name} — move ${x} blood to your pool`,
+                ),
+              );
+            }
+            continue;
+          }
+          options.push(
+            makeMasterOption(
+              spec,
+              card,
+              { target: m.id },
+              `on ${m.name} (${m.controller})`,
+            ),
+          );
+        }
+        return options;
+      }
+      if (spec.permanent) {
+        options.push(makeMasterOption(spec, card, {}, "put in play"));
+        return options;
+      }
+      const mode = spec.modes[0];
+      if (!mode) return [];
+      for (const e of mode.effects) {
+        switch (e.kind) {
+          case "lockMinion":
+            for (const s of ctx.state.seats) {
+              if (s.ousted) continue;
+              for (const m of s.minions) {
+                if (isReady(m) && !m.locked) {
+                  options.push(makeMasterOption(spec, card, { target: m.id }, `Lock ${m.name}`));
+                }
+              }
+            }
+            return options;
+          case "addBloodToReadyVampire":
+            // "Add 1 blood to a ready vampire" — vampires only (allies
+            // are not vampires, p. 11).
+            for (const s of ctx.state.seats) {
+              if (s.ousted) continue;
+              for (const m of s.minions) {
+                if (m.kind === "vampire" && isReady(m)) {
+                  options.push(
+                    makeMasterOption(spec, card, { target: m.id }, `Blood to ${m.name}`),
+                  );
+                }
+              }
+            }
+            return options;
+          case "bloodToUncontrolledKin":
+            // "Move up to N blood from a ready vampire you control to a
+            // YOUNGER vampire of the same clan in your uncontrolled
+            // region" (Grooming the Protégé). One option per (donor,
+            // recipient, amount) — the choice rides in the option id, so
+            // the card needs no ChoiceFrame (§3).
+            for (const donor of seat.minions) {
+              if (donor.kind !== "vampire" || !isReady(donor) || donor.blood < 1) continue;
+              for (const u of seat.uncontrolled) {
+                if (u.card.clan === null || u.card.clan !== donor.clan) continue;
+                // "Younger" compares the RECIPIENT to the DONOR (§3).
+                if (capacityOf(u.card) >= capacityOf(donor)) continue;
+                const most = Math.min(e.max, donor.blood);
+                for (let x = 1; x <= most; x++) {
+                  options.push(
+                    makeMasterOption(
+                      spec,
+                      card,
+                      { from: donor.id, target: u.card.id, x: String(x) },
+                      `${x} blood: ${donor.name} → ${u.card.name}`,
+                    ),
+                  );
+                }
+              }
+            }
+            return options;
+          case "addUncontrolledBlood":
+            // "Add N blood to a [titled] [clan/sect] vampire in your
+            // uncontrolled region" (Unholy Sacrament).
+            for (const u of seat.uncontrolled) {
+              if (e.clan !== undefined && u.card.clan !== e.clan) continue;
+              if (e.sect !== undefined && u.card.sect !== e.sect) continue;
+              if (e.titledOnly && u.card.title === null) continue;
+              options.push(
+                makeMasterOption(spec, card, { target: u.card.id }, `${e.amount} blood to ${u.card.name}`),
+              );
+            }
+            return options;
+          case "burnTorpidVampire":
+            for (const s of ctx.state.seats) {
+              if (s.ousted) continue;
+              for (const m of s.minions) {
+                if (m.kind === "vampire" && m.inTorpor) {
+                  options.push(makeMasterOption(spec, card, { target: m.id }, `Burn ${m.name}`));
+                }
+              }
+            }
+            return options;
+          case "redeemVampireFromAsh":
+            // "Choose A VAMPIRE in your ash heap" — `crypt` is the flag
+            // that tells a burnt vampire from a burnt library card, and
+            // every filter that does not ask the registry needs it.
+            for (const c of getSeat(ctx.state, ctx.seat).ashHeap ?? []) {
+              if (!c.crypt) continue;
+              const x = Math.floor((c.capacity ?? 0) / e.divisor);
+              options.push(
+                makeMasterOption(spec, card, { vamp: c.id }, `${c.name} — gain ${x} pool`),
+              );
+            }
+            return options;
+          case "burnLocation":
+            // Keyed on the printed `location` TAG, not on the card type:
+            // an equipment card can print "represents a location" (Living
+            // Manse), and it is a location for every card that names one.
+            for (const s of ctx.state.seats) {
+              if (s.ousted) continue;
+              for (const p of s.permanents) {
+                if (p.tags.includes("location")) {
+                  options.push(
+                    makeMasterOption(spec, card, { target: p.card.id }, `Burn ${p.card.name}`),
+                  );
+                }
+              }
+              for (const m of s.minions) {
+                for (const p of m.attached) {
+                  if (p.tags.includes("location")) {
+                    options.push(
+                      makeMasterOption(spec, card, { target: p.card.id }, `Burn ${p.card.name}`),
+                    );
+                  }
+                }
+              }
+            }
+            return options;
+          case "cryptToUncontrolled":
+            // "Cannot be played when the target crypt is empty"
+            // [RTR 20000501] — a gate on OPTIONS, so an empty crypt makes
+            // the card unplayable rather than a wasted master phase.
+            if (seat.crypt.length === 0) return [];
+            break;
+          case "moveOwnVampireBloodToPool":
+            for (const m of seat.minions) {
+              if (m.kind !== "vampire") continue;
+              for (let x = 1; x <= m.blood; x++) {
+                options.push(
+                  makeMasterOption(
+                    spec,
+                    card,
+                    { target: m.id, x: String(x) },
+                    `Move ${x} from ${m.name}`,
+                  ),
+                );
+              }
+            }
+            return options;
+          default:
+            break;
+        }
+      }
+      options.push(makeMasterOption(spec, card, {}, spec.name));
+      return options;
+    },
+
+    resolve(play, ops) {
+      // "Only one Instability may be played each turn" — recorded FIRST,
+      // before any early return below can skip it, and at resolution
+      // rather than at play so a cancelled card does not spend the turn's
+      // one use.
+      if (spec.oncePerTurnByName) {
+        const tf = ops.state.frames.find((f) => f.kind === "turn");
+        if (tf?.kind === "turn") (tf.oncePerTurnCards ??= []).push(spec.name);
+      }
+      // A master whose whole text is "that minion plays a card from your
+      // hand" (Piper) puts no card of its own in play.
+      const fromHand = (spec.modes[0]?.effects ?? []).find((e) => e.kind === "playFromHand");
+      if (fromHand?.kind === "playFromHand") {
+        applyPlayFromHand(ops, fromHand, play.seat, null, play.params);
+        return;
+      }
+      if (spec.permanent) {
+        // "Gain 3 pool … IN EITHER CASE, put this card in play" (King's
+        // Rising). A master that both pays out and stays on the table had
+        // no way to do the first: this branch put the card in play and
+        // returned, so a one-shot effect beside a `permanent` block was
+        // silently dropped. Only the pool payouts are run here — they are
+        // the clauses that read the board BEFORE the card arrives, and
+        // every other effect in the vocabulary belongs to a master that
+        // does not stay. docs/transfer-currency-design.md §3
+        for (const e of spec.modes[0]?.effects ?? []) {
+          if (e.kind === "gainPool") {
+            ops.emit({ type: "PoolGained", seat: play.seat, amount: e.amount });
+          } else if (e.kind === "gainPoolThreshold") {
+            const pool = getSeat(ops.state, play.seat).pool;
+            ops.emit({
+              type: "PoolGained",
+              seat: play.seat,
+              amount: pool <= e.atOrBelow ? e.ifAtOrBelow : e.otherwise,
+            });
+          }
+        }
+        const attaches =
+          spec.permanent.attachClan ||
+          spec.permanent.attachAnyMinion ||
+          spec.permanent.attach !== undefined;
+        const tags = [...(spec.permanent.tags ?? [])];
+        // "A vampire can have only one archetype" — the exclusivity key
+        // rides as a tag so the next copy can see it (§5).
+        if (spec.permanent.exclusiveKey) tags.push(spec.permanent.exclusiveKey);
+        if (spec.permanent.grantsTitle) tags.push("title");
+        const args: Parameters<EngineOps["putPermanentInPlay"]>[0] = {
+          card: play.card,
+          seat: play.seat,
+          // attachClan / attachAnyMinion / attach masters go on the
+          // chosen minion.
+          attachTo: attaches ? (play.params["target"] ?? null) : null,
+          statics: spec.permanent.statics,
+          tags,
+        };
+        // "Put 5 blood on this card when it is played" / "put X blood on
+        // this card, where X is the capacity of a ready Sabbat vampire you
+        // control" (docs/blood-banking-locations-design.md §3). The
+        // largest eligible vampire, not a choice: more counters is
+        // strictly better on both cards that print this.
+        const start = spec.permanent.bloodStore?.start;
+        if (typeof start === "number") args.counters = start;
+        else if (start) {
+          const w = start.capacityOfReady;
+          const sizes = getSeat(ops.state, play.seat)
+            .minions.filter(
+              (m) =>
+                m.kind === "vampire" &&
+                isReady(m) &&
+                (w.sect === undefined || m.sect === w.sect) &&
+                (w.clan === undefined || m.clan === w.clan),
+            )
+            .map((m) => capacityOf(m));
+          args.counters = sizes.length > 0 ? Math.max(...sizes) : 0;
+        }
+        if (spec.permanent.aura) args.aura = spec.permanent.aura;
+        if (spec.permanent.auras) args.auras = spec.permanent.auras;
+        if (spec.permanent.costSource) args.costSource = spec.permanent.costSource;
+        // "A master card in play is controlled by the Methuselah who played
+        // it, even if it is played on a card controlled by another
+        // Methuselah" (p. 16).
+        const foreign =
+          spec.permanent.attach !== undefined && spec.permanent.attach.scope !== "own";
+        if (spec.permanent.attachAnyMinion || foreign) {
+          args.controller = play.seat;
+        }
+        ops.putPermanentInPlay(args);
+        // "…to represent the unique Sabbat title of regent" (§7).
+        const target = play.params["target"];
+        if (spec.permanent.grantsTitle && target) {
+          ops.emit({ type: "TitleGranted", minion: target, title: spec.permanent.grantsTitle });
+        }
+        // "Move N blood from that vampire to your pool" (Villein) — the
+        // amount was chosen as the card was played.
+        if (spec.permanent.bloodToPool && target) {
+          const x = Number(play.params["x"] ?? "0");
+          if (x > 0) {
+            ops.emit({ type: "BloodBurned", minion: target, amount: x });
+            ops.emit({ type: "PoolGained", seat: play.seat, amount: x });
+          }
+        }
+        return;
+      }
+      const mode = spec.modes[0];
+      if (!mode) return;
+      for (const e of mode.effects) {
+        switch (e.kind) {
+          case "lockMinion": {
+            const t = play.params["target"];
+            if (!t) throw new Error(`${spec.name}: no target`);
+            ops.emit({ type: "MinionLocked", minion: t });
+            break;
+          }
+          case "addBloodToReadyVampire": {
+            const t = play.params["target"];
+            if (!t) throw new Error(`${spec.name}: no target`);
+            ops.emit({ type: "BloodGained", minion: t, amount: e.amount });
+            break;
+          }
+          case "gainPool":
+            ops.emit({ type: "PoolGained", seat: play.seat, amount: e.amount });
+            break;
+          case "gainPoolThreshold": {
+            // "If you have 5 OR FEWER pool, gain 3 pool. Otherwise, gain 1."
+            // The pool is read here, at resolution, and nothing else in the
+            // card's resolution has touched it yet.
+            const pool = getSeat(ops.state, play.seat).pool;
+            ops.emit({
+              type: "PoolGained",
+              seat: play.seat,
+              amount: pool <= e.atOrBelow ? e.ifAtOrBelow : e.otherwise,
+            });
+            break;
+          }
+          case "preyMayTakeEdge":
+            // "YOUR PREY MAY TAKE THE EDGE IF IT IS UNCONTROLLED"
+            // (Instability, §4). The play gate already established that
+            // the Edge is uncontrolled OR the prey's; this clause exists
+            // only for the first case, and does nothing in the second
+            // because the prey already has it. "MAY" is the prey's word,
+            // so it is a question put to THEM — the only thing in the
+            // pool where a master asks the seat it is played against.
+            if (ops.state.edge !== null) break;
+            ops.raiseChoice({
+              seat: preyOf(ops.state, play.seat),
+              cardName: spec.name,
+              cardId: play.card.id,
+              key: "preyEdge",
+              // Declining is plain `pass` (the option-id conventions), so
+              // the frame needs exactly one answer.
+              optional: true,
+            });
+            break;
+          case "redeemVampireFromAsh": {
+            // "Choose a vampire in your ash heap" — chosen at play time, so
+            // it rides in the option id like every other target (p. 25).
+            const id = play.params["vamp"];
+            const seat = getSeat(ops.state, play.seat);
+            const card = (seat.ashHeap ?? []).find((c) => c.id === id && c.crypt);
+            // READ, never splice: the state moves by events only, and the
+            // fuzz proves that by replaying the log.
+            if (!card) break;
+            // "…where X is half of the capacity of that vampire (round
+            // down)". The capacity is on the ash entry, recorded as the
+            // vampire burned: reading it back off the registry by name
+            // would answer nothing for a token vampire (§2).
+            const x = Math.floor((card.capacity ?? 0) / e.divisor);
+            if (x > 0) ops.emit({ type: "PoolGained", seat: play.seat, amount: x });
+            ops.emit({
+              type: "CardRemovedFromGame",
+              seat: play.seat,
+              cardId: card.id,
+              name: card.name,
+            });
+            break;
+          }
+          case "burnTorpidVampire": {
+            const t = play.params["target"];
+            if (!t) throw new Error(`${spec.name}: no target`);
+            // TOTAL, not `getMinion`: the chosen vampire was fixed when
+            // the card was played and can have left play since.
+            if (findMinion(ops.state, t)) ops.burnMinion(t);
+            break;
+          }
+          case "burnLocation": {
+            const t = play.params["target"];
+            if (!t) throw new Error(`${spec.name}: no target`);
+            if (ops.controllerOfEntry(t) !== null) ops.burnPermanent(t);
+            break;
+          }
+          case "cryptToUncontrolled":
+            ops.drawFromCrypt(play.seat);
+            break;
+          case "eachOwnReadyVampireBloodToPool": {
+            // EACH ready vampire, so no target and no choice — and a
+            // vampire with no blood contributes nothing rather than
+            // blocking the card [ANK 20210717].
+            for (const m of getSeat(ops.state, play.seat).minions) {
+              if (m.kind !== "vampire" || !isReady(m)) continue;
+              const n = Math.min(e.amount, m.blood);
+              if (n <= 0) continue;
+              ops.emit({ type: "BloodBurned", minion: m.id, amount: n });
+              ops.emit({ type: "PoolGained", seat: play.seat, amount: n });
+            }
+            break;
+          }
+          case "lockAllMatching":
+            for (const s of ops.state.seats) {
+              if (s.ousted) continue;
+              for (const m of s.minions) {
+                if (e.clan !== undefined && m.clan !== e.clan) continue;
+                if (e.sect !== undefined && m.sect !== e.sect) continue;
+                if (!isReady(m) || m.locked) continue;
+                ops.emit({ type: "MinionLocked", minion: m.id });
+              }
+            }
+            break;
+          case "addUncontrolledBlood": {
+            const t = play.params["target"];
+            if (!t) throw new Error(`${spec.name}: no uncontrolled target`);
+            ops.emit({ type: "UncontrolledBloodAdded", seat: play.seat, minion: t, amount: e.amount });
+            break;
+          }
+          case "bloodToUncontrolledKin": {
+            const from = play.params["from"];
+            const to = play.params["target"];
+            const x = Number(play.params["x"] ?? "0");
+            if (!from || !to || x <= 0) throw new Error(`${spec.name}: bad groom params`);
+            // The blood MOVES: burnt from the donor, added to the
+            // uncontrolled vampire's counters — which p. 35–36 says
+            // "become its blood on taking control", so that pile is the
+            // blood, not a separate one (§3).
+            ops.emit({ type: "BloodBurned", minion: from, amount: x });
+            ops.emit({ type: "UncontrolledBloodAdded", seat: play.seat, minion: to, amount: x });
+            break;
+          }
+          case "moveOwnVampireBloodToPool": {
+            const t = play.params["target"];
+            const x = Number(play.params["x"] ?? "0");
+            if (!t || x <= 0) throw new Error(`${spec.name}: bad move params`);
+            ops.emit({ type: "BloodBurned", minion: t, amount: x });
+            ops.emit({ type: "PoolGained", seat: play.seat, amount: x });
+            break;
+          }
+          case "autoPassReferendum":
+            // "…on this turn" is Día de los Muertos' own clause, and so is
+            // the sect it names; both ride on the grant rather than being
+            // written into the engine.
+            ops.armAutoPassReferendum(play.seat, {
+              ...(e.sect ? { sect: e.sect } : {}),
+              thisTurnOnly: true,
+            });
+            break;
+          default:
+            break;
+        }
+      }
+    },
+  };
+  // "If a vampire successfully hunts, move N blood from that vampire to
+  // this card; burn it at M" (Hunger Moon). ANY vampire's hunt — the hook
+  // fires for every card in play, and this one deliberately does not ask
+  // whose minion it was. docs/events-design.md §2
+  const ht = spec.permanent?.huntTax;
+  if (ht) {
+    handler.onHuntSuccess = (entry, _owner, info, ops) => {
+      const hunter = findMinion(ops.state, info.actingMinion);
+      // TOTAL READ: the hunter can be gone by "after resolution".
+      if (!hunter || hunter.kind !== "vampire") return;
+      const taken = Math.min(ht.blood, hunter.blood);
+      if (taken <= 0) return;
+      ops.emit({ type: "BloodBurned", minion: hunter.id, amount: taken });
+      ops.addCounters(entry.card.id, taken);
+      if ((entry.counters ?? 0) >= ht.burnAt) ops.burnPermanent(entry.card.id);
+    };
   }
+
+  addLockGrant(spec, handler);
 
   // Hunting ground: "during your unlock phase, a ready vampire you control
   // can gain N blood; a vampire uses only one hunting ground per turn"
@@ -5292,10 +6287,19 @@ export function permanentRushGrant(
   const g = spec.permanent?.rushGrant;
   const matches = (
     m: MinionState,
-    f: { kind?: "vampire" | "ally"; clan?: string; notClan?: string; sect?: Sect },
+    f: {
+      kind?: "vampire" | "ally";
+      clan?: string | string[];
+      notClan?: string;
+      sect?: Sect;
+    },
   ): boolean => {
     if (f.kind !== undefined && m.kind !== f.kind) return false;
-    if (f.clan !== undefined && m.clan !== f.clan) return false;
+    // A list is the UNION reading ("Tremere or Tremere antitribu").
+    if (f.clan !== undefined) {
+      const want = Array.isArray(f.clan) ? f.clan : [f.clan];
+      if (!want.some((c) => m.clan === c)) return false;
+    }
     // "A non-Salubri vampire": an untagged minion is not of that clan.
     if (f.notClan !== undefined && m.clan === f.notClan) return false;
     if (f.sect !== undefined && m.sect !== f.sect) return false;
@@ -5417,6 +6421,22 @@ export function permanentRushGrant(
   };
 }
 
+/**
+ * "Burn this card if it has no blood."
+ *
+ * ONE PLACE, called after every change a `bloodStore` makes to its own
+ * counters — the controller's draw-down, the mandatory unlock drip and
+ * the raid all empty the card by different doors, and the rule is the
+ * same at each. Never called at put-in-play, which is what lets
+ * Powerbase: New York enter empty and survive
+ * (docs/blood-banking-locations-design.md §3).
+ */
+function settleBloodStore(spec: CardSpec, entry: PermanentInPlay, ops: EngineOps): void {
+  if (!spec.permanent?.bloodStore?.burnWhenEmpty) return;
+  if ((entry.counters ?? 0) > 0) return;
+  ops.burnPermanent(entry.card.id);
+}
+
 export function vulnerableGrant(
   spec: CardSpec,
 ): Pick<CardHandler, "actionOptions" | "useActionOption" | "resolveGrantedAction"> {
@@ -5426,17 +6446,30 @@ export function vulnerableGrant(
     for (const r of v?.stealthFor ?? []) {
       if (r.clan !== undefined && m.clan !== r.clan) continue;
       if (r.sect !== undefined && m.sect !== r.sect) continue;
+      // "TITLED vampires get +1 stealth on that action" (Powerbase:
+      // Barranquilla) — printed or card-granted, the same `m.title` the
+      // `who.titled` filter four lines down already reads.
+      if (r.titled && m.title == null) continue;
       extra += r.delta;
     }
     return extra;
   };
   const political = v?.via === "politicalAction";
-  const eligible = (m: MinionState, ownerSeat: SeatId, bearer: MinionId | null): boolean => {
+  const eligible = (
+    state: GameState,
+    m: MinionState,
+    ownerSeat: SeatId,
+    bearer: MinionId | null,
+  ): boolean => {
     const who = v?.who;
     if (!canAct(m)) return false;
     // "Vampires can call a referendum…" — only vampires call political
     // actions (p. 10), one per vampire per turn (p. 24).
     if (political && (m.kind !== "vampire" || m.calledPoliticalThisTurn)) return false;
+    // "Primogen cannot attempt political actions" (Beyond Reproach) —
+    // asked at all THREE political enumerators, because the last time a
+    // gate went into one of them the siblings went without.
+    if (political && auraBlocksPolitical(state, m)) return false;
     if (!who) return true;
     if (who.excludeBearer && m.id === bearer) return false;
     if (who.bearerOnly && m.id !== bearer) return false;
@@ -5447,6 +6480,9 @@ export function vulnerableGrant(
     if (who.notClan !== undefined && m.clan === who.notClan) return false;
     if (who.sect !== undefined && m.sect !== who.sect) return false;
     if (who.minCapacity !== undefined && capacityOf(m) < who.minCapacity) return false;
+    // "TITLED vampires can call a referendum…" — printed or granted, both
+    // of which land on `m.title`.
+    if (who.titled && m.title == null) return false;
     if (who.othersOnly && m.controller === ownerSeat) return false;
     // "CHANGELING allies" — a printed sub-type, carried by the tags of the
     // minion's own card entry. No V5 ally has this tag, so the clause
@@ -5470,10 +6506,12 @@ export function vulnerableGrant(
             ? "shuffle"
             : v.outcome === "burnCounters"
               ? "strip"
-              : "burn";
+              : v.outcome === "takeCounters"
+                ? "raid"
+                : "burn";
       const options: LegalOption[] = [];
       for (const m of acting.minions) {
-        if (!eligible(m, owner.seat, owner.minion)) continue;
+        if (!eligible(ctx.state, m, owner.seat, owner.minion)) continue;
         if (v.cost?.blood !== undefined && m.blood < v.cost.blood) continue;
         if (v.cost?.pool !== undefined && acting.pool < v.cost.pool) continue;
         if (
@@ -5524,7 +6562,9 @@ export function vulnerableGrant(
                     ? "shuffleCard"
                     : v.outcome === "burnCounters"
                       ? "stripCounters"
-                      : "burnCard",
+                      : v.outcome === "takeCounters"
+                        ? "takeCounters"
+                        : "burnCard",
             },
             targetPermanent: entry.card.id,
           };
@@ -5552,6 +6592,23 @@ export function vulnerableGrant(
         // card survives. Legal against an empty card, and then it does
         // nothing: the printed clause names no precondition (§5).
         ops.removeCounters(entry.card.id, entry.counters ?? 0);
+        return;
+      }
+      if (af.grantedEffect?.key === "takeCounters") {
+        // "Move ALL the blood on this card to his or her controller's
+        // pool" (the Powerbase raid) — the counters go somewhere, which is
+        // the whole difference from `stripCounters` beside it. Legal
+        // against an empty card and then worth nothing, exactly as the
+        // printed clause names no precondition.
+        const taken = entry.counters ?? 0;
+        if (taken > 0) {
+          ops.removeCounters(entry.card.id, taken);
+          ops.emit({ type: "PoolGained", seat: af.actingSeat, amount: taken });
+        }
+        // "Burn this card if it has no blood" — the store's own rule, run
+        // through the one helper, because a raid empties the card by the
+        // same door its controller does (design §3).
+        settleBloodStore(spec, entry, ops);
         return;
       }
       if (af.grantedEffect?.key !== "burnCard") return;
@@ -5609,6 +6666,7 @@ export function politicalGrant(
         // Only vampires call political actions (p. 10), one per vampire
         // per turn (p. 24).
         if (m.kind !== "vampire" || !canAct(m) || m.calledPoliticalThisTurn) continue;
+        if (auraBlocksPolitical(ctx.state, m)) continue;
         if (g.who?.clan !== undefined && m.clan !== g.who.clan) continue;
         if (g.who?.sect !== undefined && m.sect !== g.who.sect) continue;
         if (g.who?.minCapacity !== undefined && capacityOf(m) < g.who.minCapacity) continue;
@@ -5671,7 +6729,6 @@ function makeMasterOption(
 /** Equipment: played as an equip action (undirected, +1 stealth, p. 20);
  *  attaches to the acting minion on success, burned if blocked. */
 function compileEquipment(spec: CardSpec): CardHandler {
-  const w = spec.weapon;
   const handler: CardHandler = {
     name: spec.name,
     bloodCost: spec.bloodCost,
@@ -5744,10 +6801,45 @@ function compileEquipment(spec: CardSpec): CardHandler {
       });
     },
   };
-  // Weapon strikes (docs/weapons-design.md) — mirrors the .44 Magnum
-  // bespoke handler, data-driven from spec.weapon.
+  addWeaponAbilities(spec, handler);
+  return handler;
+}
+
+/**
+ * What a WEAPON lets its bearer do (docs/weapons-design.md) — the strike,
+ * its maneuver, the sniper's long range, the keyword cancel and the
+ * unlock-on-kill rider, data-driven from `spec.weapon`.
+ *
+ * This lived INSIDE `compileEquipment` until wave 55, which is the only
+ * reason "a combat card that becomes a weapon" needed a bespoke handler
+ * for its strike (Weighted Walking Stick's doc comment says so in as many
+ * words). Nothing about a weapon's abilities is particular to the
+ * equipment card type: what a weapon does is a question about the ENTRY
+ * IN PLAY, and the card that put it there is not part of it.
+ * docs/armed-mid-combat-design.md §1
+ *
+ * It COMPOSES rather than assigns, the way `addEquipmentAbilities` does —
+ * a combat card that becomes a weapon already has ability options of its
+ * own, and assigning over `abilityOptions` is how the `choiceByKey`
+ * family of bugs starts.
+ */
+function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
+  const w = spec.weapon;
   if (w) {
-    handler.abilityOptions = (entry, owner, ctx) => {
+    // What this weapon would inflict with a regular strike against a
+    // generic opponent [RTR 19980623] — the only thing anyone asks a
+    // weapon still sitting in a hand (Concealed Weapon, §4). A
+    // combat-ends strike inflicts nothing; a strength-based weapon is
+    // measured off the base 1 strength, because no bonus counts
+    // [LSJ 20020821].
+    handler.weaponProfile = {
+      damage: w.combatEndsStrike ? 0 : (w.damage ?? 1 + (w.handBonus ?? 0)),
+      aggravated: w.aggravated,
+    };
+    const priorOptions = handler.abilityOptions?.bind(handler);
+    const priorUse = handler.useAbility?.bind(handler);
+    const priorEnded = handler.onCombatEnded?.bind(handler);
+    const weaponOptions: NonNullable<CardHandler["abilityOptions"]> = (entry, owner, ctx) => {
       const cf = ctx.combat;
       if (!cf || owner.minion === null) return [];
       const side =
@@ -5759,8 +6851,22 @@ function compileEquipment(spec: CardSpec): CardHandler {
       if (!side) return [];
       // "The opposing minion cannot use equipment" (Terror Frenzy).
       if (cf.restrict[side].equipment) return [];
-      if (w.maneuverPerCombat && ctx.window === "combat.range") {
-        if (cf.awaiting !== side || cf.usedWeaponManeuver[side] !== null) return [];
+      // "…NOT USABLE THE ROUND IT IS PUT IN PLAY" (Molotov Cocktail). The
+      // maneuver goes with the strike: [LSJ 20021028] says a weapon's
+      // optional maneuver cannot be used if its strike cannot be, so this
+      // sits above every option this weapon offers, not just the strike.
+      if (w.notUsableAttachRound && entry.attachedRound === cf.round) return [];
+      const maneuverLimit = w.maneuversPerCombat ?? (w.maneuverPerCombat ? 1 : 0);
+      if (maneuverLimit > 0 && ctx.window === "combat.range") {
+        if (cf.awaiting !== side) return [];
+        // One weapon per side, but that weapon may have more than one.
+        const spentByThis = cf.weaponManeuversUsed?.[entry.card.id] ?? 0;
+        const sideSlot = cf.usedWeaponManeuver[side];
+        if (sideSlot !== null && sideSlot !== entry.card.id) return [];
+        if (spentByThis >= maneuverLimit) return [];
+        // "…only usable to get to CLOSE RANGE" (Blade of Bellona): a
+        // maneuver flips the range, so only a long round can reach close.
+        if (w.maneuverToCloseOnly && cf.range !== "long") return [];
         return [
           {
             id: `ability:${spec.name}:${entry.card.id}:maneuver`,
@@ -5799,17 +6905,37 @@ function compileEquipment(spec: CardSpec): CardHandler {
         // "Strike: 2R damage, ONLY USABLE AT LONG RANGE" (Sniper Rifle) —
         // a gate on options (§3).
         if (w.onlyAtLongRange && cf.range !== "long") return [];
+        // "Only usable AFTER THE FIRST ROUND of combat" (RPG Launcher) —
+        // rounds are 1-based, so the first round is the one to exclude.
+        if (w.notFirstRound && cf.round <= 1) return [];
         // "…only usable once each combat/round". By CARD INSTANCE, per
         // the ruling that a second copy allows a second use
         // [ANK 20230316] — both markers are already instance-keyed.
         if (w.usableOnce === "combat" && cf.usedThisCombat.includes(entry.card.id)) return [];
         if (w.usableOnce === "round" && cf.usedThisRound.includes(entry.card.id)) return [];
-        const dmg = w.damage === null ? `strength+${w.handBonus ?? 0}` : `${w.damage}${w.ranged ? "R" : ""}`;
+        // "NOT USABLE AGAINST a vampire with Celerity, an ally, or a
+        // retainer" (Waxen Poetica) — read from the opposing minion, and
+        // a gate on the option rather than a fizzle, so the bearer is
+        // never asked to spend a one-shot on a strike that does nothing.
+        // A retainer is not a combatant in this engine, so the clause's
+        // third case can never arise and is not tested for.
+        const nua = w.notUsableAgainst;
+        if (nua) {
+          const foe = findMinion(ctx.state, side === "acting" ? cf.opposing : cf.acting);
+          if (!foe) return [];
+          if (nua.allies && foe.kind === "ally") return [];
+          if ((nua.disciplines ?? []).some((d) => disciplinesOf(foe)[d] !== undefined)) return [];
+        }
+        const dmg = w.combatEndsStrike
+          ? "combat ends"
+          : w.damage === null
+            ? `strength+${w.handBonus ?? 0}`
+            : `${w.damage}${w.ranged ? "R" : ""}`;
         return [
           {
             id: `ability:${spec.name}:${entry.card.id}:strike`,
             kind: "useAbility",
-            label: `${spec.name}: strike (${dmg}${w.aggravated ? " aggravated" : ""})`,
+            label: `${spec.name}: strike (${dmg}${w.aggravated && !w.combatEndsStrike ? " aggravated" : ""})`,
             source: entry.card.id,
             params: { action: "strike" },
           },
@@ -5875,8 +7001,16 @@ function compileEquipment(spec: CardSpec): CardHandler {
     // can unlock at the end of combat" (§6). Fired after the pop, so the
     // "remains ready" test is read then — the bearer can die later in the
     // same combat.
-    if (w.unlockOnKill) {
+    if (w.unlockOnKill || w.burnAtEndOfCombat) {
       handler.onCombatEnded = (entry, owner, info, ops) => {
+        priorEnded?.(entry, owner, info, ops);
+        // "Burn after use OR AT THE END OF COMBAT" (Molotov Cocktail) —
+        // unconditional, and first, because a weapon that leaves play can
+        // hardly unlock anyone afterwards.
+        if (w.burnAtEndOfCombat) {
+          ops.burnPermanent(entry.card.id);
+          return;
+        }
         if (!owner.minion || entry.usedThisTurn) return;
         if (!info.burnedByStrike.includes(spec.name)) return;
         const bearer = findMinion(ops.state, owner.minion);
@@ -5885,7 +7019,7 @@ function compileEquipment(spec: CardSpec): CardHandler {
         ops.emit({ type: "MinionUnlocked", minion: bearer.id });
       };
     }
-    handler.useAbility = (entry, owner, choice, ops) => {
+    const weaponUse: NonNullable<CardHandler["useAbility"]> = (entry, owner, choice, ops) => {
       if (!owner.minion) throw new Error(`${spec.name}: no bearer`);
       const act = choice.params["action"];
       if (act === "maneuver") {
@@ -5917,6 +7051,12 @@ function compileEquipment(spec: CardSpec): CardHandler {
         ranged: w.ranged,
         handBonus: w.handBonus ?? 0,
         aggravated: w.aggravated,
+        ...(w.burnAfterUse ? { burnAfterUse: true } : {}),
+        ...(w.combatEndsStrike ? { combatEnds: true } : {}),
+        ...(w.selfDamageOnStrike ? { selfDamageOnStrike: w.selfDamageOnStrike } : {}),
+        ...(w.selfDamageAtCloseRange
+          ? { selfDamageAtCloseRange: w.selfDamageAtCloseRange }
+          : {}),
       });
       // "Only usable once each combat/round" — spent when the strike is
       // CHOSEN, not when it resolves. A dodged or cancelled strike was
@@ -5933,8 +7073,22 @@ function compileEquipment(spec: CardSpec): CardHandler {
         ops.commitStrikeTo(owner.minion, entry.card.id);
       }
     };
+    handler.abilityOptions = (entry, owner, ctx) => [
+      ...(priorOptions?.(entry, owner, ctx) ?? []),
+      ...weaponOptions(entry, owner, ctx),
+    ];
+    // Dispatch on the `action` param the four weapon options carry, so a
+    // card that is a weapon AND something else keeps both. Anything else
+    // was never ours.
+    const WEAPON_ACTIONS = ["maneuver", "strike", "snipe", "cancelKeyword"];
+    handler.useAbility = (entry, owner, choice, ops) => {
+      if (WEAPON_ACTIONS.includes(choice.params["action"] ?? "")) {
+        weaponUse(entry, owner, choice, ops);
+        return;
+      }
+      priorUse?.(entry, owner, choice, ops);
+    };
   }
-  return handler;
 }
 
 /** Shared option enumeration for the three "bring a permanent resource
@@ -6043,9 +7197,31 @@ function rushGrant(
   };
 }
 
+/** An ally's printed stats, as `CardHandler.allyEntry`. Shared, because
+ *  Blood Brother Ambush is a COMBAT card that becomes an ally — the stats
+ *  question is the same one an ally card answers.
+ *  docs/no-combat-design.md §3 */
+function allyEntryFor(spec: CardSpec): NonNullable<CardHandler["allyEntry"]> {
+  return (mode) => {
+    const stats = spec.ally;
+    if (!stats) throw new Error(`${spec.name}: ally spec without stats`);
+    const m = spec.modes.find((x) => x.level === mode);
+    return {
+      life: m?.ally?.life ?? stats.life,
+      strength: m?.ally?.strength ?? stats.strength,
+      bleed: m?.ally?.bleed ?? stats.bleed,
+      statics: { ...(spec.permanent?.statics ?? {}), ...(m?.statics ?? {}) },
+      tags: allyTags(spec),
+      ...(stats.playsAsVampire ? { disciplines: stats.playsAsVampire } : {}),
+      ...(stats.actsWhenRecruited ? { actsWhenRecruited: true } : {}),
+    };
+  };
+}
+
 /** Retainers: played as an employ retainer action (undirected, +1
  *  stealth, p. 22); attaches to the acting minion with its mode's life. */
 function compileRetainer(spec: CardSpec): CardHandler {
+
   return {
     ...rushGrant(spec),
     name: spec.name,
@@ -6130,29 +7306,7 @@ function compileAlly(spec: CardSpec): CardHandler {
     // Equipment and retainers had always exposed this.
     permanentTags: allyTags(spec),
 
-    allyEntry(mode) {
-      const stats = spec.ally;
-      if (!stats) throw new Error(`${spec.name}: ally spec without stats`);
-      // The mode chosen at announcement fixes the printed version
-      // (Freakish Conglomeration's superior has 4 life).
-      const m = spec.modes.find((x) => x.level === mode);
-      return {
-        life: m?.ally?.life ?? stats.life,
-        strength: m?.ally?.strength ?? stats.strength,
-        bleed: m?.ally?.bleed ?? stats.bleed,
-        // MODE statics merge in, the way a retainer's `permanentEntry`
-        // has always done. Without this an ally's superior-only clause is
-        // silently inert — which is what happened to Bone Shambler's,
-        // Gravebound Drone's and Rotting Behemoth's superiors until it
-        // was noticed. docs/wraith-zombie-design.md §4
-        statics: { ...(spec.permanent?.statics ?? {}), ...(m?.statics ?? {}) },
-        tags: allyTags(spec),
-        // "This ally can play cards requiring basic Animalism as a
-        // vampire" (p. 11): the whole rule is these levels on the ally.
-        ...(stats.playsAsVampire ? { disciplines: stats.playsAsVampire } : {}),
-        ...(stats.actsWhenRecruited ? { actsWhenRecruited: true } : {}),
-      };
-    },
+    allyEntry: allyEntryFor(spec),
 
     options(card, ctx) {
       const base = permanentActionOptions(spec, card, ctx);
@@ -6335,6 +7489,10 @@ const POLLING_ONLY_EFFECTS: ReadonlySet<EffectPrimitive["kind"]> = new Set([
   "burnCallerOnFail",
   "payVotedForOnly",
   "autoPassNextOnPass",
+  // Wave 38: both are offers registered on the referendum frame, and both
+  // are meaningless anywhere else.
+  "bloodForVotes",
+  "taxVotesAgainst",
 ]);
 
 /** Every minion in play, in seat order — the candidate pool for a
@@ -6359,12 +7517,23 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
 
     options(card, ctx) {
       if (ctx.window !== "turn.minion") return [];
+      // "Only one <card> can be played or called in a GAME" (Political
+      // Stranglehold). A QUERY over the event log, not a latch: there is
+      // nothing to reset and nothing to forget to serialize, and "played
+      // OR called" is one event either way.
+      if (
+        spec.oncePerGameByName &&
+        ctx.state.eventLog.some((ev) => ev.type === "CardPlayed" && ev.name === spec.name)
+      ) {
+        return [];
+      }
       const seat = getSeat(ctx.state, ctx.seat);
       const options: LegalOption[] = [];
       for (const m of seat.minions) {
         if (m.kind !== "vampire") continue;
         if (!canAct(m)) continue;
         if (m.calledPoliticalThisTurn) continue;
+        if (auraBlocksPolitical(ctx.state, m)) continue;
         if (m.playedSinceUnlock.includes(spec.name)) continue;
         // "…cannot perform the same action again this turn" (Change of
         // Target, Obedience, Delaying Tactics) — the action key for a
@@ -6531,6 +7700,20 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
             });
           }
         }
+      } else if (primitive.kind === "refGiveEdge") {
+        // "CHOOSE A METHUSELAH" — exactly one, and every standing seat is
+        // a legal answer including the caller's own, since "gets the
+        // Edge" says nothing about who. The terms are the legal-move
+        // generator's answer to "who may this name", so the arity lives
+        // here rather than in the tally.
+        for (const s of standing) {
+          options.push({
+            id: `terms:${s}`,
+            kind: "chooseTerms",
+            label: `Choose ${s}`,
+            params: { seats: s },
+          });
+        }
       } else if (primitive.kind === "refChooseSeatsBurn") {
         // Non-empty subsets of standing Methuselahs, or exactly N of them
         // when the card says "choose A Methuselah".
@@ -6686,10 +7869,15 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
             (w.ready !== true || isReady(m)) &&
             (w.inTorpor === undefined || m.inTorpor === w.inTorpor) &&
             (w.maxCapacity === undefined || capacityOf(m) <= w.maxCapacity) &&
+            (w.minCapacity === undefined || capacityOf(m) >= w.minCapacity) &&
+            (w.clan === undefined || m.clan === w.clan) &&
             (w.sects === undefined || (m.sect !== null && w.sects.includes(m.sect)));
           for (const s of standing) {
             const hits = s.minions.filter(matches);
-            if (hits.length === 0) continue;
+            // "X+1 pool, where X is …" is charged at X = 0 too, so the
+            // early return can only skip a seat when there is no flat
+            // term either (design §3).
+            if (hits.length === 0 && !primitive.plus) continue;
             if (primitive.effect === "burnBlood") {
               for (const m of hits) {
                 // A vampire with less blood than the card asks for burns
@@ -6700,10 +7888,70 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
                 if (n > 0) ops.emit({ type: "BloodBurned", minion: m.id, amount: n });
               }
             } else {
+              const total = hits.length * primitive.amount + (primitive.plus ?? 0);
+              if (total > 0) {
+                ops.emit({
+                  type: primitive.effect === "gainPool" ? "PoolGained" : "PoolBurned",
+                  seat: s.id,
+                  amount: total,
+                });
+              }
+            }
+          }
+          break;
+        }
+        case "refPerSeatCards": {
+          // The counts are taken for EVERY seat before any pool moves, so
+          // an ousting earlier in the table cannot change a later seat's
+          // tally — the `refStealPerSeat` precedent one case down.
+          const count = primitive.count;
+          /** Every entry on the table, bucketed by who CONTROLS it.
+           *
+           *  `seat.permanents` alone is wrong here and would be wrong
+           *  quietly: an equipment or a retainer lives on a MINION, so a
+           *  count of "each equipment, location or retainer you control"
+           *  taken off the seat's own list would see only the locations.
+           *  The `allEntries` lesson, in a tally rather than a hook. And
+           *  the controller is read off the entry, since a master played
+           *  on another Methuselah's minion stays yours (p. 16). */
+          const tagHits = new Map<string, number>();
+          if (count.of === "permanents") {
+            for (const s of ops.state.seats) {
+              const entries = [...s.permanents, ...s.minions.flatMap((m) => m.attached)];
+              for (const p of entries) {
+                if (!count.tags.some((t) => p.tags.includes(t))) continue;
+                const owner = p.controller ?? s.id;
+                tagHits.set(owner, (tagHits.get(owner) ?? 0) + 1);
+              }
+            }
+          }
+          const tallies = standing.map((s) => {
+            if (count.of === "preyAshHeapCrypt") {
+              // "…in his or her PREY's ash heap" — this seat's bill is
+              // read off somebody else's zone, which is what stops this
+              // being a `refPerMinion`. `crypt` is the flag a burnt
+              // vampire's ash entry carries; without it the count would
+              // quietly include library cards.
+              const prey = preyOf(ops.state, s.id);
+              const heap = prey === null ? [] : (getSeat(ops.state, prey).ashHeap ?? []);
+              return { seat: s.id, n: heap.filter((c) => c.crypt === true).length };
+            }
+            return { seat: s.id, n: tagHits.get(s.id) ?? 0 };
+          });
+          for (const { seat, n } of tallies) {
+            // "Each Methuselah GAINS 1 pool. Each Methuselah THEN burns…"
+            // — both halves run for every standing seat, including one
+            // whose tally is zero, which is how a seat with nothing in
+            // play comes out ahead.
+            if (primitive.everyoneGains) {
+              ops.emit({ type: "PoolGained", seat, amount: primitive.everyoneGains });
+            }
+            const total = n * primitive.amount;
+            if (total > 0) {
               ops.emit({
                 type: primitive.effect === "gainPool" ? "PoolGained" : "PoolBurned",
-                seat: s.id,
-                amount: hits.length * primitive.amount,
+                seat,
+                amount: total,
               });
             }
           }
@@ -6950,6 +8198,18 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
           }
           break;
         }
+        case "refGiveEdge": {
+          // "Successful referendum means THE CHOSEN METHUSELAH GETS THE
+          // EDGE" (Regaining the Upper Hand, §5). The term is the same
+          // "choose a Methuselah" the burn riders use, so the chosen seat
+          // arrives the same way — and "gets" is a take, not a gift from
+          // the caller: it may already be the caller's own.
+          const chosen = frame.terms["seats"];
+          if (!chosen) break;
+          const seatId = chosen.split(",")[0];
+          if (seatId) ops.takeEdge(seatId);
+          break;
+        }
         case "refChooseSeatsBurn": {
           const seats = frame.terms["seats"];
           if (!seats) break;
@@ -6994,8 +8254,13 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
             const fail = spec.referendumFail!;
             const caller = frame.callingMinion ? findMinion(ops.state, frame.callingMinion) : null;
             if (!caller) return;
-            const n = Math.min(fail.callingVampireBurnsBlood, caller.blood);
+            const n = Math.min(fail.callingVampireBurnsBlood ?? 0, caller.blood);
             if (n > 0) ops.emit({ type: "BloodBurned", minion: caller.id, amount: n });
+            // "…this acting vampire takes N unpreventable damage" (Rant!)
+            // — environmental, so nothing can dodge or prevent it (p. 31).
+            if (fail.callingVampireDamage) {
+              ops.applyEnvironmentalDamage(caller.id, fail.callingVampireDamage, false);
+            }
           },
         }
       : {}),
@@ -7021,6 +8286,21 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // no modes must answer "requires nothing" rather than throw.
   handler.requiresDisciplines = (mode, variant) =>
     spec.modes.length === 0 ? [] : modeDisciplines(modeOf(spec, mode, variant));
+  // "Cards requiring 1 or more Disciplines AT THE SUPERIOR LEVEL" (The
+  // Slow Withering) — the level half of the same question, asked of the
+  // chosen mode. docs/gehenna-taxes-design.md §2
+  handler.requiresSuperiorDiscipline = (mode, variant) => {
+    if (spec.modes.length === 0) return false;
+    const m = modeOf(spec, mode, variant);
+    return m.level === "superior" && modeDisciplines(m).length > 0;
+  };
+  // "Do not replace until …", in both its forms. CENTRAL, because it used
+  // to be wired in the combat and modifier compilers only — so an EVENT
+  // carrying the clause (Narrow Minds, wave 31) silently replaced its card
+  // at once. A question asked in two places drifts; asked in none, it is
+  // simply wrong.
+  if (spec.delayedReplace) handler.delayedReplace = spec.delayedReplace;
+  if (spec.delayedReplaceUntil) handler.delayedReplaceUntil = spec.delayedReplaceUntil;
   // The printed type line, for cancel-as-played effects that name a type.
   // A dual-typed Action Modifier/Reaction really is a reaction card, so it
   // counts as one however this particular play is being made.
@@ -7102,6 +8382,26 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // Printed keywords ("Grapple.", "Aim."), central for the same reason as
   // the queries above (docs/weapon-riders-design.md §5).
   handler.cardKeywords = () => spec.keywords ?? [];
+  // Does this MODE restrict the opposing minion's CHOICE OF STRIKES?
+  // Central for the same reason, and scoped by the rulings rather than by
+  // what looks like a restriction: "cannot use equipment" and "hand
+  // strikes only" are in; maneuvers, presses, range, dodges, additional
+  // strikes, equipment destruction and Discipline bars are OUT
+  // [LSJ 20050221]. `restrictOpponent` carries all three of maneuver,
+  // press and equipment, so the test is on the FIELD, not the kind.
+  // docs/cancel-in-combat-design.md §3
+  handler.restrictsStrikeChoice = (mode, variant) => {
+    if (spec.modes.length === 0) return null;
+    const effects = modeOf(spec, mode, variant).effects;
+    // Named rather than a boolean, because the two bars are cancellable
+    // under different conditions (§3): the equipment one restricts
+    // nothing for a minion holding no weapon.
+    if (effects.some((e) => e.kind === "handStrikesOnly")) return "strikes";
+    if (effects.some((e) => e.kind === "restrictOpponent" && e.equipment === true)) {
+      return "equipment";
+    }
+    return null;
+  };
   // What this card becomes once in play. Two type compilers set these;
   // every other card that carries a `permanent` block — a political
   // action that attaches itself (Archon), an action that puts itself in
@@ -7115,6 +8415,22 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // reason ("after a successful action requiring HECATA or [obl]" —
   // Cappadocian Crypt; docs/blood-locations-design.md §5).
   handler.requiresClans = () => spec.requiresClan ?? [];
+  // The burn option icon (p. 17): discardable when NO minion this seat
+  // controls meets the card's requirements or is a legal target for it —
+  // the spec's own `requires*` fields and its attach filter, read over
+  // every controlled minion (a Salubri in torpor is still "a minion who
+  // meets the requirements"). docs/burn-option-design.md
+  if (spec.burnOption) {
+    handler.burnOptionDiscardable = (state, seatId) => {
+      const clan = spec.permanent?.attachClan;
+      return !getSeat(state, seatId).minions.some(
+        (m) =>
+          meetsRequirements(m, spec) &&
+          (clan === undefined || (m.kind === "vampire" && m.clan === clan)) &&
+          (!spec.permanent?.attach || attachTargets(state, seatId, spec).some((t) => t.id === m.id)),
+      );
+    };
+  }
   // "…one card in your ash heap REQUIRING AN ANARCH" (Garibaldi-Meucci
   // Museum) — the exact sibling of requiresClans and requiresDisciplines,
   // added centrally so every spec answers it. docs/ash-heap-design.md §6
@@ -7158,6 +8474,30 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // would have it overwritten. That is the wraith/zombie wave's own bug
   // from the other side, and it broke Enthrall and Propaganda the first
   // time this was written (docs/ledger-closeout.md §10).
+  // "Your prey MAY take the Edge if it is uncontrolled" (Instability) —
+  // asked of the PREY, whose frame this is, and answered only while the
+  // Edge is still sitting in the middle: between the play and the answer
+  // nothing else moves, but reading it again costs nothing and the
+  // alternative is a stale offer.
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "preyMayTakeEdge"))) {
+    choiceByKey["preyEdge"] = {
+      options: (frame, state) =>
+        state.edge !== null
+          ? []
+          : [
+              {
+                id: `choice:${spec.name}:${frame.cardId}:preyEdge:take`,
+                kind: "answerChoice" as const,
+                label: `${spec.name}: take the Edge`,
+                params: {},
+              },
+            ],
+      apply: (frame, _choice, ops) => {
+        if (ops.state.edge === null) ops.takeEdge(frame.seat);
+      },
+    };
+  }
+
   if (
     spec.modes.some((m) =>
       m.effects.some((e) => e.kind === "selfDamageAfterAction" && e.optOutBlood !== undefined),
@@ -7644,6 +8984,49 @@ export function compileSpec(spec: CardSpec): CardHandler {
       },
     };
   }
+  // "Lock during your discard phase to move a card from your ash heap to
+  // the BOTTOM of your library" (Waste Management Operation) — the same
+  // family as `store.addFromAshHeap` with no store in between: the card
+  // goes straight back. Written beside the store rather than inside it
+  // because there is nothing to store (docs/ash-heap-resource-design.md §3).
+  if (perm?.ashToLibrary) {
+    const a2l = perm.ashToLibrary;
+    const priorOptions = handler.abilityOptions?.bind(handler);
+    const priorUse = handler.useAbility?.bind(handler);
+    handler.abilityOptions = (entry, owner, ctx) => {
+      const out = priorOptions ? [...priorOptions(entry, owner, ctx)] : [];
+      const controller = entry.controller ?? owner.seat;
+      if (ctx.seat !== controller || ctx.turnSeat !== controller) return out;
+      if (ctx.window !== `turn.${a2l.window}`) return out;
+      if (entry.locked) return out;
+      for (const c of getSeat(ctx.state, controller).ashHeap ?? []) {
+        // "…move A CARD from your ash heap to your library": a burnt
+        // VAMPIRE belongs to the crypt and cannot be shuffled into a
+        // library. `crypt` is the flag that says so.
+        if (c.crypt) continue;
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:a2l:${c.id}`,
+          kind: "useAbility",
+          label: `${spec.name}: lock it to put ${c.name} on the ${a2l.to} of your library`,
+          source: entry.card.id,
+          params: { act: "ashToLibrary", card: c.id },
+        });
+      }
+      return out;
+    };
+    handler.useAbility = (entry, owner, choice, ops) => {
+      if (choice.params["act"] !== "ashToLibrary") {
+        priorUse?.(entry, owner, choice, ops);
+        return;
+      }
+      ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      ops.ashToLibrary(
+        entry.controller ?? owner.seat,
+        choice.params["card"]!,
+        a2l.to,
+      );
+    };
+  }
   // Out-of-play stores on a card in play (docs/library-search-design.md
   // §5–§7). Central, because the three cards that carry one are two
   // Masters and an Equipment.
@@ -7653,9 +9036,23 @@ export function compileSpec(spec: CardSpec): CardHandler {
       const fill = st.fillOnEntry;
       handler.onEnterPlay = (entry, owner, ops) => {
         if (fill.from === "libraryTop") {
-          for (let i = 0; i < fill.count; i++) {
+          for (let i = 0; i < (fill.count === "all" ? 0 : fill.count); i++) {
             ops.storeCard({ holder: entry.card.id, from: "library", faceUp: st.faceUp });
           }
+          return;
+        }
+        // "…with any number of cards requiring Protean from your hand."
+        // One card at a time, so the option list is linear in the hand
+        // rather than a power set of it (§4).
+        if (fill.from === "hand") {
+          ops.raiseChoice({
+            seat: entry.controller ?? owner.seat,
+            cardName: spec.name,
+            cardId: entry.card.id,
+            key: "fillStore",
+            params: { left: fill.count === "all" ? "all" : String(fill.count) },
+            optional: false,
+          });
           return;
         }
         // "Search your library for up to three …" — a real search, so it
@@ -7683,7 +9080,17 @@ export function compileSpec(spec: CardSpec): CardHandler {
     // "During your unlock phase, you can move the top card of your library
     // to this equipment"; "during your master phase, you can put a ghoul
     // from your hand on this location."
-    if (st.addTopInUnlockPhase || st.addFromHandInMasterPhase || st.playableFrom) {
+    // `playableFrom` is deliberately NOT in this list: a card played out of
+    // a store is offered by the engine's ordinary hand-play enumerator, not
+    // by an ability of the store (docs/store-plays-design.md §2). Two routes
+    // to one sentence is how the two drift.
+    if (
+      st.addTopInUnlockPhase ||
+      st.addFromHandInMasterPhase ||
+      st.addFromAshHeap ||
+      st.exchangeWithHandInMasterPhase ||
+      st.toLibraryInMasterPhase
+    ) {
       handler.abilityOptions = (entry, owner, ctx) => {
         const controller = entry.controller ?? owner.seat;
         if (ctx.seat !== controller) return [];
@@ -7704,13 +9111,21 @@ export function compileSpec(spec: CardSpec): CardHandler {
           });
         }
         const add = st.addFromHandInMasterPhase;
-        if (add && ctx.window === "turn.master" && ctx.turnSeat === controller) {
+        // "…if it doesn't already have one": the cap is on the STORE, so
+        // it is checked once rather than per candidate card.
+        const roomInStore =
+          add?.max === undefined || (entry.stored ?? []).length < add.max;
+        if (add && roomInStore && ctx.window === "turn.master" && ctx.turnSeat === controller) {
           for (const c of seat.hand) {
             const h = ctx.registry[c.name];
             if (!h) continue;
             const types = h.costTypes?.(null, undefined) ?? [];
             if (add.cardTypes && !add.cardTypes.some((t) => types.includes(t))) continue;
             if ((add.tags ?? []).some((t) => !(h.permanentTags ?? []).includes(t))) continue;
+            // "a NON-LOCATION equipment card" — a Living Manse is an
+            // equipment card by type and a location by sub-type, so the
+            // type filter alone would take it.
+            if ((add.notTags ?? []).some((t) => (h.permanentTags ?? []).includes(t))) continue;
             out.push({
               id: `ability:${spec.name}:${entry.card.id}:store:${c.id}`,
               kind: "useAbility",
@@ -7720,42 +9135,65 @@ export function compileSpec(spec: CardSpec): CardHandler {
             });
           }
         }
-        // "…can play cards from this location as if from your hand": the
-        // play-from-hand machinery with the source pile swapped (§7).
-        const pf = st.playableFrom;
-        if (pf && ctx.window === "turn.minion" && (entry.stored ?? []).length > 0) {
-          for (const m of seat.minions) {
-            if (pf.clan !== undefined && m.clan !== pf.clan) continue;
-            if (!canAct(m)) continue;
-            for (const c of entry.stored ?? []) {
-              const h = ctx.registry[c.name];
-              if (!h) continue;
-              for (const mode of h.modesPlayableBy?.(m) ?? []) {
-                const cost = playCostFor(
-                  ctx.state,
-                  {
-                    name: h.name,
-                    bloodCost: h.bloodCost,
-                    poolCost: h.poolCost ?? 0,
-                    types: h.costTypes?.(mode, undefined) ?? [],
-                    requires: h.requiresDisciplines?.(mode, undefined) ?? [],
-                  },
-                  m,
-                  ctx.action,
-                  ctx.combat,
-                  m.id,
-                  ctx.seat,
-                );
-                if (m.blood < cost.blood || seat.pool <= cost.pool) continue;
-                out.push({
-                  id: `ability:${spec.name}:${entry.card.id}:play:${m.id}:${c.id}:${mode ?? "-"}`,
-                  kind: "useAbility",
-                  label: `${m.name}: play ${c.name} from ${spec.name}`,
-                  source: entry.card.id,
-                  params: { act: "play", minion: m.id, card: c.id, fmode: mode ?? "-" },
-                });
-              }
-            }
+        // "LOCK this card to move a library card from your (or your
+        // prey's) ash heap to this card, face down." The ash heap is
+        // public (p. 16), so every candidate is a real, visible choice
+        // and the card names WHICH heap.
+        const ash = st.addFromAshHeap;
+        const ashRoom = ash?.max === undefined || (entry.stored ?? []).length < (ash.max ?? 0);
+        if (ash && ashRoom && !entry.locked && ctx.window === "turn.master" && ctx.turnSeat === controller) {
+          const fromSeat =
+            ash.whose === "prey" ? preyOf(ctx.state, controller) : controller;
+          for (const c of getSeat(ctx.state, fromSeat).ashHeap ?? []) {
+            // "a LIBRARY card": a burnt vampire is not one, and `crypt`
+            // is the flag that says so without asking the registry.
+            if (c.crypt) continue;
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:fromash:${c.id}`,
+              kind: "useAbility",
+              label: `${spec.name}: lock it to take ${c.name} from ${fromSeat}'s ash heap`,
+              source: entry.card.id,
+              params: { act: "fromAsh", card: c.id, seat: fromSeat },
+            });
+          }
+        }
+        // "You may use a MASTER PHASE ACTION to move a card from this
+        // location to the top of your library" — the way back out.
+        if (
+          st.toLibraryInMasterPhase &&
+          ctx.window === "turn.master" &&
+          ctx.turnSeat === controller &&
+          (entry.stored ?? []).length > 0
+        ) {
+          for (const c of entry.stored ?? []) {
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:tolib:${c.id}`,
+              kind: "useAbility",
+              label: `${spec.name}: move ${c.name} to the ${st.toLibraryInMasterPhase} of your library`,
+              source: entry.card.id,
+              params: { act: "toLibrary", card: c.id },
+            });
+          }
+        }
+        // "During your master phase, you may EXCHANGE a card in your hand
+        // for the card on this Storage Annex" — a swap, so it needs both a
+        // card in hand and a card on the store, and it is one option per
+        // hand card (the store holds one).
+        if (
+          st.exchangeWithHandInMasterPhase &&
+          ctx.window === "turn.master" &&
+          ctx.turnSeat === controller &&
+          (entry.stored ?? []).length > 0
+        ) {
+          const held = (entry.stored ?? [])[0]!;
+          for (const c of seat.hand) {
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:swap:${c.id}`,
+              kind: "useAbility",
+              label: `${spec.name}: exchange ${c.name} for the card on it`,
+              source: entry.card.id,
+              params: { act: "swap", card: c.id, held: held.id },
+            });
           }
         }
         return out;
@@ -7776,19 +9214,53 @@ export function compileSpec(spec: CardSpec): CardHandler {
           });
           return;
         }
-        if (act === "play") {
-          const mode = choice.params["fmode"];
-          ops.playCardFromHand({
+        if (act === "fromAsh") {
+          ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+          ops.storeCard({
+            holder: entry.card.id,
+            from: "ashHeap",
             cardId: choice.params["card"]!,
-            seat: controller,
-            minion: choice.params["minion"]!,
-            mode: mode === "-" || mode === undefined ? null : (mode as "basic" | "superior"),
-            from: { zone: "store", holder: entry.card.id },
+            fromSeat: choice.params["seat"]!,
+            faceUp: st.faceUp,
           });
-          if (st.burnWhenEmpty && (entry.stored ?? []).length === 0) {
-            ops.burnPermanent(entry.card.id);
-          }
+          return;
         }
+        if (act === "toLibrary") {
+          ops.storedToLibrary(
+            entry.card.id,
+            choice.params["card"]!,
+            st.toLibraryInMasterPhase ?? "top",
+          );
+          return;
+        }
+        if (act === "swap") {
+          // The stored card comes back to hand FIRST and the chosen card
+          // goes out second: the other order would briefly put two cards on
+          // a store that holds one, and `max` is checked at enumeration.
+          ops.emit({
+            type: "StoredCardDrawn",
+            seat: controller,
+            holder: entry.card.id,
+            cardId: choice.params["held"]!,
+          });
+          ops.storeCard({
+            holder: entry.card.id,
+            from: "hand",
+            cardId: choice.params["card"]!,
+            faceUp: st.faceUp,
+          });
+          return;
+        }
+      };
+    }
+    // "…can play cards from this card as if from your hand": a HANDLER
+    // field the engine's own play enumerator reads, so the card is offered
+    // in every window its type belongs in (§2).
+    if (st.playableFrom) {
+      handler.storePlay = {
+        ...(st.playableFrom.bearer === true ? { bearerOnly: true } : {}),
+        ...(st.playableFrom.clan !== undefined ? { clan: st.playableFrom.clan } : {}),
+        ...(st.burnWhenEmpty === true ? { burnWhenEmpty: true } : {}),
       };
     }
     // The store's search and its draw redirect are two ChoiceFrames on
@@ -7835,8 +9307,9 @@ export function compileSpec(spec: CardSpec): CardHandler {
         const eligible = getSeat(state, frame.seat).library.filter((c) =>
           searchMatches(c, registry, fill.cardTypes, fill.nonUniqueOnly),
         );
+        const cap = fill.count === "all" ? eligible.length : fill.count;
         const sets: string[][] = [[]];
-        for (let n = 1; n <= Math.min(fill.count, eligible.length); n++) {
+        for (let n = 1; n <= Math.min(cap, eligible.length); n++) {
           for (const set of combinations(eligible.map((c) => c.id), n)) sets.push(set);
         }
         return sets.map((set) => ({
@@ -7861,6 +9334,80 @@ export function compileSpec(spec: CardSpec): CardHandler {
         // "…you still shuffle the library" even when nothing was found
         // (p. 48).
         ops.shuffleLibrary(frame.seat);
+        burnEmptyStore(st, frame.cardId, ops);
+      },
+    };
+    // The one-card-at-a-time fill (§4). `left` counts down in the frame's
+    // params; a library search shuffles ONCE, when the sequence ends.
+    choiceByKey["fillStore"] = {
+      options: (frame, state, registry) => {
+        const fill = st.fillOnEntry;
+        if (!fill) return [];
+        const seat = getSeat(state, frame.seat);
+        // One zone today; the loop stays because the zone is IN THE OPTION
+        // ID and in the apply, which is what a second zone would need.
+        const zones: Array<"hand"> = ["hand"];
+        const out: LegalOption[] = [];
+        for (const zone of zones) {
+          const pile = seat.hand;
+          for (const c of pile) {
+            // "A LIBRARY card": a burnt vampire is not one.
+            if (c.crypt) continue;
+            if (!searchMatches(c, registry, fill.cardTypes, fill.nonUniqueOnly)) continue;
+            if (fill.requires !== undefined && !requiresDiscipline(registry, c, fill.requires)) {
+              continue;
+            }
+            out.push({
+              id: `choice:${spec.name}:${frame.cardId}:fillStore:${zone}:${c.id}`,
+              kind: "answerChoice" as const,
+              label: `Put ${c.name} (${zone}) on ${spec.name}`,
+              params: { card: c.id, zone },
+            });
+          }
+        }
+        // "PUT a card from your hand on this card when you play it" has no
+        // "stop": the clause is mandatory, so the answer is only omitted
+        // while nothing has been put on yet. An empty option list pops the
+        // frame harmlessly, which is the empty-hand case.
+        const first = (frame.params["left"] ?? "") === (fill.count === "all" ? "all" : String(fill.count));
+        if (!(fill.mandatory === true && first && out.length > 0)) {
+          out.push({
+            id: `choice:${spec.name}:${frame.cardId}:fillStore:none`,
+            kind: "answerChoice" as const,
+            label: out.length === 0 ? "Put nothing on it" : "Put no more on it",
+            params: { card: "none" },
+          });
+        }
+        return out;
+      },
+      apply: (frame, choice, ops) => {
+        const fill = st.fillOnEntry;
+        if (!fill) return;
+        const pick = choice.params["card"] ?? "none";
+        const left = frame.params["left"] === "all" ? "all" : Number(frame.params["left"] ?? "0");
+        if (pick !== "none") {
+          ops.storeCard({
+            holder: frame.cardId,
+            from: (choice.params["zone"] ?? "hand") as "hand" | "library" | "ashHeap",
+            cardId: pick,
+            faceUp: st.faceUp,
+          });
+          const rest = left === "all" ? "all" : left - 1;
+          if (rest === "all" || rest > 0) {
+            ops.raiseChoice({
+              seat: frame.seat,
+              cardName: spec.name,
+              cardId: frame.cardId,
+              key: "fillStore",
+              params: { left: rest === "all" ? "all" : String(rest) },
+              optional: false,
+            });
+            return;
+          }
+        }
+        // A fill from HAND searches nothing, so there is no p. 14 shuffle
+        // to owe — the moment a zone here is a LIBRARY, one is owed once,
+        // when the sequence ends, and owed even if nothing was found (p. 48).
         burnEmptyStore(st, frame.cardId, ops);
       },
     };
@@ -7965,6 +9512,17 @@ export function compileSpec(spec: CardSpec): CardHandler {
       if (frame.cardInstanceId) ops.burnPermanent(frame.cardInstanceId);
     };
   }
+  // "…during THAT referendum, non-Anarch titles are worth -1 vote" (Fee
+  // Stake). `referendumSetup` is the one hook that fires as a referendum
+  // opens, and `fromCardInPlay` is how a card in play tells its own
+  // referendums from any other bearing the same name.
+  const rvm = perm?.vulnerableTo?.refVoteModifier;
+  if (rvm && !handler.referendumSetup) {
+    handler.referendumSetup = (frame) => {
+      if (!frame.fromCardInPlay) return;
+      frame.voteModifiers = [...(frame.voteModifiers ?? []), rvm];
+    };
+  }
   if (perm?.unlockDrain || perm?.selfBurn?.whenPreyHasNoTorpor) {
     handler.onAnyUnlock = (entry, owner, unlockingSeat, ops) => {
       const controller = entry.controller ?? owner.seat;
@@ -7997,6 +9555,19 @@ export function compileSpec(spec: CardSpec): CardHandler {
       }
     };
   }
+  // "If you control the Edge during your unlock phase, burn this card"
+  // (King's Rising) — YOUR unlock phase, so it fires on the controller's
+  // and nobody else's. Composed, for the reason the toll below is.
+  if (perm?.burnWhenControllerHasEdgeAtUnlock) {
+    const priorEdgeBurn = handler.onAnyUnlock;
+    handler.onAnyUnlock = (entry, owner, unlockingSeat, ops) => {
+      priorEdgeBurn?.(entry, owner, unlockingSeat, ops);
+      const controller = entry.controller ?? owner.seat;
+      if (unlockingSeat !== controller) return;
+      if (ops.state.edge !== controller) return;
+      ops.burnPermanent(entry.card.id);
+    };
+  }
   if (perm?.unlockToll) {
     const toll = perm.unlockToll;
     // Composed rather than assigned: `unlockDrain` above owns the same
@@ -8020,6 +9591,24 @@ export function compileSpec(spec: CardSpec): CardHandler {
         key: "unlockToll",
         params: { left: String(units) },
       });
+    };
+  }
+  if (perm?.bloodStore?.unlockToPool) {
+    const drip = perm.bloodStore.unlockToPool;
+    // "During EACH of your unlock phases, move 1 blood from this card to
+    // your pool" — no "may", so it is a hook and not an offer, and the
+    // card burns itself the turn it runs dry.
+    const prior = handler.onControllerUnlock;
+    handler.onControllerUnlock = (entry, owner, ops) => {
+      prior?.(entry, owner, ops);
+      const controller = entry.controller ?? owner.seat;
+      if (getSeat(ops.state, controller).ousted) return;
+      const take = Math.min(drip, entry.counters ?? 0);
+      if (take > 0) {
+        ops.removeCounters(entry.card.id, take);
+        ops.emit({ type: "PoolGained", seat: controller, amount: take });
+      }
+      settleBloodStore(spec, entry, ops);
     };
   }
   if (perm?.unlockCounter) {
@@ -8584,7 +10173,7 @@ export function compileSpec(spec: CardSpec): CardHandler {
   if (spec.permanent?.vulnerableTo) {
     providers.push({
       // act:<Name>:<cardId>:<burn|steal|shuffle|strip>:<actor>
-      owns: (id) => /:(burn|steal|shuffle|strip|vote):/.test(id),
+      owns: (id) => /:(burn|steal|shuffle|strip|raid|vote):/.test(id),
       ...vulnerableGrant(spec),
     });
   }
@@ -8637,6 +10226,195 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // it used to sit mid-function, so a clause registering a key BELOW it
   // (Split the Veil's) found no dispatcher installed at all and its
   // question was silently never asked. docs/wraith-zombie-design.md §5
+  // "During each Methuselah's PHASE, that Methuselah …" — the recurring
+  // Gehenna event (docs/gehenna-events-design.md §2). ONE card, in ONE
+  // play area, firing in EVERY seat's phase: the subject is the seat whose
+  // phase it is, never `owner`, which is why the hook's seat argument is
+  // used throughout and the owner is deliberately ignored.
+  const each = spec.eachMethuselah;
+  if (each) {
+    const fire = (entry: PermanentInPlay, turnSeat: SeatId, ops: EngineOps): void => {
+      const eff = each.effect;
+      if (eff.kind === "burnPoolPerTorpidVampire") {
+        const torpid = getSeat(ops.state, turnSeat).minions.filter(
+          (m) => m.kind === "vampire" && m.inTorpor,
+        ).length;
+        if (torpid > 0) {
+          ops.emit({ type: "PoolBurned", seat: turnSeat, amount: eff.amount * torpid });
+        }
+        return;
+      }
+      if (eff.kind === "burnBloodUnlessHunted") {
+        // "…capacity less than the number of Gehenna events in play" —
+        // the count INCLUDES this card, so a lone Thirst bites nothing
+        // and each further Gehenna event raises the waterline by one.
+        const limit = gehennaEventsInPlay(ops.state).length;
+        for (const m of getSeat(ops.state, turnSeat).minions) {
+          if (m.kind !== "vampire" || !isReady(m)) continue;
+          if (capacityOf(m) >= limit || m.huntedThisPhase) continue;
+          const burn = Math.min(eff.amount, m.blood);
+          if (burn > 0) ops.emit({ type: "BloodBurned", minion: m.id, amount: burn });
+        }
+        return;
+      }
+      if (eff.kind === "damageReadyVampire") {
+        // "…chooses a ready vampire" — the subject is the seat whose
+        // phase it is, and `whose` says which ready region is read.
+        const region = eff.whose === "prey" ? preyOf(ops.state, turnSeat) : turnSeat;
+        if (!readyVampiresOf(ops.state, region).length) return;
+        ops.raiseChoice({
+          seat: turnSeat,
+          cardName: spec.name,
+          cardId: entry.card.id,
+          key: "gehennaPickVampire",
+          params: { region },
+          ...(eff.optional ? { optional: true } : {}),
+        });
+        return;
+      }
+      if (eff.kind === "burnSameClanVampire") {
+        // "…that Methuselah ignores this effect until the end of the
+        // game" — per SEAT, and kept on this copy of the card.
+        if ((entry.exemptSeats ?? []).includes(turnSeat)) return;
+        const legal = sameClanBurnTargets(ops.state, turnSeat, eff.sameClan);
+        if (legal.length === 0) return;
+        ops.raiseChoice({
+          seat: turnSeat,
+          cardName: spec.name,
+          cardId: entry.card.id,
+          key: "gehennaSameClan",
+          params: { region: turnSeat },
+        });
+        return;
+      }
+      // The phase's Methuselah picks first; the location's CONTROLLER
+      // answers the ransom. Two questions, two seats, two frames.
+      const prey = preyOf(ops.state, turnSeat);
+      if (getSeat(ops.state, prey).permanents.some((p) => p.tags.includes("location"))) {
+        ops.raiseChoice({
+          seat: turnSeat,
+          cardName: spec.name,
+          cardId: entry.card.id,
+          key: "gehennaPickLocation",
+          optional: true,
+        });
+      }
+    };
+    if (each.effect.kind === "damageReadyVampire") {
+      const amount = each.effect.amount;
+      choiceByKey["gehennaPickVampire"] = {
+        options: (frame, state) =>
+          readyVampiresOf(state, frame.params?.["region"] ?? frame.seat).map((m) => ({
+            id: `choice:${spec.name}:${frame.cardId}:gehennaPickVampire:${m.id}`,
+            kind: "answerChoice" as const,
+            label: `${spec.name}: ${m.name} takes ${amount} damage`,
+            params: { minion: m.id },
+          })),
+        apply: (frame, choice, ops) => {
+          const id = choice.params["minion"];
+          if (!id || !findMinion(ops.state, id)) return;
+          // Unpreventable environmental damage: source null, so nothing
+          // can dodge or prevent it (p. 31).
+          ops.applyEnvironmentalDamage(id, amount, false);
+        },
+      };
+    }
+    if (each.effect.kind === "burnSameClanVampire") {
+      const eff = each.effect;
+      choiceByKey["gehennaSameClan"] = {
+        options: (frame, state) =>
+          sameClanBurnTargets(state, frame.params?.["region"] ?? frame.seat, eff.sameClan).map(
+            (m) => ({
+              id: `choice:${spec.name}:${frame.cardId}:gehennaSameClan:${m.id}`,
+              kind: "answerChoice" as const,
+              label: `${spec.name}: burn ${m.name}`,
+              params: { minion: m.id },
+            }),
+          ),
+        apply: (frame, choice, ops) => {
+          const id = choice.params["minion"];
+          const m = id ? findMinion(ops.state, id) : null;
+          if (!m) return;
+          // The order is printed: they burn one of those vampires, and
+          // THEN the capacity of the one they burned decides whether the
+          // card can ever ask them again.
+          const big = capacityOf(m) >= eff.exemptFromCapacity;
+          ops.burnMinion(m.id);
+          if (!big) return;
+          const entry = allPermanents(ops.state).find((p) => p.card.id === frame.cardId);
+          if (entry) (entry.exemptSeats ??= []).push(frame.seat);
+        },
+      };
+    }
+    if (each.effect.kind === "burnPreyLocation") {
+      const ransom = each.effect.ransom;
+      choiceByKey["gehennaPickLocation"] = {
+        options: (frame, state) =>
+          getSeat(state, preyOf(state, frame.seat))
+            .permanents.filter((p) => p.tags.includes("location"))
+            .map((p) => ({
+              id: `choice:${spec.name}:${frame.cardId}:gehennaPickLocation:${p.card.id}`,
+              kind: "answerChoice" as const,
+              label: `${spec.name}: threaten ${p.card.name}`,
+              params: { location: p.card.id },
+            })),
+        apply: (frame, choice, ops) => {
+          const loc = choice.params["location"];
+          if (!loc || !entryStillInPlay(ops.state, loc)) return;
+          ops.raiseChoice({
+            seat: ops.controllerOfEntry(loc) ?? frame.seat,
+            cardName: spec.name,
+            cardId: frame.cardId,
+            key: "gehennaRansom",
+            params: { location: loc, ransom: String(ransom) },
+          });
+        },
+      };
+      choiceByKey["gehennaRansom"] = {
+        options: (frame, state) => {
+          const loc = frame.params?.["location"];
+          if (!loc || !entryStillInPlay(state, loc)) return [];
+          const name = allPermanents(state).find((p) => p.card.id === loc)?.card.name ?? loc;
+          const out: LegalOption[] = [];
+          // "…unless its controller burns N pool": nobody may oust
+          // themselves to keep a location, so the pay arm needs pool to
+          // SPARE, and the burn arm is always there to keep the frame
+          // answerable.
+          if (getSeat(state, frame.seat).pool > ransom) {
+            out.push({
+              id: `choice:${spec.name}:${frame.cardId}:gehennaRansom:pay`,
+              kind: "answerChoice" as const,
+              label: `${spec.name}: burn ${ransom} pool to keep ${name}`,
+              params: { location: loc, pay: "yes" },
+            });
+          }
+          out.push({
+            id: `choice:${spec.name}:${frame.cardId}:gehennaRansom:burn`,
+            kind: "answerChoice" as const,
+            label: `${spec.name}: let ${name} burn`,
+            params: { location: loc, pay: "no" },
+          });
+          return out;
+        },
+        apply: (frame, choice, ops) => {
+          const loc = choice.params["location"];
+          if (!loc || !entryStillInPlay(ops.state, loc)) return;
+          if (choice.params["pay"] === "yes") {
+            ops.emit({ type: "PoolBurned", seat: frame.seat, amount: ransom });
+            return;
+          }
+          ops.burnPermanent(loc);
+        },
+      };
+    }
+    if (each.when === "unlock") {
+      handler.onAnyUnlock = (entry, _owner, seatId, ops) => fire(entry, seatId, ops);
+    } else if (each.when === "discard") {
+      handler.onDiscardPhase = (entry, _owner, turnSeat, ops) => fire(entry, turnSeat, ops);
+    } else {
+      handler.onMinionPhaseEnd = (entry, _owner, turnSeat, ops) => fire(entry, turnSeat, ops);
+    }
+  }
   addCryptAbilities(spec, handler, choiceByKey);
   if (Object.keys(choiceByKey).length > 0) {
     handler.choiceOptions = (frame, state, registry) =>
@@ -8649,7 +10427,11 @@ export function compileSpec(spec: CardSpec): CardHandler {
   addAttachedCardBehaviour(spec, handler);
   addCombatAttachBehaviour(spec, handler);
   addOpponentAttachBehaviour(spec, handler);
+  // "Lock to give a Ravnos you control +1 stealth" on an ALLY (Rom Gypsy)
+  // is the location sentence; masters get it inside compileMasterCard.
+  if (spec.cardType !== "master") addLockGrant(spec, handler);
   addAllyAbilities(spec, handler);
+  addAllyBurnRules(spec, handler);
   addRetainerAbilities(spec, handler);
   addEquipmentAbilities(spec, handler);
   addDeclinedBleedBonus(spec, handler);
@@ -8918,8 +10700,16 @@ function addCryptAbilities(
 
   // "<This vampire> can <do Y> as a [+N stealth] [Ⓓ] action [that costs 1
   // blood]" — six crypt cards, one clause (docs/crypt-wave-5.md §1).
-  const ga = perm?.grantedAction;
-  if (ga) {
+  // A card may grant SEVERAL actions (Gregory Winter, Amam the Devourer —
+  // docs/plain-allies-design.md §5): each grant compiles in its own turn
+  // of this loop, chaining onto the handlers the previous one installed,
+  // and every option, use and resolution carries the grant's INDEX so the
+  // resolver for one grant never answers for another.
+  const grants = [
+    ...(perm?.grantedAction ? [perm.grantedAction] : []),
+    ...(perm?.grantedActions ?? []),
+  ];
+  grants.forEach((ga, gaIndex) => {
     /** Every legal answer to this action, each carrying its own params.
      *  Enumerated at ANNOUNCEMENT (p. 25), so a blocked action has
      *  already fixed what it would have done. */
@@ -8964,6 +10754,8 @@ function addCryptAbilities(
         case "addBlood": {
           for (const m of getSeat(state, seat).minions) {
             if (!isReady(m)) continue;
+            // "…to a ready VAMPIRE you control" (Procurer).
+            if (ga.vampiresOnly && m.kind !== "vampire") continue;
             // An option whose WHOLE content is "gain N blood" does
             // nothing for a minion already at capacity, and taking it
             // spends a real action (docs/futile-options-design.md).
@@ -8977,9 +10769,36 @@ function addCryptAbilities(
           }
           break;
         }
+        case "burnSelfAndBurnMinion": {
+          // "…burn himself AND a <clan> [with capacity N or less]
+          // controlled by your prey" — a Ⓓ action, so never his own seat's.
+          const allowed = new Set<SeatId>(
+            ga.scope === "prey"
+              ? [preyOf(state, seat)]
+              : ga.scope === "predatorOrPrey"
+                ? [preyOf(state, seat), predatorOf(state, seat)]
+                : state.seats.filter((s) => s.id !== seat).map((s) => s.id),
+          );
+          for (const s of state.seats) {
+            if (s.ousted || s.id === seat || !allowed.has(s.id)) continue;
+            for (const m of s.minions) {
+              if (ga.targetClan !== undefined && m.clan !== ga.targetClan) continue;
+              if (ga.maxCapacity !== undefined && capacityOf(m) > ga.maxCapacity) continue;
+              out.push({
+                key: `kill:${m.id}`,
+                label: `burn ${spec.name} and ${m.name} (${s.id})`,
+                params: { target: m.id },
+                targetMinion: m.id,
+              });
+            }
+          }
+          break;
+        }
         case "stealEquipment": {
           for (const s of state.seats) {
             for (const m of s.minions) {
+              // "…from a vampire IN TORPOR" (Tutu).
+              if (ga.fromTorporOnly && !m.inTorpor) continue;
               for (const p of m.attached) {
                 if (!p.tags.includes("equipment")) continue;
                 out.push({
@@ -8988,6 +10807,85 @@ function addCryptAbilities(
                   params: { card: p.card.id },
                   targetPermanent: p.card.id,
                 });
+              }
+            }
+          }
+          break;
+        }
+        case "burnBlood": {
+          // "…from a vampire" (Thadius Zho): a Ⓓ action, so another
+          // Methuselah's — the burnPermanent convention — and a ready
+          // vampire with blood to burn, or the action would do nothing.
+          for (const s of state.seats) {
+            if (s.ousted || s.id === seat) continue;
+            for (const m of s.minions) {
+              if (m.kind !== "vampire" || !isReady(m) || m.blood <= 0) continue;
+              // "…from a LOCKED vampire with a capacity LESS THAN 8" (Young
+              // Bloods) — filters on the target, so they gate the option.
+              if (ga.lockedOnly && !m.locked) continue;
+              if (ga.maxCapacity !== undefined && capacityOf(m) >= ga.maxCapacity) continue;
+              out.push({
+                key: `blood:${m.id}`,
+                label: `burn ${ga.amount ?? 1} blood from ${m.name} (${s.id})`,
+                params: { target: m.id },
+                targetMinion: m.id,
+              });
+            }
+          }
+          break;
+        }
+        case "burnTorporVampire": {
+          // "…a vampire in torpor" (ECTU Operative) — another Methuselah's.
+          for (const s of state.seats) {
+            if (s.ousted || s.id === seat) continue;
+            for (const m of s.minions) {
+              if (m.kind !== "vampire" || !m.inTorpor) continue;
+              out.push({
+                key: `torpor:${m.id}`,
+                label: `burn ${m.name} (${s.id}, in torpor)`,
+                params: { target: m.id },
+                targetMinion: m.id,
+              });
+            }
+          }
+          break;
+        }
+        case "burnPermanent": {
+          // "…controlled by YOUR PREY" / "…by your predator or prey" —
+          // the scope is part of the card, so it gates the option rather
+          // than being checked at resolution: a target that was never
+          // legal should not be announceable.
+          const allowed = new Set<SeatId>(
+            ga.scope === "prey"
+              ? [preyOf(state, seat)]
+              : ga.scope === "predatorOrPrey"
+                ? [preyOf(state, seat), predatorOf(state, seat)]
+                : state.seats.filter((s) => s.id !== seat).map((s) => s.id),
+          );
+          for (const s of state.seats) {
+            // Never your own, and an ousted seat controls nothing.
+            if (s.ousted || s.id === seat || !allowed.has(s.id)) continue;
+            if (ga.what === "location") {
+              for (const p of s.permanents) {
+                if (!p.tags.includes("location")) continue;
+                out.push({
+                  key: `burn:${p.card.id}`,
+                  label: `burn ${p.card.name} (${s.id})`,
+                  params: { card: p.card.id },
+                  targetPermanent: p.card.id,
+                });
+              }
+            } else {
+              for (const m of s.minions) {
+                for (const p of m.attached) {
+                  if (!p.tags.includes("equipment")) continue;
+                  out.push({
+                    key: `burn:${p.card.id}`,
+                    label: `burn ${p.card.name} on ${m.name}`,
+                    params: { card: p.card.id },
+                    targetPermanent: p.card.id,
+                  });
+                }
               }
             }
           }
@@ -9084,6 +10982,10 @@ function addCryptAbilities(
       // actor cannot meet is not a choice. Paid at RESOLUTION (p. 27),
       // so a blocked action spends nothing.
       if (ga.bloodCost !== undefined && actor.blood < ga.bloodCost) return out;
+      // …and the same for a POOL price (Felix), read off the controller.
+      if (ga.poolCost !== undefined && getSeat(ctx.state, controller).pool < ga.poolCost) {
+        return out;
+      }
       for (const a of answers(ctx.state, controller, actor, ctx.registry)) {
         out.push({
           id: `act:${spec.name}:${entry.card.id}:granted:${actor.id}:${a.key}`,
@@ -9091,7 +10993,7 @@ function addCryptAbilities(
           label: `${actor.name}: ${a.label} (${spec.name})`,
           source: entry.card.id,
           minion: actor.id,
-          params: { act: "granted", ...a.params },
+          params: { act: "granted", grant: String(gaIndex), ...a.params },
         });
       }
       return out;
@@ -9099,7 +11001,10 @@ function addCryptAbilities(
 
     const priorGaUse = handler.useActionOption?.bind(handler);
     handler.useActionOption = (entry, owner, choice, ops) => {
-      if (choice.params?.["act"] !== "granted") {
+      if (
+        choice.params?.["act"] !== "granted" ||
+        (choice.params?.["grant"] ?? "0") !== String(gaIndex)
+      ) {
         priorGaUse?.(entry, owner, choice, ops);
         return;
       }
@@ -9112,10 +11017,17 @@ function addCryptAbilities(
         // resolves as a silent no-op (docs/crypt-wave-2.md §3).
         effect: { key: "cryptGrantedAction", params },
         ...(ga.stealth !== undefined ? { stealth: ga.stealth } : {}),
-        ...(ga.bloodCost !== undefined ? { cost: { blood: ga.bloodCost } } : {}),
+        ...(ga.bloodCost !== undefined || ga.poolCost !== undefined
+          ? {
+              cost: {
+                ...(ga.bloodCost !== undefined ? { blood: ga.bloodCost } : {}),
+                ...(ga.poolCost !== undefined ? { pool: ga.poolCost } : {}),
+              },
+            }
+          : {}),
         // Ⓓ: directed at the target's controller, who alone may block.
         ...(ga.directed && target ? { targetMinion: target } : {}),
-        ...(ga.directed && card && ga.do === "stealEquipment"
+        ...(ga.directed && card && (ga.do === "stealEquipment" || ga.do === "burnPermanent")
           ? { targetPermanent: card }
           : {}),
         // No `noCombat` needed: the combat-on-success gate already fires
@@ -9129,6 +11041,7 @@ function addCryptAbilities(
       priorGaResolve?.(entry, af, ops);
       if (af.grantedEffect?.key !== "cryptGrantedAction") return;
       const p = af.grantedEffect.params;
+      if ((p["grant"] ?? "0") !== String(gaIndex)) return;
       const seat = af.actingSeat;
       switch (ga.do) {
         case "burnSelfForBlood": {
@@ -9159,6 +11072,52 @@ function addCryptAbilities(
           // Both can have left play between announcement and resolution.
           if (!cardId || !actor) return;
           ops.moveAttachment(cardId, actor.id, seat);
+          return;
+        }
+        case "burnBlood": {
+          // Target and actor were fixed at announcement and either can
+          // have left play since — a derived read must be total.
+          const m = p["target"] ? findMinion(ops.state, p["target"]) : null;
+          if (!m) return;
+          const amount = Math.min(ga.amount ?? 1, m.blood);
+          if (amount <= 0) return;
+          ops.emit({ type: "BloodBurned", minion: m.id, amount });
+          if (ga.steal) {
+            const actor = findMinion(ops.state, af.acting);
+            if (actor) ops.emit({ type: "BloodGained", minion: actor.id, amount });
+          }
+          return;
+        }
+        case "burnSelfAndBurnMinion": {
+          // The PRICE is the actor, and it is paid whether or not the
+          // target is still there — "burn himself AND …" is one sentence
+          // with two burns, not a burn bought with a burn.
+          const actor = findMinion(ops.state, af.acting);
+          const victim = p["target"] ? findMinion(ops.state, p["target"]) : null;
+          if (victim) ops.burnMinion(victim.id);
+          if (actor) ops.burnMinion(actor.id);
+          return;
+        }
+        case "burnTorporVampire": {
+          const m = p["target"] ? findMinion(ops.state, p["target"]) : null;
+          // Rescued between announcement and resolution: nothing to burn.
+          if (!m || !m.inTorpor) return;
+          ops.burnMinion(m.id);
+          if (ga.gainLife) {
+            const actor = findMinion(ops.state, af.acting);
+            if (actor) ops.emit({ type: "BloodGained", minion: actor.id, amount: ga.gainLife });
+          }
+          return;
+        }
+        case "burnPermanent": {
+          const cardId = p["card"];
+          // The target was fixed at announcement (p. 25) and can have
+          // left play since — burnt by its own controller, or by another
+          // Methuselah's card in the action's own impulse windows. A
+          // vanished target is not a failed action, it is an action with
+          // nothing left to do.
+          if (!cardId || ops.controllerOfEntry(cardId) === null) return;
+          ops.burnPermanent(cardId);
           return;
         }
         case "ashExchange": {
@@ -9251,7 +11210,7 @@ function addCryptAbilities(
         },
       };
     }
-  }
+  });
 
   // "After a minion in combat with <this vampire> leaves the ready
   // region, their controller burns N pool" (Egidia Arrú).
@@ -10233,6 +12192,145 @@ function addEquipmentAbilities(spec: CardSpec, handler: CardHandler): void {
       }
     }
 
+    // "…may BURN IT to get +2 intercept for the current action" (§2). The
+    // same p. 26 gate as `interceptForBlood` — the bearer must be the one
+    // attempting the block and still short — but no discipline test and
+    // no repeat, because the price is the card.
+    const bfi = eq.burnForIntercept;
+    if (bfi !== undefined && ctx.action && ctx.blockAttempt) {
+      if (
+        ctx.blockAttempt.blocker === bearer.id &&
+        currentIntercept(ctx.state, ctx.action.actionId, bearer.id) <
+          currentStealth(ctx.state, ctx.action.actionId)
+      ) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:burnintercept`,
+          kind: "useAbility",
+          label: `${spec.name}: burn it for +${bfi} intercept`,
+          source: entry.card.id,
+          params: { do: "burnintercept" },
+        });
+      }
+    }
+
+    // "…may burn this card to PREVENT 2 POINTS OF DAMAGE in combat" (§1).
+    // Offered against the damage actually pending on the bearer, which is
+    // also both rulings: prevention is applied to what is being resolved
+    // and nothing carries over [RTR 20041202] [ANK 20200318].
+    if (eq.burnToPrevent !== undefined && ctx.window === "combat.damageResolution") {
+      const cf = ctx.combat;
+      const pd = cf?.pendingDamage[0];
+      if (cf && pd && pd.minion === bearer.id) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:burnprevent`,
+          kind: "useAbility",
+          label: `${spec.name}: burn it to prevent ${eq.burnToPrevent} damage`,
+          source: entry.card.id,
+          params: { do: "burnprevent" },
+        });
+      }
+    }
+
+    // "…or to GAIN 2 BLOOD (ignore excess blood)" (§1). The card prints no
+    // window, so it is offered wherever its controller has an impulse; the
+    // only gate is the futile-option one — a vampire at capacity gains
+    // nothing, which is what "ignore excess" says happens.
+    if (
+      eq.burnForBlood !== undefined &&
+      bearer.kind === "vampire" &&
+      canGainBlood(bearer)
+    ) {
+      out.push({
+        id: `ability:${spec.name}:${entry.card.id}:burnblood`,
+        kind: "useAbility",
+        label: `${spec.name}: burn it to gain ${eq.burnForBlood} blood`,
+        source: entry.card.id,
+        params: { do: "burnblood" },
+      });
+    }
+
+    // "…can burn this card DURING YOUR MASTER PHASE to lock any vampire"
+    // (§2). "Any" is the whole table, your own vampires included — and an
+    // already-locked one is not a legal target, since locking it does
+    // nothing the second sentence could then hang on.
+    const btl = eq.burnToLockVampire;
+    if (btl && ctx.window === "turn.master" && ctx.seat === ctx.turnSeat) {
+      for (const s of ctx.state.seats) {
+        if (s.ousted) continue;
+        for (const m of s.minions) {
+          if (m.kind !== "vampire" || m.locked || m.inTorpor) continue;
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:lockvamp:${m.id}`,
+            kind: "useAbility",
+            label: `${spec.name}: burn it to lock ${m.name}`,
+            source: entry.card.id,
+            params: { do: "lockvamp", target: m.id },
+          });
+        }
+      }
+    }
+
+    // "…to gain 1 level of ANY ONE DISCIPLINE until your next unlock
+    // phase. The vampire cannot choose a Discipline he or she already has
+    // at the superior level" (§3). One option per Discipline in the pool,
+    // read through `disciplinesOf` so a granted superior disqualifies
+    // itself the same way a printed one does.
+    const bfd = eq.burnForDiscipline;
+    if (bfd && bearer.kind === "vampire") {
+      const have = disciplinesOf(bearer);
+      for (const d of DISCIPLINES) {
+        if (have[d] === "superior") continue;
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:disc:${d}`,
+          kind: "useAbility",
+          label: `${spec.name}: burn it for +${bfd.levels} level of ${d}`,
+          source: entry.card.id,
+          params: { do: "disc", disc: d },
+        });
+      }
+    }
+
+    // "After resolving a SUCCESSFUL action, this minion may lock the
+    // Helicopter to unlock" (§2). `action.afterResolution` is the window
+    // that means "successful"; the bearer must be the actor and must
+    // actually be locked, or the option buys nothing.
+    if (
+      eq.lockToUnlockAfterSuccess &&
+      ctx.window === "action.afterResolution" &&
+      !entry.locked &&
+      bearer.locked &&
+      ctx.action?.acting === bearer.id
+    ) {
+      out.push({
+        id: `ability:${spec.name}:${entry.card.id}:unlockme`,
+        kind: "useAbility",
+        label: `${spec.name}: lock it to unlock ${bearer.name}`,
+        source: entry.card.id,
+        params: { do: "unlockme" },
+      });
+    }
+
+    // "If the anarch with this card is READY, he or she can burn N blood
+    // to cause an action DIRECTED AT HIM OR HER to fail" (§3).
+    const bba = eq.burnBloodToFailAction;
+    if (bba && ctx.action && isReady(bearer) && bearer.blood >= bba.blood) {
+      const af = ctx.action;
+      const aimed = af.targetMinion ? findMinion(ctx.state, af.targetMinion) : null;
+      // *"Cannot be used while a block is being attempted, or has already
+      // been successful"* [ANK 20260316] [LSJ 20041022] — state A, which
+      // is the same gate the ally form already reads.
+      const sectOk = bba.requiresSect === undefined || bearer.sect === bba.requiresSect;
+      if (sectOk && aimed?.id === bearer.id && af.step === "A" && !ctx.blockAttempt) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:failaction`,
+          kind: "useAbility",
+          label: `${spec.name}: burn ${bba.blood} blood to make this action fail`,
+          source: entry.card.id,
+          params: { do: "failaction" },
+        });
+      }
+    }
+
     // "They can burn this card before range is determined to end combat."
     if (eq.burnToEndCombat && ctx.window === "combat.beforeRange" && ctx.combat) {
       const cf = ctx.combat;
@@ -10267,6 +12365,67 @@ function addEquipmentAbilities(spec: CardSpec, handler: CardHandler): void {
         delta: eq.interceptForBlood.amount,
         source: spec.name,
       });
+      return;
+    }
+    if (act === "burnintercept" && eq.burnForIntercept !== undefined && owner.minion) {
+      const af = ops.action();
+      if (!af) return;
+      // Burn first: the card is the price, and a price paid after the
+      // benefit is a price a later effect can dodge.
+      ops.burnPermanent(entry.card.id);
+      ops.emit({
+        type: "InterceptModified",
+        actionId: af.actionId,
+        minion: owner.minion,
+        delta: eq.burnForIntercept,
+        source: spec.name,
+      });
+      return;
+    }
+    // The four burn-the-card arms (§§1–3). Every one of them burns FIRST:
+    // the card is the price, and a price paid after the benefit is a price
+    // a later effect can dodge.
+    if (act === "burnprevent" && eq.burnToPrevent !== undefined && owner.minion) {
+      ops.burnPermanent(entry.card.id);
+      ops.preventDamageFor(owner.minion, eq.burnToPrevent);
+      return;
+    }
+    if (act === "burnblood" && eq.burnForBlood !== undefined && owner.minion) {
+      ops.burnPermanent(entry.card.id);
+      ops.emit({ type: "BloodGained", minion: owner.minion, amount: eq.burnForBlood });
+      return;
+    }
+    if (act === "lockvamp" && eq.burnToLockVampire) {
+      const target = choice.params["target"];
+      if (!target) throw new Error(`${spec.name}: no lock target`);
+      ops.burnPermanent(entry.card.id);
+      ops.emit({ type: "MinionLocked", minion: target });
+      if (eq.burnToLockVampire.skipNextUnlock) {
+        const m = findMinion(ops.state, target);
+        if (m) m.skipNextUnlock = true;
+      }
+      return;
+    }
+    if (act === "disc" && eq.burnForDiscipline && owner.minion) {
+      const disc = choice.params["disc"];
+      if (!disc) throw new Error(`${spec.name}: no Discipline chosen`);
+      ops.burnPermanent(entry.card.id);
+      const m = findMinion(ops.state, owner.minion);
+      if (m) m.disciplineBoostUntilUnlock = disc;
+      return;
+    }
+    if (act === "unlockme" && eq.lockToUnlockAfterSuccess && owner.minion) {
+      ops.lockPermanent(entry.card.id);
+      ops.emit({ type: "MinionUnlocked", minion: owner.minion });
+      return;
+    }
+    if (act === "failaction" && eq.burnBloodToFailAction && owner.minion) {
+      ops.emit({
+        type: "BloodBurned",
+        minion: owner.minion,
+        amount: eq.burnBloodToFailAction.blood,
+      });
+      ops.failAction();
       return;
     }
     if (act === "unblockable" && eq.announceUnblockable && owner.minion) {
@@ -10327,6 +12486,114 @@ function addDeclinedBleedBonus(spec: CardSpec, handler: CardHandler): void {
 function addRetainerAbilities(spec: CardSpec, handler: CardHandler): void {
   const ra = spec.permanent?.retainerAbilities;
   if (!ra) return;
+
+  // "If the vampire with this retainer is IN TORPOR, he or she gains N
+  // blood at the beginning of his or her minion phase" (§2). Automatic —
+  // "gains", not "you can" — and gated on the EMPLOYER's phase, which is
+  // what "his or her minion phase" names.
+  const tb = ra.torporBloodAtMinionPhase;
+  if (tb !== undefined) {
+    handler.onMinionPhase = (entry, owner, turnSeat, ops) => {
+      if (turnSeat !== (entry.controller ?? owner.seat)) return;
+      const m = owner.minion ? findMinion(ops.state, owner.minion) : null;
+      if (!m || !m.inTorpor || !canGainBlood(m)) return;
+      ops.emit({ type: "BloodGained", minion: m.id, amount: tb });
+    };
+  }
+
+  // "During your unlock phase, the employer burns N blood, or this
+  // retainer is burned" (§3). A real question only while the employer can
+  // pay; otherwise the card is simply burned, because a frame with one
+  // answer is a frame nobody should be asked.
+  const up = ra.unlockUpkeep;
+  if (up) {
+    const priorUnlock = handler.onAnyUnlock?.bind(handler);
+    handler.onAnyUnlock = (entry, owner, unlockingSeat, ops) => {
+      priorUnlock?.(entry, owner, unlockingSeat, ops);
+      const controller = entry.controller ?? owner.seat;
+      if (unlockingSeat !== controller) return;
+      const m = owner.minion ? findMinion(ops.state, owner.minion) : null;
+      if (!m || m.blood < up.blood) {
+        ops.burnPermanent(entry.card.id);
+        return;
+      }
+      ops.raiseChoice({
+        seat: controller,
+        cardName: spec.name,
+        cardId: entry.card.id,
+        key: "retainerUpkeep",
+      });
+    };
+    const priorOptions = handler.choiceOptions?.bind(handler);
+    handler.choiceOptions = (frame, state, registry) => {
+      if (frame.key !== "retainerUpkeep") return priorOptions?.(frame, state, registry) ?? [];
+      return [
+        {
+          id: `choice:${spec.name}:${frame.cardId}:retainerUpkeep:pay`,
+          kind: "answerChoice" as const,
+          label: `${spec.name}: burn ${up.blood} blood to keep them`,
+          params: { pay: "yes" },
+        },
+        {
+          id: `choice:${spec.name}:${frame.cardId}:retainerUpkeep:burn`,
+          kind: "answerChoice" as const,
+          label: `${spec.name}: let them burn`,
+          params: { pay: "no" },
+        },
+      ];
+    };
+    const priorApply = handler.applyChoice?.bind(handler);
+    handler.applyChoice = (frame, choice, ops) => {
+      if (frame.key !== "retainerUpkeep") {
+        priorApply?.(frame, choice, ops);
+        return;
+      }
+      const bearer = bearerOf(ops.state, frame.cardId ?? "");
+      if (choice.params["pay"] === "yes" && bearer) {
+        ops.emit({ type: "BloodBurned", minion: bearer.id, amount: up.blood });
+        return;
+      }
+      if (frame.cardId) ops.burnPermanent(frame.cardId);
+    };
+  }
+
+  // "During your minion phase, you may look at ONE CARD PICKED AT RANDOM
+  // from your prey's hand" (§4). Once a phase, and only while the prey
+  // actually holds a card — a look at an empty hand is the futile option.
+  if (ra.peekPreyRandomCard) {
+    const priorAbility = handler.abilityOptions?.bind(handler);
+    handler.abilityOptions = (entry, owner, ctx) => {
+      const out = [...(priorAbility?.(entry, owner, ctx) ?? [])];
+      const controller = entry.controller ?? owner.seat;
+      if (ctx.seat !== controller || ctx.turnSeat !== controller) return out;
+      if (ctx.window !== "turn.minion" || entry.usedThisPhase) return out;
+      if (getSeat(ctx.state, preyOf(ctx.state, controller)).hand.length === 0) return out;
+      out.push({
+        id: `ability:${spec.name}:${entry.card.id}:peek`,
+        kind: "useAbility",
+        label: `${spec.name}: look at a random card in your prey's hand`,
+        source: entry.card.id,
+        params: { act: "retainerPeek" },
+      });
+      return out;
+    };
+    const priorUse = handler.useAbility?.bind(handler);
+    handler.useAbility = (entry, owner, choice, ops) => {
+      if (choice.params["act"] !== "retainerPeek") {
+        priorUse?.(entry, owner, choice, ops);
+        return;
+      }
+      const controller = entry.controller ?? owner.seat;
+      const hand = getSeat(ops.state, preyOf(ops.state, controller)).hand;
+      if (hand.length === 0) return;
+      // Through the seeded generator, never Math.random: a replay must
+      // see the same card (docs/retainer-upkeep-design.md §4).
+      const card = hand[ops.randomIndex(hand.length)];
+      if (!card) return;
+      entry.usedThisPhase = true;
+      ops.emit({ type: "CardsRevealed", to: controller, cards: [card.id] });
+    };
+  }
 
   // "If the action to employ this retainer is successful, unlock this
   // vampire" — at one of two moments, and the basic's delay is a real
@@ -10395,6 +12662,91 @@ function addRetainerAbilities(spec: CardSpec, handler: CardHandler): void {
       }
     }
 
+    // "Vampire with this retainer may burn X blood to get +X intercept
+    // for the current action" (Corpse Minion, §1). One point at a time,
+    // repeatable — the card is never spent, so nothing latches. Offered
+    // on the same terms as `lockForIntercept`: only while this minion is
+    // the one attempting the block (p. 26, from the blocker's side).
+    if (ra.burnBloodForIntercept && ctx.action) {
+      const af = ctx.action;
+      const ba = ctx.blockAttempt;
+      if (ba && ba.blocker === bearer.id && bearer.blood >= 1) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:bloodintercept`,
+          kind: "useAbility",
+          label: `${spec.name}: burn 1 blood for +1 intercept`,
+          source: entry.card.id,
+          params: { act: "retainerBloodIntercept", action: af.actionId },
+        });
+      }
+    }
+
+    // "The employer may lock this retainer to get +N stealth for the
+    // current action" (Malajit, §2). The mirror of `lockForIntercept`,
+    // and gated the same way p. 26 gates every stealth card: only when
+    // stealth is actually needed.
+    if (ra.lockForStealth && !entry.locked && ctx.action) {
+      const af = ctx.action;
+      const ba = ctx.blockAttempt;
+      // A block attempt must be underway and winning: the same gate
+      // `modifyStealth` applies to every stealth card, which is p. 26's
+      // only-when-needed rule and the first of the three gates in
+      // CLAUDE.md that make an option vanish.
+      const needed =
+        af.acting === bearer.id &&
+        !!ba &&
+        currentIntercept(ctx.state, af.actionId, ba.blocker) >=
+          currentStealth(ctx.state, af.actionId);
+      if (needed) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:stealth`,
+          kind: "useAbility",
+          label: `${spec.name}: lock for +${ra.lockForStealth.amount} stealth`,
+          source: entry.card.id,
+          params: { act: "retainerStealth", action: af.actionId },
+        });
+      }
+    }
+
+    // "The employer can burn N blood to SET THE RANGE for the round,
+    // before range is determined, during the first round" (Omael Kuman,
+    // §3).
+    if (ra.burnBloodToSetRange && ctx.window === "combat.beforeRange") {
+      const cf = ctx.combat;
+      if (cf && cf.round === 1 && bearer.blood >= ra.burnBloodToSetRange.blood) {
+        for (const range of ["close", "long"] as const) {
+          if (cf.range === range) continue;
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:range:${range}`,
+            kind: "useAbility",
+            label: `${spec.name}: burn ${ra.burnBloodToSetRange.blood} blood — set the range to ${range}`,
+            source: entry.card.id,
+            params: { act: "retainerSetRange", range },
+          });
+        }
+      }
+    }
+
+    // "When this vampire is BLOCKED, they may burn this retainer and
+    // unlock instead of entering combat" (Ghoul Escort). The first window
+    // of the combat the block produced, to the acting side only.
+    //
+    // "Cannot be used if blocked when LEAVING TORPOR, as no combat would
+    // happen" [ANK 20181122-1] — a blocked leave-torpor never pushes a
+    // combat at all, so this option cannot arise there.
+    if (ra.burnToAvoidCombat && ctx.window === "combat.beforeRange") {
+      const cf = ctx.combat;
+      if (cf?.fromBlock && cf.round === 1 && cf.acting === bearer.id) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:escort`,
+          kind: "useAbility",
+          label: `${spec.name}: burn it — unlock instead of entering combat`,
+          source: entry.card.id,
+          params: { act: "retainerEscort" },
+        });
+      }
+    }
+
     // "The employer can lock this retainer to prevent N damage in combat."
     if (ra.lockToPrevent && !entry.locked && ctx.window === "combat.damageResolution") {
       const cf = ctx.combat;
@@ -10416,7 +12768,14 @@ function addRetainerAbilities(spec: CardSpec, handler: CardHandler): void {
     if (ra.preventPerCombat && ctx.window === "combat.damageResolution") {
       const cf = ctx.combat;
       const pd = cf?.pendingDamage[0];
-      if (cf && pd && pd.minion === bearer.id && !cf.usedThisCombat.includes(entry.card.id)) {
+      if (
+        cf &&
+        pd &&
+        pd.minion === bearer.id &&
+        // "…prevent 1 NON-AGGRAVATED damage each combat" (Nephren-Ka).
+        !(ra.preventNonAggOnly && pd.aggravated) &&
+        !cf.usedThisCombat.includes(entry.card.id)
+      ) {
         out.push({
           id: `ability:${spec.name}:${entry.card.id}:preventcombat`,
           kind: "useAbility",
@@ -10489,6 +12848,46 @@ function addRetainerAbilities(spec: CardSpec, handler: CardHandler): void {
         });
         return;
       }
+      case "retainerBloodIntercept": {
+        const af = ops.action();
+        const ba = ops.state.frames.find((f) => f.kind === "blockAttempt");
+        if (!af || ba?.kind !== "blockAttempt" || !me) return;
+        ops.emit({ type: "BloodBurned", minion: me, amount: 1 });
+        ops.emit({
+          type: "InterceptModified",
+          actionId: af.actionId,
+          minion: ba.blocker,
+          delta: 1,
+          source: spec.name,
+        });
+        return;
+      }
+      case "retainerStealth": {
+        const af = ops.action();
+        if (!af) return;
+        ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+        ops.emit({
+          type: "StealthModified",
+          actionId: af.actionId,
+          delta: ra.lockForStealth!.amount,
+          source: spec.name,
+        });
+        return;
+      }
+      case "retainerSetRange": {
+        if (!me) return;
+        ops.emit({ type: "BloodBurned", minion: me, amount: ra.burnBloodToSetRange!.blood });
+        ops.setCombatRange(choice.params["range"] === "long" ? "long" : "close");
+        return;
+      }
+      case "retainerEscort": {
+        // Burn FIRST, then cancel: the retainer is the price, and the
+        // cancel drops the frame the ability was offered in.
+        ops.burnPermanent(entry.card.id);
+        if (me) ops.emit({ type: "MinionUnlocked", minion: me });
+        ops.cancelCombat("actionBlocked");
+        return;
+      }
       case "retainerPrevent":
         if (!me) return;
         ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
@@ -10534,6 +12933,120 @@ function stealthIsNeeded(ctx: PlayContext, actionId: string): boolean {
   const ba = ctx.blockAttempt;
   if (!ba) return false;
   return currentIntercept(ctx.state, actionId, ba.blocker) >= currentStealth(ctx.state, actionId);
+}
+
+/**
+ * What happens when an ally LEAVES, and what it pays to stay
+ * (docs/plain-allies-design.md §5). Three clauses, one hook each:
+ *
+ *  - `burnBounty` — "if a vampire controlled by another Methuselah burns
+ *    this ally in combat or as an action, he or she gains N blood"
+ *    (Young Bloods). The burner is DERIVED from the live frame rather
+ *    than plumbed through every burn path: the other combatant if this
+ *    ally is in a combat, otherwise the acting minion of an action aimed
+ *    at it. "In combat or as an action" is the card naming exactly those
+ *    two frames, so a burn from anywhere else (an event, an upkeep) pays
+ *    nothing — which is what the sentence says.
+ *  - `shuffleIntoLibraryOnBurn` — "if this ally is burned, shuffle him
+ *    into his owner's library" (Amam). Fired from `onLeaveReady`, which
+ *    runs BEFORE `burnMinion` walks the attachments, so the entry is
+ *    already gone by the time the burn would have sent it to the ash heap.
+ *  - `unlockBurnLife` — "during your unlock phase, this ally burns 1
+ *    life" (Gregory Winter).
+ */
+function addAllyBurnRules(spec: CardSpec, handler: CardHandler): void {
+  const a = spec.ally;
+  const upkeep = [spec.permanent?.statics, ...spec.modes.map((m) => m.statics)].find(
+    (s) => s?.unlockBurnLife !== undefined,
+  )?.unlockBurnLife;
+  const phaseUnlock = [spec.permanent?.statics, ...spec.modes.map((m) => m.statics)].some(
+    (s) => s?.unlockAtMinionPhase,
+  );
+  if (
+    !a?.burnBounty &&
+    !a?.shuffleIntoLibraryOnBurn &&
+    !a?.opposingBurnedGainLife &&
+    !phaseUnlock &&
+    upkeep === undefined
+  ) {
+    return;
+  }
+
+  if (a?.burnBounty || a?.shuffleIntoLibraryOnBurn) {
+    const prior = handler.onLeaveReady?.bind(handler);
+    handler.onLeaveReady = (entry, owner, info, ops) => {
+      prior?.(entry, owner, info, ops);
+      if (info.minion !== owner.minion || info.how !== "burned") return;
+      if (a.burnBounty) {
+        const burner = burnerOf(ops.state, info.minion);
+        if (burner && burner.kind === "vampire" && burner.controller !== owner.seat) {
+          ops.emit({ type: "BloodGained", minion: burner.id, amount: a.burnBounty.blood });
+        }
+      }
+      if (a.shuffleIntoLibraryOnBurn) ops.shuffleIntoLibrary(entry.card.id);
+    };
+  }
+
+  if (a?.opposingBurnedGainLife) {
+    const gain = a.opposingBurnedGainLife;
+    const prior = handler.onLeaveReady?.bind(handler);
+    handler.onLeaveReady = (entry, owner, info, ops) => {
+      prior?.(entry, owner, info, ops);
+      if (info.how !== "burned" || owner.minion === null || info.minion === owner.minion) return;
+      const cf = ops.state.frames.find((f) => f.kind === "combat");
+      if (cf?.kind !== "combat") return;
+      const mine = cf.acting === owner.minion ? cf.opposing : cf.acting;
+      if (mine !== info.minion) return;
+      const me = findMinion(ops.state, owner.minion);
+      // "…CAN gain 1 life": optional, but a gain that is already capped at
+      // starting life has no downside, and an option list nobody would
+      // ever decline is what `docs/futile-options-design.md` is about.
+      if (me && canGainBlood(me)) ops.emit({ type: "BloodGained", minion: me.id, amount: gain });
+    };
+  }
+
+  // "During your minion phase, <this ally> can unlock" (Tutu). Fired on
+  // the minion phase OPENING — the hook wave 43 had to build — and only
+  // in its own controller's phase, which is what "your" names.
+  if (
+    [spec.permanent?.statics, ...spec.modes.map((m) => m.statics)].some(
+      (s) => s?.unlockAtMinionPhase,
+    )
+  ) {
+    const priorPhase = handler.onMinionPhase?.bind(handler);
+    handler.onMinionPhase = (entry, owner, turnSeat, ops) => {
+      priorPhase?.(entry, owner, turnSeat, ops);
+      if (turnSeat !== (entry.controller ?? owner.seat) || owner.minion === null) return;
+      const me = findMinion(ops.state, owner.minion);
+      if (me?.locked) ops.emit({ type: "MinionUnlocked", minion: me.id });
+    };
+  }
+
+  if (upkeep !== undefined) {
+    const prior = handler.onControllerUnlock?.bind(handler);
+    handler.onControllerUnlock = (entry, owner, ops) => {
+      prior?.(entry, owner, ops);
+      const n = entry.statics.unlockBurnLife;
+      if (n === undefined || owner.minion === null) return;
+      const me = findMinion(ops.state, owner.minion);
+      if (me) ops.emit({ type: "BloodBurned", minion: me.id, amount: Math.min(n, me.blood) });
+    };
+  }
+}
+
+/**
+ * Who just burned `victim`, for `ally.burnBounty`. Derived from the live
+ * frames — "in combat or as an action" names exactly two — and total: a
+ * burn from anywhere else has no burner and returns null.
+ */
+function burnerOf(state: GameState, victim: MinionId): MinionState | null {
+  const cf = state.frames.find((f) => f.kind === "combat");
+  if (cf?.kind === "combat" && (cf.acting === victim || cf.opposing === victim)) {
+    return findMinion(state, cf.acting === victim ? cf.opposing : cf.acting);
+  }
+  const af = [...state.frames].reverse().find((f) => f.kind === "action");
+  if (af?.kind === "action" && af.target === victim) return findMinion(state, af.acting);
+  return null;
 }
 
 function addAllyAbilities(spec: CardSpec, handler: CardHandler): void {
@@ -11242,6 +13755,8 @@ function addCombatAttachBehaviour(spec: CardSpec, handler: CardHandler): void {
   // Whether the card CAN prevent is a spec question; the amount and the
   // filter are read off the entry, which knows which mode created it.
   const canPrevent = attach?.burnToPrevent !== undefined;
+  const canDiscount = attach?.burnToDiscountCombatCard !== undefined;
+  const holdsAmmo = attach?.storeAmmoFromHand === true;
   const lockGrant = selfAttach?.combatLockGrant;
   const buyOff = spec.permanent?.bearerCanBurn;
   const unlockBurn = victimAttach?.bearerUnlockBurn;
@@ -11267,7 +13782,7 @@ function addCombatAttachBehaviour(spec: CardSpec, handler: CardHandler): void {
     };
   }
 
-  if (!canPrevent && !lockGrant && !buyOff) return;
+  if (!canPrevent && !lockGrant && !buyOff && !canDiscount && !holdsAmmo) return;
 
   const baseOptions = handler.abilityOptions?.bind(handler);
   const baseUse = handler.useAbility?.bind(handler);
@@ -11294,6 +13809,57 @@ function addCombatAttachBehaviour(spec: CardSpec, handler: CardHandler): void {
             label: `${spec.name}: burn it to prevent ${prevent.amount} damage`,
             source: entry.card.id,
             params: { act: "burnToPrevent" },
+          });
+        }
+      }
+    }
+
+    // "This vampire can burn this card to reduce the cost of a combat
+    // card THEY play by 1 blood" (Focus the Blood). Offered before range,
+    // where the blood is still worth spending, and only to the bearer's
+    // own controller — "a combat card THEY play" is the whole scope.
+    const discount = entry.statics.burnToDiscountCombatCard;
+    if (
+      discount !== undefined &&
+      ctx.seat === controller &&
+      ctx.combat &&
+      ctx.window === "combat.beforeRange"
+    ) {
+      out.push({
+        id: `ability:${spec.name}:${entry.card.id}:discount`,
+        kind: "useAbility",
+        label: `${spec.name}: burn it — ${bearer.name}'s next combat card costs ${discount} less blood`,
+        source: entry.card.id,
+        params: { act: "combatDiscount" },
+      });
+    }
+
+    // "When using this gun, you may use the effect of the ammo card as if
+    // it were played from your hand" (Magazine). The gun is the one this
+    // card was put on, and the FOUR AMMO RULES are asked through the same
+    // helper the hand path uses — the whole reason that helper exists (§4).
+    if (holdsAmmo && ctx.seat === controller && ctx.window === "combat.beforeResolution") {
+      const cf = ctx.combat;
+      const side =
+        cf && bearer.id === cf.acting
+          ? "acting"
+          : cf && bearer.id === cf.opposing
+            ? "opposing"
+            : null;
+      const linked = entry.tags.find((t) => t.startsWith("gun:"))?.slice(4);
+      const held = entry.stored?.[0];
+      if (cf && side && linked && held) {
+        const load = ctx.registry[held.name]?.ammoLoad?.(null);
+        // "…requirements and cost apply as normal": no ammo card in the
+        // pool has either, so the parenthetical costs nothing today —
+        // recorded rather than silently skipped.
+        if (load && ammoTargetGun(cf, side, bearer, load.minGunUses) === linked) {
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:ammo`,
+            kind: "useAbility",
+            label: `${spec.name}: fire ${held.name} from the magazine`,
+            source: entry.card.id,
+            params: { act: "magazineAmmo", gun: linked },
           });
         }
       }
@@ -11372,6 +13938,35 @@ function addCombatAttachBehaviour(spec: CardSpec, handler: CardHandler): void {
       if (!p) throw new Error(`${spec.name}: no prevention on this card`);
       ops.preventDamageFor(owner.minion, p.amount);
       ops.burnPermanent(entry.card.id);
+      return;
+    }
+    // Focus the Blood: the blood is ALREADY on the card, so burning it is
+    // the payment. A one-shot `playCostMod` scoped to this bearer — the
+    // combat frame holds both combatants' plays, so without the minion
+    // scope the opposing vampire would spend it.
+    if (act === "combatDiscount" && owner.minion) {
+      const n = entry.statics.burnToDiscountCombatCard;
+      if (n === undefined) throw new Error(`${spec.name}: no discount on this card`);
+      ops.addCombatPlayCostMod({
+        amount: -n,
+        pays: "blood",
+        cardTypes: ["combat"],
+        once: true,
+        minionId: owner.minion,
+      });
+      ops.burnPermanent(entry.card.id);
+      return;
+    }
+    // Magazine: "use the effect of the ammo card as if it were played from
+    // your hand" — the SAME `loadAmmo` the hand path calls, with the
+    // stored card's own id, so the one-ammo-per-gun rule counts it.
+    if (act === "magazineAmmo") {
+      const held = entry.stored?.[0];
+      const gun = choice.params["gun"];
+      const load = held ? ops.registry[held.name]?.ammoLoad?.(null) : undefined;
+      if (!held || !gun || !load) return;
+      ops.loadAmmo(gun, { ...load, cardId: held.id, name: held.name });
+      ops.burnStoredCard(entry.card.id, held.id);
       return;
     }
     if (act === "combatStrength" && lockGrant?.strengthRound && owner.minion) {
@@ -11577,9 +14172,14 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   const bleedSale = perm?.discardForBleed;
   const rescue = perm?.torporRescue;
   const transfers = perm?.transferAbilities;
+  const handSize = perm?.handSizeLock;
   const peek = perm?.cryptPeek;
   const ambush = perm?.preReferendumAmbush;
+  const store = perm?.bloodStore;
+  const offers = store?.offers ?? [];
   if (
+    offers.length === 0 &&
+    !handSize &&
     !afterBlood &&
     !frenzy &&
     !exchange &&
@@ -11609,11 +14209,127 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   > = {};
 
   if (frenzy) handler.abilityInAsPlayed = true;
+  // "ANY Methuselah can …": the options above are built for `ctx.seat`, and
+  // without this flag the engine only asks the controller's card at all.
+  if (transfers?.burnByAnySeat || transfers?.tutor) handler.abilityAnySeat = true;
 
   handler.abilityOptions = (entry, owner, ctx) => {
     const out: LegalOption[] = baseOptions ? [...baseOptions(entry, owner, ctx)] : [];
     const controller = entry.controller ?? owner.seat;
+    // "ANY Methuselah can … during HIS OR HER influence phase" — offered
+    // before the controller gate below, because the whole point of these
+    // two is that they are not the controller's (§4, §5). The payer is
+    // `ctx.seat`, whose phase it is, and whose transfers and pool are
+    // spent — which is why nothing here reads `controller`.
+    if (
+      (transfers?.burnByAnySeat || transfers?.tutor) &&
+      ctx.window === "turn.influence" &&
+      ctx.seat === ctx.turnSeat
+    ) {
+      const tf = ctx.state.frames[0];
+      const left = tf?.kind === "turn" ? tf.transfersLeft : 0;
+      const payer = getSeat(ctx.state, ctx.seat);
+      const burn = transfers.burnByAnySeat;
+      // A price you cannot pay is not an option, and paying your last pool
+      // ousts you (p. 6).
+      if (burn && left >= burn.transfers && payer.pool > burn.poolCost) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:burnfor:${ctx.seat}`,
+          kind: "useAbility",
+          label: `${spec.name}: burn it (${burn.poolCost} pool, ${burn.transfers} transfers)`,
+          source: entry.card.id,
+          params: { act: "burnByAnySeat", payer: ctx.seat },
+        });
+      }
+      const tutor = transfers.tutor;
+      // "…AND remove a vampire in his or her uncontrolled region from the
+      // game": one clause, one cost, so it is offered only when both halves
+      // can happen — the `cryptDraw` reading, beside it.
+      if (tutor && left >= tutor.transfers) {
+        for (const u of payer.uncontrolled) {
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:tutor:${ctx.seat}:${u.card.id}`,
+            kind: "useAbility",
+            label: `${spec.name}: remove ${u.card.name} to search your library (${tutor.transfers} transfers)`,
+            source: entry.card.id,
+            params: { act: "tutor", payer: ctx.seat, target: u.card.id },
+          });
+        }
+      }
+    }
     if (ctx.seat !== controller) return out;
+    // "Lock to get +1 hand size THIS TURN" (Ennoia's Theater) — the card
+    // prints no timing restriction, so it is offered wherever its
+    // controller has an impulse, like Dreams of the Sphinx's own hand-size
+    // clause (docs/temporary-hand-size-design.md).
+    if (handSize && !entry.locked) {
+      out.push({
+        id: `ability:${spec.name}:${entry.card.id}:handsize`,
+        kind: "useAbility",
+        label: `${spec.name}: lock it for +${handSize.amount} hand size this turn`,
+        source: entry.card.id,
+        params: { act: "handSize" },
+      });
+    }
+    // The Powerbase blood store (docs/blood-banking-locations-design.md §2).
+    // "During X, do Y" is once per phase (p. 16) and the offers are an
+    // EITHER/OR — Chicago banks a blood or cashes the pile, never both —
+    // so one `phaseUses` latch covers the whole set rather than one per
+    // offer, which is what the card says.
+    if (offers.length > 0 && (entry.phaseUses ?? 0) === 0) {
+      const seat = getSeat(ctx.state, controller);
+      const tf = ctx.state.frames.find((f) => f.kind === "turn");
+      const held = entry.counters ?? 0;
+      for (const [i, o] of offers.entries()) {
+        const inWindow =
+          o.window === "unlock"
+            ? ctx.window === "turn.unlock" && ctx.turnSeat === controller
+            : ctx.window === "turn.master" && ctx.seat === ctx.turnSeat;
+        if (!inWindow) continue;
+        if (o.usesMasterAction && (tf?.kind !== "turn" || tf.masterActionsLeft <= 0)) continue;
+        const price = o.poolCost ?? 0;
+        // A price you cannot pay is not an option, and paying your last
+        // pool for a card that pays you back later ousts you now (p. 6).
+        if (price > 0 && seat.pool <= price) continue;
+        if (o.kind === "bankToCard") {
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:store:${i}`,
+            kind: "useAbility",
+            label: `${spec.name}: add ${o.amount} blood from the blood bank`,
+            source: entry.card.id,
+            params: { act: "bloodStore", offer: String(i) },
+          });
+        } else if (o.kind === "cardToPool") {
+          const take = o.amount === "all" ? held : Math.min(o.amount, held);
+          // "Move 2 blood from this card to your pool" on a card holding
+          // one moves one — the printed amount is a ceiling, not a
+          // requirement — but on an EMPTY card it is worth nothing and
+          // spends the phase's one use (docs/futile-options-design.md).
+          if (take <= 0) continue;
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:store:${i}`,
+            kind: "useAbility",
+            label: `${spec.name}: move ${take} blood to your pool`,
+            source: entry.card.id,
+            params: { act: "bloodStore", offer: String(i) },
+          });
+        } else {
+          // "Move up to N pool to this card and add 1 blood from the blood
+          // bank for each pool you move" — one option per amount, since
+          // the choice of how much is the player's.
+          for (let n = 1; n <= o.max; n++) {
+            if (seat.pool - price <= n) break;
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:store:${i}:${n}`,
+              kind: "useAbility",
+              label: `${spec.name}: move ${n} pool here and match it from the bank`,
+              source: entry.card.id,
+              params: { act: "bloodStore", offer: String(i), amount: String(n) },
+            });
+          }
+        }
+      }
+    }
     if (afterBlood && ctx.window === "action.afterResolution" && !entry.locked) {
       const af = ctx.action;
       const card = af?.card;
@@ -11849,6 +14565,26 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
           params: { act: "cashOut" },
         });
       }
+      // "Lock during your influence phase to get +1 transfer" — gaining,
+      // not spending, so there is no `left` gate; the lock is the limit
+      // (§2). "Can be used AT ANY MOMENT during the influence phase to get
+      // the additional transfer" [RTR 20180303].
+      const gain = transfers.gain;
+      if (gain && !(gain.lock === true && entry.locked)) {
+        const edgeOk = gain.burnEdge !== true || ctx.state.edge === controller;
+        if (edgeOk) {
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:gaintransfers`,
+            kind: "useAbility",
+            label:
+              `${spec.name}: ${gain.lock ? "lock" : "use"} it` +
+              `${gain.burnEdge ? " and burn the Edge" : ""} for +${gain.transfers} transfer` +
+              `${gain.transfers === 1 ? "" : "s"}`,
+            source: entry.card.id,
+            params: { act: "gainTransfers" },
+          });
+        }
+      }
     }
 
     // "If a political action is successful, BEFORE THE REFERENDUM, you
@@ -11970,6 +14706,31 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       ops.emit({ type: "BloodGained", minion: target, amount: afterBlood.amount });
     };
   }
+  if (offers.length > 0) {
+    extraUse["bloodStore"] = (entry, owner, choice, ops) => {
+      const o = offers[Number(choice.params["offer"] ?? "-1")];
+      if (!o) throw new Error(`${spec.name}: no blood-store offer`);
+      const controller = entry.controller ?? owner.seat;
+      entry.phaseUses = (entry.phaseUses ?? 0) + 1;
+      if (o.usesMasterAction) ops.spendMasterAction();
+      if (o.poolCost) ops.emit({ type: "PoolBurned", seat: controller, amount: o.poolCost });
+      if (o.kind === "bankToCard") {
+        ops.addCounters(entry.card.id, o.amount);
+      } else if (o.kind === "cardToPool") {
+        const held = entry.counters ?? 0;
+        const take = o.amount === "all" ? held : Math.min(o.amount, held);
+        ops.removeCounters(entry.card.id, take);
+        ops.emit({ type: "PoolGained", seat: controller, amount: take });
+      } else {
+        const n = Number(choice.params["amount"] ?? "0");
+        ops.emit({ type: "PoolBurned", seat: controller, amount: n });
+        // The pool moved sits on the card as a counter alongside the blood
+        // the bank matches it with — p. 5, they are the same counter.
+        ops.addCounters(entry.card.id, n * 2);
+      }
+      settleBloodStore(spec, entry, ops);
+    };
+  }
   if (frenzy) {
     extraUse["frenzyCancel"] = (entry, _owner, _choice, ops) => {
       ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
@@ -12024,6 +14785,109 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       ops.spendTransfers(transfers.cashOut!.transfers);
       ops.emit({ type: "PoolGained", seat: controller, amount: transfers.cashOut!.gainPool });
       ops.burnPermanent(entry.card.id);
+    };
+    void 0;
+  }
+  if (handSize) {
+    extraUse["handSize"] = (entry, owner, _choice, ops) => {
+      ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      ops.addHandSizeBonus({
+        seat: entry.controller ?? owner.seat,
+        amount: handSize.amount,
+        // "THIS TURN": a grant on the turn frame lapses when the frame is
+        // replaced, which is AFTER the discard phase — the p. 50 reading
+        // Dreams of the Sphinx is built on.
+        scope: "turn",
+        cardName: spec.name,
+        cardId: entry.card.id,
+      });
+    };
+  }
+  if (transfers) {
+    extraUse["gainTransfers"] = (entry, owner, _choice, ops) => {
+      const gain = transfers.gain!;
+      const controller = entry.controller ?? owner.seat;
+      if (gain.lock === true) ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      if (gain.burnEdge === true) ops.emit({ type: "EdgeBurned", seat: controller });
+      // One funnel for the count, in the other direction (§2).
+      ops.spendTransfers(-gain.transfers);
+    };
+    extraUse["burnByAnySeat"] = (entry, _owner, choice, ops) => {
+      const burn = transfers.burnByAnySeat!;
+      const payer = choice.params["payer"]!;
+      ops.spendTransfers(burn.transfers);
+      if (burn.poolCost > 0) {
+        ops.emit({ type: "PoolBurned", seat: payer, amount: burn.poolCost });
+      }
+      ops.burnPermanent(entry.card.id);
+    };
+    extraUse["tutor"] = (entry, _owner, choice, ops) => {
+      const tutor = transfers.tutor!;
+      const payer = choice.params["payer"]!;
+      ops.spendTransfers(tutor.transfers);
+      // REMOVAL, not burning (p. 16) — and out of the UNCONTROLLED region,
+      // which is not play.
+      ops.removeUncontrolledFromGame(payer, choice.params["target"]!);
+      ops.raiseChoice({
+        seat: payer,
+        cardName: spec.name,
+        cardId: entry.card.id,
+        key: "searchAnyToHand",
+        // NOT optional: the shuffle p. 14 makes mandatory rides on the
+        // answer, and "find nothing" is an answer (p. 48).
+        optional: false,
+      });
+    };
+  }
+  // "…to search for ANY CARD in his or her library and put it in his or her
+  // hand (discarding and shuffling afterward)" — grafted onto whatever
+  // choice handling the type compiler already produced, for the reason
+  // this whole function is written that way.
+  if (transfers?.tutor) {
+    const baseChoiceOptions = handler.choiceOptions?.bind(handler);
+    const baseApplyChoice = handler.applyChoice?.bind(handler);
+    handler.choiceOptions = (frame, state, registry) => {
+      if (frame.key !== "searchAnyToHand") {
+        return baseChoiceOptions ? baseChoiceOptions(frame, state, registry) : [];
+      }
+      // The searching seat is the frame's, not the card's controller: this
+      // card is played by one Methuselah and used by all of them.
+      const out: LegalOption[] = getSeat(state, frame.seat).library.map((c) => ({
+        id: `choice:${spec.name}:${frame.cardId}:searchAnyToHand:${c.id}`,
+        kind: "answerChoice" as const,
+        label: `Take ${c.name}`,
+        params: { pick: c.id },
+      }));
+      out.push({
+        id: `choice:${spec.name}:${frame.cardId}:searchAnyToHand:none`,
+        kind: "answerChoice" as const,
+        label: "Find nothing",
+        params: { pick: "none" },
+      });
+      return out;
+    };
+    handler.applyChoice = (frame, choice, ops) => {
+      if (frame.key !== "searchAnyToHand") {
+        baseApplyChoice?.(frame, choice, ops);
+        return;
+      }
+      const pick = choice.params["pick"];
+      if (pick && pick !== "none") {
+        const card = getSeat(ops.state, frame.seat).library.find((c) => c.id === pick);
+        if (card) {
+          ops.emit({
+            type: "CardSearchedToHand",
+            seat: frame.seat,
+            cardId: card.id,
+            name: card.name,
+          });
+        }
+      }
+      ops.shuffleLibrary(frame.seat);
+      // "(DISCARDING and shuffling afterward)": the card searched for puts
+      // the hand over its size, and p. 7 sheds the excess — the card names
+      // the rule rather than adding one.
+      ops.discardDownToHandSize(frame.seat, spec.name, frame.cardId);
     };
   }
   if (ambush) {
@@ -12296,6 +15160,7 @@ function compileByType(spec: CardSpec): CardHandler {
   if (spec.cardType === "action") return compileActionCard(spec);
   if (spec.cardType === "combat") return compileCombatCard(spec);
   if (spec.cardType === "master") return compileMasterCard(spec);
+  if (spec.cardType === "event") return compileEventCard(spec);
   if (spec.cardType === "equipment") return compileEquipment(spec);
   if (spec.cardType === "retainer") return compileRetainer(spec);
   if (spec.cardType === "ally") return compileAlly(spec);

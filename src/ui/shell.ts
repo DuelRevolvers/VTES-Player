@@ -621,7 +621,10 @@ export class Shell {
         <div class="row"><button id="ng-back">Leave</button></div></div>`;
     }
     const build = buildTable(this.table);
-    const precons = supportedPrecons().filter((p) => p.playable);
+    // Legal-as-printed decks AND the half decks. A New Blood starter is
+    // fully implemented — every card in it plays — it is simply half a
+    // deck, which is a thing to LABEL rather than a thing to hide.
+    const precons = supportedPrecons().filter((p) => p.playable || p.halfDeck);
     const code = host?.code ?? guest?.code ?? "";
     const online = code !== "" || isOnlineTable(this.table);
     const problems = guest ? guest.problems : build.problems.map((p) => (p.seat ? `${p.seat}: ${p.problem}` : p.problem));
@@ -912,9 +915,21 @@ export class Shell {
                   // to tell a combat deck from a vote deck without
                   // opening 60 cards.
                   const style = preconStyle(p.name);
+                  // The set travels WITH the name. The panel groups by set
+                  // already, but a player scrolling it reads the button,
+                  // not the heading it scrolled past — and the clan names
+                  // repeat across sets, so "Malkavian" alone names two
+                  // different decks.
+                  const half = p.halfDeck
+                    ? ` — half deck (${p.cryptCount} crypt, ${p.libraryCount} library); not legal on its own, p. 14`
+                    : "";
                   return `<button class="precon" data-i="${i}" data-set="${esc(p.set)}"
-                                  data-name="${esc(p.name)}" title="${esc(style ?? p.name)}">
-                            <span class="pname">${esc(p.name)}</span>
+                                  data-name="${esc(p.name)}"
+                                  title="${esc(`${p.name} — ${p.set}${half}${style ? `. ${style}` : ""}`)}">
+                            <span class="ptitle">
+                              <span class="pname">${esc(p.name)}</span>
+                              <span class="pset">${esc(p.set)}${p.halfDeck ? " · half deck" : ""}</span>
+                            </span>
                             ${style ? `<span class="pstyle">${esc(style)}</span>` : ""}
                           </button>`;
                 })
@@ -954,9 +969,11 @@ export class Shell {
         <p class="note"><b>Sets:</b> ${supportedSets().map(esc).join(", ")}.</p>
         <p class="note">
           <b>Precon decks:</b>
-          ${supportedPrecons().filter((p) => p.playable).length} playable as printed.
-          The New Blood starters are half decks by design and need combining
-          before they are legal (${MIN_SEATS === 2 ? "p. 14" : "p. 14"}).
+          ${supportedPrecons().filter((p) => p.playable).length} playable as printed,
+          plus ${supportedPrecons().filter((p) => p.halfDeck).length} New Blood
+          starters. Every card in a starter plays, but a starter is half a
+          deck by design — under p. 14's minimums — so it is offered
+          labelled <i>half deck</i> and is not a tournament-legal deck.
         </p>
       </details>`;
   }

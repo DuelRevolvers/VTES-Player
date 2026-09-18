@@ -298,6 +298,7 @@ describe("Ravnos Cache (101552)", () => {
   it("pays only some of a bigger cost", () => {
     const state = withSource("cache", "Ravnos Cache", 1, cacheSource);
     state.seats[0]!.hand.push({ id: "fang", name: "Kali's Fang" });
+    state.seats[0]!.minions[0]!.clan = "Banu Haqim"; // Kali's Fang's clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
 
     runTrace(engine, [

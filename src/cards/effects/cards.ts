@@ -160,6 +160,66 @@ function praxisSeizure(krcgId: number, city: string): CardSpec {
 }
 
 /**
+ * "+1 stealth action. Requires an Anarch with capacity 5 or more. Title.
+ * Put this card on this Anarch to represent the unique Anarch title of
+ * Baron of <city>. [While this Anarch is <clan> …, they get +1 vote
+ * during referendums they call.] Vampires can call a referendum to burn
+ * this card as a +1 stealth political action; during that referendum,
+ * non-Anarch titles are worth -1 vote."
+ *
+ * The Praxis Seizure in the third sect — but taken by an ACTION rather
+ * than won by a referendum, which is the whole difference and the reason
+ * `attachSelf` had to learn to grant a title (docs/fee-stake-design.md).
+ *
+ * `unique: true` for the Praxis Seizure reason: two Barons of Boston is a
+ * CONTEST, and the engine's contest detector gates on the registry flag.
+ * The city rides in `grantsTitleCity` because `titleContestKey` keys a
+ * baron on the city ALONE — the wave 19 finding, in a third place.
+ */
+function feeStake(krcgId: number, city: string, voteClan?: string[]): CardSpec {
+  return {
+    krcgId,
+    name: `Fee Stake: ${city}`,
+    cardType: "action",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    requiresSect: ["anarch"],
+    requiresCapacity: 5,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [`Baron of ${city}`],
+      vulnerableTo: {
+        stealth: 1,
+        via: "politicalAction",
+        // "…non-Anarch TITLES are worth -1 vote": both halves matter, and
+        // an untitled vampire has no title to devalue.
+        refVoteModifier: { amount: -1, titledOnly: true, notSect: "anarch" },
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "attachSelf",
+            grantsTitle: "baron",
+            grantsTitleCity: city,
+            ...(voteClan
+              ? { statics: { votesWhenCalling: { amount: 1, bearerClan: voteClan } } }
+              : {}),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/**
  * "Requires a Sabbat vampire. Title. If this referendum passes, put this
  * card on the acting vampire to represent the unique Sabbat title of
  * Archbishop of <city>. This could lead to a contested title."
@@ -248,6 +308,65 @@ const PRAXIS_SEIZURES: CardSpec[] = (
   ] as Array<[number, string]>
 ).map(([id, city]) => praxisSeizure(id, city));
 
+// Three of the six print a clan clause; the other three are the plain
+// title (docs/fee-stake-design.md §4).
+const FEE_STAKES: CardSpec[] = (
+  [
+    [100712, "Boston", ["Toreador"]],
+    [100713, "Corte"],
+    [100714, "Los Angeles"],
+    [100715, "New York", ["Brujah"]],
+    [100716, "Perth"],
+    [100717, "Seattle", ["Gangrel"]],
+  ] as Array<[number, string, string[]?]>
+).map(([id, city, clans]) => feeStake(id, city, clans));
+
+/**
+ * The clan Justicars (docs/justicars-design.md).
+ *
+ * "Title. Choose a ready \<clan\>. Successful referendum means this card
+ * is put on the chosen \<clan\> to represent the unique Camarilla title of
+ * \<Clan\> Justicar. In this referendum, each \<clan\> gets +1 vote."
+ *
+ * The Praxis Seizure treatment: one shape, eight names, so one table
+ * builds the specs and the same table builds the handlers, and neither
+ * can gain a card the other has not.
+ *
+ * `camarillaOnly` is the clause four of them print and four of them do
+ * not — "choose a ready CAMARILLA Lasombra" against "choose a ready
+ * Tremere" — and it is a real difference in this pool, not a flourish:
+ * every V5 Gangrel is Anarch, which is why Gangrel Justicar is NOT in
+ * this list (design §4).
+ *
+ * `unique: true` matters as much as anything else here. "The UNIQUE
+ * Camarilla title" is a claim on the CARD as well as on the title, and
+ * the card-control contest (p. 17) gates on `registry[name].isUnique` —
+ * the Praxis Seizure lesson, which these two cards were shipped without
+ * (design §3).
+ */
+const JUSTICAR_CLANS: Array<[krcgId: number, clan: string, camarillaOnly: boolean]> = [
+  [102268, "Banu Haqim", true],
+  [100262, "Brujah", false],
+  [102272, "Lasombra", true],
+  [101154, "Malkavian", true],
+  [101299, "Nosferatu", false],
+  [101990, "Toreador", false],
+  [102021, "Tremere", false],
+  [102111, "Ventrue", false],
+];
+
+const JUSTICARS: CardSpec[] = JUSTICAR_CLANS.map(([krcgId, clan]) => ({
+  krcgId,
+  name: `${clan} Justicar`,
+  cardType: "politicalAction" as const,
+  bloodCost: 0,
+  unique: true,
+  usable: [],
+  // The grant itself is bespoke (`titleGrant`): the card is held aside
+  // until the referendum resolves, which no primitive expresses.
+  modes: [{ level: "basic" as const, discipline: null, effects: [] }],
+}));
+
 const HUNTING_GROUNDS: CardSpec[] = (
   [
     [100015, "Academic Hunting Ground"],
@@ -287,9 +406,172 @@ const HUNTING_GROUNDS: CardSpec[] = (
   ] as Array<[number, string]>
 ).map(([id, name]) => huntingGround(id, name));
 
+/**
+ * The Powerbases that BANK BLOOD (docs/blood-banking-locations-design.md).
+ *
+ * Five unique locations whose text is one shape: blood sits on the card,
+ * the controller draws it down a little at a time, and a minion of
+ * another Methuselah can take the whole pile as a Ⓓ action. They differ
+ * only in which window the offer sits in, how much moves, and who may
+ * raid them — which is exactly what makes `permanent.bloodStore` pay for
+ * all five at once.
+ */
+const POWERBASES: CardSpec[] = [
+  {
+    // "Master: unique location. Put X blood on this card when it is
+    // played, where X is the capacity of a ready Sabbat vampire you
+    // control. During your unlock phase, you may move 1 blood from this
+    // card to your pool. Any vampire may burn this location as a Ⓓ
+    // action. Titled vampires get +1 stealth on that action. Burn this
+    // card if it has no counters."
+    krcgId: 101431,
+    name: "Powerbase: Barranquilla",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      bloodStore: {
+        start: { capacityOfReady: { sect: "sabbat" } },
+        offers: [{ window: "unlock", kind: "cardToPool", amount: 1 }],
+        burnWhenEmpty: true,
+      },
+      // The odd one out: its counter-play BURNS the card rather than
+      // taking the blood, which is why banking it up here is safe.
+      vulnerableTo: {
+        who: { kind: "vampire" },
+        stealthFor: [{ titled: true, delta: 1 }],
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. During your unlock phase, you may move 1
+    // blood from the blood bank to this card or move all the blood on this
+    // card to your pool. A vampire controlled by another Methuselah can
+    // move all the blood on this card to his or her controller's pool as a
+    // Ⓓ action."
+    krcgId: 101434,
+    name: "Powerbase: Chicago",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      bloodStore: {
+        offers: [
+          { window: "unlock", kind: "bankToCard", amount: 1 },
+          { window: "unlock", kind: "cardToPool", amount: "all" },
+        ],
+      },
+      vulnerableTo: { who: { kind: "vampire", othersOnly: true }, outcome: "takeCounters" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. Put 5 blood on this card when it is
+    // played. During each of your unlock phases, move 1 blood from this
+    // card to your pool. Any Sabbat vampire controlled by another
+    // Methuselah may move all the blood on the Powerbase to his or her
+    // controller's pool as a Ⓓ action. Burn this card if it has no blood."
+    krcgId: 101438,
+    name: "Powerbase: Mexico City",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      // No "may" on the drip: this one pays out on a clock and burns
+      // itself when it runs dry, which is the whole card.
+      bloodStore: { start: 5, unlockToPool: 1, burnWhenEmpty: true },
+      vulnerableTo: {
+        who: { kind: "vampire", sect: "sabbat", othersOnly: true },
+        outcome: "takeCounters",
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. As a master phase action, you may burn 1
+    // pool to move 3 blood counters from the blood bank to this card or
+    // move 1 blood counter from this card to your pool. Any Sabbat vampire
+    // controlled by another Methuselah can take a Ⓓ action to move all the
+    // blood on the 'base to his or her controller's blood pool. Burn this
+    // card when the last blood counter on it is removed."
+    krcgId: 101440,
+    name: "Powerbase: New York",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      bloodStore: {
+        // It enters EMPTY and is bought up later — the reason
+        // `burnWhenEmpty` is checked on change and not at put-in-play.
+        offers: [
+          { window: "master", usesMasterAction: true, poolCost: 1, kind: "bankToCard", amount: 3 },
+          { window: "master", usesMasterAction: true, kind: "cardToPool", amount: 1 },
+        ],
+        burnWhenEmpty: true,
+      },
+      vulnerableTo: {
+        who: { kind: "vampire", sect: "sabbat", othersOnly: true },
+        outcome: "takeCounters",
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. During your unlock phase, you may move up
+    // to 3 pool to this card and add 1 blood from the blood bank for each
+    // pool you move, or you may move 2 blood from this card to your pool.
+    // A vampire controlled by another Methuselah may move all the blood on
+    // this card to his or her controller's pool as a Ⓓ action."
+    krcgId: 101444,
+    name: "Powerbase: Washington, D.C.",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      bloodStore: {
+        offers: [
+          { window: "unlock", kind: "poolToCardMatched", max: 3 },
+          { window: "unlock", kind: "cardToPool", amount: 2 },
+        ],
+      },
+      vulnerableTo: { who: { kind: "vampire", othersOnly: true }, outcome: "takeCounters" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+];
+
 export const cardSpecs: CardSpec[] = [
+  ...JUSTICARS,
+  ...POWERBASES,
   ...HUNTING_GROUNDS,
   ...PRAXIS_SEIZURES,
+  ...FEE_STAKES,
   ...CRUSADES,
   // --- Weapons gate (docs/weapons-design.md) ---
   {
@@ -409,6 +691,79 @@ export const cardSpecs: CardSpec[] = [
         // played from hand needs no `abilityInAsPlayed`, which guards
         // abilities of cards IN PLAY (§4).
         effects: [{ kind: "cancelStrikeCard", bloodCost: 1 }],
+      },
+    ],
+  },
+  {
+    // "A vampire can play only one Death Seeker each round. Cancel a
+    //  combat card played by the opposing minion as it is played, and its
+    //  cost is not paid."
+    //
+    // The rulings are all about what canceling DOES, and every one of them
+    // is already the engine's behaviour: *"if used to cancel a strike,
+    // another strike is chosen"* [LSJ 20100206] falls out of the slot
+    // never being filled, and *"the canceled card has still been played"*
+    // [ANK 20190104] is what `playedHistory` records regardless
+    // (docs/one-each-round-design.md §2).
+    krcgId: 100510,
+    name: "Death Seeker",
+    requiresClan: ["Salubri antitribu"],
+    cardType: "combat",
+    bloodCost: 1,
+    poolCost: 0,
+    combatLimit: "round",
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "cancelCombatCard" }] }],
+  },
+  {
+    // "A vampire may play only one Leathery Hide each round. Prevent four
+    //  non-aggravated damage from the opposing minion's strike."
+    //
+    // *"Cannot be used to prevent aggravated damage, EVEN IF the minion
+    // treats them as normal damage"* [LSJ 20040812-2] — `nonAggravated`
+    // reads the damage's own flag, not the victim's treatment of it.
+    krcgId: 101082,
+    name: "Leathery Hide",
+    requiresClan: ["Gangrel antitribu"],
+    cardType: "combat",
+    bloodCost: 0,
+    poolCost: 0,
+    combatLimit: "round",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "prevent", base: 4, perBloodX: false, nonAggravated: true }],
+      },
+    ],
+  },
+  {
+    // "Maneuver, only usable to go to long range. If this minion has
+    //  flight [FLIGHT] and the opposing minion does not, play before range
+    //  is determined to set the range for the round to long. A minion may
+    //  play only one High Ground each round."
+    //
+    // Two modes at the same printed level: the maneuver anyone may use,
+    // and the flight clause that SETS the range instead — different
+    // windows, and setting is not maneuvering (§3).
+    krcgId: 100925,
+    name: "High Ground",
+    cardType: "combat",
+    bloodCost: 0,
+    poolCost: 0,
+    combatLimit: "round",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "maneuver", onlyToLong: true }],
+      },
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "setRangeLong", requiresFlightAdvantage: true }],
       },
     ],
   },
@@ -975,6 +1330,240 @@ export const cardSpecs: CardSpec[] = [
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
+    // "Vehicle. When a minion equips with the Helicopter, lock it. After
+    //  resolving a successful action, this minion may lock the Helicopter
+    //  to unlock. A minion may have only one vehicle."
+    //
+    // `exclusiveKey: "vehicle"` is the first exclusivity CLASS shared by
+    // cards of different names — Living Manse's key was its own name
+    // (docs/vehicles-and-havens-design.md §1).
+    krcgId: 100909,
+    name: "Helicopter",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 3,
+    permanent: {
+      where: "bearer",
+      statics: { locksOnEquip: true },
+      tags: ["vehicle"],
+      exclusiveKey: "vehicle",
+      equipmentAbilities: { lockToUnlockAfterSuccess: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Vehicle. During your master phase, you may show a non-location
+    //  equipment card from your hand to the other players and place it
+    //  face down on the Delivery Truck if it doesn't already have one.
+    //  You may look at the card at any time. Any minion you control may
+    //  equip that card (face up) as a +1 stealth action (requirements and
+    //  cost apply as normal). A minion may have only one vehicle."
+    //
+    // "As a +1 stealth action" DESCRIBES the equip action's own +1
+    // (p. 20) rather than adding to it — the standing parenthetical
+    // lesson. The store machinery already carries "requirements and cost
+    // apply as normal" (§4).
+    krcgId: 100520,
+    name: "Delivery Truck",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["vehicle"],
+      exclusiveKey: "vehicle",
+      store: {
+        faceUp: false,
+        addFromHandInMasterPhase: {
+          cardTypes: ["equipment"],
+          notTags: ["location"],
+          max: 1,
+        },
+        playableFrom: {},
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Equipment. Haven. Only usable by an anarch. If the anarch with
+    //  this card is ready, he or she can burn 2 blood to cause an action
+    //  directed at him or her to fail. A minion may have only one haven."
+    //
+    // *"Can be equipped by a NON-ANARCH and would still count as a haven,
+    // although the rest of his effect does not apply"* [LSJ 20030607] —
+    // so there is NO `requiresSect` on the card; the sect sits on the
+    // ability (§3).
+    krcgId: 100229,
+    name: "Body Bag",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["haven"],
+      exclusiveKey: "haven",
+      equipmentAbilities: {
+        burnBloodToFailAction: { blood: 2, requiresSect: "anarch" },
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique equipment. The vampire with this equipment may burn this
+    //  card to prevent 2 points of damage in combat or to gain 2 blood
+    //  (ignore excess blood)."
+    //
+    // One card-shaped price, two unrelated windows — which is why the
+    // price is a field of its own rather than a clause inside either
+    // effect (docs/burn-the-equipment-design.md §1).
+    krcgId: 100212,
+    name: "Blood Tears of Kephran",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      equipmentAbilities: { burnToPrevent: 2, burnForBlood: 2 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique. This vampire can burn this card during your master phase
+    //  to lock any vampire. The locked vampire does not unlock as normal
+    //  during their next unlock phase."
+    //
+    // *"The 'does not unlock as normal' effect is redundant with being
+    // infernal"* [LSJ 20050114] — a note about another card's wording,
+    // not a second behaviour: `skipNextUnlock` is exactly the one-shot
+    // form (docs/burn-the-equipment-design.md §2).
+    krcgId: 101252,
+    name: "Mummy's Tongue",
+    requiresClan: ["Ministry"],
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      equipmentAbilities: { burnToLockVampire: { skipNextUnlock: true } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Equipment. The vampire with this equipment may burn this card to
+    //  gain 1 level of any one Discipline until your next unlock phase.
+    //  The vampire cannot choose a Discipline he or she already has at
+    //  the superior level."
+    //
+    // The card is burnt to pay for a trait that outlives it, so the boost
+    // sits on the MINION and the controller's unlock sweep clears it —
+    // the `skipNextUnlock` shape (docs/burn-the-equipment-design.md §3).
+    krcgId: 102114,
+    name: "Vial of Elder Vitae",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      equipmentAbilities: { burnForDiscipline: { levels: 1, until: "nextUnlock" } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique equipment. The vampire with this equipment has superior
+    //  Obfuscate [OBF]. The vampire with this equipment may burn it to
+    //  get +2 intercept for the current action."
+    //
+    // *"The superior Obfuscate is not optional"* [RTR 19980707]
+    // [LSJ 19980722] — a static grant, which is why it is a `statics`
+    // entry and not an ability the bearer may decline
+    // (docs/discipline-granting-equipment-design.md §1).
+    krcgId: 100325,
+    name: "Changeling Skin Mask",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { disciplineGrant: { discipline: "obf", level: "superior" } },
+      // The card is the price, so there is no repeat and no latch needed:
+      // p. 26's only-when-needed gate is the whole limit (§2).
+      equipmentAbilities: { burnForIntercept: 2 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique equipment. The vampire with this equipment has superior
+    //  Celerity [CEL]. This vampire gets one optional maneuver each
+    //  combat."
+    //
+    // The maneuver half is `maneuverPerCombat`, already built for
+    // Biothaumaturgic Experiment — which is also why this card inherits
+    // that field's recorded gap: credits are summed when the combat is
+    // PUSHED, so a `noEquipment` rider arriving at block resolution
+    // cannot take them back [RTR 20010710] (§3).
+    krcgId: 100591,
+    name: "Drum of Xipe Totec",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {
+        disciplineGrant: { discipline: "cel", level: "superior" },
+        maneuverPerCombat: 1,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique equipment. The vampire with this equipment has superior
+    //  Blood Sorcery [THA]. Any Tremere or Tremere antitribu may enter
+    //  combat with the minion with this equipment as a Ⓓ action."
+    //
+    // "Any" means any Methuselah's — the card in one play area offering an
+    // action to the whole table, which `rushGrant`'s `scope: "any"`
+    // already means. *"The action provided by this card is considered an
+    // action requiring the listed clan"* [LSJ 20080604], which the actor
+    // filter is (§4).
+    krcgId: 102102,
+    name: "Veneficorum Artum Sanguis",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { disciplineGrant: { discipline: "tha", level: "superior" } },
+      rushGrant: {
+        who: {
+          scope: "any",
+          kind: "vampire",
+          clan: ["Tremere", "Tremere antitribu"],
+        },
+        target: { scope: "bearer" },
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
     // "Requires an Anarch. Only usable during a bleed action.
     //  +X bleed (limited). X must be 1, 2 or 3."
     krcgId: 101239,
@@ -1109,6 +1698,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 100720,
     name: "Femur of Toomler",
+    requiresClan: ["Tzimisce"],
     cardType: "equipment",
     bloodCost: 0,
     poolCost: 2,
@@ -1121,6 +1711,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 101032,
     name: "Kali's Fang",
+    requiresClan: ["Banu Haqim"],
     cardType: "equipment",
     bloodCost: 0,
     poolCost: 2,
@@ -1235,6 +1826,7 @@ export const cardSpecs: CardSpec[] = [
     //  and no bonus.
     krcgId: 102112,
     name: "Vermin Channel",
+    requiresClan: ["Nosferatu antitribu"],
     cardType: "action",
     bloodCost: 1,
     usable: [],
@@ -1254,6 +1846,7 @@ export const cardSpecs: CardSpec[] = [
     //  may block it (p. 24).
     krcgId: 100099,
     name: "Art Scam",
+    requiresClan: ["Toreador antitribu"],
     cardType: "action",
     bloodCost: 0,
     usable: [],
@@ -1296,6 +1889,7 @@ export const cardSpecs: CardSpec[] = [
     // — the same ruling Effective Management carries, on the same effect.
     krcgId: 101050,
     name: "Kindred Intelligence",
+    requiresClan: ["Nosferatu"],
     cardType: "action",
     bloodCost: 0,
     usable: [],
@@ -1346,6 +1940,7 @@ export const cardSpecs: CardSpec[] = [
     krcgId: 101909,
     name: "Surprise Influence",
     cardType: "reaction",
+    requiresVampire: true,
     bloodCost: 0,
     usable: [],
     modes: [
@@ -1403,6 +1998,7 @@ export const cardSpecs: CardSpec[] = [
     //  a new kind of state.
     krcgId: 101162,
     name: "Mantle of the Moon",
+    requiresClan: ["Ravnos"],
     cardType: "actionModifier",
     bloodCost: 4,
     usable: ["onlyAsAnnounced"],
@@ -1423,6 +2019,7 @@ export const cardSpecs: CardSpec[] = [
     // the card would silently become "nobody can block" for allies.
     krcgId: 101870,
     name: "Stiff Contempt",
+    requiresClan: ["Samedi"],
     cardType: "actionModifier",
     bloodCost: 0,
     usable: ["onlyAsAnnounced"],
@@ -1439,6 +2036,7 @@ export const cardSpecs: CardSpec[] = [
     //  vampire gains 1 blood and you gain 1 pool."
     krcgId: 101854,
     name: "Spoils of War",
+    requiresClan: ["Brujah antitribu"],
     cardType: "actionModifier",
     bloodCost: 0,
     usable: ["afterResolutionByActor", "ifActionSucceeded", "ifActionDirected"],
@@ -1467,6 +2065,7 @@ export const cardSpecs: CardSpec[] = [
     // people the moment a legacy crypt wave lands.
     krcgId: 100016,
     name: "Acheron Vortex",
+    requiresClan: ["Harbinger of Skulls"],
     cardType: "actionModifier",
     bloodCost: 0,
     usable: ["evenIfNotNeeded"],
@@ -2037,6 +2636,66 @@ export const cardSpecs: CardSpec[] = [
   //     apiece — the shape `spec.ally` and `mode.retainerLife` already
   //     cover exactly. NO new vocabulary in this wave.
   {
+    // "Mortal with 1 life. If the vampire with this retainer is in torpor,
+    //  he or she gains 1 blood at the beginning of his or her minion
+    //  phase." The phase-hook family's missing opener
+    //  (docs/retainer-upkeep-design.md §1).
+    krcgId: 100692,
+    name: "Faithful Servant",
+    cardType: "retainer",
+    bloodCost: 2,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mortal"],
+      retainerAbilities: { torporBloodAtMinionPhase: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Mortal with 1 life. During your minion phase, you may look at one
+    //  card picked at random from your prey's hand."
+    krcgId: 100776,
+    name: "Fortune Teller",
+    requiresClan: ["Ravnos"],
+    cardType: "retainer",
+    bloodCost: 1,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mortal"],
+      retainerAbilities: { peekPreyRandomCard: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Unique GHOUL with 1 life. During your unlock phase, Carter's
+    //  employer burns 1 blood, or Carter is burned. The vampire with this
+    //  retainer gets +2 bleed."
+    //
+    // *"Ghouls are monsters, not mortal"* [ANK 20200203-2] [LSJ 20060515]
+    // — the tag is `ghoul`, and that matters to every card that names one
+    // kind or the other.
+    krcgId: 101644,
+    name: "Robert Carter",
+    cardType: "retainer",
+    bloodCost: 1,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { bleed: 2 },
+      tags: ["ghoul"],
+      retainerAbilities: { unlockUpkeep: { blood: 1 } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
     // "Unique mortal with 1 life. The employer gets +1 bleed."
     krcgId: 101015,
     name: "J. S. Simmons, Esq.",
@@ -2461,6 +3120,1623 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  // --- EVENTS, the card type (docs/events-design.md) ---
+  {
+    // "Event. Each Methuselah gets +2 hand size for each victory point he
+    //  or she has."
+    krcgId: 100163,
+    name: "The Bitter and Sweet Story",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: { where: "seat", statics: { handSizePerVictoryPointAll: 2 }, tags: ["event"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "If a vampire successfully hunts, move 1 blood from that vampire to
+    //  this card after resolution. Burn this card if it has 5 blood."
+    //
+    //  "If the vampire gains no blood from their hunt, it is not
+    //  successful" [LSJ 20050720-2] — which is what the engine's hunt
+    //  success signal already means.
+    krcgId: 100944,
+    name: "Hunger Moon",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["event"],
+      huntTax: { blood: 1, burnAt: 5 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Inconnu. Do not replace until your next unlock phase.
+    //  Minion cards that change the target of a bleed action cost +1
+    //  blood or life."
+    krcgId: 101265,
+    name: "Narrow Minds",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplace: "unlock",
+    permanent: {
+      where: "seat",
+      // Every seat's seat-level permanents are scanned for a play-cost
+      // modifier, so "minion cards" means everyone's without saying so.
+      statics: { playCostMod: { amount: 1, pays: "bloodOrLife", redirectsBleed: true } },
+      tags: ["event"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- GEHENNA: the recurring event (docs/gehenna-events-design.md) ---
+  {
+    // "Gehenna. Do not replace as long as this card is in play.
+    //  During each Methuselah's discard phase, that Methuselah burns 1
+    //  pool for each vampire in torpor they control."
+    krcgId: 100581,
+    name: "Dragonbound",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplace: "whileInPlay",
+    permanent: { where: "seat", statics: {}, tags: ["event", "gehenna"] },
+    eachMethuselah: {
+      when: "discard",
+      effect: { kind: "burnPoolPerTorpidVampire", amount: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. After each Methuselah's minion phase ends, each ready
+    //  vampire controlled by that Methuselah with capacity less than the
+    //  number of Gehenna events in play who did not hunt during that
+    //  minion phase burns 1 blood."
+    //
+    //  "The hunt need not be successful for a vampire to avoid the
+    //  effect" [LSJ 20050727] — so the latch is set at announcement.
+    krcgId: 101974,
+    name: "Thirst",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: { where: "seat", statics: {}, tags: ["event", "gehenna"] },
+    eachMethuselah: {
+      when: "afterMinionPhase",
+      effect: { kind: "burnBloodUnlessHunted", amount: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. Requires 2 or more other Gehenna events in play. Do not
+    //  replace until your next discard phase.
+    //  During each Methuselah's unlock phase, that Methuselah can choose
+    //  a location controlled by their prey. The chosen location is burned
+    //  unless its controller burns 2 pool."
+    krcgId: 100409,
+    name: "Conquest of Humanity",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplace: "discard",
+    requiresOtherGehennaEvents: 2,
+    permanent: { where: "seat", statics: {}, tags: ["event", "gehenna"] },
+    eachMethuselah: {
+      when: "unlock",
+      effect: { kind: "burnPreyLocation", ransom: 2 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- GEHENNA: the unlock-phase trio (docs/gehenna-unlock-design.md) ---
+  {
+    // "Gehenna. Requires 1 or more other Gehenna events in play. Do not
+    //  replace until a titled vampire goes to torpor. During each
+    //  Methuselah's unlock phase, that Methuselah CAN choose a ready
+    //  vampire controlled by their prey. The chosen vampire takes 1
+    //  unpreventable environmental damage. Titled vampires can call a
+    //  referendum to burn this card as a +1 stealth political action."
+    //
+    //  "Is not replaced until the condition is met, even if it is burned"
+    //  [LSJ 20080805] — the wait is on the SEAT, not on the card, which
+    //  is what `drawWhenCondition` already records.
+    krcgId: 101279,
+    name: "The New Inquisition",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplaceUntil: "titledVampireTorpor",
+    requiresOtherGehennaEvents: 1,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["event", "gehenna"],
+      vulnerableTo: { who: { titled: true }, stealth: 1, via: "politicalAction" },
+    },
+    eachMethuselah: {
+      when: "unlock",
+      effect: { kind: "damageReadyVampire", whose: "prey", amount: 1, optional: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. Do not replace until your next discard phase. Requires at
+    //  least two other Gehenna cards controlled by OTHER METHUSELAHS in
+    //  play. During each Methuselah's unlock phase, he or she CHOOSES a
+    //  ready vampire he or she controls. The chosen vampire takes 1
+    //  unpreventable damage. Earth Meld cards cost 2 additional blood."
+    krcgId: 100148,
+    name: "Becoming of Ennoia",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplace: "discard",
+    requiresOtherGehennaEvents: 2,
+    gehennaGateOthersOnly: true,
+    permanent: {
+      where: "seat",
+      // A named-card tax, the Villein/Minion Tap shape: every seat's
+      // seat-level permanents are scanned, so it reaches the table.
+      statics: { playCostMod: { amount: 2, pays: "blood", cardName: "Earth Meld" } },
+      tags: ["event", "gehenna"],
+    },
+    eachMethuselah: {
+      when: "unlock",
+      effect: { kind: "damageReadyVampire", whose: "self", amount: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. Requires 2 or more other Gehenna events in play. Do not
+    //  replace as long as this card is in play. During each Methuselah's
+    //  unlock phase, if that Methuselah controls 3 or more vampires of the
+    //  same clan, they burn one of those vampires. If that vampire's
+    //  capacity is 6 or more, that Methuselah ignores this effect until
+    //  the end of the game."
+    krcgId: 101566,
+    name: "Recalled to the Founder",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplace: "whileInPlay",
+    requiresOtherGehennaEvents: 2,
+    permanent: { where: "seat", statics: {}, tags: ["event", "gehenna"] },
+    eachMethuselah: {
+      when: "unlock",
+      effect: { kind: "burnSameClanVampire", sameClan: 3, exemptFromCapacity: 6 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- GEHENNA taxes (docs/gehenna-taxes-design.md) ---
+  {
+    // "Gehenna. Do not replace until a vampire moves from torpor to the
+    //  ready region.
+    //  Actions performed by vampires in torpor cost +1 blood. Rescuing an
+    //  older vampire from torpor costs +1 blood."
+    krcgId: 101994,
+    name: "Torpid Blood",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplaceUntil: "vampireLeavesTorpor",
+    permanent: {
+      where: "seat",
+      statics: { torporActionTax: 1, olderRescueTax: 1 },
+      tags: ["event", "gehenna"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. Requires 1 or more other Gehenna events in play. Do not
+    //  replace until a vampire commits diablerie.
+    //  Cards requiring 1 or more Disciplines at the superior level cost +1
+    //  blood. Vampires who commit diablerie ignore this effect until a
+    //  Gehenna event is played."
+    krcgId: 101807,
+    name: "The Slow Withering",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplaceUntil: "diablerie",
+    requiresOtherGehennaEvents: 1,
+    permanent: {
+      where: "seat",
+      // Every seat's seat-level permanents are scanned for a play-cost
+      // modifier, so "cards" means everyone's without saying so.
+      statics: {
+        playCostMod: {
+          amount: 1,
+          pays: "blood",
+          requiresSuperiorDiscipline: true,
+          exemptDiablerists: true,
+        },
+      },
+      tags: ["event", "gehenna"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. Requires at least 2 other Gehenna events in play. Do not
+    //  replace until your prey is ousted.
+    //  A Methuselah cannot gain pool during their own turn unless they
+    //  have the Edge or at least 1 victory point (instead, any pool they
+    //  would gain goes to the blood bank)."
+    krcgId: 101640,
+    name: "The Rising",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplaceUntil: "preyOusted",
+    requiresOtherGehennaEvents: 2,
+    permanent: {
+      where: "seat",
+      statics: { barsPoolGainOnOwnTurn: true },
+      tags: ["event", "gehenna"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Events that are one table-wide RULE
+  //     (docs/table-rule-events-design.md) ---
+  {
+    // "Government. When a Methuselah uses a discard phase action to
+    //  discard a card, he or she doesn't draw to replace that card until
+    //  his or her next unlock phase."
+    krcgId: 101420,
+    name: "Port Authority",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: { where: "seat", statics: { barsDiscardReplacement: true }, tags: ["event"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Government. Any minion who successfully performs an equip action
+    //  unlocks at the end of the turn."
+    krcgId: 101305,
+    name: "NRA PAC",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: { where: "seat", statics: { unlockAfterEquip: true }, tags: ["event"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Inconnu. Blood hunt referendums get an additional 2 votes against
+    //  the referendum."
+    krcgId: 102085,
+    name: "Urban Jungle",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: { where: "seat", statics: { bloodHuntVotesAgainst: 2 }, tags: ["event"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Events that keep a COUNTER (docs/counter-clock-events-design.md) ---
+  {
+    // "Government. During your unlock phase, add two counters to this card
+    //  from the blood bank. When a vampire with capacity less than X is
+    //  blocked while hunting, where X is the number of counters on this
+    //  card, burn that vampire and all the counters on this card."
+    krcgId: 100577,
+    name: "Dr. Marisa Fletcher, CDC",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: { blockedHuntBurn: true },
+      tags: ["event"],
+      // "From the blood bank" — conjured, not bought out of pool.
+      unlockCounter: { amount: 2 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Government. If an ally is burned in combat with an acting vampire,
+    //  add 1 counter to this card and inflict 2 unpreventable
+    //  environmental damage on the acting vampire after the combat ends.
+    //  If this card has 4 counters, burn it."
+    krcgId: 100709,
+    name: "FBI Special Affairs Division",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: { allyBurnedInCombat: { damage: 2, burnAt: 4 } },
+      tags: ["event"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. Do not replace until a vampire commits diablerie.
+    //  This card comes into play with 10 counters. After another Gehenna
+    //  event is played, burn 1 counter from this card. Blood hunts cannot
+    //  be called on vampires with capacity greater than the number of
+    //  counters on this card who diablerize a younger vampire."
+    krcgId: 100796,
+    name: "Fueled by Heart's Blood",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplaceUntil: "diablerie",
+    permanent: {
+      where: "seat",
+      statics: {
+        startsWithCounters: 10,
+        burnCounterOnGehennaEvent: true,
+        barsBloodHuntAboveCounters: true,
+      },
+      tags: ["event", "gehenna"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Conditional weapons (docs/conditional-weapons-design.md) ---
+  {
+    // "Weapon: gun. 1R damage each strike, with two optional maneuvers
+    //  each combat."
+    krcgId: 100516,
+    name: "Deer Rifle",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    weapon: { damage: 1, ranged: true, aggravated: false, maneuversPerCombat: 2 },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Melee weapon. Strike: strength+1 damage, with 1 optional maneuver
+    //  each combat, only usable to get to close range."
+    krcgId: 100175,
+    name: "Blade of Bellona",
+    requiresClan: ["Salubri antitribu"],
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    weapon: {
+      damage: null,
+      handBonus: 1,
+      ranged: false,
+      aggravated: false,
+      maneuverPerCombat: true,
+      maneuverToCloseOnly: true,
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon. 6R damage each strike; only usable after the first round of
+    //  combat; only usable at long range."
+    krcgId: 101656,
+    name: "RPG Launcher",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 2,
+    weapon: {
+      damage: 6,
+      ranged: true,
+      aggravated: false,
+      onlyAtLongRange: true,
+      notFirstRound: true,
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Blood at the referendum (docs/referendum-blood-design.md) ---
+  {
+    // "Only usable during a referendum.
+    //  Each vampire with a capacity above 4 can burn blood to gain votes.
+    //  A vampire gains 1 vote for each blood he or she burns. A vampire
+    //  with a capacity above 7 gains an additional vote for each blood he
+    //  or she burns."
+    krcgId: 101230,
+    name: "Mob Rule",
+    cardType: "modifierOrReaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "bloodForVotes",
+            minCapacity: 4,
+            votesPerBlood: 1,
+            bigCapacity: 7,
+            bigVotesPerBlood: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a ready anarch. Only usable during a referendum before any
+    //  votes and ballots are cast.
+    //  During this referendum, each ready anarch may burn 1 blood to gain
+    //  1 additional vote. If the referendum fails, this acting vampire
+    //  takes 2 unpreventable damage."
+    krcgId: 101541,
+    name: "Rant!",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    requiresSect: ["anarch"],
+    referendumFail: { callingVampireDamage: 2 },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "bloodForVotes", sect: "anarch", votesPerBlood: 1, maxBloodPerMinion: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a ready titled Sabbat vampire. Only usable during a
+    //  referendum.
+    //  Any vampire casting votes or ballots against this referendum burns
+    //  1 blood when the results are tallied."
+    krcgId: 100337,
+    name: "Cheval de Bataille",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    requiresTitled: true,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "taxVotesAgainst", blood: 1 }] },
+    ],
+  },
+  // --- The lock as currency (docs/lock-as-currency-design.md) ---
+  {
+    // "Only usable when this vampire successfully blocks an ally or a
+    //  younger vampire (play before combat, if any).
+    //  This vampire doesn't lock for successfully blocking."
+    krcgId: 101221,
+    name: "Minor Irritation",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // The window rule is read off the MODE, not the spec — the
+        // enumerator looks for the mode carrying it.
+        usable: ["afterBlockResolution"],
+        effects: [{ kind: "noLockForBlocking" }],
+      },
+    ],
+  },
+  {
+    // "Only usable when an ally or younger vampire is bleeding you, after
+    //  blocks are declined. Lock this reacting vampire. Choose another
+    //  Methuselah other than the acting minion's controller. The acting
+    //  minion is now bleeding that Methuselah."
+    krcgId: 101126,
+    name: "Lost in Translation",
+    cardType: "reaction",
+    bloodCost: 2,
+    usable: ["bleedTargetsYou", "afterBlocksDeclined"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // The redirect enumerator already excludes both this seat and the
+        // ACTING seat, which is exactly "another Methuselah other than the
+        // acting minion's controller".
+        effects: [{ kind: "redirectBleed", lockSelf: true, allyOrYoungerOnly: true }],
+      },
+    ],
+  },
+  {
+    // "Requires a vampire. Usable by a locked vampire.
+    //  Choose a younger locked vampire you control. The chosen vampire can
+    //  play reaction cards and attempt to block as though unlocked until
+    //  the current action is concluded. A vampire may play only one Fillip
+    //  each turn."
+    krcgId: 100729,
+    name: "Fillip",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: ["byVampire", "alsoByLockedMinion"],
+    oncePerTurnPerVampire: true,
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // "As though unlocked, for this action" is exactly a wake (p. 44):
+        // `awake` grants reactions and blocking without unlocking, and it
+        // is scoped to the action already.
+        effects: [{ kind: "wakeOther", who: "youngerLockedVampire" }],
+      },
+    ],
+  },
+  // --- Buying a block (docs/buying-a-block-design.md) ---
+  {
+    // "Do not replace until your next unlock phase.
+    //  +1 intercept. Not usable by a vampire with more than 0 intercept."
+    krcgId: 101093,
+    name: "Legwork",
+    cardType: "reaction",
+    bloodCost: 1,
+    usable: [],
+    onlyIfNoIntercept: true,
+    delayedReplace: "unlock",
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "modifyIntercept", amount: 1 }] },
+    ],
+  },
+  {
+    // "Do not replace until after this action. Only usable during a bleed
+    //  against you. This reacting vampire gets +2 intercept. A vampire
+    //  cannot play both Pack Tactics and Elder Intervention during the
+    //  same action."
+    krcgId: 101343,
+    name: "Pack Tactics",
+    cardType: "reaction",
+    bloodCost: 1,
+    usable: ["bleedTargetsYou"],
+    notWithThisAction: ["Elder Intervention"],
+    delayedReplace: "afterAction",
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "modifyIntercept", amount: 2 }] },
+    ],
+  },
+  {
+    // "Only usable by a locked vampire. This vampire unlocks and attempts
+    //  to block."
+    krcgId: 100628,
+    name: "Eluding the Arms of Morpheus",
+    cardType: "reaction",
+    bloodCost: 1,
+    usable: ["byLockedMinion"],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "unlockAndAttemptBlock" }] },
+    ],
+  },
+  // --- Blocked, but no combat (docs/no-combat-design.md) ---
+  {
+    // "Only usable when this vampire is successfully blocked by a vampire
+    //  of the same clan (play before combat). Cancel the block and
+    //  combat. The action continues as normal, and no vampires of that
+    //  clan may block the acting vampire for the remainder of the turn."
+    krcgId: 100354,
+    name: "Clan Loyalty",
+    cardType: "actionModifier",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "cancelBlockCombat",
+            outcome: "continueAction",
+            requiresSameClanBlocker: true,
+            barBlockerClanThisTurn: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable when an action is blocked. Combat does not occur. Put
+    //  this card into play. While in play, this card represents an ally
+    //  with 3 life and 2 strength who can strike for 2R damage; this ally
+    //  enters combat with the blocking minion. Blood Brother Ambush may
+    //  play cards requiring basic Potence [pot] as a vampire with a
+    //  capacity of 3. If a card would give them blood, give them life
+    //  instead. Burn this card at the end of combat or if the combat is
+    //  canceled."
+    //
+    //  "If a card would give them blood, give them life instead" needs no
+    //  code: an ally's life IS its blood field in this engine (p. 11).
+    krcgId: 100195,
+    name: "Blood Brother Ambush",
+    requiresClan: ["Brujah antitribu"],
+    cardType: "actionModifier",
+    bloodCost: 2,
+    ally: {
+      life: 3,
+      strength: 2,
+      bleed: 0,
+      strike: { damage: 2, ranged: true },
+      playsAsVampire: { pot: "basic" },
+    },
+    permanent: { where: "bearer", statics: { burnAtCombatEnd: true }, tags: [] },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "cancelBlockCombat", outcome: "ambush" }],
+      },
+    ],
+  },
+  {
+    // "Ghoul with 4 life. Requires a ready vampire.
+    //  When this vampire is blocked, he or she may burn this retainer and
+    //  unlock instead of entering combat. (This does not unlock the
+    //  blocker.)"
+    krcgId: 100817,
+    name: "Ghoul Escort",
+    cardType: "retainer",
+    requiresVampire: true,
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["ghoul"],
+      retainerAbilities: { burnToAvoidCombat: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 4, effects: [] }],
+  },
+  // --- First strike (docs/first-strike-cards-design.md) ---
+  {
+    // "Do not replace until after combat.
+    //  Strike: hand strike (at strength damage) with first strike. If
+    //  more than 1 damage is inflicted with this strike, ignore the
+    //  excess."
+    krcgId: 101529,
+    name: "Quick Jab",
+    cardType: "combat",
+    bloodCost: 0,
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "strikeHandBonus", bonus: 0, firstStrike: true, capDamage: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "Strike: prevent 2 damage from the opposing minion's next hand
+    //  strike this round (including any currently-resolving hand strike).
+    //  If another round of combat occurs, this minion gets first strike
+    //  on his or her initial strike that round."
+    krcgId: 100763,
+    name: "Forearm Block",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "strikePreventHandStrike", amount: 2, firstStrikeNextRound: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "Play after range is determined. Only usable at close range. Not
+    //  usable if this minion played a Haymaker last round.
+    //  This minion's initial strike this round will be strike: hand
+    //  strike at +1 damage, and the opposing minion's initial strike this
+    //  round gets first strike. If either minion inflicts more damage
+    //  than the other this round, that minion gets an optional press this
+    //  round."
+    krcgId: 100900,
+    name: "Haymaker",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        usable: ["onlyAtCloseRange"],
+        effects: [{ kind: "haymaker", bonus: 1, notAfterOwnLastRound: true }],
+      },
+    ],
+  },
+  // --- What a strike is made of (docs/strike-sources-design.md) ---
+  {
+    // "Strike: hand strike or use a melee weapon strike. This strike is
+    //  at +1 damage."
+    krcgId: 100328,
+    name: "Channeling the Beast",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "strikeHandBonus", bonus: 1, orMeleeWeapon: true }],
+      },
+    ],
+  },
+  {
+    // "Do not replace until after combat.
+    //  Strike: hand strike or use a melee weapon strike. This strike is
+    //  at +1 damage."
+    //
+    //  Channeling the Beast's twin, and the pair is why both are in this
+    //  wave: the ONLY difference is the replacement clause, so they test
+    //  each other.
+    krcgId: 101131,
+    name: "Lucky Blow",
+    cardType: "combat",
+    bloodCost: 0,
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "strikeHandBonus", bonus: 1, orMeleeWeapon: true }],
+      },
+    ],
+  },
+  {
+    // "Only usable at close range. Choose a weapon possessed by the
+    //  opposing minion. Strike: X damage, where X is the pool cost of the
+    //  chosen weapon."
+    krcgId: 102083,
+    name: "Up Yours!",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // The range gates are MODE rules (a card can have a close mode
+        // and a long one); at spec level they are silently ignored.
+        usable: ["onlyAtCloseRange"],
+        effects: [{ kind: "strikeWeaponCost" }],
+      },
+    ],
+  },
+  {
+    // "Only usable at long range. Strike: dodge, with an optional press."
+    //  "The optional press can only be used during the current round"
+    //  [TOM 19960521] — which is what a press credit already is.
+    krcgId: 100123,
+    name: "Backflip",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        usable: ["onlyAtLongRange"],
+        effects: [{ kind: "strikeDodge", riders: { press: 1 } }],
+      },
+    ],
+  },
+  // --- A second minion helps the action through
+  //     (docs/second-minion-modifiers-design.md) ---
+  {
+    // "Only usable by a ready unlocked minion with a gun other than the
+    //  acting minion. The blocking minion gets -1 intercept."
+    //
+    //  "Can only be played by the CONTROLLER OF THE ACTING MINION"
+    //  [LSJ 19990425] — which is what an action modifier is (p. 12), so
+    //  the rule needs no clause of its own.
+    krcgId: 101907,
+    name: "Suppressing Fire",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    requiresAttachedTag: ["gun"],
+    usable: ["byOtherUnlockedVampire"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "modifyBlockerIntercept", amount: -1 }],
+      },
+    ],
+  },
+  {
+    // "Only usable by a ready unlocked Ravnos other than the acting
+    //  minion. Allies and vampires younger than this modifying Ravnos get
+    //  -1 intercept."
+    krcgId: 102204,
+    name: "Zapaderin",
+    cardType: "actionModifier",
+    bloodCost: 1,
+    requiresClan: ["Ravnos"],
+    usable: ["byOtherUnlockedVampire"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "modifyFilteredIntercept",
+            amount: -1,
+            kinds: ["ally"],
+            youngerThanPlayer: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a ready Sabbat vampire. Only usable when the action is
+    //  announced. Choose another ready Sabbat vampire you control. The
+    //  chosen vampire burns 1 blood, or this card has no effect. This
+    //  action gets +1 stealth, even if stealth is not yet needed."
+    krcgId: 101867,
+    name: "Stealth Ritus",
+    cardType: "actionModifier",
+    bloodCost: 1,
+    requiresSect: ["sabbat"],
+    usable: ["onlyAsAnnounced", "evenIfNotNeeded"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "otherMinionPaysBlood", amount: 1, sect: "sabbat", thenStealth: 1 },
+        ],
+      },
+    ],
+  },
+  // --- Retainers bought with a price (docs/retainer-prices-design.md) ---
+  {
+    // "Ghoul with 1 life.
+    //  Vampire with this retainer may burn X blood to get +X intercept
+    //  for the current action."
+    krcgId: 100428,
+    name: "Corpse Minion",
+    requiresClan: ["Tremere"],
+    cardType: "retainer",
+    bloodCost: 0,
+    poolCost: 1,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["ghoul"],
+      retainerAbilities: { burnBloodForIntercept: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Requires a non-Camarilla vampire. Unique mortal with 1 life.
+    //  Malajit's employer may lock him to get +1 stealth for the current
+    //  action. If that action is blocked, burn Malajit."
+    krcgId: 101148,
+    name: "Malajit Chandramouli",
+    cardType: "retainer",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    requiresSect: ["sabbat", "anarch", "independent"],
+    permanent: {
+      where: "bearer",
+      statics: { burnIfEmployerBlocked: true },
+      tags: ["mortal"],
+      retainerAbilities: { lockForStealth: { amount: 1, burnIfBlocked: true } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  {
+    // "Unique ghoul with 1 life.
+    //  The employer can burn 1 blood to set the range for the round
+    //  before range is determined during the first round of combat."
+    krcgId: 101320,
+    name: "Omael Kuman",
+    requiresClan: ["Banu Haqim"],
+    cardType: "retainer",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["ghoul"],
+      retainerAbilities: { burnBloodToSetRange: { blood: 1 } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
+  // --- Allies whose Ⓓ action destroys a card in play
+  //     (docs/destroyer-allies-design.md) ---
+  {
+    // "Unique mortal with 2 life. 2 strength, 0 bleed.
+    //  The Bruisers may take a Ⓓ action to burn a location controlled by
+    //  your prey."
+    krcgId: 100259,
+    name: "The Bruisers",
+    requiresClan: ["Brujah antitribu"],
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    ally: { life: 2, strength: 2, bleed: 0 },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mortal"],
+      grantedAction: { do: "burnPermanent", what: "location", scope: "prey", directed: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Mortal with 2 life. 1 strength, 0 bleed.
+    //  As a Ⓓ action, Arcanum Investigator can burn an equipment card
+    //  possessed by a minion controlled by your predator or prey."
+    //
+    //  "His action is directed against the Methuselah CONTROLLING THE
+    //  EQUIPMENT, not the minion it's on" [LSJ 20090324] — which is what
+    //  `targetPermanent` already means, so the bearer being someone
+    //  else's problem never arises.
+    krcgId: 100083,
+    name: "Arcanum Investigator",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    ally: { life: 2, strength: 1, bleed: 0 },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mortal"],
+      grantedAction: {
+        do: "burnPermanent",
+        what: "equipment",
+        scope: "predatorOrPrey",
+        directed: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique wraith with 2 life. 1 strength, 1 bleed.
+    //  Felix can burn a location as a +1 stealth Ⓓ action that costs 1
+    //  pool."
+    krcgId: 100719,
+    name: 'Felix "Fix" Hessian',
+    requiresClan: ["Giovanni"],
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    ally: { life: 2, strength: 1, bleed: 1, subtype: "wraith" },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["wraith"],
+      grantedAction: {
+        do: "burnPermanent",
+        what: "location",
+        directed: true,
+        stealth: 1,
+        poolCost: 1,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Plain allies (docs/plain-allies-design.md, tranche 1 wave 45) ---
+  {
+    // "Unique mortal with 3 life. 0 strength, 0 bleed.
+    //  The Slashers may strike for 1R damage."  Brujah icon (p. 10).
+    krcgId: 101799,
+    name: "The Slashers",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    requiresClan: ["Brujah"],
+    ally: { life: 3, strength: 0, bleed: 0, subtype: "mortal", strike: { damage: 1, ranged: true } },
+    permanent: { where: "bearer", statics: {}, tags: [] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Mage with 2 life. 0 strength, 1 bleed.
+    //  Outcast Mage may strike for 2R damage. Outcast Mage gets one
+    //  optional maneuver each combat."  Tremere icon (p. 10). The maneuver
+    //  is the same `maneuverPerCombat` static a gun carries, on the ally's
+    //  own self-attached entry.
+    krcgId: 101337,
+    name: "Outcast Mage",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    requiresClan: ["Tremere"],
+    ally: { life: 2, strength: 0, bleed: 1, strike: { damage: 2, ranged: true } },
+    permanent: { where: "bearer", statics: { maneuverPerCombat: 1 }, tags: ["mage"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Ghoul with 2 life. 1 bleed, 1 strength.
+    //  Rafastio Ghoul can play cards requiring basic Blood Sorcery [tha]
+    //  as a vampire with a capacity of 3."  No clan icon.
+    krcgId: 101537,
+    name: "Rafastio Ghoul",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    ally: { life: 2, strength: 1, bleed: 1, subtype: "ghoul", playsAsVampire: { tha: "basic" } },
+    permanent: { where: "bearer", statics: {}, tags: [] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Ghoul with 1 life. 1 strength, 0 bleed.
+    //  Procurer may move 1 blood from the blood bank to a ready vampire
+    //  you control as a +2 stealth action."  No clan icon. Seraphina's
+    //  `addBlood` arm, narrowed to vampires and undirected.
+    krcgId: 101491,
+    name: "Procurer",
+    cardType: "ally",
+    bloodCost: 2,
+    poolCost: 0,
+    ally: { life: 1, strength: 1, bleed: 0, subtype: "ghoul" },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [],
+      grantedAction: { do: "addBlood", amount: 1, stealth: 2, vampiresOnly: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mortal with 1 life. 4 strength, 0 bleed.
+    //  The Muddled Vampire Hunter strikes with first strike. He may enter
+    //  combat with a ready vampire controlled by another Methuselah as a
+    //  Ⓓ action."  Malkavian icon (p. 10). First strike is the permanent
+    //  static `firstStrike` (docs/first-strike-design.md); the rush is War
+    //  Ghoul's, minus his own controller's vampires.
+    krcgId: 101250,
+    name: "Muddled Vampire Hunter",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    requiresClan: ["Malkavian"],
+    ally: { life: 1, strength: 4, bleed: 0, subtype: "mortal" },
+    rush: { targets: "vampire", othersOnly: true },
+    permanent: { where: "bearer", statics: { firstStrike: true }, tags: [] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Plain allies II (docs/plain-allies-design.md §4, tranche 1 wave 46) ---
+  {
+    // "Unique mage with 2 life. 0 strength, 2 bleed.
+    //  Thadius Zho can strike: 2R damage. He gets 1 optional maneuver each
+    //  combat. He can burn 1 blood from a vampire as a +1 stealth Ⓓ
+    //  action."  Tremere icon (p. 10).
+    krcgId: 101963,
+    name: "Thadius Zho",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    requiresClan: ["Tremere"],
+    ally: { life: 2, strength: 0, bleed: 2, strike: { damage: 2, ranged: true } },
+    permanent: {
+      where: "bearer",
+      statics: { maneuverPerCombat: 1 },
+      tags: ["mage"],
+      grantedAction: { do: "burnBlood", amount: 1, stealth: 1, directed: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Mortal with 3 life. 1 strength, 0 bleed. Operation Antigen.
+    //  ECTU Operative can strike: 1R damage. He gets 1 optional maneuver
+    //  each combat. He can burn a vampire in torpor as a Ⓓ action."
+    //  "Operation Antigen" is a printed keyword with no rules of its own
+    //  (no card in the pool reads it); it rides in the tags.
+    krcgId: 102237,
+    name: "ECTU Operative",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    ally: { life: 3, strength: 1, bleed: 0, subtype: "mortal", strike: { damage: 1, ranged: true } },
+    permanent: {
+      where: "bearer",
+      statics: { maneuverPerCombat: 1 },
+      tags: ["antigen"],
+      grantedAction: { do: "burnTorporVampire", directed: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Mortal with 2 life. 0 strength, 0 bleed.
+    //  Rom Gypsy may strike for 1R damage. Rom Gypsy gets one optional
+    //  maneuver each combat. Lock to give a Ravnos you control +1
+    //  stealth."  Ravnos icon (p. 10). The lock is the location
+    //  `lockGrant`, on the ally's own entry.
+    krcgId: 101650,
+    name: "Rom Gypsy",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    requiresClan: ["Ravnos"],
+    ally: { life: 2, strength: 0, bleed: 0, subtype: "mortal", strike: { damage: 1, ranged: true } },
+    permanent: {
+      where: "bearer",
+      statics: { maneuverPerCombat: 1 },
+      tags: [],
+      lockGrant: { grant: "stealth", amount: 1, clan: "Ravnos", ownOnly: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Allies with two Ⓓ actions (docs/plain-allies-design.md §5,
+  //     tranche 1 wave 47) ---
+  {
+    // "Unique mortal with 3 life. 2 strength, 0 bleed.
+    //  The Young Bloods can burn 2 blood from a locked vampire with a
+    //  capacity less than 8 as a +1 stealth Ⓓ action. If a vampire
+    //  controlled by another Methuselah burns the Young Bloods in combat
+    //  or as an action, he or she gains 2 blood."  No clan icon.
+    krcgId: 102202,
+    name: "Young Bloods",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    ally: { life: 3, strength: 2, bleed: 0, subtype: "mortal", burnBounty: { blood: 2 } },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [],
+      grantedAction: {
+        do: "burnBlood",
+        amount: 2,
+        stealth: 1,
+        directed: true,
+        lockedOnly: true,
+        maxCapacity: 8,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique ghoul with 4 life. 1 strength, 1 bleed.
+    //  Gregory can steal 1 blood (becoming life) from a vampire controlled
+    //  by another Methuselah as a +1 stealth Ⓓ action. He can burn a
+    //  vampire in torpor to gain 2 life as a Ⓓ action. During your unlock
+    //  phase, Gregory burns 1 life."  No clan icon. The pool's first card
+    //  with TWO granted actions.
+    krcgId: 100855,
+    name: "Gregory Winter",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    ally: { life: 4, strength: 1, bleed: 1, subtype: "ghoul" },
+    permanent: {
+      where: "bearer",
+      statics: { unlockBurnLife: 1 },
+      tags: [],
+      grantedAction: { do: "burnBlood", amount: 1, steal: true, stealth: 1, directed: true },
+      grantedActions: [{ do: "burnTorporVampire", gainLife: 2, directed: true }],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mummy with 3 life. 2 strength, 0 bleed.
+    //  Amam can enter combat with a minion as a Ⓓ action. Amam can burn a
+    //  vampire in torpor to gain 1 life as a Ⓓ action. If a minion
+    //  opposing Amam in combat is burned, Amam can gain 1 life. If Amam is
+    //  burned, shuffle him into his owner's library."  Ministry icon.
+    //  The rush is its own field, so this needs only one `grantedAction`.
+    krcgId: 100042,
+    name: "Amam the Devourer",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    requiresClan: ["Ministry"],
+    ally: {
+      life: 3,
+      strength: 2,
+      bleed: 0,
+      subtype: "mortal",
+      opposingBurnedGainLife: 1,
+      shuffleIntoLibraryOnBurn: true,
+    },
+    rush: { targets: "minion" },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mummy"],
+      grantedAction: { do: "burnTorporVampire", gainLife: 1, directed: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- The mummies (docs/mummies-design.md, tranche 1 wave 48) ---
+  {
+    // "Unique mummy with 3 life. 1 strength, 2 bleed.
+    //  Qetu gets 1 optional press each combat, only usable to end combat.
+    //  If Qetu is burned, shuffle her into her owner's library."
+    krcgId: 101527,
+    name: "Qetu the Evil Doer",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    requiresClan: ["Ministry"],
+    ally: { life: 3, strength: 1, bleed: 2, shuffleIntoLibraryOnBurn: true },
+    permanent: { where: "bearer", statics: { endPressPerCombat: 1 }, tags: ["mummy"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mummy with 2 life. 2 strength, 1 bleed.
+    //  During an action, Saatet-ta can lock to give a Follower of Set you
+    //  control +1 stealth, +1 intercept, or +1 bleed. If she is burned,
+    //  shuffle her into her owner's library."
+    //  "Follower of Set" is the Ministry (the V5 renaming).
+    krcgId: 101665,
+    name: "Saatet-ta",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    requiresClan: ["Ministry"],
+    ally: { life: 2, strength: 2, bleed: 1, shuffleIntoLibraryOnBurn: true },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mummy"],
+      lockGrant: {
+        grant: "stealth",
+        grants: ["stealth", "intercept", "bleed"],
+        amount: 1,
+        clan: "Ministry",
+        ownOnly: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mummy with 5 life. 2 strength, 0 bleed.
+    //  Nephren-Ka can prevent 1 non-aggravated damage each combat. He can
+    //  play cards requiring basic Necromancy [nec] as a vampire. He can
+    //  enter combat with a minion as a Ⓓ action. If he is burned, shuffle
+    //  him into his owner's library."
+    //
+    //  The Necromancy clause is implemented and correct, and matters to
+    //  nothing today: no card in the pool requires [nec] (V5 replaced it
+    //  with Oblivion). That is not §0 inertness — the CARD does plenty —
+    //  and it costs nothing the day a [nec] card is admitted.
+    krcgId: 101273,
+    name: "Nephren-Ka",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    requiresClan: ["Ministry"],
+    ally: {
+      life: 5,
+      strength: 2,
+      bleed: 0,
+      shuffleIntoLibraryOnBurn: true,
+      playsAsVampire: { nec: "basic" },
+    },
+    rush: { targets: "minion" },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mummy"],
+      retainerAbilities: { preventPerCombat: 1, preventNonAggOnly: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- The mummies, closed out (docs/mummies-design.md §§4-5, wave 49) ---
+  {
+    // "Unique mummy with 3 life. 3 strength, 1 bleed.
+    //  Akhenaten can play cards requiring basic Necromancy [nec] as a
+    //  3-capacity vampire. In combat with a Follower of Set, any damage he
+    //  inflicts is aggravated. Akhenaten can burn himself to burn a
+    //  Follower of Set controlled by your prey as a Ⓓ action. If he is
+    //  burned, shuffle him into his owner's library."  No clan icon.
+    krcgId: 100033,
+    name: "Akhenaten, The Sun Pharaoh",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 4,
+    unique: true,
+    ally: {
+      life: 3,
+      strength: 3,
+      bleed: 1,
+      shuffleIntoLibraryOnBurn: true,
+      playsAsVampire: { nec: "basic" },
+    },
+    permanent: {
+      where: "bearer",
+      statics: { allDamageAggravatedVsClan: "Ministry" },
+      tags: ["mummy"],
+      grantedAction: {
+        do: "burnSelfAndBurnMinion",
+        targetClan: "Ministry",
+        scope: "prey",
+        directed: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mummy with 3 life. 3 strength, 2 bleed.
+    //  Kherebutu can play cards requiring basic Necromancy [nec] as a
+    //  vampire with capacity 3. Kherebutu can burn himself and a Tremere
+    //  with capacity 4 or less controlled by your prey as a Ⓓ action. If
+    //  he is burned, shuffle him in his owner's library."
+    krcgId: 101047,
+    name: "Kherebutu",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 5,
+    unique: true,
+    requiresClan: ["Ministry"],
+    ally: {
+      life: 3,
+      strength: 3,
+      bleed: 2,
+      shuffleIntoLibraryOnBurn: true,
+      playsAsVampire: { nec: "basic" },
+    },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["mummy"],
+      grantedAction: {
+        do: "burnSelfAndBurnMinion",
+        targetClan: "Tremere",
+        maxCapacity: 4,
+        scope: "prey",
+        directed: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique mummy with 3 life. 2 strength, 1 bleed.
+    //  Once each combat, Tutu can strike: dodge. During your minion phase,
+    //  Tutu can unlock. Tutu can steal an equipment from a vampire in
+    //  torpor as a Ⓓ action. If Tutu is burned, shuffle him into his
+    //  owner's library."
+    krcgId: 102048,
+    name: "Tutu the Doubly Evil One",
+    cardType: "ally",
+    bloodCost: 0,
+    poolCost: 4,
+    unique: true,
+    requiresClan: ["Ministry"],
+    ally: { life: 3, strength: 2, bleed: 1, shuffleIntoLibraryOnBurn: true },
+    permanent: {
+      where: "bearer",
+      statics: { unlockAtMinionPhase: true },
+      tags: ["mummy"],
+      grantsStrikePerCombat: { kind: "dodge" },
+      grantedAction: { do: "stealEquipment", fromTorporOnly: true, directed: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Reactions that read the ACTING minion
+  //     (docs/acting-minion-reactions-design.md) ---
+  {
+    // "Requires an Independent or Anarch vampire. Only usable if a
+    //  Camarilla or Sabbat vampire is bleeding you.
+    //  Reduce the bleed amount by 1."
+    krcgId: 100132,
+    name: "Banner of Neutrality",
+    cardType: "reaction",
+    bloodCost: 0,
+    requiresSect: ["independent", "anarch"],
+    requiresActing: { vampire: true, sects: ["camarilla", "sabbat"] },
+    usable: ["bleedTargetsYou"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "modifyBleed", amount: -1, limited: false }],
+      },
+    ],
+  },
+  {
+    // "Reduce a bleed against you by 1 for each point of stealth the
+    //  acting minion has when this card is played."
+    krcgId: 101038,
+    name: "Keep it Simple",
+    cardType: "reaction",
+    bloodCost: 1,
+    usable: ["bleedTargetsYou"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "modifyBleed", amount: 0, limited: false, perActingStealth: true }],
+      },
+    ],
+  },
+  {
+    // "Not usable if the acting minion is an Assamite or wraith or has
+    //  flight [FLIGHT]. Reduce a bleed against you by 1. If the acting
+    //  minion is an ally or vampire with capacity 5 or less, reduce the
+    //  bleed amount by 3 instead."
+    //
+    //  "Assamite" is the printed name of the clan the registry calls
+    //  BANU HAQIM — the rename this project has already been bitten by
+    //  once, in a filter that silently matched nothing.
+    krcgId: 101274,
+    name: "Nest of Eagles",
+    requiresClan: ["Banu Haqim"],
+    cardType: "reaction",
+    bloodCost: 0,
+    requiresActing: {
+      notClans: ["Banu Haqim"],
+      notUndeadAlly: true,
+      notTags: ["flight"],
+    },
+    usable: ["bleedTargetsYou"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "modifyBleed",
+            amount: -1,
+            limited: false,
+            // "…reduce by 3 INSTEAD" — so the extra is the difference,
+            // not the whole of it.
+            bonus: { extra: -2, when: { kind: "actingSmall", capacity: 5 } },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable if a Camarilla vampire is acting. +2 intercept."
+    //  Costs 1 blood (KRCG), which the card face carries rather than the
+    //  text.
+    krcgId: 102105,
+    name: "Venetian Conference",
+    requiresClan: ["Giovanni"],
+    cardType: "reaction",
+    bloodCost: 1,
+    requiresActing: { vampire: true, sects: ["camarilla"] },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "modifyIntercept", amount: 2 }],
+      },
+    ],
+  },
+  // --- One-shot weapons: "Burn after use" (docs/one-shot-weapons-design.md) ---
+  {
+    // "Weapon. 3R damage as a strike. If Grenade is used at close range,
+    //  the minion with this weapon takes 1 damage. Burn after use."
+    krcgId: 100857,
+    name: "Grenade",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    weapon: {
+      damage: 3,
+      ranged: true,
+      aggravated: false,
+      burnAfterUse: true,
+      selfDamageAtCloseRange: { amount: 1 },
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon. 2R aggravated damage each strike. If White Phosphorus
+    //  Grenade is used at close range, the minion with this equipment
+    //  takes 1 aggravated damage. Burn after use."
+    krcgId: 102179,
+    name: "White Phosphorus Grenade",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    weapon: {
+      damage: 2,
+      ranged: true,
+      aggravated: true,
+      burnAfterUse: true,
+      selfDamageAtCloseRange: { amount: 1, aggravated: true },
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Weapon. End combat as a strike, only usable at long range. Burn
+    //  after use."
+    krcgId: 101814,
+    name: "Smoke Grenade",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    weapon: {
+      damage: 0,
+      ranged: true,
+      aggravated: false,
+      combatEndsStrike: true,
+      onlyAtLongRange: true,
+      burnAfterUse: true,
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique weapon. Strike: 2R aggravated damage. Not usable against a
+    //  vampire with Celerity [cel], an ally, or a retainer. Burn after
+    //  use."
+    krcgId: 102162,
+    name: "Waxen Poetica",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    weapon: {
+      damage: 2,
+      ranged: true,
+      aggravated: true,
+      burnAfterUse: true,
+      notUsableAgainst: { disciplines: ["cel"], allies: true },
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // --- Strike-effects gate (docs/strike-effects-design.md) ---
   {
     krcgId: 100230,
@@ -2513,6 +4789,109 @@ export const cardSpecs: CardSpec[] = [
     },
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Only usable before range is determined. This minion equips with a
+    // non-unique weapon card from your hand (requirements and cost apply
+    // as normal). The weapon cannot cost 3 or more pool or inflict (with
+    // a regular strike) aggravated damage or 4 or more damage."
+    // (docs/armed-mid-combat-design.md §4)
+    krcgId: 100392,
+    name: "Concealed Weapon",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "playFromHand",
+            types: ["equipment"],
+            // A weapon, which is a printed sub-type the permanent already
+            // carries — "equipment" alone would concede a Leather Jacket.
+            tags: ["weapon"],
+            nonUniqueOnly: true,
+            // "cannot cost 3 OR MORE pool" / "4 OR MORE damage": both
+            // limits are the printed number minus one, and writing 3 for
+            // either would be the same quiet off-by-one The Erciyes
+            // Fragments' "capacity above 4" was.
+            maxPoolCost: 2,
+            maxDamage: 3,
+            noAggravated: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Ranged strike: put this card on this minion; it becomes a weapon
+    // equipment that can strike: 2R aggravated damage, not usable the
+    // round it is put in play. Burn after use or at the end of combat."
+    // (docs/armed-mid-combat-design.md §2)
+    krcgId: 101235,
+    name: "Molotov Cocktail",
+    cardType: "combat",
+    bloodCost: 0,
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "Molotov Cocktail"] },
+    weapon: {
+      damage: 2,
+      ranged: true,
+      aggravated: true,
+      burnAfterUse: true,
+      burnAtEndOfCombat: true,
+      notUsableAttachRound: true,
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "strikeAttachSelfWeapon", ranged: true }],
+      },
+    ],
+  },
+  {
+    // "Before range is determined, put this card on this minion. This
+    // card represents an equipment card and doesn't count as a combat
+    // card while in play. This equipment is a weapon, gun. Ammo cards
+    // cannot be used with this gun. It does 1R damage each strike, with
+    // an optional maneuver each combat. Bearer takes 1 damage during
+    // strike resolution when striking with this gun, but only once each
+    // combat. This card is kept as normal equipment and is not discarded
+    // after combat." (docs/armed-mid-combat-design.md §3)
+    krcgId: 102208,
+    name: "Zip Gun",
+    cardType: "combat",
+    bloodCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      // "noAmmo" is read by `ammoTargetGun`, beside "gun" and for the
+      // same reason: the ammo window has an entry in play and nothing
+      // else to ask.
+      tags: ["weapon", "gun", "noAmmo", "Zip Gun"],
+    },
+    weapon: {
+      damage: 1,
+      ranged: true,
+      aggravated: false,
+      maneuverPerCombat: true,
+      selfDamageOnStrike: { amount: 1, oncePerCombat: true },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // "…is kept as normal equipment and is not discarded after
+        // combat" needs nothing: an attached entry is how every card that
+        // becomes equipment already persists. What WOULD have needed
+        // building is the opposite (Molotov's end-of-combat burn).
+        effects: [{ kind: "attachSelfWeapon", counters: 0 }],
+      },
+    ],
   },
   {
     // "Only usable before range is determined during the first round. Put
@@ -2612,6 +4991,7 @@ export const cardSpecs: CardSpec[] = [
     // minion cannot attempt to block this action again."
     krcgId: 102250,
     name: "Forced Confessional",
+    requiresClan: ["Salubri"],
     cardType: "actionModifier",
     bloodCost: 0,
     usable: [],
@@ -2920,6 +5300,7 @@ export const cardSpecs: CardSpec[] = [
     // there is nobody to charge.
     krcgId: 101632,
     name: "Rewilding",
+    requiresClan: ["Gangrel"],
     cardType: "action",
     bloodCost: 0,
     usable: [],
@@ -3158,6 +5539,7 @@ export const cardSpecs: CardSpec[] = [
     // docs/outside-combat-design.md
     krcgId: 102262,
     name: "Touch of Valeren",
+    requiresClan: ["Salubri"],
     cardType: "actionOrCombat",
     bloodCost: 1,
     usable: [],
@@ -3367,6 +5749,7 @@ export const cardSpecs: CardSpec[] = [
     // split. docs/abstain-gate-design.md §4.
     krcgId: 101692,
     name: "Scorn of Adonis",
+    requiresClan: ["Toreador"],
     cardType: "actionModifier",
     bloodCost: 0,
     usable: [],
@@ -3655,6 +6038,165 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "press", continueOnly: true }] },
+    ],
+  },
+  {
+    // "Only usable at the end of a successful action directed at the
+    // Methuselah with the edge. You gain the edge."
+    // (docs/the-edge-design.md §2)
+    krcgId: 100664,
+    name: "Esteem",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: ["afterResolutionByActor", "ifActionSucceeded", "targetHasTheEdge"],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "takeEdge" }] }],
+  },
+  {
+    // "Only usable during a bleed action. Burn the Edge to get +1 bleed
+    // that does not count against the limit. You cannot gain the Edge
+    // this action. If you would get the Edge, it is burned instead."
+    // (docs/the-edge-design.md §3)
+    krcgId: 101098,
+    name: "Leverage",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    // You cannot burn what you do not hold.
+    requiresEdge: "self",
+    usable: ["onlyDuringBleed"],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "burnEdgeForBleed", amount: 1 }] },
+    ],
+  },
+  {
+    // "Master. Only usable if your prey controls the Edge or the Edge is
+    // uncontrolled. Your prey may take the Edge if it is uncontrolled.
+    // You gain 2 pool. Only one Instability may be played each turn."
+    // (docs/the-edge-design.md §4)
+    krcgId: 100993,
+    name: "Instability",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresEdge: "preyOrUncontrolled",
+    oncePerTurnByName: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // Order matters and matches the print: the prey is asked first,
+        // and the 2 pool is unconditional either way.
+        effects: [{ kind: "preyMayTakeEdge" }, { kind: "gainPool", amount: 2 }],
+      },
+    ],
+  },
+  {
+    // "Choose a Methuselah. Successful referendum means the chosen
+    // Methuselah gets the Edge." (docs/the-edge-design.md §5)
+    krcgId: 101583,
+    name: "Regaining the Upper Hand",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "refGiveEdge" }] }],
+  },
+  {
+    // "Maneuver, only usable to go to long range. If the opposing
+    // minion's strike successfully inflicts any damage on this minion
+    // this round, the opposing minion gets an optional press."
+    // (docs/cancel-in-combat-design.md §4)
+    krcgId: 100125,
+    name: "Backstep",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // Both halves in one mode: the rider is the PRICE of the
+        // maneuver, not a second thing the player chooses.
+        effects: [
+          { kind: "maneuver", onlyToLong: true },
+          { kind: "pressToStrikerIfDamaged" },
+        ],
+      },
+    ],
+  },
+  {
+    // "Do not replace until after combat. Press, only usable to end
+    // combat. Alternatively, burn 1 blood to cancel a grapple card (such
+    // as Immortal Grapple or Mighty Grapple) as it is played (no cost is
+    // paid for that card)." (docs/cancel-in-combat-design.md §2)
+    krcgId: 100554,
+    name: "Disengage",
+    cardType: "combat",
+    bloodCost: 0,
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "press", continueOnly: false, endOnly: true }],
+      },
+      {
+        // "Alternatively" — a second MODE, not a second effect: the two
+        // halves are offered in different windows and the player picks
+        // one. The compiler keys modes by level, so the alternative rides
+        // a variant.
+        level: "basic",
+        discipline: null,
+        variant: "cancel",
+        effects: [
+          {
+            kind: "cancelCombatCard",
+            bloodCost: 1,
+            keywords: ["grapple"],
+            // "(no cost is paid for that card)" — printed, so the refund
+            // is this card's clause rather than the general rule.
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a ready anarch. Do not replace until after combat.
+    // Maneuver or press or burn 1 blood to cancel a combat card played by
+    // the opposing minion that would restrict this anarch's choice of
+    // strikes this round as it is played."
+    // (docs/cancel-in-combat-design.md §3)
+    krcgId: 100861,
+    name: "Groundfighting",
+    cardType: "combat",
+    bloodCost: 0,
+    requiresSect: ["anarch"],
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "maneuver" }] },
+      {
+        level: "basic",
+        discipline: null,
+        variant: "press",
+        effects: [{ kind: "press", continueOnly: false }],
+      },
+      {
+        level: "basic",
+        discipline: null,
+        variant: "cancel",
+        effects: [
+          {
+            kind: "cancelCombatCard",
+            bloodCost: 1,
+            restrictsStrikeChoice: true,
+            // NOT printed here, where Disengage prints it — so the
+            // general rule stands and the cancelled card's cost is still
+            // paid [RBK cancel-a-card] [ANK 20260216].
+            costIsStillPaid: true,
+          },
+        ],
+      },
     ],
   },
   {
@@ -4402,6 +6944,7 @@ export const cardSpecs: CardSpec[] = [
     // clause is vestigial — no other sentence on the card uses X.)
     krcgId: 102213,
     name: "Creeping Sabotage",
+    requiresClan: ["Nosferatu"],
     cardType: "action",
     bloodCost: 0,
     permanent: {
@@ -4544,11 +7087,115 @@ export const cardSpecs: CardSpec[] = [
       },
     ],
   },
+  // --- Blood-bank actions (docs/blood-bank-actions-design.md). Four
+  //     actions whose whole effect is blood arriving from the BANK.
+  {
+    // "+1 stealth action. Requires a ready archbishop, priscus, cardinal
+    // or regent. Each ready Sabbat vampire you control gains 1 blood from
+    // the blood bank."
+    krcgId: 100200,
+    name: "Blood Feast",
+    cardType: "action",
+    bloodCost: 1,
+    requiresTitle: ["archbishop", "priscus", "cardinal", "regent"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "bankBloodSweep", amount: 1, who: { sect: "sabbat", ownOnly: true } },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Each ready unlocked Ravnos gains 1 blood."
+    //
+    // NO CONTROLLER IS NAMED, so this feeds every Ravnos at the table,
+    // not just the player's — the field `ownOnly` exists to be left off
+    // here, and leaving it on would have been invisible in a one-seat
+    // test.
+    krcgId: 101376,
+    name: "Patshiv",
+    cardType: "action",
+    bloodCost: 0,
+    requiresClan: ["Ravnos"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "bankBloodSweep", amount: 1, who: { clan: "Ravnos", unlockedOnly: true } },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a Sabbat vampire. Move 2 blood from the
+    // blood bank to an unlocked Sabbat vampire, or move 1 blood to each of
+    // two unlocked Sabbat vampires."
+    //
+    // Neither half names a controller either — "an unlocked Sabbat
+    // vampire" is any of them.
+    krcgId: 100660,
+    name: "Esbat",
+    cardType: "action",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "bankBloodSplit",
+            who: { sect: "sabbat", unlockedOnly: true },
+            splits: [
+              { amount: 2, targets: 1 },
+              { amount: 1, targets: 2 },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Add 2 blood to a younger Assamite in your
+    // uncontrolled region."
+    //
+    // THE CARD SAYS ASSAMITE; THE REGISTRY SAYS BANU HAQIM. A filter
+    // spelled from the card text would match nothing and the card would
+    // be offered to nobody, silently — the clan-vocabulary trap, and the
+    // reason `clan-vocabulary.test.ts` exists.
+    krcgId: 101045,
+    name: "Khabar: Loyalty",
+    cardType: "action",
+    bloodCost: 0,
+    requiresClan: ["Banu Haqim"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "addUncontrolledBlood", amount: 2, youngerOnly: true, clan: "Banu Haqim" },
+        ],
+      },
+    ],
+  },
   {
     // "+1 stealth action. Add 2 blood to a Gangrel in your uncontrolled
     // region."
     krcgId: 101972,
     name: "Thing",
+    requiresClan: ["Gangrel"],
     cardType: "action",
     bloodCost: 0,
     usable: [],
@@ -5118,6 +7765,7 @@ export const cardSpecs: CardSpec[] = [
     //  +1 blood or life."
     krcgId: 102263,
     name: "Unleashing the Bestial Soul",
+    requiresClan: ["Salubri"],
     cardType: "actionModifier",
     bloodCost: 1,
     usable: ["onlyAsAnnounced"],
@@ -5364,6 +8012,7 @@ export const cardSpecs: CardSpec[] = [
     // and restricts the card to bleed actions.
     krcgId: 102264,
     name: "Visions of Gehenna",
+    requiresClan: ["Ravnos"],
     cardType: "actionModifier",
     bloodCost: 0,
     usable: [],
@@ -5672,6 +8321,7 @@ export const cardSpecs: CardSpec[] = [
     // first round of the resulting combat."
     krcgId: 102256,
     name: "One With the Land",
+    requiresClan: ["Tzimisce"],
     cardType: "reaction",
     bloodCost: 0,
     usable: ["actionDirectedAtYou"],
@@ -5745,6 +8395,7 @@ export const cardSpecs: CardSpec[] = [
     krcgId: 101717,
     name: "Sense the Savage Way",
     cardType: "reaction",
+    requiresVampire: true,
     bloodCost: 0,
     requiresCapacity: 7,
     usable: [],
@@ -5864,6 +8515,7 @@ export const cardSpecs: CardSpec[] = [
     // for +1 intercept)." Bespoke overlay adds the attached ability.
     krcgId: 102353,
     name: "Dogged Pursuit",
+    requiresClan: ["Ravnos"],
     cardType: "reaction",
     bloodCost: 0,
     usable: ["byLockedMinion"],
@@ -6132,6 +8784,9 @@ export const cardSpecs: CardSpec[] = [
     krcgId: 101780,
     name: "Sight Beyond Sight",
     cardType: "master",
+    // The printed burn option icon (p. 17) — the only card in the pool
+    // that carries it. docs/burn-option-design.md
+    burnOption: true,
     bloodCost: 0,
     poolCost: 0,
     unique: true,
@@ -6919,8 +9574,12 @@ export const cardSpecs: CardSpec[] = [
     name: "Elder Intervention",
     cardType: "reaction",
     bloodCost: 1,
-    // Pack Tactics clause is moot: that card is not in the V5 pool.
+    // "A vampire cannot play both Elder Intervention and Pack Tactics
+    // during the same action." Moot until wave 36 brought Pack Tactics
+    // into the pool; the bar has to be named on BOTH cards or it only
+    // works in one direction (docs/buying-a-block-design.md §2).
     usable: ["bleedTargetsYou"],
+    notWithThisAction: ["Pack Tactics"],
     delayedReplace: "afterAction",
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "modifyIntercept", amount: 2 }] },
@@ -6983,6 +9642,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 102248,
     name: "Feast of the Soul's Secrets",
+    requiresClan: ["Salubri"],
     cardType: "action",
     bloodCost: 1,
     usable: [],
@@ -7390,6 +10050,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 101628,
     name: "Revenant",
+    requiresClan: ["Tzimisce"],
     cardType: "retainer",
     bloodCost: 1,
     permanent: { where: "bearer", statics: { intercept: 1 }, tags: ["ghoul"] },
@@ -7446,6 +10107,7 @@ export const cardSpecs: CardSpec[] = [
     // something other than combat.
     krcgId: 102107,
     name: "Vengeful Spirit",
+    requiresClan: ["Harbinger of Skulls"],
     cardType: "retainer",
     bloodCost: 1,
     permanent: {
@@ -7464,6 +10126,7 @@ export const cardSpecs: CardSpec[] = [
     // as a +1 stealth action."
     krcgId: 102210,
     name: "Zombie",
+    requiresClan: ["Giovanni"],
     cardType: "retainer",
     bloodCost: 1,
     permanent: {
@@ -7480,6 +10143,7 @@ export const cardSpecs: CardSpec[] = [
     // damage each combat."
     krcgId: 101612,
     name: "Resplendent Protector",
+    requiresClan: ["Toreador"],
     cardType: "retainer",
     bloodCost: 0,
     permanent: {
@@ -7517,6 +10181,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 100568,
     name: "Dog Pack",
+    requiresClan: ["Gangrel"],
     cardType: "retainer",
     bloodCost: 0,
     poolCost: 2,
@@ -7532,6 +10197,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 101411,
     name: "Political Ally",
+    requiresClan: ["Ventrue"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 2,
@@ -7544,6 +10210,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 102220,
     name: "Double Deuce",
+    requiresClan: ["Gangrel"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 2,
@@ -7558,6 +10225,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 102217,
     name: "47th Street Royals",
+    requiresClan: ["Brujah"],
     cardType: "ally",
     bloodCost: 0,
     unique: true,
@@ -7648,6 +10316,7 @@ export const cardSpecs: CardSpec[] = [
   {
     krcgId: 102286,
     name: "Aggressive Corpse",
+    requiresClan: ["Hecata"],
     cardType: "ally",
     bloodCost: 2,
     ally: { life: 3, strength: 2, bleed: 0 },
@@ -7696,6 +10365,7 @@ export const cardSpecs: CardSpec[] = [
     cardType: "ally",
     bloodCost: 0,
     poolCost: 3,
+    requiresClan: ["Tzimisce"],
     ally: { life: 5, strength: 4, bleed: 0 },
     rush: { targets: "vampire" },
     permanent: { where: "bearer", statics: {}, tags: ["ghoul"] },
@@ -7714,6 +10384,7 @@ export const cardSpecs: CardSpec[] = [
     // to this ally."
     krcgId: 102267,
     name: "The Vozhd of Sofia",
+    requiresClan: ["Tzimisce"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 3,
@@ -7746,6 +10417,7 @@ export const cardSpecs: CardSpec[] = [
     // and its cost is not paid (the minion chooses a strike again)."
     krcgId: 102363,
     name: "The Vozhd of Gravesend",
+    requiresClan: ["Tzimisce"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 4,
@@ -7777,6 +10449,7 @@ export const cardSpecs: CardSpec[] = [
     // number `capacityOf` already returns (docs/vozhd-allies-design.md §3).
     krcgId: 102364,
     name: "The Vozhd of Juiz de Fora",
+    requiresClan: ["Tzimisce"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 3,
@@ -7804,6 +10477,7 @@ export const cardSpecs: CardSpec[] = [
     // phase, a Tzimisce you control can burn 1 blood to unlock this ally."
     krcgId: 102365,
     name: "The Vozhd of Szczecin",
+    requiresClan: ["Tzimisce"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 4,
@@ -7874,6 +10548,7 @@ export const cardSpecs: CardSpec[] = [
     // lock to give a Ravnos you control +1 stealth."
     krcgId: 102234,
     name: "City Star Taxi",
+    requiresClan: ["Ravnos"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 3,
@@ -7953,6 +10628,112 @@ export const cardSpecs: CardSpec[] = [
         cryptDraw: { transfers: 1 },
         cashOut: { transfers: 4, gainPool: 2 },
       },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- Transfers as a currency (docs/transfer-currency-design.md) ---
+  {
+    // "Master: unique location. [Gangrel / Gangrel antitribu]
+    //  Lock to get +1 hand size this turn.
+    //  Lock during your influence phase to get +1 transfer."
+    //
+    // "Only requires ONE clan or the other to be played" [ANK 20190203];
+    // the antitribu half names no vampire in the V5 pool, and listing both
+    // is what the ruling says rather than a guess about which is meant.
+    // "Can be used AT ANY MOMENT during the influence phase to get the
+    // additional transfer" [RTR 20180303] — so the transfer clause has no
+    // window narrower than the phase, and the hand-size clause has none at
+    // all. ONE card, ONE lock: using either spends the other.
+    krcgId: 100646,
+    name: "Ennoia's Theater",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    requiresControlledClan: ["Gangrel", "Gangrel antitribu"],
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Ennoia's Theater", "location"],
+      handSizeLock: { amount: 1 },
+      transferAbilities: { gain: { transfers: 1, lock: true } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. If you have 5 or fewer pool, gain 3 pool. Otherwise, gain 1
+    //  pool. In either case, put this card in play. You cannot use
+    //  transfers to move counters to or from your uncontrolled minions. If
+    //  you control the Edge during your unlock phase, burn this card."
+    //
+    // The ban is on the COUNTER transfers only: the crypt draw spends
+    // transfers without moving a counter onto a minion, and influencing a
+    // full vampire out is free (p. 36) and moves no counters either.
+    krcgId: 101059,
+    name: "King's Rising",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: { barsUncontrolledTransfers: true },
+      tags: ["King's Rising"],
+      burnWhenControllerHasEdgeAtUnlock: true,
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "gainPoolThreshold", atOrBelow: 5, ifAtOrBelow: 3, otherwise: 1 }],
+      },
+    ],
+  },
+  {
+    // "Unique Master. Put this card in play. Every Nosferatu burns 1
+    //  additional blood to unlock during his or her controller's unlock
+    //  phase. Any Methuselah can burn this card by burning 1 pool and
+    //  spending four transfers during his or her influence phase."
+    //
+    // Both halves reach past the controller: the tax is on every Nosferatu
+    // AT THE TABLE, and the counter-play is any Methuselah's, paid on
+    // their own turn out of their own transfers.
+    krcgId: 102176,
+    name: "Whispers of the Nictuku",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: { clanUnlockSurcharge: { clan: "Nosferatu", blood: 1 } },
+      tags: ["Whispers of the Nictuku"],
+      transferAbilities: { burnByAnySeat: { transfers: 4, poolCost: 1 } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Inconnu. A Methuselah may spend four transfers and remove a vampire
+    //  in his or her uncontrolled region from the game to search for any
+    //  card in his or her library and put it in his or her hand
+    //  (discarding and shuffling afterward)."
+    //
+    // An EVENT: it sits in one play area and rules the table, so its one
+    // ability belongs to every Methuselah in their own influence phase.
+    krcgId: 100970,
+    name: "Inconnu Tutelage",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["event", "Inconnu Tutelage", "inconnu"],
+      transferAbilities: { tutor: { transfers: 4 } },
     },
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
@@ -8130,6 +10911,7 @@ export const cardSpecs: CardSpec[] = [
     // the Portcullis."
     krcgId: 102303,
     name: "Raising the Portcullis",
+    requiresClan: ["Lasombra"],
     cardType: "politicalAction",
     bloodCost: 0,
     unique: true,
@@ -8346,21 +11128,105 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }], // bespoke terms
   },
+  // --- Table-wide pool swings (docs/table-pool-swings-design.md). Four
+  //     referendums that hand every Methuselah a bill or a windfall,
+  //     counted from something they control.
   {
-    krcgId: 101154,
-    name: "Malkavian Justicar",
+    // "If this referendum is successful, each Methuselah burns X+1 pool,
+    // where X is the number of Assamites he or she controls."
+    //
+    // ASSAMITE IS BANU HAQIM in the registry, and the +1 is charged to a
+    // Methuselah with none — which is the whole card.
+    krcgId: 102019,
+    name: "Treaty of Tyre Enforced",
     cardType: "politicalAction",
     bloodCost: 0,
     usable: [],
-    modes: [{ level: "basic", discipline: null, effects: [] }], // bespoke title grant
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refPerMinion",
+            effect: "burnPool",
+            amount: 1,
+            plus: 1,
+            who: { kind: "vampire", clan: "Banu Haqim" },
+          },
+        ],
+      },
+    ],
   },
   {
-    krcgId: 101990,
-    name: "Toreador Justicar",
+    // "Only one Political Stranglehold can be played or called in a game.
+    // Successful referendum means each Methuselah gains 3 pool for each
+    // vampire they control with capacity 8 or more."
+    krcgId: 101417,
+    name: "Political Stranglehold",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    oncePerGameByName: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refPerMinion",
+            effect: "gainPool",
+            amount: 3,
+            who: { kind: "vampire", minCapacity: 8 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Successful referendum means each Methuselah gains 1 pool. Each
+    // Methuselah then burns 1 pool for each equipment, location or
+    // retainer card he or she controls."
+    krcgId: 100289,
+    name: "Can't Take it with You",
     cardType: "politicalAction",
     bloodCost: 0,
     usable: [],
-    modes: [{ level: "basic", discipline: null, effects: [] }], // bespoke title grant
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refPerSeatCards",
+            effect: "burnPool",
+            amount: 1,
+            everyoneGains: 1,
+            // Equipment and retainers sit on MINIONS; only locations sit
+            // in the seat's own play area. The tally has to read both.
+            count: { of: "permanents", tags: ["equipment", "location", "retainer"] },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "If this referendum is successful, each Methuselah burns X pool,
+    // where X is the number of vampires in his or her prey's ash heap."
+    krcgId: 101167,
+    name: "Mark of the Damned",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "refPerSeatCards", effect: "burnPool", amount: 1, count: { of: "preyAshHeapCrypt" } },
+        ],
+      },
+    ],
   },
   {
     krcgId: 100294,
@@ -8792,6 +11658,7 @@ export const cardSpecs: CardSpec[] = [
     // difference."
     krcgId: 100619,
     name: "Elder Kindred Network",
+    requiresClan: ["Ventrue"],
     cardType: "reaction",
     bloodCost: 0,
     usable: [],
@@ -8838,6 +11705,7 @@ export const cardSpecs: CardSpec[] = [
     // waits however long it takes.
     krcgId: 101156,
     name: "Malkavian Rider Clause",
+    requiresClan: ["Malkavian"],
     cardType: "reaction",
     bloodCost: 1,
     usable: [],
@@ -9608,6 +12476,7 @@ export const cardSpecs: CardSpec[] = [
     //  combat ends during the first round of the resulting combat."
     krcgId: 102254,
     name: "Night Terrors",
+    requiresClan: ["Ravnos"],
     cardType: "reaction",
     bloodCost: 1,
     usable: [],
@@ -10008,6 +12877,109 @@ export const cardSpecs: CardSpec[] = [
     //  face up and out of play. If you would draw a card from your
     //  library, you can draw one of those cards instead. If this location
     //  has no cards on it, burn it."
+    // --- The ash heap as a resource
+    //     (docs/ash-heap-resource-design.md) ---
+    // "Master. Choose a vampire in your ash heap. Gain X pool, where X is
+    //  half of the capacity of that vampire (round down). Remove that
+    //  vampire from the game."
+    krcgId: 101577,
+    name: "Redeem the Lost Soul",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "redeemVampireFromAsh", divisor: 2 }],
+      },
+    ],
+  },
+  {
+    // "Master: unique location. Lock during your discard phase to move a
+    //  card from your ash heap to the bottom of your library."
+    //
+    //  The Brujah antitribu icon on a MASTER is decorative — a master's
+    //  clan requirement is printed in its text, and this one prints none.
+    krcgId: 102153,
+    name: "Waste Management Operation",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Waste Management Operation", "location"],
+      ashToLibrary: { to: "bottom", window: "discard" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. You may lock this location to move a
+    //  library card from your ash heap to this location, face down. You
+    //  may use a master phase action to move a card from this location to
+    //  the top of your library. Any vampire may burn this location as a
+    //  Ⓓ action."
+    //
+    //  The Harbinger of Skulls icon is decorative for the same reason.
+    krcgId: 101136,
+    name: "Maabara",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Maabara", "location"],
+      store: {
+        faceUp: false,
+        addFromAshHeap: { whose: "own" },
+        toLibraryInMasterPhase: "top",
+      },
+      vulnerableTo: { who: { kind: "vampire" } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique master. Put this card in play. Lock this card to move a
+    //  library card from your PREY's ash heap to this card, face down. You
+    //  may look at that card at any time. You may play the card from the
+    //  Fragments as if playing it from your hand (requirements and cost,
+    //  if any, apply as normal). When that card is burned, remove it from
+    //  the game instead. Only 1 card can be on this card at a time. Any
+    //  vampire with a capacity above 4 can steal the Fragments (and any
+    //  card on it) for his or her controller as a Ⓓ action."
+    //
+    //  "Capacity ABOVE 4" is `minCapacity: 5`, and `outcome: "steal"`
+    //  already moves the whole entry — "and any card on it" is what
+    //  keeping the entry whole means.
+    krcgId: 100656,
+    name: "The Erciyes Fragments",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["The Erciyes Fragments"],
+      store: {
+        faceUp: false,
+        addFromAshHeap: { whose: "prey", max: 1 },
+        playableFrom: {},
+        removeFromGameWhenBurned: true,
+      },
+      vulnerableTo: { who: { kind: "vampire", minCapacity: 5 }, outcome: "steal" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
     krcgId: 102351,
     name: "Black Market Cache",
     cardType: "master",
@@ -10085,6 +13057,84 @@ export const cardSpecs: CardSpec[] = [
         faceUp: true,
         addFromHandInMasterPhase: { cardTypes: ["ally", "retainer"], tags: ["ghoul"] },
         playableFrom: { clan: "Tzimisce" },
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- The stores you play out of (docs/store-plays-design.md) ---
+  {
+    // "+1 stealth action.
+    //  Put this card on this Gangrel with any number of cards requiring
+    //  Protean [pro] from your hand face down and out of play (you can
+    //  look at the cards at any time). This Gangrel can play these cards
+    //  as if from your hand. Burn this card if it has no cards on it. A
+    //  vampire can have only one Gift of Proteus."
+    //
+    // The clan icon is a REQUIREMENT (p. 10) and KRCG's text does not
+    // repeat it, so `requiresClan` is read off the icon rather than the
+    // sentence — which here happens to say it twice.
+    krcgId: 100827,
+    name: "Gift of Proteus",
+    cardType: "action",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresClan: ["Gangrel"],
+    permanent: {
+      where: "bearer",
+      statics: {},
+      // The name is in `tags` as well as `exclusiveKey`: the action
+      // enumerator's own-duplicate check reads the BEARER'S TAGS, and the
+      // gate on a second copy has to hold at both.
+      tags: ["Gift of Proteus"],
+      exclusiveKey: "Gift of Proteus",
+      store: {
+        faceUp: false,
+        fillOnEntry: { from: "hand", count: "all", requires: "pro" },
+        playableFrom: { bearer: true },
+        burnWhenEmpty: true,
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "actionStealth", amount: 1 }, { kind: "attachSelf" }],
+      },
+    ],
+  },
+  // Mokolé Blood (101232) was BUILT for this wave and then pulled: its
+  // store takes "cards requiring Serpentis [ser]", and the V5 pool has no
+  // Serpentis card and no vampire with the Discipline, so the store can
+  // never be filled and the card burns the instant it enters play. Whole
+  // and inert, which §0 keeps out of the pool. The `searchOrAshHeap` fill
+  // it needed is built and is what Storage Annex's sibling zone list uses.
+  // docs/store-plays-design.md §7
+  {
+    // "Master: location.
+    //  Put a card from your hand face down (out of play) on this card when
+    //  you play it. You may look at the card at any time. During your
+    //  master phase, you may exchange a card in your hand for the card on
+    //  this Storage Annex."
+    //
+    // A store NOBODY plays out of: the card on it is a card in reserve, and
+    // the only way back is the exchange. `playableFrom` is absent, which is
+    // what makes it absent from the play enumerator (§6).
+    krcgId: 101877,
+    name: "Storage Annex",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Storage Annex", "location"],
+      store: {
+        faceUp: false,
+        fillOnEntry: { from: "hand", count: 1, mandatory: true },
+        exchangeWithHandInMasterPhase: true,
       },
     },
     usable: [],
@@ -10196,6 +13246,74 @@ export const cardSpecs: CardSpec[] = [
       unlockDrain: { whose: "prey", amount: 1 },
       selfBurn: { onPreyOusted: { gainPool: 3 } },
       vulnerableTo: { via: "politicalAction", stealth: 1, cost: { pool: 1 } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "refPutInPlay" }] }],
+  },
+  // --- Referendums that become a TABLE RULE
+  //     (docs/table-referendums-design.md) ---
+  {
+    // "Requires a prince. If this referendum is successful, put this card
+    //  in play. Primogen cannot attempt political actions and get one
+    //  less vote during political actions. This card may be burned by a
+    //  referendum called by ANY vampire as a +1 stealth political action."
+    krcgId: 100158,
+    name: "Beyond Reproach",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresTitle: ["prince"],
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Beyond Reproach"],
+      // The bar and the vote penalty are one sentence about one title, so
+      // they are one aura with two fields rather than two clauses that
+      // could disagree about who a primogen is.
+      aura: { scope: "global", title: "primogen", cannotActPolitical: true, votes: -1 },
+      vulnerableTo: { via: "politicalAction", stealth: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "refPutInPlay" }] }],
+  },
+  {
+    // "If this referendum is successful, put this card in play. Each
+    //  Methuselah must pay an additional pool to use a discard phase
+    //  action to discard a card. Any vampire may call a referendum to burn
+    //  this card as a +1 stealth political action."
+    krcgId: 100285,
+    name: "Camarilla Threat",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: { discardActionPoolTax: 1 },
+      tags: ["Camarilla Threat"],
+      vulnerableTo: { via: "politicalAction", stealth: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "refPutInPlay" }] }],
+  },
+  {
+    // "Requires a prince or justicar. If this referendum is successful,
+    //  put this card in play. While in play, when any Methuselah moves a
+    //  vampire from uncontrolled to controlled, he or she burns 1
+    //  additional pool. Any CAMARILLA vampire can call a referendum to
+    //  burn this card as a +1 stealth political action."
+    krcgId: 101184,
+    name: "Masquerade Enforcement",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresTitle: ["prince", "justicar"],
+    permanent: {
+      where: "seat",
+      statics: { influenceOutPoolTax: 1 },
+      tags: ["Masquerade Enforcement"],
+      // The only one of the three whose burn referendum is not open to
+      // everybody — `who.sect` already existed for exactly this.
+      vulnerableTo: { via: "politicalAction", stealth: 1, who: { sect: "camarilla" } },
     },
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [{ kind: "refPutInPlay" }] }],
@@ -10448,6 +13566,100 @@ export const cardSpecs: CardSpec[] = [
     //  [PRO] or [THA] As above, but to prevent 2 damage in combat."
     // The two modes differ by EXACTLY the aggravated filter, which makes
     // this the sharpest test of the `prevent.nonAggravated` gate (§3).
+    // --- Before-range attachments (docs/before-range-attachments-design.md)
+    // "Only usable before range is determined. A vampire can play only one
+    //  Focus the Blood each combat. Put this card and 1 blood on this
+    //  Assamite. This vampire can burn this card to reduce the cost of a
+    //  combat card they play by 1 blood."
+    //
+    //  "Assamite" is the registry's Banu Haqim — the clan-vocabulary trap
+    //  the project memory records, checked against the registry, not the
+    //  printed name.
+    krcgId: 100753,
+    name: "Focus the Blood",
+    cardType: "combat",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresClan: ["Banu Haqim"],
+    combatLimit: "combat",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "attachInCombat",
+            to: "self",
+            when: "beforeRange",
+            bloodOnCard: 1,
+            burnToDiscountCombatCard: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Put this card on a Nosferatu in combat. The Nosferatu with this card
+    //  has -1 strength each combat. You may play this card even if you are
+    //  not involved in the current combat."
+    //
+    //  "-1 strength EACH COMBAT", not this one: the card stays in play on
+    //  the vampire, so it is an ordinary attached static and nothing burns
+    //  it when the combat ends.
+    krcgId: 101302,
+    name: "Nosferatu Putrescence",
+    cardType: "combat",
+    bloodCost: 0,
+    poolCost: 0,
+    // NOTE: `usable` is read off the MODE by the outside-combat gate, not
+    // off the spec — the spec-level one gates something else entirely, and
+    // putting it there compiles, typechecks and offers the card to nobody.
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        usable: ["byOutsideVampire"],
+        effects: [
+          {
+            kind: "attachInCombat",
+            to: "anyInCombat",
+            when: "beforeRange",
+            targetClan: "Nosferatu",
+            statics: { strength: -1 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable before range is determined. Put this card on a gun on
+    //  this minion and put an ammo card from your hand on this card. When
+    //  using this gun, you may use the effect of the ammo card as if it
+    //  were played from your hand (requirements and cost apply as normal)."
+    krcgId: 101142,
+    name: "Magazine",
+    cardType: "combat",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "attachInCombat",
+            to: "gunOnSelf",
+            when: "beforeRange",
+            storeAmmoFromHand: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     krcgId: 102347,
     name: "Wall of Filth",
     cardType: "combat",
@@ -10488,6 +13700,7 @@ export const cardSpecs: CardSpec[] = [
     //  action."
     krcgId: 102260,
     name: "Sculpt the Flesh",
+    requiresClan: ["Tzimisce"],
     cardType: "combat",
     bloodCost: 0,
     permanent: {
@@ -10916,6 +14129,7 @@ export const cardSpecs: CardSpec[] = [
     // A hunt, not a cardEffect — the action kind is printed and matters.
     krcgId: 102302,
     name: "Psychophagia",
+    requiresClan: ["Hecata"],
     cardType: "action",
     bloodCost: 0,
     usable: [],
@@ -11307,6 +14521,7 @@ export const cardSpecs: CardSpec[] = [
     // blood cost.
     krcgId: 102304,
     name: "Rotting Behemoth",
+    requiresClan: ["Hecata"],
     cardType: "ally",
     bloodCost: 3,
     poolCost: 0,
@@ -11353,6 +14568,7 @@ export const cardSpecs: CardSpec[] = [
     // that did not happen here.
     krcgId: 102297,
     name: "Split the Veil",
+    requiresClan: ["Hecata"],
     cardType: "action",
     bloodCost: 0,
     permanent: {
@@ -11405,6 +14621,7 @@ export const cardSpecs: CardSpec[] = [
     // which already merge into the ally's entry (the Feral Hound shape).
     krcgId: 102293,
     name: "Bone Shambler",
+    requiresClan: ["Hecata"],
     cardType: "ally",
     bloodCost: 1,
     poolCost: 0,
@@ -11569,6 +14786,7 @@ export const cardSpecs: CardSpec[] = [
     // blocked, so no combat follows.
     krcgId: 102292,
     name: "Screamer",
+    requiresClan: ["Hecata"],
     cardType: "ally",
     bloodCost: 0,
     poolCost: 1,
@@ -13861,19 +17079,25 @@ function titleGrant(opts: {
   };
 }
 
-const malkavianJusticar = titleGrant({
-  name: "Malkavian Justicar",
-  title: "justicar",
-  eligible: (m) => isReady(m) && m.clan === "Malkavian" && m.sect === "camarilla",
-  voteBonusClan: "Malkavian",
-});
-
-const toreadorJusticar = titleGrant({
-  name: "Toreador Justicar",
-  title: "justicar",
-  eligible: (m) => isReady(m) && m.clan === "Toreador",
-  voteBonusClan: "Toreador",
-});
+/**
+ * One handler per clan Justicar, built from the same table as the specs
+ * (docs/justicars-design.md §2). Eight cards, one shape: choose a ready
+ * vampire of the clan, the title lands on a pass, and every vampire of
+ * that clan votes one louder while the referendum runs.
+ */
+const JUSTICAR_HANDLERS: CardHandler[] = JUSTICAR_CLANS.map(([, clan, camarillaOnly]) =>
+  titleGrant({
+    name: `${clan} Justicar`,
+    title: "justicar",
+    // "Choose a ready CAMARILLA Lasombra" against "choose a ready
+    // Tremere" — four print the sect clause and four do not.
+    eligible: (m) =>
+      isReady(m) && m.clan === clan && (!camarillaOnly || m.sect === "camarilla"),
+    // "each ready Brujah" / "each Tremere" / "each Banu Haqim" — three
+    // phrasings of one rule, since only a ready vampire casts votes.
+    voteBonusClan: clan,
+  }),
+);
 
 const cardinalBenediction = titleGrant({
   name: "Cardinal Benediction",
@@ -17121,8 +20345,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     saulotsHealingTouch,
     openWar,
     diaDeLosMuertos,
-    malkavianJusticar,
-    toreadorJusticar,
+    ...JUSTICAR_HANDLERS,
     cardinalBenediction,
     dreamsOfTheSphinx,
     doggedPursuit,

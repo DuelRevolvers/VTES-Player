@@ -100,6 +100,7 @@ describe("Aggressive Corpse (102286)", () => {
     const state = threeSeatGame();
     const alice = state.seats[0]!;
     alice.hand.push({ id: "ac1", name: "Aggressive Corpse" });
+    alice.minions[0]!.clan = "Hecata"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
 
     runTrace(engine, [

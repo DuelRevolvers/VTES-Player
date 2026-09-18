@@ -13,7 +13,7 @@
  * the far side of the seam.
  */
 
-import type { DecisionPoint, LegalOption } from "../engine/index.ts";
+import type { DecisionPoint, GameState, LegalOption } from "../engine/index.ts";
 import type { DeckDef, GameSetup } from "./decks.ts";
 import { validateDecks } from "./decks.ts";
 import { cardText } from "./cardinfo.ts";
@@ -24,7 +24,7 @@ import { autoSave, loadSaves, saveAs } from "./savedgames.ts";
 import { DEFAULT_CHAT_COLOR } from "./profile.ts";
 import type { FinishedView, ModerationView, SeatFace } from "./render.ts";
 import { DEFAULT_EMOJI_CATEGORY } from "./render.ts";
-import { actionsByTableCard, orderHand, playsByCard, render } from "./render.ts";
+import { actionsByTableCard, orderHand, playsByCard, render, stillOffered } from "./render.ts";
 import type { UiSettings } from "./settings.ts";
 import { HeuristicAgent } from "../ai/heuristic.ts";
 import { loadSettings, saveSettings, seatSeed } from "./settings.ts";
@@ -318,6 +318,36 @@ export class DebugApp {
     // changed, so neither should its label — re-announcing it on every
     // repaint is the flicker in a different form.
     p.hidden = false;
+    // AND PUT IT BACK WHERE IT WAS. The panel is a NEW element — the
+    // repaint replaced the whole root — so it carries none of the inline
+    // `left`/`top` the pointer-follow had set, and `.zoom` has no
+    // position of its own in the stylesheet. Unhidden and unplaced, it
+    // appears in the top-left corner and stays there until the player
+    // moves the mouse. Positioned after `hidden = false`, so the panel
+    // can be measured rather than falling back to its default size.
+    this.positionPreview(p);
+  }
+
+  /**
+   * A SELECTION IS A QUESTION ABOUT THE DECISION ON THE TABLE — "what can
+   * this card do now?" — so it dies with that decision.
+   *
+   * `submit` cleared it for a play made FROM the menu, which covered only
+   * one of the ways a decision ends. Passing, ending the phase, a bot
+   * moving, a remote seat answering: each left the menu sitting open on a
+   * card whose options had gone, and the list on it was the LAST
+   * decision's, which is worse than a stale list — it is a wrong one.
+   *
+   * Checked against what is actually offered rather than against "the
+   * decision changed", because that is the real question, and it answers
+   * the awkward case for free: a decision that moves on but still offers
+   * this card keeps its menu open, which is what a player mid-thought
+   * wants.
+   */
+  private pruneSelection(dp: LegalDecision, state: GameState): void {
+    if (this.selectedCard && !stillOffered(this.selectedCard, dp, state)) {
+      this.selectedCard = null;
+    }
   }
 
   private repaint(): void {
@@ -325,8 +355,10 @@ export class DebugApp {
     // thrown away — see `saveScroll`.
     this.saveScroll();
     const dp = this.transport.decision();
+    const state = this.transport.view();
+    this.pruneSelection(dp, state);
     this.root.innerHTML = render({
-      state: this.transport.view(),
+      state,
       dp,
       eventFilter: this.eventFilter,
       canUndo: this.transport.history?.canUndo() ?? false,
@@ -503,14 +535,32 @@ export class DebugApp {
         p.hidden = true;
         return;
       }
-      const pad = 16;
-      const w = p.offsetWidth || 300;
-      const h = p.offsetHeight || 460;
-      const x = Math.min(ev.clientX + pad, window.innerWidth - w - pad);
-      const y = Math.min(Math.max(pad, ev.clientY - h / 2), window.innerHeight - h - pad);
-      p.style.left = `${Math.max(pad, x)}px`;
-      p.style.top = `${Math.max(pad, y)}px`;
+      this.positionPreview(p);
     });
+  }
+
+  /**
+   * Where the magnifier sits for the pointer's CURRENT position.
+   *
+   * ONE PLACE, because the panel is positioned from two: the `mousemove`
+   * that makes it follow the pointer, and the repaint that has to put it
+   * back. `.zoom` is `position: fixed` with no `left`/`top` of its own, so
+   * a panel that is shown without being placed lands in the top-left
+   * corner of the window — which is exactly what a repaint did, on every
+   * game tick, to a preview the player was reading (owner report,
+   * 2026-09-17). `restorePreview` restored the CARD and not the PLACE.
+   *
+   * It reads `this.pointer` rather than taking coordinates, so there is
+   * no call site that can pass the wrong ones.
+   */
+  private positionPreview(p: HTMLDivElement): void {
+    const pad = 16;
+    const w = p.offsetWidth || 300;
+    const h = p.offsetHeight || 460;
+    const x = Math.min(this.pointer.x + pad, window.innerWidth - w - pad);
+    const y = Math.min(Math.max(pad, this.pointer.y - h / 2), window.innerHeight - h - pad);
+    p.style.left = `${Math.max(pad, x)}px`;
+    p.style.top = `${Math.max(pad, y)}px`;
   }
 
   /**

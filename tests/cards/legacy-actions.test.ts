@@ -30,6 +30,8 @@ const WAVE: Array<[number, string]> = [
 function game(name: string, setup: (s: GameState) => void = () => {}) {
   const state = threeSeatGame();
   state.seats[0]!.minions[0]!.blood = 3;
+  // The printed clan icon is a requirement on a minion card (p. 10).
+  state.seats[0]!.minions[0]!.clan = testRegistry[name]?.requiresClans?.()?.[0] ?? null;
   setup(state);
   state.seats[0]!.hand.push({ id: "ac", name });
   return { state, engine: new VtesEngine(state, testRegistry) };

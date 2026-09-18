@@ -206,10 +206,26 @@ function tableActionMarks(id: string, ctx: TableCtx | null): { cls: string; body
 }
 
 /** Blood/life as pips, with the number for anything above a handful. */
-function pips(n: number): string {
-  if (n <= 0) return `<span class="pips empty">—</span>`;
-  if (n > 6) return `<span class="pips">●×${n}</span>`;
-  return `<span class="pips">${"●".repeat(n)}</span>`;
+function pips(n: number, extra = ""): string {
+  const cls = extra ? `pips ${extra}` : "pips";
+  if (n <= 0) return `<span class="${cls} empty">—</span>`;
+  if (n > 6) return `<span class="${cls}">●×${n}</span>`;
+  return `<span class="${cls}">${"●".repeat(n)}</span>`;
+}
+
+/**
+ * The counters on a card in play, laid over its scan the way blood sits
+ * over a vampire's.
+ *
+ * They used to be a number in a corner badge the size of the card's border,
+ * which is not something a player tracking The Gate of Acheron's clock can
+ * read across the table. Same pips as blood, teal rather than red: counters
+ * on a card are not blood, and telling the two apart at a glance is the
+ * whole reason the colour differs.
+ */
+function counterOverlay(n: number | undefined): string {
+  if (!n || n <= 0) return "";
+  return `<div class="counter-overlay" title="${n} counter(s)">${pips(n, "counters")}</div>`;
 }
 
 function disciplineList(m: MinionState): string {
@@ -247,7 +263,7 @@ function attachedList(m: MinionState, ctx: TableCtx | null): string {
       const mark = tableActionMarks(p.card.id, ctx);
       return `<div class="attached-card ${mark.cls}" data-tcard="${esc(p.card.id)}">
         ${cardImage(p.card.name, "tiny", p.locked)}
-        ${p.counters ? `<span class="counter-badge">${p.counters}</span>` : ""}
+        ${counterOverlay(p.counters)}
         ${mark.body}
       </div>`;
     })
@@ -303,7 +319,7 @@ function permanentTile(p: PermanentInPlay, ctx: TableCtx | null): string {
   const mark = tableActionMarks(p.card.id, ctx);
   return `<div class="perm-card ${mark.cls}" data-tcard="${esc(p.card.id)}">
     ${cardImage(p.card.name, "small", p.locked)}
-    ${p.counters ? `<span class="counter-badge">${p.counters}</span>` : ""}
+    ${counterOverlay(p.counters)}
     ${mark.body}
   </div>`;
 }
@@ -752,7 +768,7 @@ function decisionBar(
   for (const o of dp.options) {
     // Card plays live ON the cards in hand, not as buttons up here — click
     // or drag the card itself.
-    if (o.kind === "playCard" || o.kind === "discard") {
+    if (o.kind === "playCard" || o.kind === "discard" || o.kind === "burnOptionDiscard") {
       cardPlays += 1;
       continue;
     }
@@ -825,12 +841,31 @@ function decisionBar(
 export function playsByCard(dp: DecisionPoint | null): Map<string, LegalOption[]> {
   const byCard = new Map<string, LegalOption[]>();
   for (const o of dp?.options ?? []) {
-    if (o.kind !== "playCard" && o.kind !== "discard") continue;
+    if (o.kind !== "playCard" && o.kind !== "discard" && o.kind !== "burnOptionDiscard") continue;
     const list = byCard.get(o.card) ?? [];
     list.push(o);
     byCard.set(o.card, list);
   }
   return byCard;
+}
+
+/**
+ * Does the decision on the table still offer anything about this card?
+ *
+ * The question a SELECTION asks, and the reason it lives here beside the
+ * two indexes rather than in the screen that keeps the selection: a card
+ * is selected to ask "what can this do now?", and "now" is the decision.
+ * When the decision moves on and the card is no longer in either index,
+ * the menu on it is showing the LAST decision's options, which is not
+ * stale so much as wrong.
+ */
+export function stillOffered(
+  id: string | null,
+  dp: DecisionPoint | null,
+  state: GameState,
+): boolean {
+  if (!id) return false;
+  return playsByCard(dp).has(id) || actionsByTableCard(dp, state).has(id);
 }
 
 /**

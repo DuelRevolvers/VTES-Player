@@ -41,7 +41,12 @@ function reactThenBlock(
 ): { state: GameState; engine: VtesEngine } {
   const state = threeSeatGame();
   Object.assign(find(state, "V1"), { blood: 4, strength: 1 });
-  Object.assign(find(state, "M"), { blood: 4, strength: 1, ...m });
+  Object.assign(find(state, "M"), {
+    blood: 4,
+    strength: 1,
+    clan: testRegistry[bobCards[0]?.name ?? ""]?.requiresClans?.()?.[0] ?? null,
+    ...m,
+  });
   state.seats[1]!.hand.push(...bobCards);
   const engine = new VtesEngine(state, testRegistry);
   runTrace(engine, [
@@ -282,6 +287,7 @@ describe("Night Terrors (102254)", () => {
     Object.assign(find(state, "M"), {
       blood: 4,
       disciplines: { obf: "basic", pre: "basic" },
+      clan: "Ravnos", // the printed clan icon (p. 10)
     });
     state.seats[1]!.hand.push({ id: "nt", name: "Night Terrors" });
     const engine = new VtesEngine(state, testRegistry);

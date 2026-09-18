@@ -26,6 +26,7 @@ describe("Political Ally (101411)", () => {
     const state = threeSeatGame();
     const alice = state.seats[0]!;
     alice.hand.push({ id: "pa1", name: "Political Ally" });
+    alice.minions[0]!.clan = "Ventrue"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
 
     runTrace(engine, [
@@ -62,6 +63,7 @@ describe("Political Ally (101411)", () => {
       }),
     );
     alice.hand.push({ id: "pa1", name: "Political Ally" });
+    alice.minions[0]!.clan = "Ventrue"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
     const dp = engine.decision()!;
     expect(dp.options.some((o) => o.id.startsWith("play:Political Ally"))).toBe(false);
@@ -91,6 +93,7 @@ describe("Revenant (101628)", () => {
     const state = threeSeatGame();
     const alice = state.seats[0]!;
     alice.hand.push({ id: "rev1", name: "Revenant" });
+    alice.minions[0]!.clan = "Tzimisce"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
 
     runTrace(engine, [

@@ -307,9 +307,10 @@ describe("Szlachta Assistant (102360)", () => {
   });
 
   it("NEGATIVE SPACE: the modifier does not touch a card that is not a Tzimisce ghoul ally", () => {
-    // War Ghoul is tagged "ghoul" but requires no clan, so the filter
-    // must NOT match it. This is the test that keeps the two new
-    // PlayCostMod filters honest.
+    // Rafastio Ghoul is tagged "ghoul" but prints no clan icon, so the
+    // filter must NOT match it. This is the test that keeps the two new
+    // PlayCostMod filters honest. (War Ghoul, the old fixture, prints the
+    // Tzimisce icon — a requirement on a minion card, p. 10.)
     const mod = {
       amount: -2,
       pays: "bloodOrPool" as const,
@@ -318,7 +319,7 @@ describe("Szlachta Assistant (102360)", () => {
       tags: ["ghoul"],
       once: true,
     };
-    const h = testRegistry["War Ghoul"]!;
+    const h = testRegistry["Rafastio Ghoul"]!;
     expect(h.permanentTags).toContain("ghoul");
     expect(h.requiresClans?.() ?? []).not.toContain("Tzimisce");
     // Both halves must match; War Ghoul fails the clan half.

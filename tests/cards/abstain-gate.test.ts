@@ -146,6 +146,7 @@ describe("Scorn of Adonis (101692) — an effect after the tally", () => {
   it("burns 1 pool from each Methuselah who voted against", () => {
     const state = votingGame();
     state.seats[0]!.hand.push({ id: "soa", name: "Scorn of Adonis" });
+    state.seats[0]!.minions[0]!.clan = "Toreador"; // the printed clan icon (p. 10)
     const bobPool = state.seats[1]!.pool;
     const carolPool = state.seats[2]!.pool;
     const engine = new VtesEngine(state, testRegistry);

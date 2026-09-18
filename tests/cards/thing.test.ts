@@ -14,6 +14,7 @@ describe("Thing (101972)", () => {
     alice.uncontrolled.push({ card: makeMinion("U", "Alice", { clan: "Gangrel", capacity: 5, blood: 0 }), counters: 0 });
     alice.uncontrolled.push({ card: makeMinion("X", "Alice", { clan: "Ventrue", capacity: 5, blood: 0 }), counters: 0 });
     alice.hand.push({ id: "th1", name: "Thing" });
+    alice.minions[0]!.clan = "Gangrel"; // the printed clan icon (p. 10)
     const engine = new VtesEngine(state, testRegistry);
 
     // Only the Gangrel (U) is a legal target; the Ventrue (X) is not.

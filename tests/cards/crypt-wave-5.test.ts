@@ -327,9 +327,11 @@ describe("Hel-Blá", () => {
     // card was unrecognised. A negative that is empty for the wrong
     // reason looks exactly like a correct one.
     const { engine } = withCrypt("Hel-Blá (G6)", (s) => {
-      s.seats[0]!.ashHeap = [{ id: "ally1", name: "Screamer" }];
+      // Vagabond Mystic prints no clan icon; Screamer (the old fixture) is
+      // a Hecata card, so since the icon gate landed it DOES qualify.
+      s.seats[0]!.ashHeap = [{ id: "ally1", name: "Vagabond Mystic" }];
     });
-    expect(handlers["Screamer"]?.allyEntry).toBeDefined();
+    expect(handlers["Vagabond Mystic"]?.allyEntry).toBeDefined();
     walkTo(engine, "end");
     expect(optionIds(engine).some((o) => o.includes("ally:ally1"))).toBe(false);
   });

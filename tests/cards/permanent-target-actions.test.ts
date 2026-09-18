@@ -36,7 +36,11 @@ function location(id: string, name: string): PermanentInPlay {
 /** Alice acts; Bob controls a location. */
 function game(card: string, disc: Record<string, "basic" | "superior">): GameState {
   const state = threeSeatGame();
-  Object.assign(find(state, "V1"), { disciplines: disc, blood: 4 });
+  Object.assign(find(state, "V1"), {
+    disciplines: disc,
+    blood: 4,
+    clan: testRegistry[card]?.requiresClans?.()?.[0] ?? null, // the printed clan icon (p. 10)
+  });
   state.seats[0]!.hand.push({ id: "c", name: card });
   state.seats[1]!.permanents.push(location("loc", "Alamut"));
   return state;

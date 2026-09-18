@@ -256,6 +256,7 @@ describe("Ashur-uballit", () => {
     const v1 = find(state, "V1");
     v1.blood = 6;
     v1.capacity = 10;
+    v1.clan = "Hecata"; // both allies recruited here print the Hecata icon (p. 10)
     v1.disciplines = { obf: "superior", pot: "superior", ani: "superior", obl: "superior" };
     if (withAshur) {
       state.seats[0]!.minions.push(makeMinion("V9", "Alice", { capacity: 10, blood: 4 }));

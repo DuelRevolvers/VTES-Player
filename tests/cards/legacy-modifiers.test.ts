@@ -34,6 +34,8 @@ const WAVE: Array<[number, string]> = [
 function hunting(name: string, setup: (s: GameState) => void = () => {}) {
   const state = threeSeatGame();
   state.seats[0]!.minions[0]!.blood = 2;
+  // The printed clan icon is a requirement on a minion card (p. 10).
+  state.seats[0]!.minions[0]!.clan = testRegistry[name]?.requiresClans?.()?.[0] ?? null;
   setup(state);
   state.seats[0]!.hand.push({ id: "am", name });
   const engine = new VtesEngine(state, testRegistry);
@@ -161,6 +163,7 @@ describe("Spoils of War (101854)", () => {
   it("pays 1 blood and 1 pool after a successful DIRECTED action", () => {
     const state = threeSeatGame();
     state.seats[0]!.minions[0]!.blood = 1;
+    state.seats[0]!.minions[0]!.clan = "Brujah antitribu"; // the printed clan icon (p. 10)
     state.seats[0]!.hand.push({ id: "am", name: "Spoils of War" });
     const engine = new VtesEngine(state, testRegistry);
     runTrace(engine, [

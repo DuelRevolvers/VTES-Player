@@ -26,7 +26,12 @@ function intoStrikes(
   disc: Record<string, "basic" | "superior">,
 ): { state: GameState; engine: VtesEngine } {
   const state = threeSeatGame();
-  Object.assign(find(state, "V1"), { disciplines: disc, blood: 4, strength: 1 });
+  Object.assign(find(state, "V1"), {
+    disciplines: disc,
+    blood: 4,
+    strength: 1,
+    clan: testRegistry[aliceCards[0] ?? ""]?.requiresClans?.()?.[0] ?? null,
+  });
   Object.assign(find(state, "M"), { blood: 4, strength: 1 });
   aliceCards.forEach((n, i) => state.seats[0]!.hand.push({ id: `a${i}`, name: n }));
   const engine = new VtesEngine(state, testRegistry);

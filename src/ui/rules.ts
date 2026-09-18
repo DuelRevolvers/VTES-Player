@@ -302,6 +302,15 @@ export const RULE_SECTIONS: RuleSection[] = [
         <li><b>Ally</b> — an independent non-vampire minion, with life.</li>
         <li><b>Political action</b> — calls a referendum, or can be burned
         during one for a vote. Vampires only.</li>
+        <li><b>Event</b> — put into play with a <b>discard phase action</b>,
+        no more than one per phase, and each event only <b>once each
+        game</b>. Its text usually applies to the whole table, in every
+        Methuselah's turn. A <b>Gehenna</b> event belongs to a family that
+        counts itself: several require other Gehenna events to be in play
+        already, and some measure their effect by how many there are. The
+        other keywords on the type line — <b>Government</b>,
+        <b>Inconnu</b>, <b>Inquisition</b>, <b>Transient</b> — name the
+        event's flavour and are read only by cards that mention them.</li>
       </ul>
       <p>Terms worth knowing:</p>
       <ul>

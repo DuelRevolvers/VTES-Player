@@ -292,6 +292,7 @@ describe("Paths in Two Worlds (102300)", () => {
     Object.assign(find(state, "V1"), {
       disciplines: { obl: mode === "superior" ? "superior" : "basic" },
       blood: 5,
+      clan: "Hecata", // Screamer prints the Hecata icon (p. 10)
     });
     seatOf(state, "Alice").pool = 10;
     seatOf(state, "Alice").hand.push(
@@ -315,14 +316,16 @@ describe("Paths in Two Worlds (102300)", () => {
     const state = threeSeatGame();
     Object.assign(find(state, "V1"), { disciplines: { obl: "basic" }, blood: 5 });
     seatOf(state, "Alice").hand.push(
-      { id: "pa", name: "Political Ally" },
+      // Vagabond Mystic prints no clan icon; Political Ally (the old
+      // fixture) is a Ventrue card and V1 here has no clan (p. 10).
+      { id: "pa", name: "Vagabond Mystic" },
       { id: "p2w", name: "Paths in Two Worlds" },
     );
     const engine = new VtesEngine(state, testRegistry);
 
-    expect(walkTo(engine, "play:Political Ally")).toBe(true);
+    expect(walkTo(engine, "play:Vagabond Mystic")).toBe(true);
     runTrace(engine, [
-      ["Alice", optionIds(engine).find((o) => o.startsWith("play:Political Ally"))!],
+      ["Alice", optionIds(engine).find((o) => o.startsWith("play:Vagabond Mystic"))!],
     ]);
     expect(walkTo(engine, "play:Paths in Two Worlds", 12)).toBe(false);
   });
@@ -491,7 +494,7 @@ describe("Spectral Servitor (102296)", () => {
 describe("Rotting Behemoth (102304)", () => {
   function entering(heap: Array<{ id: string; name: string }>) {
     const state = threeSeatGame();
-    Object.assign(find(state, "V1"), { disciplines: { obl: "basic" }, blood: 6 });
+    Object.assign(find(state, "V1"), { disciplines: { obl: "basic" }, blood: 6, clan: "Hecata" });
     seatOf(state, "Alice").hand.push({ id: "rb", name: "Rotting Behemoth" });
     seatOf(state, "Alice").ashHeap = heap;
     return { state, engine: new VtesEngine(state, testRegistry) };

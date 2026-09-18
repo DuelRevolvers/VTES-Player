@@ -278,6 +278,22 @@ function fourSeatGame(seed: number): GameState {
     "Pit of Contemplation",
     // Unlock-phase tolls (docs/unlock-tolls-design.md).
     "The Gate of Acheron",
+    // Blood-bank actions (docs/blood-bank-actions-design.md). The fixture
+    // seats carry Sabbat, Ravnos and Banu Haqim vampires, so all four are
+    // reachable: the sweep, the split and the uncontrolled-region feed.
+    "Blood Feast",
+    "Patshiv",
+    "Esbat",
+    "Khabar: Loyalty",
+    // The Powerbases that BANK BLOOD
+    // (docs/blood-banking-locations-design.md). All five: the store, the
+    // mandatory drip that burns the card, the pool-matched investment, the
+    // master-phase purchase, and the raid that empties one.
+    "Powerbase: Barranquilla",
+    "Powerbase: Chicago",
+    "Powerbase: Mexico City",
+    "Powerbase: New York",
+    "Powerbase: Washington, D.C.",
     // "Minions can burn this card as a Ⓓ action" family.
     "Creeping Sabotage",
     "Army of Rats",
@@ -310,6 +326,27 @@ function fourSeatGame(seed: number): GameState {
     "Visit from the Capuchin",
     "Touch of Oblivion",
     "Weighted Walking Stick",
+    // Armed mid-combat (docs/armed-mid-combat-design.md) — two more cards
+    // that BECOME weapons, and one that pulls one out of the hand. Dealt
+    // in beside the guns and ammo above, which is what Zip Gun's "ammo
+    // cards cannot be used with this gun" needs to be a live question.
+    "Concealed Weapon",
+    "Zip Gun",
+    "Molotov Cocktail",
+    // The delayed-replacement cards whose second clause is a CANCEL
+    // (docs/cancel-in-combat-design.md). Dealt in beside Immortal
+    // Grapple, which is the pool's only grapple card and the only thing
+    // Disengage's cancel half can name.
+    "Backstep",
+    "Disengage",
+    "Groundfighting",
+    // The Edge as a currency (docs/the-edge-design.md) — one card that
+    // gains the token, one that spends it, one gated on where it sits
+    // and one that moves it by vote.
+    "Esteem",
+    "Leverage",
+    "Instability",
+    "Regaining the Upper Hand",
     // Bespoke economies + the last investment card.
     "Carver's Meat Packing and Storage",
     "Wall Street Night, Financial Newspaper",
@@ -602,6 +639,38 @@ function fourSeatGame(seed: number): GameState {
     "Opium Den",
     "Iron Glare",
     "Malkavian Justicar",
+    // The six clan Justicars added in wave 60
+    // (docs/justicars-design.md). The fixture crypts carry all six clans,
+    // and the pair of Nosferatu Justicars is the card contest the wave
+    // turned on.
+    // Table-wide pool swings (docs/table-pool-swings-design.md). All four
+    // move every seat's pool at once, so the fuzz's pool-conservation
+    // replay is the interesting guard here, not the option list.
+    "Treaty of Tyre Enforced",
+    "Political Stranglehold",
+    "Can't Take it with You",
+    "Mark of the Damned",
+    // Stores you play out of (docs/store-plays-design.md, wave 62). These
+    // two put cards into a pile the ORDINARY play enumerator reads, so the
+    // fuzz is checking that a card in no zone is still offered exactly
+    // once, and that nothing draws a replacement for it.
+    "Gift of Proteus",
+    "Storage Annex",
+    // Transfers as a currency (docs/transfer-currency-design.md, wave 63).
+    // Three of these four change the influence phase for EVERY seat — the
+    // transfer ban, the unlock surcharge and the any-Methuselah burn — so
+    // what the fuzz is guarding is that the phase still ends: a currency
+    // that can go up as well as down is a loop if a gate is wrong.
+    "Ennoia's Theater",
+    "King's Rising",
+    "Whispers of the Nictuku",
+    "Inconnu Tutelage",
+    "Banu Haqim Justicar",
+    "Brujah Justicar",
+    "Lasombra Justicar",
+    "Nosferatu Justicar",
+    "Tremere Justicar",
+    "Ventrue Justicar",
     "Protected District",
     "Party Out Of Bounds",
     // Legacy weapons (docs/pool-widening-design.md §6, tranche 3 wave 1).
@@ -714,6 +783,242 @@ function fourSeatGame(seed: number): GameState {
     "Bum's Rush",
     "Ambush",
     "Entrenching",
+    // Legacy one-shot weapons (tranche 3 wave 23). A weapon that BURNS
+    // ITSELF at strike resolution is the first equipment to leave play
+    // from inside the damage path, so every later read of the bearer's
+    // attachments is now a read of a card that may have gone.
+    "Grenade",
+    "White Phosphorus Grenade",
+    "Smoke Grenade",
+    "Waxen Poetica",
+    // Legacy reactions that read the ACTING minion (tranche 3 wave 24).
+    // Each one makes an option list depend on who is acting, which is the
+    // shape the fuzz is best at: a gate that is too tight shows up as a
+    // card nobody can ever play, and one too loose as a bleed that goes
+    // negative.
+    "Banner of Neutrality",
+    "Keep it Simple",
+    "Nest of Eagles",
+    "Venetian Conference",
+    // Legacy destroyer allies (tranche 3 wave 25). A Ⓓ action whose
+    // target is a CARD IN PLAY that can be gone by resolution — the shape
+    // that has produced a throw in the past every time a read was not
+    // total.
+    "The Bruisers",
+    "Arcanum Investigator",
+    'Felix "Fix" Hessian',
+    // Legacy priced retainers (tranche 3 wave 26). Corpse Minion is the
+    // first REPEATABLE in-window price in the pool: no latch, so an
+    // option that reappears every time it is taken is exactly the shape
+    // that can loop if the cost is ever not charged.
+    "Corpse Minion",
+    "Malajit Chandramouli",
+    "Omael Kuman",
+    // Gehenna: the recurring event (tranche 3 wave 32). These fire in
+    // EVERY seat's phase from one seat's play area, so they put a cost on
+    // phases the fuzz used to walk through untouched — and Dragonbound
+    // can oust a Methuselah outside their own turn, which is the shape
+    // that breaks a loop that assumes seats only leave on their own.
+    "Dragonbound",
+    "Thirst",
+    "Conquest of Humanity",
+    // Gehenna taxes (tranche 3 wave 33). The Rising drops a PoolGained
+    // event on the floor, so it is the first card that can make the
+    // conservation invariant's two sides disagree if the drop is ever done
+    // at apply time instead of at emit; Torpid Blood changes the price of
+    // an action the fuzz takes freely.
+    "Torpid Blood",
+    "The Slow Withering",
+    "The Rising",
+    // Gehenna: the unlock-phase trio (tranche 1 wave 50). These three fire
+    // a CHOICE frame in every seat's unlock phase, which no other event
+    // does — Recalled to the Founder can burn a minion there, and
+    // Becoming of Ennoia can kill one with damage, both at a moment the
+    // turn frame is mid-sweep.
+    "The New Inquisition",
+    "Becoming of Ennoia",
+    "Recalled to the Founder",
+    // Fee Stake (tranche 1 wave 51). A TITLE taken by an action rather
+    // than by a referendum — so a fuzz seat can become a baron without
+    // ever calling a vote, and two seats taking the same city is the
+    // contest path from a direction nothing else in the decks reaches.
+    "Fee Stake: Boston",
+    "Fee Stake: New York",
+    "Fee Stake: Seattle",
+    // Referendums that become a table rule (tranche 1 wave 52). Camarilla
+    // Threat and Masquerade Enforcement put a PRICE on two phases the
+    // fuzz walks every turn — the discard and the influence out — so a
+    // gate and its payment drifting apart shows up as an unpayable
+    // option rather than as nothing at all.
+    "Beyond Reproach",
+    "Camarilla Threat",
+    "Masquerade Enforcement",
+    // Before-range attachments (tranche 1 wave 53). The guns and the five
+    // ammo cards are already in these decks, so Magazine is dealt beside
+    // what it needs; Nosferatu Putrescence is played from OUTSIDE a
+    // combat, which few cards in the decks do.
+    "Focus the Blood",
+    "Magazine",
+    "Nosferatu Putrescence",
+    // The ash heap as a resource (tranche 1 wave 54). These are the first
+    // cards that MOVE things out of an ash heap, which every other card
+    // treats as write-only — and Redeem reads a burnt vampire's recorded
+    // capacity, so it exercises the ash entry's new field.
+    "Redeem the Lost Soul",
+    "Waste Management Operation",
+    "Maabara",
+    "The Erciyes Fragments",
+    // Events that are one table-wide rule (tranche 3 wave 34). Port
+    // Authority redirects a replacement draw that every seat takes every
+    // turn, and NRA PAC unlocks a minion at a moment nothing else in the
+    // pool acts on.
+    "Port Authority",
+    "NRA PAC",
+    "Urban Jungle",
+    // Events that keep a counter (tranche 3 wave 35). Dr. Marisa Fletcher
+    // can remove the ACTING minion from inside a successful block, which
+    // is the shape that threw before this wave; FBI queues damage that
+    // lands after a combat has already been popped.
+    "Dr. Marisa Fletcher, CDC",
+    "FBI Special Affairs Division",
+    "Fueled by Heart's Blood",
+    // Buying a block (tranche 3 wave 36). Legwork's gate reads a DERIVED
+    // value of the reacting minion, and Pack Tactics/Elder Intervention are
+    // the pool's first pair of cards that bar each other per vampire per
+    // action — both are option lists that must shrink and grow back.
+    "Legwork",
+    "Pack Tactics",
+    "Eluding the Arms of Morpheus",
+    // The lock as currency (tranche 3 wave 37). Minor Irritation UNDOES a
+    // lock the engine has already applied, and Fillip hands a wake to a
+    // minion other than the one playing the card.
+    "Minor Irritation",
+    "Lost in Translation",
+    "Fillip",
+    // Blood at the referendum (tranche 3 wave 38). These are the pool's
+    // first REPEATABLE vote purchases: an option that reappears every time
+    // it is taken is exactly the shape that can loop if the blood is not
+    // charged, and the fuzz votes constantly.
+    "Mob Rule",
+    "Rant!",
+    "Cheval de Bataille",
+    // Conditional weapons (tranche 3 wave 39). The first weapon in the
+    // pool with TWO maneuvers, and the first whose strike is barred in a
+    // whole round — both are option lists that must shrink and grow back
+    // as a combat runs.
+    "Deer Rifle",
+    "Blade of Bellona",
+    "RPG Launcher",
+    // Discipline-granting equipment (tranche 3 wave 40). These change a
+    // vampire's DERIVED Disciplines while in play, so every card the fuzz
+    // deals is re-priced and re-gated against a set that moves when the
+    // equipment does — and the last of the three offers its action to
+    // every seat at the table, not only the bearer's.
+    "Changeling Skin Mask",
+    "Drum of Xipe Totec",
+    "Veneficorum Artum Sanguis",
+    // Burn the equipment (tranche 3 wave 41). Two of the three offer their
+    // ability in EVERY window their controller is asked in — the first
+    // cards in the pool with no printed timing at all — so they are the
+    // option lists most likely to expose a window the enumerator should
+    // not have reached.
+    "Blood Tears of Kephran",
+    "Mummy's Tongue",
+    "Vial of Elder Vitae",
+    // Vehicles and havens (tranche 3 wave 42). The pool's first exclusivity
+    // CLASS shared across card names, plus the first equipment that enters
+    // play locked — both are option lists that must close and stay closed.
+    "Helicopter",
+    "Delivery Truck",
+    "Body Bag",
+    // Retainer upkeep (tranche 3 wave 43). The first cards to fire on the
+    // minion phase OPENING, and the first recurring card that can burn
+    // ITSELF on a phase boundary — which is the shape a per-phase latch
+    // gets wrong.
+    "Faithful Servant",
+    "Fortune Teller",
+    "Robert Carter",
+    // One each round (tranche 3 wave 44). Death Seeker acts inside ANOTHER
+    // card's as-played window, which is the one window the fuzz could
+    // previously only ever reach with a strike card.
+    "Death Seeker",
+    "Leathery Hide",
+    "High Ground",
+    // Waves 27-31, added late (2026-09-14). Step 5 of the wave ritual was
+    // missed for five waves running, so these sixteen cards had never been
+    // dealt into a random game. Each one is a shape the fuzz is built for:
+    //
+    //  - the second-minion modifiers (27) are paid for by a minion that is
+    //    NOT the actor, so a mis-scoped payer shows up as blood drifting;
+    //  - the strike sources (28) put a strike's damage on ANOTHER card, and
+    //    Lucky Blow defers its own replacement to after combat;
+    //  - the first-strike cards (29) split a round in two, and Haymaker
+    //    bars itself for the NEXT round — a latch that must clear;
+    //  - the no-combat cards (30) cancel a combat that has already been set
+    //    up, which is where a stale frame reference surfaces;
+    //  - the events (31) are the only cards played in the DISCARD phase,
+    //    once each game, and The Bitter and Sweet Story changes every
+    //    seat's hand size from one seat's play area.
+    "Stealth Ritus",
+    "Suppressing Fire",
+    "Zapaderin",
+    "Backflip",
+    "Channeling the Beast",
+    "Lucky Blow",
+    "Up Yours!",
+    "Quick Jab",
+    "Haymaker",
+    "Forearm Block",
+    "Blood Brother Ambush",
+    "Clan Loyalty",
+    "Ghoul Escort",
+    "Hunger Moon",
+    "The Bitter and Sweet Story",
+    "Narrow Minds",
+    // Plain allies (tranche 1 wave 45). Procurer's action is the first
+    // repeatable blood-from-the-bank grant an ALLY carries, and the Hunter
+    // rushes with first strike on every hand strike. The Slashers, Outcast
+    // Mage and the Hunter print Brujah / Tremere / Malkavian icons, which
+    // no fixture vampire here carries — they are dealt, never recruited;
+    // their gates are proven in tests/cards/plain-allies.test.ts.
+    "The Slashers",
+    "Outcast Mage",
+    "Rafastio Ghoul",
+    "Procurer",
+    "Muddled Vampire Hunter",
+    // Plain allies II (tranche 1 wave 46). Thadius Zho's Ⓓ action burns
+    // blood from another seat's vampire and the ECTU Operative's burns a
+    // vampire in TORPOR — both targets fixed at announcement and readable
+    // as gone at resolution. Rom Gypsy is the first ALLY carrying a
+    // location-style lockGrant. Tremere / Ravnos icons: dealt, not
+    // recruited, by this fixture.
+    "Thadius Zho",
+    "ECTU Operative",
+    "Rom Gypsy",
+    // Allies with two Ⓓ actions (tranche 1 wave 47). Gregory Winter is the
+    // pool's first card carrying TWO granted actions, so a resolver that
+    // answers for the wrong grant shows up here as blood conservation
+    // drifting; Amam LEAVES PLAY into the library rather than the ash
+    // heap, and Young Bloods pays its killer — both are counters moving
+    // on a path the replay invariant has to account for.
+    "Young Bloods",
+    "Gregory Winter",
+    "Amam the Devourer",
+    // The mummies (tranche 1 wave 48). Qetu adds a THIRD press credit pool
+    // to the combat frame, which is the shape that strands a credit if the
+    // spend order is wrong; Saatet-ta's one lock now offers three options.
+    // All three leave play into the library, which the replay invariant
+    // has to account for.
+    "Qetu the Evil Doer",
+    "Saatet-ta",
+    "Nephren-Ka",
+    // The mummies closed out (tranche 1 wave 49). `burnSelfAndBurnMinion`
+    // takes TWO minions off the table in one resolution — the actor among
+    // them — which is the shape that strands a frame reading its own
+    // acting minion; Tutu unlocks himself on a phase boundary.
+    "Akhenaten, The Sun Pharaoh",
+    "Kherebutu",
+    "Tutu the Doubly Evil One",
   ];
   const seats = ["A", "B", "C", "D"].map((id, i) => {
     const cards: CardInstance[] = [];
@@ -767,6 +1072,12 @@ function fourSeatGame(seed: number): GameState {
           // Clan-gated granted actions: Hecata drives Pit of
           // Contemplation, Ministry drives Cave of Apples.
           clan: i % 2 === 0 ? ("Hecata" as const) : ("Ministry" as const),
+          // Mirrors `a`'s sect, so an even seat controls TWO ready Sabbat
+          // vampires. Stealth Ritus needs a ready Sabbat to play it and
+          // ANOTHER ready Sabbat to burn the blood, so with one per seat it
+          // would be dealt and never be playable — a card in the decks that
+          // is never played teaches the fuzz nothing.
+          sect: i % 2 === 0 ? ("sabbat" as const) : ("anarch" as const),
           path: "Power and the Inner Voice" as const,
         }),
         // The clans the play-from-hand family is gated on: Angel's Gift
@@ -1023,3 +1334,4 @@ describe("random-playout fuzzing (seeded)", () => {
     });
   }
 });
+

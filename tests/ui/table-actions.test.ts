@@ -13,7 +13,7 @@ import playtestDecks from "../../config/playtest-decks.json";
 import type { DecisionPoint, GameState, LegalOption } from "../../src/engine/index.ts";
 import type { DeckDef, GameSetup } from "../../src/ui/decks.ts";
 import type { RenderInput } from "../../src/ui/render.ts";
-import { actionsByTableCard, render } from "../../src/ui/render.ts";
+import { actionsByTableCard, render, stillOffered } from "../../src/ui/render.ts";
 import { LocalTransport } from "../../src/ui/transport.ts";
 
 const config = playtestDecks as unknown as {
@@ -134,6 +134,45 @@ describe("indexing options by the card they are about", () => {
         html.includes(`data-opt="${o.id}"`);
       expect(reachable, `"${o.label}" (${o.id}) is offered nowhere`).toBe(true);
     }
+  });
+});
+
+describe("a selected card outliving its decision", () => {
+  it("stops being offered the moment the decision it asked about is gone", () => {
+    // A selection asks "what can this card do NOW?", and the table used to
+    // keep answering with the LAST decision's options: a menu left open on
+    // a card after the player passed, ended the phase, or a bot moved.
+    const { t, dp } = withTableActions();
+    const state = t.view();
+    const [card] = [...actionsByTableCard(dp, state).keys()];
+    expect(card, "the walk found no card with an action on it").toBeDefined();
+    // The positive case first — without it this test would pass on a
+    // `stillOffered` that always says no.
+    expect(stillOffered(card!, dp, state)).toBe(true);
+    expect(stillOffered("no-such-card", dp, state)).toBe(false);
+    expect(stillOffered(null, dp, state)).toBe(false);
+
+    // Walk on until the card stops being offered — passing, ending a
+    // phase, and the turn moving to another seat all reach this — and
+    // assert the selection would have been dropped by then.
+    let steps = 0;
+    for (; steps < 300; steps++) {
+      const next = t.decision();
+      if (!next) break;
+      if (!stillOffered(card!, next, t.view())) break;
+      void t.choose((next.options.find((o) => o.kind === "pass") ?? next.options[0]!).id);
+    }
+    expect(steps, "the card was offered at every decision to the end of the walk").toBeLessThan(300);
+    expect(stillOffered(card!, t.decision(), t.view())).toBe(false);
+  });
+
+  it("keeps the menu open while the same card is still offered", () => {
+    // The other half: a decision moving on is not by itself a reason to
+    // close the menu. What closes it is the card dropping out of the
+    // options, so a player mid-thought keeps their menu.
+    const { t, dp } = withTableActions();
+    const html = screen(t, { selectedCard: [...actionsByTableCard(dp, t.view()).keys()][0]! });
+    expect(html).toContain("actionable selected");
   });
 });
 

@@ -119,6 +119,33 @@ export const CLANS: string[] = [
   "Ventrue",
 ];
 
+/**
+ * Every Discipline IN THE POOL, as the 3-letter codes a minion's
+ * `disciplines` record is keyed by — what "any one Discipline" offers
+ * (Vial of Elder Vitae), the p. 49 reading `CLANS` already takes.
+ *
+ * The same growth rule as `CLANS`, and the same trap in a new place: a
+ * Discipline is a property of a VAMPIRE, but a library card carries a
+ * discipline REQUIREMENT, and while the two sets agree by accident
+ * nothing notices. They agree today — eleven either way — and the
+ * vocabulary assertion in `tests/cards/burn-the-equipment.test.ts`
+ * cross-checks both against the registry so a widening cannot drift it.
+ * docs/burn-the-equipment-design.md §3
+ */
+export const DISCIPLINES: string[] = [
+  "ani",
+  "aus",
+  "cel",
+  "dom",
+  "for",
+  "obf",
+  "obl",
+  "pot",
+  "pre",
+  "pro",
+  "tha",
+];
+
 export const TITLE_VOTES: Record<VampireTitle, number> = {
   primogen: 1,
   prince: 2,
@@ -170,6 +197,21 @@ export interface MinionState {
   bledThisTurn: boolean;
   /** One political action per vampire per turn (p. 24). */
   calledPoliticalThisTurn: boolean;
+  /** "…who did not hunt during that minion phase" (Thirst). Set when a
+   *  HUNT is announced, not when it succeeds — *"the hunt need not be
+   *  successful for a vampire to avoid the effect"* [LSJ 20050727] —
+   *  and reset with the rest of the per-turn latches at the controller's
+   *  unlock phase. docs/gehenna-events-design.md §2 */
+  huntedThisPhase?: boolean;
+  /** "Vampires who commit diablerie ignore this effect until a Gehenna
+   *  event is played" (The Slow Withering). Set when this vampire
+   *  diablerises, cleared for EVERY minion the next time any Gehenna
+   *  event is played. docs/gehenna-taxes-design.md §2 */
+  ignoresGehennaTax?: boolean;
+  /** "…unlocks at the end of the turn" (NRA PAC) — recorded on the minion
+   *  when the equip succeeds, because the promise outlives the card that
+   *  made it [LSJ 20080619]. docs/table-rule-events-design.md §2 */
+  unlocksAtEndOfTurn?: boolean;
   /** "A vampire can gain blood from only one hunting ground each turn" —
    *  reset at the controller's unlock phase. Optional (undefined = false). */
   usedHuntingGroundThisTurn?: boolean;
@@ -250,6 +292,14 @@ export interface MinionState {
    *  consumed by the next unlock sweep. The persistent form lives on the
    *  card in play as PermanentInPlay.preventsUnlock. */
   skipNextUnlock?: boolean;
+  /** "…gain 1 level of any one Discipline UNTIL YOUR NEXT UNLOCK PHASE"
+   *  (Vial of Elder Vitae). The card is burnt to pay for it, so there is
+   *  no permanent left to hang a static on and the boost lives on the
+   *  minion — the `skipNextUnlock` shape, and cleared at the same one
+   *  place: the controller's unlock sweep. Read through `disciplinesOf`,
+   *  where it behaves exactly like `PermanentStatics.disciplineBoost`.
+   *  docs/burn-the-equipment-design.md §3 */
+  disciplineBoostUntilUnlock?: string;
   /** "…this Tzimisce can burn 1 blood during your NEXT DISCARD PHASE to
    *  unlock" (Fiendish Tongue). The action card that granted it is burnt
    *  at resolution (p. 27), so there is no card in play to hang an
@@ -284,6 +334,16 @@ export interface CardInstance {
    *  count removals — which would otherwise silently start counting
    *  vampires (docs/ledger-closeout.md §9). */
   crypt?: true;
+  /** A burnt vampire's CAPACITY, recorded as it goes to the ash heap.
+   *
+   *  The ash heap kept a name and nothing else, which is fine while every
+   *  reader only counts cards — and wrong the moment one asks a burnt
+   *  vampire a question about itself ("gain pool equal to half its
+   *  capacity", Redeem the Lost Soul). Going back to the registry by NAME
+   *  would work for printed vampires and answer nothing for a TOKEN
+   *  vampire, which has no registry entry at all
+   *  (docs/token-vampire-design.md). docs/ash-heap-resource-design.md §2 */
+  capacity?: number;
 }
 
 /** Static modifiers a permanent contributes while in play. */
@@ -301,7 +361,12 @@ export type PlayCostCardType =
   | "ally"
   | "retainer"
   | "equipment"
-  | "politicalAction";
+  | "politicalAction"
+  /** An EVENT (p. 37). Nothing in the pool prices one today, but the type
+   *  is printed and `central-queries` requires every library card to name
+   *  one — the cost vocabulary is the printed type line, not the set of
+   *  types somebody has written a modifier for. */
+  | "event";
 
 /**
  * "Cards requiring Dominate cost other minions +1 blood" / "reaction
@@ -312,6 +377,14 @@ export type PlayCostCardType =
  * Every filter that is PRESENT must match; an absent filter does not
  * constrain. Amounts are signed and the total is clamped at zero.
  */
+/** What a "do not replace until …" clause can wait for, when it waits for
+ *  an event rather than a phase. docs/gehenna-taxes-design.md §1 */
+export type DelayedDrawCondition =
+  | "vampireLeavesTorpor"
+  | "diablerie"
+  | "preyOusted"
+  | "titledVampireTorpor";
+
 export interface PlayCostMod {
   amount: number;
   /** Which resource the modifier moves. `bloodOrLife` is the
@@ -336,6 +409,21 @@ export interface PlayCostMod {
    *  default intersection. One modifier rather than two, so a card
    *  matching both is charged once. docs/crypt-wave-4.md §2 */
   clanOrDiscipline?: boolean;
+  /** "Minion cards that CHANGE THE TARGET OF A BLEED action cost +1"
+   *  (Narrow Minds) — matched on what the card DOES, off
+   *  `CardHandler.redirectsBleed`, because the printed clause names an
+   *  effect and not a type or a name. docs/events-design.md §3 */
+  redirectsBleed?: boolean;
+  /** "Cards requiring 1 or more Disciplines AT THE SUPERIOR LEVEL cost +1
+   *  blood" (The Slow Withering) — a property of the chosen MODE, not of
+   *  the card, which is why it rides on `PricedCard.requiresSuperior`
+   *  rather than on a printed field. docs/gehenna-taxes-design.md §2 */
+  requiresSuperiorDiscipline?: boolean;
+  /** "Vampires who commit diablerie ignore this effect until a Gehenna
+   *  event is played" (The Slow Withering) — the exemption is on the
+   *  MINION (`ignoresGehennaTax`), so the modifier only has to say that it
+   *  honours one. */
+  exemptDiablerists?: boolean;
   /** Whom the modifier charges, relative to the card in play that
    *  radiates it: the minion it sits on, or everyone else. */
   minions?: "bearer" | "others";
@@ -499,6 +587,19 @@ export interface PermanentStatics {
    *  every construction site must remember is one a new site will forget.
    *  docs/library-audit.md §2 */
   strikesUndodgeable?: boolean;
+  /** "BURN THIS CARD AT THE END OF COMBAT or if the combat is canceled"
+   *  (Blood Brother Ambush) — an ally that exists only for one fight.
+   *  Read at the single `CombatEnded` site, and at the cancel, so both
+   *  halves of the sentence are one check.
+   *  docs/no-combat-design.md §3 */
+  burnAtCombatEnd?: boolean;
+  /** "\<This minion\> strikes with FIRST STRIKE" (Muddled Vampire Hunter,
+   *  Meat Hook's grant) — read off the STRIKER at resolution for the same
+   *  reason `strikesUndodgeable` is: a minion strikes by hand, by weapon
+   *  or by a granted strike, and a flag every construction site has to
+   *  remember is one a new site will forget.
+   *  docs/first-strike-design.md §1 */
+  firstStrike?: boolean;
   /** "During the first round of each combat, this ally can burn 1 life to
    *  get 1 press" (Rotting Behemoth SUPERIOR). Identical in shape to
    *  `allyAbilities.burnLifeForPress` and read by the same code — the
@@ -510,6 +611,12 @@ export interface PermanentStatics {
    *  can burn N pool instead" (Spectral Servitor). The upkeep of a ghost
    *  that will not stay. Per-mode, so it lives in statics. */
   unlockSelfBurn?: { payPoolInstead?: number };
+  /** "During your unlock phase, \<this ally\> burns 1 LIFE" (Gregory
+   *  Winter) — the softer sibling of `unlockSelfBurn`: an ally's life IS
+   *  its blood (p. 11), so at 1 life this is the same thing, and the
+   *  engine's ordinary "an ally at 0 life leaves play" handles it.
+   *  docs/plain-allies-design.md §5 */
+  unlockBurnLife?: number;
   /** "This ally can play NON-ACTION cards requiring basic \<D\> as a
    *  vampire" (Spectral Servitor) — p. 11's play-as-a-vampire rule with
    *  the action half withheld. `playsAsVampire` puts the Disciplines on
@@ -544,6 +651,12 @@ export interface PermanentStatics {
    *  reason `isMaster` and `frenzyOnOpponent` are stamped onto their
    *  frames. docs/combat-attachments-design.md §3 */
   burnToPrevent?: { amount: number; nonAggravated?: boolean };
+  /** "This vampire can burn this card to reduce the cost of a COMBAT CARD
+   *  they play by N blood" (Focus the Blood) — a one-shot `playCostMod`
+   *  the BEARER spends, offered as an ability of the attached entry. The
+   *  blood is already on the card; burning it is how it is spent.
+   *  docs/before-range-attachments-design.md §3 */
+  burnToDiscountCombatCard?: number;
   /** "Recruit ally actions cost this vampire −1 blood or pool"
    *  (Charisma), "cards requiring Dominate cost OTHER minions +1 blood"
    *  (Libertas), "Minion Tap costs you +1 pool" (Villein) — a play-cost
@@ -554,7 +667,94 @@ export interface PermanentStatics {
    *  Capuchin) — a hand size that moves with the counters
    *  (docs/counter-sinks-design.md §3). */
   handSizePerCounter?: boolean;
+  /** "EACH METHUSELAH gets +N hand size for each VICTORY POINT he or she
+   *  has" (The Bitter and Sweet Story) — a cross-table static: it is read
+   *  off whoever's card it is, but it pays out to every seat against
+   *  their own victory points. docs/events-design.md §2 */
+  handSizePerVictoryPointAll?: number;
+  /** "A Methuselah cannot gain pool during their own turn unless they have
+   *  the Edge or at least 1 victory point (instead, any pool they would
+   *  gain goes to the blood bank)" (The Rising). Applies to EVERY seat,
+   *  wherever the card sits. docs/gehenna-taxes-design.md §3 */
+  barsPoolGainOnOwnTurn?: boolean;
+  /** "Actions performed by vampires in torpor cost +N blood" (Torpid
+   *  Blood) — charged at announcement, and gated there too, so a torpor
+   *  vampire is never offered an action it cannot pay for. */
+  torporActionTax?: number;
+  /** "Each Methuselah must pay an ADDITIONAL POOL to use a discard phase
+   *  action to discard a card" (Camarilla Threat) — a table-wide tax,
+   *  summed by `tableStatic` wherever the card sits.
+   *  docs/table-referendums-design.md §3 */
+  discardActionPoolTax?: number;
+  /** "When any Methuselah moves a vampire from uncontrolled to
+   *  controlled, he or she burns 1 ADDITIONAL POOL" (Masquerade
+   *  Enforcement). docs/table-referendums-design.md §4 */
+  influenceOutPoolTax?: number;
+  /** "When a Methuselah uses a discard phase action to discard a card,
+   *  they don't draw to replace that card until their next unlock phase"
+   *  (Port Authority). Table-wide, from one seat's play area.
+   *  docs/table-rule-events-design.md §1 */
+  barsDiscardReplacement?: boolean;
+  /** "Any minion who successfully performs an equip action unlocks at the
+   *  end of the turn" (NRA PAC). The promise is made when the equip
+   *  succeeds and is kept even if this card has since left play
+   *  [LSJ 20080619]. docs/table-rule-events-design.md §2 */
+  unlockAfterEquip?: boolean;
+  /** "When a minion EQUIPS with the Helicopter, lock it" — the card comes
+   *  into play locked, and "it" is the card, not the minion (who locked at
+   *  announcement anyway). The distinction the rulings draw is the PATH:
+   *  *"if directly put (and not equipped) on the vampire, it is not
+   *  locked"* [LSJ 20090415] [LSJ 20100119] but *"it comes locked if it is
+   *  equipped, even in a non-standard fashion"* [LSJ 20100119] — so this
+   *  fires in `enterPermanent`, the shared equip pipeline, and never on
+   *  the `putsInPlayOnSuccess` / `attachOnSuccess` paths.
+   *  docs/vehicles-and-havens-design.md §2 */
+  locksOnEquip?: boolean;
+  /** "Blood hunt referendums get an additional N votes AGAINST the
+   *  referendum" (Urban Jungle) — counted in the tally, not cast by
+   *  anyone. docs/table-rule-events-design.md §3 */
+  bloodHuntVotesAgainst?: number;
+  /** "This card comes into play with N counters" (Fueled by Heart's
+   *  Blood) — applied as the permanent enters, so the clock is already
+   *  running when the first "as played" window opens.
+   *  docs/counter-clock-events-design.md §1 */
+  startsWithCounters?: number;
+  /** "After another Gehenna event is played, burn 1 counter from this
+   *  card" — a clock that runs DOWN, driven by other cards being played.
+   *  docs/counter-clock-events-design.md §1 */
+  burnCounterOnGehennaEvent?: boolean;
+  /** "Blood hunts cannot be called on vampires with capacity greater than
+   *  the number of counters on this card who diablerize a YOUNGER
+   *  vampire" (Fueled by Heart's Blood). Reads this entry's counters, so
+   *  it is a static that names a clock rather than a fixed number. */
+  barsBloodHuntAboveCounters?: boolean;
+  /** "When a vampire with capacity less than X is blocked WHILE HUNTING,
+   *  where X is the number of counters on this card, burn that vampire
+   *  and all the counters on this card" (Dr. Marisa Fletcher, CDC).
+   *  docs/counter-clock-events-design.md §2 */
+  blockedHuntBurn?: boolean;
+  /** "If an ALLY is burned in combat with an acting vampire, add 1 counter
+   *  to this card and inflict N unpreventable environmental damage on the
+   *  acting vampire AFTER THE COMBAT ENDS. If this card has M counters,
+   *  burn it" (FBI Special Affairs Division).
+   *  docs/counter-clock-events-design.md §3 */
+  allyBurnedInCombat?: { damage: number; burnAt: number };
+  /** "Rescuing an OLDER vampire from torpor costs +N blood" (Torpid
+   *  Blood). Older = greater capacity; the rescuer pays the extra. */
+  olderRescueTax?: number;
   transfers?: number;
+  /** "You cannot use transfers to move counters to or from your
+   *  uncontrolled minions" (King's Rising) — the transfer BAN, read by the
+   *  influence-phase enumerator. It bars the two transfers that move
+   *  counters and leaves the crypt draw and the free influence-out alone,
+   *  which is what the card says. docs/transfer-currency-design.md §3 */
+  barsUncontrolledTransfers?: boolean;
+  /** "Every \<clan\> burns 1 ADDITIONAL blood to unlock during his or her
+   *  controller's unlock phase" (Whispers of the Nictuku) — a price on
+   *  every vampire of that clan AT THE TABLE, charged by a card that sits
+   *  in one seat's play area. A vampire who cannot pay does not unlock.
+   *  docs/transfer-currency-design.md §4 */
+  clanUnlockSurcharge?: { clan: string; blood: number };
   /** Applies to the bearer (equipment/retainers). */
   intercept?: number;
   /** Stealth/intercept that applies only during CERTAIN actions
@@ -632,6 +832,12 @@ export interface PermanentStatics {
    *  penalty, not a price, so it never bars the block.
    *  docs/path-cards-design.md §3 */
   blockedPoolToll?: { amount: number };
+  /** "…If that action is BLOCKED, burn this card" (Malajit Chandramouli)
+   *  — burned at the same moment as the tolls above, and only if it was
+   *  SPENT: the card is locked to use it, so a locked one is a used one.
+   *  An untouched retainer is not paid for a block it did not answer.
+   *  docs/retainer-prices-design.md §2 */
+  burnIfEmployerBlocked?: boolean;
   /** Votes the bearer casts from an attached card rather than from a
    *  title — "a unique Independent title worth 2 votes" (Saulot's Guiding
    *  Wisdom). `TITLE_VOTES` is a fixed map over the eleven printed titles
@@ -639,6 +845,12 @@ export interface PermanentStatics {
    *  with these and NO title is still a vote source.
    *  docs/outside-combat-design.md §4 */
   votes?: number;
+  /** "While this Anarch is Toreador …, they get +1 vote during
+   *  referendums THEY CALL" (Fee Stake: Boston, New York, Seattle) —
+   *  scoped to the referendum's calling minion, which no
+   *  `ConditionalStatic` can ask about because those are evaluated with
+   *  no referendum in hand. docs/fee-stake-design.md §4 */
+  votesWhenCalling?: { amount: number; bearerClan?: string[] };
   /** "Rescuing a non-Tremere vampire from torpor costs this Salubri -N
    *  blood, and if the action is successful the rescued vampire gains M
    *  blood" (Saulot's Healing Touch) — an action-cost modifier carried by
@@ -658,6 +870,21 @@ export interface PermanentStatics {
    *  (Righteous Blade) — the restricted sibling, spent before a general
    *  credit. docs/weapon-riders-design.md §4 */
   continuePressPerCombat?: number;
+  /** "1 optional press each combat, ONLY USABLE TO END COMBAT" (Qetu the
+   *  Evil Doer) — the other restricted sibling. p. 32 gives a press two
+   *  uses, continue or cancel a press to continue, so "to end" is exactly
+   *  the second. docs/mummies-design.md §1 */
+  endPressPerCombat?: number;
+  /** "In combat with a \<clan\>, any damage he inflicts is AGGRAVATED"
+   *  (Akhenaten). Read at the single place a strike becomes damage, so it
+   *  reaches weapon strikes too — unlike `handStrikesAggravated`, which
+   *  the card's "any damage" deliberately outruns.
+   *  docs/mummies-design.md §4 */
+  allDamageAggravatedVsClan?: string;
+  /** "During your minion phase, \<this ally\> can unlock" (Tutu) — a
+   *  free unlock offered once each of its controller's minion phases.
+   *  docs/mummies-design.md §5 */
+  unlockAtMinionPhase?: boolean;
   /** "While the employer is in combat, the opposing minion's controller
    *  plays with an OPEN HAND" (Owl Companion). Derived on read from the
    *  live combat frames — never stored, so it turns itself off whichever
@@ -693,6 +920,15 @@ export interface PermanentStatics {
   /** "+1 level of Celerity [cel]" (the Discipline master cards) — the
    *  3-letter code; read through disciplinesOf(). */
   disciplineBoost?: string;
+  /** "The vampire with this equipment HAS SUPERIOR Obfuscate [OBF]"
+   *  (Changeling Skin Mask, Drum of Xipe Totec, Veneficorum Artum
+   *  Sanguis) — a grant AT A LEVEL, which is not `disciplineBoost`: a
+   *  boost is +1 step, so it leaves a vampire with no Obfuscate at BASIC,
+   *  where these cards say superior outright. A floor, never a ceiling —
+   *  a vampire who already prints superior keeps it, and the grant is not
+   *  optional [RTR 19980707].
+   *  docs/discipline-granting-equipment-design.md §1 */
+  disciplineGrant?: { discipline: string; level: DisciplineLevel };
   /** "This minion cannot block" (Pentex™ Subversion) — a persistent
    *  restriction on the bearer, unlike the action-scoped
    *  `ActionFrame.blockRestrictions`. */
@@ -838,6 +1074,14 @@ export interface PermanentAura {
    *  aura must not turn an untitled vampire into a vote source.
    *  docs/politics-locations-design.md §2 */
   titledOnly?: boolean;
+  /** "PRIMOGEN cannot attempt political actions and get one less vote"
+   *  (Beyond Reproach) — ONE named title, where `titledOnly` is any of
+   *  them. docs/table-referendums-design.md §2 */
+  title?: VampireTitle;
+  /** "…cannot attempt political actions" — the political sibling of
+   *  `cannotHunt`: an aura that takes an ACTION KIND away rather than
+   *  modifying it. docs/table-referendums-design.md §2 */
+  cannotActPolitical?: boolean;
   /** "WHILE YOUR PREY CONTROLS A VAMPIRE IN TORPOR, vampires you control
    *  get +1 bleed" (Raising the Portcullis) — the first aura whose
    *  condition reads ANOTHER seat's board. Derived on every read, like
@@ -889,6 +1133,13 @@ export interface PermanentInPlay {
   /** Whose card it is (p. 16); burned cards go to the owner's ash heap. */
   owner?: SeatId;
   locked: boolean;
+  /** The combat round this card entered play, when it entered play DURING
+   *  a combat at all. "Not usable the round it is put in play" (Molotov
+   *  Cocktail) is a question about the CARD's age, which no existing
+   *  field could answer: `cf.round` alone gives the combat's age, and a
+   *  card that arrives in round 3 has to know it.
+   *  docs/armed-mid-combat-design.md §2 */
+  attachedRound?: number;
   /** "During X, do Y" latch — one use per phase (p. 16); reset at unlock. */
   usedThisPhase: boolean;
   /** How many times this phase, for the rare card that allows more than
@@ -961,6 +1212,12 @@ export interface PermanentInPlay {
   /** Face up (public) or face down — the owner may look at them at any
    *  time, nobody else may (Shilmulo Tarot). Masked in `redactFor`. */
   storedFaceUp?: boolean;
+  /** "…that Methuselah ignores this effect until the end of the game"
+   *  (Recalled to the Founder). A per-seat exemption from this card's own
+   *  recurring effect, kept ON THE CARD rather than on the seat: it is
+   *  this copy's clause, and a second copy must not inherit it.
+   *  docs/gehenna-unlock-design.md §4 */
+  exemptSeats?: SeatId[];
 }
 
 /** A face-down-ish crypt card sitting in the uncontrolled region with the
@@ -1207,7 +1464,12 @@ export type GameEvent =
       holder: CardInstanceId;
       cardId: CardInstanceId;
       name: string;
-      from: "library" | "hand";
+      /** `ashHeap` is the seat named by `from Seat` — a card taken from a
+       *  PREY's ash heap leaves THEIR heap and lands on YOUR card
+       *  (The Erciyes Fragments). */
+      from: "library" | "hand" | "ashHeap";
+      /** Whose pile the card came out of, when that is not `seat`. */
+      fromSeat?: SeatId;
       faceUp: boolean;
     }
   /** "…you can draw one of those cards instead" — a stored card taken
@@ -1291,6 +1553,12 @@ export type GameEvent =
   | { type: "DamageMended"; minion: MinionId; amount: number }
   | { type: "WentToTorpor"; minion: MinionId }
   | { type: "CombatEnded"; rounds: number }
+  /** A combat that NEVER HAPPENED — the block succeeded and a card
+   *  replaced its second consequence (Clan Loyalty, Ghoul Escort, Blood
+   *  Brother Ambush). Distinct from `CombatEnded` on purpose: End of
+   *  Round does not run and no "after combat" rider fires, because there
+   *  was no combat. docs/no-combat-design.md §1 */
+  | { type: "CombatCancelled"; acting: MinionId; opposing: MinionId }
   | { type: "Ousted"; seat: SeatId }
   | { type: "VictoryPointGained"; seat: SeatId }
   | { type: "GameEnded"; winner: SeatId | null }
@@ -1381,6 +1649,27 @@ export type GameEvent =
    *  entirely, because p. 16 says such a card cannot be retrieved or
    *  affected in any way. docs/ash-heap-design.md §4 */
   | { type: "CardRemovedFromGame"; seat: SeatId; cardId: CardInstanceId; name: string }
+  /** A card goes straight from an ash heap back to its owner's library
+   *  (Waste Management Operation). docs/ash-heap-resource-design.md §3 */
+  | {
+      type: "AshHeapCardToLibrary";
+      seat: SeatId;
+      cardId: CardInstanceId;
+      name: string;
+      to: "top" | "bottom";
+    }
+  /** A card stored on a card in play goes back to its owner's library
+   *  (Maabara). The library is face down even
+   *  to its owner (p. 14), so WHERE it lands is the whole effect.
+   *  docs/ash-heap-resource-design.md §3 */
+  | {
+      type: "StoredCardToLibrary";
+      seat: SeatId;
+      holder: CardInstanceId;
+      cardId: CardInstanceId;
+      name: string;
+      to: "top" | "bottom";
+    }
   /** A card leaves one of a Methuselah's out-of-play zones for somewhere
    *  the ordinary draw/discard events do not cover: back into play as a
    *  minion (Split the Veil), or onto a minion as a searched-out master
@@ -1540,15 +1829,30 @@ export interface TurnFrame {
   seat: SeatId;
   phase: TurnPhase;
   turnNumber: number;
+  /** "No vampires of that clan may block the acting vampire FOR THE
+   *  REMAINDER OF THE TURN" (Clan Loyalty) — the only block bar that
+   *  outlives its action, so it lives on the turn rather than on
+   *  `ActionFrame.blockRestrictions`. docs/no-combat-design.md §2 */
+  clanBlockBars?: Array<{ acting: MinionId; clan: string }>;
   /** Unlock-phase bookkeeping: cards unlocked (automatic, once). */
   unlockDone: boolean;
   /** Edge pool-gain decision handled (only asked of the Edge holder). */
   edgeDone: boolean;
+  /** "Only one <card> may be played each turn" (Instability), by NAME and
+   *  across the whole table — the printed line makes the TURN the scope,
+   *  not the seat. Appended as such a card resolves; the frame dies with
+   *  the turn, which is the whole of the bookkeeping.
+   *  docs/the-edge-design.md §4 */
+  oncePerTurnCards?: string[];
   /** Unlock-phase permanent abilities declined/finished (Vessel etc.). */
   unlockAbilitiesDone: boolean;
   /** Other seats that passed their "during any Methuselah's unlock phase"
    *  abilities (Homunculus) — asked after the turn's seat, clockwise. */
   unlockOthersDone: SeatId[];
+  /** Seats that have taken their one burn-option discard this unlock
+   *  phase (p. 17: "limited to one such discard each unlock phase").
+   *  Optional so older saves and fixtures load. docs/burn-option-design.md */
+  burnOptionUsed?: SeatId[];
   /** Transfers remaining; granted at the start of the influence phase —
    *  1/2/3 on the game's first three turns, then 4 (p. 35). */
   transfersLeft: number;
@@ -1655,6 +1959,14 @@ export interface ActionFrame {
    *  in the after-resolution window can gate on "only usable if the
    *  action was successful" / "…was blocked" after the fact. */
   resolvedSuccess?: boolean;
+  /** "You cannot gain the Edge this action. If you would get the Edge, it
+   *  is BURNED INSTEAD" (Leverage). Not a suppression: p. 21's successful
+   *  bleed still moves the token, it just moves it to the middle of the
+   *  table rather than to the bleeder. Scoped to the action because that
+   *  is what the card says, and the bleed that would hand the Edge back
+   *  is this same action's.
+   *  docs/the-edge-design.md §3 */
+  edgeBurnedInsteadOfTaken?: boolean;
   /** "This vampire burns 1 blood to continue the action AS IF UNBLOCKED"
    *  (Go-getter superior) — set in the `action.afterResolution` window and
    *  consumed the moment that window closes, which is the only point at
@@ -2055,6 +2367,11 @@ export interface PendingDamage {
    *  been replaced by then — a fact about an item belongs on the item.
    *  docs/last-combat-design.md §5 */
   fromGun?: boolean;
+  /** This damage came from a HAND strike — the question Forearm Block
+   *  asks ("prevent 2 damage from the opposing minion's next hand
+   *  strike"). Read off `strike.source`, so a melee weapon is not one.
+   *  docs/first-strike-cards-design.md §2 */
+  fromHandStrike?: boolean;
 }
 
 /**
@@ -2142,6 +2459,46 @@ export interface Strike {
    *  1 counter from this card" (Weighted Walking Stick) — the card whose
    *  counters this strike spends. */
   depletesCard?: CardInstanceId;
+  /** "Strike: … WITH FIRST STRIKE" (Quick Jab) — this strike resolves
+   *  before a normal one (p. 33). One of three sources, all folded by
+   *  `hasFirstStrike`. docs/first-strike-design.md §1 */
+  firstStrike?: boolean;
+  /** "If more than N damage is inflicted with this strike, IGNORE THE
+   *  EXCESS" (Quick Jab) — a ceiling on what the strike inflicts, applied
+   *  before the damage packet exists. docs/first-strike-cards-design.md §1 */
+  capDamage?: number;
+  /** "BURN AFTER USE" (Grenade and friends) — burn `weaponCard` when this
+   *  strike RESOLVES. Not when it is chosen: *"does not burn if combat
+   *  ends before it resolves"* [LSJ 19981006].
+   *  docs/one-shot-weapons-design.md §1 */
+  burnWeaponAfterStrike?: boolean;
+  /** "If this weapon is used at close range, the minion with this weapon
+   *  takes N damage" (Grenade) — environmental damage on the STRIKER
+   *  [LSJ 19970801]. docs/one-shot-weapons-design.md §2 */
+  bearerSelfDamage?: {
+    amount: number;
+    aggravated: boolean;
+    /** "…during strike resolution when striking with this gun" (Zip Gun)
+     *  — no range condition at all, where Grenade's is close-range only. */
+    anyRange?: boolean;
+    /** "…but only once each combat" (Zip Gun). Recorded on the frame
+     *  rather than counted off `gunUses`, which is incremented at
+     *  DECLARATION: a first strike that never resolves would otherwise
+     *  spend the one use. docs/armed-mid-combat-design.md §3 */
+    oncePerCombat?: boolean;
+  };
+  /** "RANGED STRIKE: put this card on THIS minion" (Molotov Cocktail) —
+   *  `attachToVictim` pointing the other way. It lands where the one-shot
+   *  weapon riders do, on the striker's own side of the table, so a dodge
+   *  does not cancel it (p. 33) but a combat that ends first does
+   *  [ANK 20200203-1]. docs/armed-mid-combat-design.md §2 */
+  attachToSelf?: {
+    cardId: CardInstanceId;
+    name: string;
+    controller: SeatId;
+    statics?: PermanentStatics;
+    tags?: string[];
+  };
   /** "Strike: send the opposing vampire to torpor or burn the opposing
    *  ally" (Touch of Oblivion superior) — not damage, so not prevented,
    *  but a dodge cancels it (p. 33). */
@@ -2226,6 +2583,12 @@ export interface AmmoLoad {
   /** The ammo card itself, for the log and for the one-per-gun rule. */
   cardId: CardInstanceId;
   name: string;
+  /** Glaser's "not usable the first time the gun is used in a given
+   *  combat" — a LOAD-TIME gate rather than an effect, carried on the
+   *  load so the hand path and Magazine read it off one object rather
+   *  than each keeping their own copy.
+   *  docs/before-range-attachments-design.md §4 */
+  minGunUses?: number;
   /**
    * Added to the gun's damage, in the SAME properties as the base damage
    * ("additional damage inherits all of the properties of the base
@@ -2275,6 +2638,18 @@ export interface CombatFrame {
   awaiting: "acting" | "opposing";
   declines: number;
   strikes: { acting: Strike | null; opposing: Strike | null };
+  /** "If the opposing minion's strike successfully inflicts any damage on
+   *  THIS minion this round, the opposing minion gets an optional press"
+   *  (Backstep). One entry per card played, spent when the damage lands.
+   *  `round` is carried so a rider installed in round 2 cannot pay out in
+   *  round 3 — press credits reset each round, but the RIDER would not.
+   *  docs/cancel-in-combat-design.md §4 */
+  pressIfDamaged?: Array<{ minion: MinionId; round: number }>;
+  /** Weapons whose "the bearer takes N damage, ONLY ONCE EACH COMBAT"
+   *  rider has already fired (Zip Gun). Keyed on the card instance, like
+   *  `weapon.usableOnce`: two Zip Guns are two separate riders.
+   *  docs/armed-mid-combat-design.md §3 */
+  bearerSelfDamageDone?: CardInstanceId[];
   /** "normal" = the round's first strike pair; "additional" = an extra
    *  strike sub-round where only minions with additional strikes strike
    *  (p. 32). */
@@ -2312,6 +2687,40 @@ export interface CombatFrame {
   /** "Damage from this vampire's hand strikes is aggravated this round"
    *  (Claws of the Dead, Wolf Claws) — per-round, reset each round. */
   handStrikesAggravated: { acting: boolean; opposing: boolean };
+  /** "…that minion's initial strike this round gets FIRST STRIKE"
+   *  (Haymaker, Forearm Block's next-round clause) — a round-scoped
+   *  grant, reset with the rest of the round's riders. The other two
+   *  sources are the strike itself and a static on the minion.
+   *  docs/first-strike-design.md §1 */
+  firstStrikeRound?: { acting: boolean; opposing: boolean };
+  /** "If ANOTHER ROUND of combat occurs, this minion gets first strike on
+   *  their initial strike THAT round" (Forearm Block) — promoted into
+   *  `firstStrikeRound` at the round boundary, after that field is
+   *  cleared. docs/first-strike-cards-design.md §2 */
+  firstStrikeNextRound?: { acting: boolean; opposing: boolean };
+  /** "Prevent N damage from the opposing minion's NEXT HAND STRIKE this
+   *  round" (Forearm Block) — points held against hand-strike damage
+   *  aimed at this side. Spent by the first hand strike they meet, and
+   *  whatever is left is LOST rather than carried on: the card does not
+   *  say "can prevent" [ANK 20200318].
+   *  docs/first-strike-cards-design.md §2 */
+  preventHandStrike?: { acting: number; opposing: number };
+  /** "This minion's INITIAL STRIKE this round will be strike: hand strike
+   *  at +N damage" (Haymaker) — the strike is not a choice this round,
+   *  and the number is the bonus. The normal-round twin of
+   *  `forcedAdditionalStrike`. docs/first-strike-cards-design.md §3 */
+  forcedHandStrike?: { acting: number | null; opposing: number | null };
+  /** "If either minion inflicts MORE DAMAGE than the other this round,
+   *  that minion gets an optional press this round" (Haymaker) — settled
+   *  as the round leaves damage resolution, which is the first moment
+   *  both totals are final. docs/first-strike-cards-design.md §3 */
+  pressToBiggerHitter?: boolean;
+  /** Set while ONE side's first strike is resolving, naming the side
+   *  whose ordinary strike has not been resolved yet. The round's second
+   *  half is picked up when that damage has finished, which is the only
+   *  moment the engine knows whether the second striker is still there.
+   *  docs/first-strike-design.md §2 */
+  pendingSecondStrike?: "acting" | "opposing" | null;
   /** "All damage inflicted on vampires during the resulting combat is
    *  aggravated" (Dawn Operation). Unlike `handStrikesAggravated` this is
    *  combat-scoped (never reset per round), covers BOTH sides, and applies
@@ -2383,6 +2792,11 @@ export interface CombatFrame {
    *  `pressesCombat`, offered only for `press:continue` and SPENT FIRST,
    *  the `closeManeuvers` rule. docs/weapon-riders-design.md §4 */
   pressesContinueOnly?: { acting: number; opposing: number };
+  /** The mirror: "1 optional press each combat, ONLY USABLE TO END
+   *  COMBAT" (Qetu) — offered only for `press:end` and spent first there,
+   *  by the same "most restricted credit first" rule.
+   *  docs/mummies-design.md §1 */
+  pressesEndOnly?: { acting: number; opposing: number };
   /** "Strikes that are not hand strikes cannot be used this round (BY
    *  EITHER COMBATANT)" (Immortal Grapple) — a single boolean rather
    *  than the usual per-side pair, because reaching both combatants is
@@ -2514,10 +2928,21 @@ export interface CombatFrame {
    *  "only one X each round/combat" limits (p. 32). */
   playedThisRound: string[];
   playedThisCombat: string[];
+  /** Every combat card played in this combat, with WHO played it and in
+   *  WHICH ROUND — the only record that survives the round reset, and so
+   *  the only one able to answer "not usable if this minion played a
+   *  Haymaker LAST round". docs/first-strike-cards-design.md §3 */
+  playedHistory?: Array<{ name: string; minion: MinionId; round: number }>;
   /** Using a weapon's maneuver commits that weapon's strike for the
    *  round (.44 ruling, p. 47); one weapon maneuver per combat. */
   committedStrike: { acting: CardInstanceId | null; opposing: CardInstanceId | null };
   usedWeaponManeuver: { acting: CardInstanceId | null; opposing: CardInstanceId | null };
+  /** How many maneuvers each WEAPON has spent this combat. The side slot
+   *  above still holds "one weapon per side", but a weapon printed with
+   *  two maneuvers needs its own count, keyed by card instance for the
+   *  Chainsaw reason: two copies are two weapons.
+   *  docs/conditional-weapons-design.md §1 */
+  weaponManeuversUsed?: Record<CardInstanceId, number>;
   /** "This combat, the opposing minion cannot maneuver / press / use
    *  equipment" (Terror Frenzy) — per-side combat restrictions. */
   restrict: {
@@ -2577,6 +3002,12 @@ export interface CombatFrame {
    * docs/basic-combat-design.md §2
    */
   drawAfterCombat?: SeatId[];
+  /** "…inflict N unpreventable environmental damage on the acting vampire
+   *  AFTER THE COMBAT ENDS" (FBI Special Affairs Division). Queued on the
+   *  frame and drained at the engine's one `CombatEnded` site — the
+   *  `drawAfterCombat` treatment, for the same reason: a combat ends four
+   *  different ways. docs/counter-clock-events-design.md §3 */
+  damageAfterCombat?: Array<{ minion: MinionId; amount: number }>;
   /** "Prevent all damage from the opposing minion's strikes THIS ROUND"
    *  (Rolling with the Punches superior) — per side, reset each round,
    *  checked at the `pushPendingDamage` chokepoint (§4). */
@@ -2640,7 +3071,16 @@ export interface ReferendumFrame {
    *  same way. Reaches only votes NOT YET CAST: a source spends its votes
    *  once, at a count read when it casts.
    *  docs/path-cards-design.md §§4–5 */
-  voteModifiers?: Array<{ amount: number; exceptPath?: string }>;
+  voteModifiers?: Array<{
+    amount: number;
+    exceptPath?: string;
+    /** "During that referendum, NON-ANARCH TITLES are worth -1 vote"
+     *  (Fee Stake) — two conditions on the vampire, not on the path:
+     *  they must hold a title at all, and their sect must not be this
+     *  one. docs/fee-stake-design.md §3 */
+    titledOnly?: boolean;
+    notSect?: Sect;
+  }>;
   /** "…once results are tallied" (Scorn of Adonis) — effects that outlive
    *  the tally, applied after ReferendumResolved whatever the outcome. */
   postTally?: Array<
@@ -2689,6 +3129,31 @@ export interface ReferendumFrame {
   votes: Array<{ seat: SeatId; source: string; count: number; inFavor: boolean }>;
   /** Spent vote sources: minion ids, "edge", "caller", "cardvote:<seat>". */
   usedSources: string[];
+  /** "Each vampire with a capacity above N can BURN BLOOD TO GAIN VOTES"
+   *  (Mob Rule, Rant!) — an open offer to every Methuselah's qualifying
+   *  vampires, repeatable unless `maxBloodPerMinion` caps it. Each
+   *  purchase casts immediately, because the engine has no "held" votes:
+   *  a source spends its votes once, at a count read when it casts.
+   *  docs/referendum-blood-design.md §1 */
+  bloodVoteOffers?: Array<{
+    minCapacity?: number;
+    sect?: Sect;
+    votesPerBlood: number;
+    /** "A vampire with a capacity above M gains an ADDITIONAL vote for
+     *  each blood" (Mob Rule) — the second tier. */
+    bigCapacity?: number;
+    bigVotesPerBlood?: number;
+    maxBloodPerMinion?: number;
+  }>;
+  /** Blood already spent on `bloodVoteOffers` by each vampire, for the
+   *  capped form. */
+  bloodVotesBought?: Record<MinionId, number>;
+  /** "Any vampire casting votes or ballots AGAINST this referendum burns
+   *  N blood WHEN THE RESULTS ARE TALLIED" (Cheval de Bataille). NOT the
+   *  same as Alexander Silverson's per-cast toll: it reaches votes cast
+   *  BEFORE the card was played [RTR 19951110], so it can only be a sweep
+   *  at the tally. docs/referendum-blood-design.md §2 */
+  againstBloodTaxAtTally?: number;
   cycle: ImpulseCycle;
 }
 
@@ -2758,6 +3223,14 @@ export interface CardPlayFrame {
    *  same reason as the flags above — Sword of the Archangel cancels "a
    *  grapple or aim card". docs/weapon-riders-design.md §5 */
   keywords?: string[];
+  /** This play would RESTRICT THE OPPOSING MINION'S CHOICE OF STRIKES
+   *  this round — "cannot use equipment", "hand strikes only". The same
+   *  denormalization as `isStrike` and for the same reason: Groundfighting
+   *  cancels by this property and must not read another card's spec.
+   *  The rulings scope it tightly (it is NOT range, maneuvers, dodges,
+   *  additional strikes, equipment destruction or Discipline
+   *  restrictions) [LSJ 20050221]. docs/cancel-in-combat-design.md §3 */
+  restrictsStrikeChoice?: "strikes" | "equipment";
   /** Frenzy keyword (p. 32), denormalized for the same reason: a frenzy
    *  card's effects have to be identifiable once applied, so the ops that
    *  aim one at the opposing combatant can tag what they set.
@@ -2830,6 +3303,25 @@ export interface GameState {
   edge: SeatId | null;
   frames: Frame[];
   eventLog: GameEvent[];
+  /** Event card NAMES put into play this game. *"Each event card may only
+   *  be played once each game"* (p. 37) — a bar that outlives the card
+   *  itself (it still bars a second copy after the first is burnt), so it
+   *  lives on the game rather than on a seat or a card.
+   *  docs/events-design.md §1 */
+  eventsPlayed?: string[];
+  /** *"Do not replace as long as this card is in play"* (Dragonbound) —
+   *  the replacement draw waits on the card LEAVING PLAY, which is not a
+   *  phase and not an action, so it cannot be counted on a seat the way
+   *  `delayedDraws` is. Keyed by the card that is holding it up.
+   *  docs/gehenna-events-design.md §3 */
+  drawWhenLeavesPlay?: Array<{ seat: SeatId; cardId: CardInstanceId }>;
+  /** *"Do not replace until a vampire commits diablerie / moves from torpor
+   *  to the ready region / until your prey is ousted"* — a replacement draw
+   *  waiting on a CONDITION rather than a phase. Released at the one event
+   *  that answers it, and *"is not replaced until the condition is met,
+   *  even if [the card] is burned"* [LSJ 20080805] — so it is held on the
+   *  game, not on the card. docs/gehenna-taxes-design.md §1 */
+  drawWhenCondition?: Array<{ seat: SeatId; until: DelayedDrawCondition }>;
   /** Replaying (seq, option) pairs through the same engine version and RNG
    *  seed reproduces the game exactly (§7). */
   commandLog: CommandLogEntry[];

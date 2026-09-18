@@ -97,6 +97,7 @@ describe("the Vozhd skeleton: recruit, and eat one of your own", () => {
   function recruitGame(name: string): GameState {
     const state = threeSeatGame();
     seatOf(state, "Alice").pool = 12;
+    find(state, "V1").clan = "Tzimisce"; // every Vozhd prints the Tzimisce icon (p. 10)
     seatOf(state, "Alice").hand.push({ id: "v1card", name });
     allyInPlay(state, "Alice", "SPARE", "Political Ally", 1, 0);
     return state;

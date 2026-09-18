@@ -445,6 +445,7 @@ describe("swept action cards", () => {
     const { state, engine } = game({ dom: "superior" }, ["Feast of the Soul's Secrets"]);
     const alice = state.seats[0]!;
     alice.minions.push(makeMinion("V0", "Alice", { blood: 1, capacity: 3 }));
+    alice.minions[0]!.clan = "Salubri"; // the printed clan icon (p. 10)
     runTrace(engine, [
       ["Alice", "play:Feast of the Soul's Secrets:superior:V1:V0"],
       ["Alice", "pass"],

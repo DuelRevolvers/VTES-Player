@@ -12,6 +12,9 @@
   --gold: #c9a34a;
   --good: #4a8f5f;
   --blood: #c4402c;
+  /* Counters on a card in play. Teal so a card's counters are never read
+     as blood at a glance — the pips are deliberately the same shape. */
+  --counter: #3fc2b8;
 }
 
 * { box-sizing: border-box; }
@@ -341,11 +344,18 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
   background: rgba(10, 8, 12, .82); color: var(--gold);
   border-radius: 8px; padding: 0 5px; font-size: 11px; font-weight: 700;
 }
-.counter-badge {
-  position: absolute; right: -4px; top: -4px; z-index: 2;
-  background: var(--gold); color: #201c14; border-radius: 8px;
-  padding: 0 5px; font-size: 10px; font-weight: 700;
+/* Counters on a card in play — the blood overlay's twin, in teal. A card
+   that is counting something (The Gate of Acheron's clock) shows it the
+   way a vampire shows blood, because that is where a player already
+   looks. */
+.counter-overlay {
+  position: absolute; left: 3px; bottom: 3px; z-index: 2;
+  background: rgba(10, 8, 12, .82); border: 1px solid var(--counter);
+  border-radius: 8px; padding: 0 5px; font-size: 12px; line-height: 1.5;
 }
+/* The tiny scan under a minion has no room for the full treatment. */
+.attached-card .counter-overlay { left: 1px; bottom: 1px; padding: 0 3px; font-size: 10px; }
+.pips.counters { color: var(--counter); }
 
 .perm-card, .attached-card { position: relative; display: inline-block; }
 .attached-cards { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
@@ -417,7 +427,9 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
   font-size: 10px; background: var(--line); border-radius: 2px;
   padding: 0 5px; white-space: nowrap;
 }
-.chip.counter { background: #3a2f22; color: var(--gold); }
+/* Named counters on a MINION read as counters too, so they take the same
+   teal — one colour for one idea, wherever it is drawn. */
+.chip.counter { background: #1f3330; color: var(--counter); }
 .chip.perm { background: #23303a; }
 .chip.card { background: var(--panel2); border: 1px solid var(--line); font-size: 11px; padding: 2px 7px; }
 
@@ -1071,6 +1083,13 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
   text-align: left; max-width: 100%;
 }
 .precon .pname { font-weight: 600; }
+/* The deck's set, beside its name: quieter and italic, because it is what
+   tells two "Malkavian" decks apart without being the thing you read
+   first. Wraps rather than truncating — a set name is short but the
+   buttons are narrow. */
+.precon .ptitle { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.precon .pset { font-size: 10px; font-style: italic; color: var(--dim); white-space: normal; }
+.precon:hover .pset { color: var(--ink); }
 .precon .pstyle { font-size: 11px; color: var(--dim); line-height: 1.35; white-space: normal; }
 .precon:hover .pstyle { color: var(--ink); }
 
