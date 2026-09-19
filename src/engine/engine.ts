@@ -99,8 +99,9 @@ import type {
   StrikeKind,
   GrantedStrike,
   TurnFrame,
+  VoteGrants,
 } from "./state.ts";
-import { HAND_STRIKE, TITLE_VOTES } from "./state.ts";
+import { HAND_STRIKE, TITLE_VOTES, resolvePerSeat } from "./state.ts";
 import {
   canAct,
   canReact,
@@ -1010,6 +1011,24 @@ export class VtesEngine implements EngineOps {
         // From the blood bank — no pool change (Govern/Enchant superior).
         findUncontrolled(this.state, ev.seat, ev.minion).counters += ev.amount;
         break;
+      case "UncontrolledChosen": {
+        const found = this.allEntries().find((e) => e.entry.card.id === ev.cardId);
+        if (found) found.entry.linkedUncontrolled = ev.minion;
+        break;
+      }
+      case "EquipmentMoved": {
+        // The SAME entry, on a different minion — counters, lock state and
+        // everything stacked on it travel with it, because it never left
+        // play (docs/blood-and-gear-design.md §3).
+        const from = findMinion(this.state, ev.from);
+        const to = findMinion(this.state, ev.to);
+        if (!from || !to) break;
+        const i = from.attached.findIndex((p) => p.card.id === ev.cardId);
+        if (i < 0) break;
+        const [entry] = from.attached.splice(i, 1);
+        if (entry) to.attached.push(entry);
+        break;
+      }
       case "AllyEnteredPlay": {
         // Life comes from the blood bank (p. 22); capacity records the
         // printed starting life (a reference, not a cap — p. 11).
@@ -2692,6 +2711,97 @@ export class VtesEngine implements EngineOps {
     }
   }
 
+  /**
+   * Does this minion have a strike that REACHES at long range (p. 30)?
+   *
+   * Walks what they are holding and asks each card's own
+   * `weaponProfile`, so there is one answer to "is this weapon ranged"
+   * whether the card is spec-compiled or hand-rolled. Granted ranged
+   * strikes count too — "1 additional ranged strike" and a blood steal
+   * are both ranged by construction.
+   *
+   * It exists because the AI cannot see it: a weapon's reach is on the
+   * card, not on the permanent in play, so the projection has no way to
+   * carry it and the policy could only ever tell that a BARE HAND strike
+   * does not reach (docs/ai-combat-range-design.md §5.1).
+   */
+  private hasRangedStrike(minionId: MinionId, side: "acting" | "opposing", cf: CombatFrame): boolean {
+    const m = findMinion(this.state, minionId);
+    if (!m) return false;
+    // "Strikes that are not hand strikes cannot be used this round"
+    // (Immortal Grapple) takes every weapon off the table, so nothing
+    // reaches however the minion is armed.
+    if (cf.handStrikesOnly) return false;
+    for (const p of m.attached) {
+      if (this.handler(p.card.name)?.weaponProfile?.ranged) return true;
+    }
+    return (cf.grantedStrikes?.[side] ?? []).some((g) => g.kind === "stealBlood");
+  }
+
+  /**
+   * IS THE OUTCOME ALREADY SETTLED, whatever anyone does from here?
+   *
+   * "More for than against passes; ties FAIL" (p. 28). So the referendum
+   * is decided when one side wins even if every vote still available goes
+   * the other way:
+   *
+   *  - **pass** when `for > against + everything that could oppose`;
+   *  - **fail** when `for + everything that could support <= against`.
+   *
+   * It exists so an agent does not pay for a vote that cannot matter — a
+   * blood toll, a bought vote (docs/ai-vote-economy-design.md). It gates
+   * COSTS only, never the direction of a vote, because it has a known
+   * false-positive mode: cards still in hands can grant votes during
+   * polling, and hands are hidden. Guessing them would be determinization
+   * (`ai-v2-design.md` §6).
+   *
+   * Counted by walking each standing seat's own polling options, so there
+   * is ONE enumeration of what a vote source is. A source that offers
+   * both directions is counted on BOTH sides — it could go either way —
+   * and one the card fixed the direction of is counted only on its own.
+   *
+   * Deliberately CONSERVATIVE and therefore deliberately slightly wrong
+   * in one direction: a blood purchase is repeatable (Mob Rule) and is
+   * counted once, so "decided" can be reached a little early. The failure
+   * mode is a bot declining to pay for a vote it might have wanted, which
+   * is the cheap way to be wrong.
+   */
+  /** PUBLIC so the tie rule can be tested directly. "Ties fail" (p. 28)
+   *  is the likeliest off-by-one in this file, and driving it through a
+   *  whole game to observe it would be a test about the fixture. Reading
+   *  it changes nothing, so exposing it costs no invariant — the same
+   *  argument that made `HeuristicAgent.score` public. */
+  public referendumDecided(rf: ReferendumFrame): "pass" | "fail" | null {
+    let votesFor = 0;
+    let votesAgainst = 0;
+    for (const v of rf.votes) {
+      if (v.inFavor) votesFor += v.count;
+      else votesAgainst += v.count;
+    }
+    let couldSupport = 0;
+    let couldOppose = 0;
+    for (const s of this.state.seats) {
+      if (s.ousted) continue;
+      /** Per SOURCE, because a flexible source is one vote block that
+       *  could land on either side — not two separate blocks. */
+      const bySource = new Map<string, { for: number; against: number }>();
+      for (const o of this.pollingOptions(rf, s.id)) {
+        if (o.kind !== "castVote") continue;
+        const seen = bySource.get(o.source) ?? { for: 0, against: 0 };
+        if (o.inFavor) seen.for = Math.max(seen.for, o.count);
+        else seen.against = Math.max(seen.against, o.count);
+        bySource.set(o.source, seen);
+      }
+      for (const seen of bySource.values()) {
+        couldSupport += seen.for;
+        couldOppose += seen.against;
+      }
+    }
+    if (votesFor > votesAgainst + couldOppose) return "pass";
+    if (votesFor + couldSupport <= votesAgainst) return "fail";
+    return null;
+  }
+
   /** Vote sources available to `seat` right now (p. 28): each unused
    *  ready titled vampire (locked is fine), the Edge, the calling card
    *  (caller only), and one political action card from hand — at most
@@ -2734,6 +2844,20 @@ export class VtesEngine implements EngineOps {
           ...(toll > 0 ? { toll } : {}),
         });
       }
+    };
+    /** A source the card fixed the direction of. No `voter`, so no against
+     *  toll — a card-granted vote is untolled by construction, exactly as
+     *  the untolled branch of `both`. */
+    const oneWay = (source: string, count: number, label: string, inFavor: boolean): void => {
+      if (count <= 0) return;
+      options.push({
+        id: `vote:${source}:${inFavor ? "for" : "against"}`,
+        kind: "castVote",
+        label: `${label}: ${count} vote${count > 1 ? "s" : ""} ${inFavor ? "for" : "against"}`,
+        source,
+        count,
+        inFavor,
+      });
     };
     // "Each vampire with a capacity above N can burn blood to gain votes"
     // (Mob Rule, Rant!). Offered to EVERY Methuselah's vampires, not just
@@ -2822,6 +2946,10 @@ export class VtesEngine implements EngineOps {
       if (rf.abstaining?.includes(m.id)) continue;
       // "…or cast votes or ballots this turn" (Expulsion).
       if (m.expelledThisTurn) continue;
+      // "This vampire cannot cast votes or ballots" (Detection) — the same
+      // bar with no expiry, carried by a card on the vampire
+      // (docs/pay-to-unlock-design.md §4).
+      if (m.attached.some((p) => p.statics.cannotCastVotes)) continue;
       // "Non-<sect> vampires cannot cast votes or ballots" (p. 28).
       if (rf.voteRestriction && m.sect !== rf.voteRestriction.sect) continue;
       // "+2 votes when casting votes AGAINST blood hunt referendums"
@@ -2841,10 +2969,21 @@ export class VtesEngine implements EngineOps {
     if (this.state.edge === seat && !rf.usedSources.includes("edge")) {
       both("edge", 1, "Burn the Edge");
     }
-    // Bonus votes granted by cards played this polling step (§3).
-    const grant = rf.voteGrants[seat] ?? 0;
-    if (grant > 0 && !rf.usedSources.includes(`grant:${seat}`)) {
-      both("grant", grant, "Granted votes");
+    // Bonus votes granted by cards played this polling step (§3). Three
+    // sources, not one: a grant printed with a DIRECTION ("+3 votes against
+    // the referendum", Protected District) is only castable that way, and
+    // each bucket is spent on its own so a seat holding both can cast both.
+    const grants = rf.voteGrants[seat];
+    if (grants) {
+      if (grants.any > 0 && !rf.usedSources.includes(`grant:${seat}`)) {
+        both("grant", grants.any, "Granted votes");
+      }
+      if (grants.for > 0 && !rf.usedSources.includes(`grantFor:${seat}`)) {
+        oneWay("grantFor", grants.for, "Granted votes (for)", true);
+      }
+      if (grants.against > 0 && !rf.usedSources.includes(`grantAgainst:${seat}`)) {
+        oneWay("grantAgainst", grants.against, "Granted votes (against)", false);
+      }
     }
     const cardVoteSpent = rf.usedSources.includes(`cardvote:${seat}`);
     // A blood hunt has no calling card, so no caller vote (p. 35).
@@ -2998,6 +3137,10 @@ export class VtesEngine implements EngineOps {
       actionId,
       actionKind: params.actionKind,
       card: { instance: play.card, mode: play.mode, params: play.params },
+      // Recorded HERE, where the handler is already in hand: this is the
+      // only one of the three action-frame sites that has a card at all,
+      // the other two being built-in actions and granted entry actions.
+      ...(this.handler(play.card.name)?.isPoliticalAction ? { political: true } : {}),
       acting: m.id,
       actingSeat: seat,
       target,
@@ -3147,6 +3290,7 @@ export class VtesEngine implements EngineOps {
     if (opts.bloodCost) {
       this.emit({ type: "BloodBurned", minion, amount: opts.bloodCost });
     }
+    this.chargeUnlockEffectTax(minion);
     this.emit({ type: "MinionUnlocked", minion });
     af.pendingAutoBlock = { minion, interceptBonus: opts.interceptBonus ?? 0 };
     // "If this vampire does not block this action, lock/attach it after
@@ -3159,7 +3303,65 @@ export class VtesEngine implements EngineOps {
   /** "Unlock this vampire" (Guard Dogs) — a locked vampire unlocks so its
    *  controller can block it through the normal flow. */
   unlockReactingMinion(minion: MinionId): void {
+    this.chargeUnlockEffectTax(minion);
     this.emit({ type: "MinionUnlocked", minion });
+  }
+
+  /**
+   * "While it is not this minion's turn, using an effect to unlock this
+   * minion or to allow this minion to block as if unlocked costs an
+   * additional pool" (Burden the Mind).
+   *
+   * ONE helper, called by every op that unlocks a minion so it can react —
+   * `unlockAndAttemptBlock` and `unlockReactingMinion` are the two doors
+   * today, and a third would have to call this rather than quietly skip the
+   * clause (the `onAnyUnlock` lesson, before it bites).
+   *
+   * The payer is the minion's CONTROLLER: the effects that reach this are
+   * wakes and their siblings, which a Methuselah plays for their own minion,
+   * and the clause charges whoever uses the effect.
+   * docs/block-taxes-design.md §5
+   */
+  /**
+   * A blocker locks for blocking (p. 25) — unless a card on them says they
+   * do not.
+   *
+   * ONE helper, because the engine emitted this lock in TWO places: block
+   * resolution, and `endAction({ lockBlocker })` for the cards that end an
+   * action but lock the blocker anyway (Mirror Walk, p. 49). An exemption
+   * honoured in one and not the other is a card that works or not depending
+   * on which card ended the action. docs/lock-as-price-design.md §3
+   */
+  private lockBlockerForBlocking(blocker: MinionId, actor: MinionId): void {
+    const m = findMinion(this.state, blocker);
+    if (!m) return;
+    const blocked = findMinion(this.state, actor);
+    // "…does not lock for blocking a vampire THE SAME AGE OR YOUNGER"
+    // (Atonement): age is capacity, and an ally has none, so the clause
+    // cannot be satisfied by blocking one — which is what the card says.
+    const exempt = m.attached.some((p) => {
+      const nl = p.statics.noLockForBlocking;
+      if (!nl) return false;
+      if (nl.sameAgeOrYounger !== true) return true;
+      return (
+        blocked !== null &&
+        blocked.kind === "vampire" &&
+        capacityOf(blocked) <= capacityOf(m)
+      );
+    });
+    if (exempt) return;
+    this.emit({ type: "MinionLocked", minion: blocker });
+  }
+
+  private chargeUnlockEffectTax(minion: MinionId): void {
+    const m = findMinion(this.state, minion);
+    if (!m) return;
+    const tf = this.state.frames[0];
+    // "WHILE IT IS NOT THIS MINION'S TURN" — on their controller's own turn
+    // the card says nothing at all.
+    if (tf?.kind === "turn" && tf.seat === m.controller) return;
+    const tax = m.attached.reduce((n, p) => n + (p.statics.unlockEffectPoolTax ?? 0), 0);
+    if (tax > 0) this.emit({ type: "PoolBurned", seat: m.controller, amount: tax });
   }
 
   /** "During this action, this vampire can burn 1 blood to get +1
@@ -3748,7 +3950,7 @@ export class VtesEngine implements EngineOps {
           }
         }
       }
-      this.emit({ type: "MinionLocked", minion: ba.blocker });
+      this.lockBlockerForBlocking(ba.blocker, af.acting);
       af.blockedBy = ba.blocker;
       af.step = "blocked";
       // "If this vampire blocks, put this card on the acting minion; you
@@ -3838,8 +4040,26 @@ export class VtesEngine implements EngineOps {
       }
     } else {
       // A failed attempt does not lock the blocker; back to state A; the
-      // same Methuselah may attempt again (p. 25, p. 27 B.4).
+      // same Methuselah may attempt again with ANOTHER minion (p. 25,
+      // p. 27 B.4).
+      //
+      // But not with THIS one. Stealth persists for the whole action, so a
+      // second attempt by the same minion faces the same numbers and fails
+      // the same way — and the option was live in every window, so a walker
+      // that kept re-declaring it never left state A: the dealt-game test
+      // ran 20,000 steps of block → fail → block. This is the `forceFail`
+      // path's own bookkeeping (Enchanting Gaze), applied to the ordinary
+      // failure beside it.
+      //
+      // RECORDED READING, for the owner: the alternative is that a minion
+      // may re-attempt within one action, which only matters if their
+      // intercept has risen since — and then the first attempt was thrown
+      // away for nothing. One line either way.
+      // docs/lock-as-price-design.md §5
       this.emit({ type: "BlockFailed", actionId: ba.actionId, blocker: ba.blocker });
+      if (!af.blockRestrictions.cannotBlock.includes(ba.blocker)) {
+        af.blockRestrictions.cannotBlock.push(ba.blocker);
+      }
       af.step = "A";
       cycleRewind(af.cycle);
     }
@@ -5428,6 +5648,13 @@ export class VtesEngine implements EngineOps {
    *  `removeMinionFromGame`, which only knows about minions in PLAY. */
   removeUncontrolledFromGame(seatId: SeatId, minion: MinionId): void {
     this.emit({ type: "UncontrolledRemovedFromGame", seat: seatId, minion });
+    this.notifyUncontrolledLeft(minion);
+  }
+
+  /** "Choose a vampire in your uncontrolled region" (Gather, Tomb of
+   *  Rameses III) — the card in play remembers which one. §2 */
+  linkUncontrolled(cardId: CardInstanceId, minion: MinionId): void {
+    this.emit({ type: "UncontrolledChosen", cardId, minion });
   }
 
   /** "…otherwise, move it to the bottom of your crypt" (Family
@@ -5445,6 +5672,45 @@ export class VtesEngine implements EngineOps {
     const tf = this.state.frames[0];
     if (tf?.kind !== "turn") throw new Error("spendTransfers outside a turn");
     tf.transfersLeft -= n;
+  }
+
+  /**
+   * "Move that vampire from your uncontrolled region to your ready region,
+   * with any counters he or she has" (Gather, Tomb of Rameses III) — the
+   * same move the influence phase's own `inf:out` makes, so it is ONE
+   * helper: the pool tax and the counters-become-blood rule are rules of
+   * the MOVE, not of the phase, and a card doing it by hand would have
+   * either of them wrong. docs/uncontrolled-graduation-design.md §2
+   */
+  moveUncontrolledToReady(seatId: SeatId, minion: MinionId): void {
+    const entry = findUncontrolled(this.state, seatId, minion);
+    // "When any Methuselah moves a vampire from uncontrolled to
+    // controlled, he or she burns 1 ADDITIONAL POOL" (Masquerade
+    // Enforcement).
+    const moveTax = this.tableStatic("influenceOutPoolTax");
+    if (moveTax > 0) this.emit({ type: "PoolBurned", seat: seatId, amount: moveTax });
+    this.emit({
+      type: "VampireEnteredPlay",
+      seat: seatId,
+      minion,
+      // Counters become blood; the excess drains immediately (p. 36).
+      blood: Math.min(entry.counters, capacityOf(entry.card)),
+    });
+    this.notifyUncontrolledLeft(minion);
+  }
+
+  /** "Burn this card when this vampire LEAVES the uncontrolled region"
+   *  (Tomb of Rameses III) — however it leaves: influenced out by the
+   *  phase, graduated by a card, or removed from the game. Called from the
+   *  two places a vampire can leave that region, so a third way out would
+   *  have to opt in rather than silently skip the clause.
+   *  docs/uncontrolled-graduation-design.md §5 */
+  private notifyUncontrolledLeft(minion: MinionId): void {
+    for (const { entry } of this.allEntries()) {
+      if (entry.linkedUncontrolled !== minion) continue;
+      if (!this.registry[entry.card.name]?.burnWhenLinkedUncontrolledLeaves) continue;
+      this.burnPermanent(entry.card.id);
+    }
   }
 
   /** "Discard down afterward" (p. 7) — asked of the ENGINE, which owns the
@@ -5821,10 +6087,16 @@ export class VtesEngine implements EngineOps {
     tf.discardActionsLeft = (tf.discardActionsLeft ?? 1) + n;
   }
 
-  grantVotes(seat: SeatId, amount: number): void {
+  /** `direction` is what the GRANTING CARD printed, not what the seat wants:
+   *  "+3 votes against the referendum" (Protected District) is a defensive
+   *  card and casting it for the referendum it was played to stop is not a
+   *  legal option. Defaults to "any", which is every other vote grant in the
+   *  pool. docs/polling-votes-design.md §3 */
+  grantVotes(seat: SeatId, amount: number, direction: keyof VoteGrants = "any"): void {
     const rf = this.referendumFrame();
     if (!rf) throw new Error("grantVotes outside a referendum");
-    rf.voteGrants[seat] = (rf.voteGrants[seat] ?? 0) + amount;
+    const g = (rf.voteGrants[seat] ??= { any: 0, for: 0, against: 0 });
+    g[direction] += amount;
   }
 
   /** "If this vampire blocks, it gets N maneuvers/presses in the resulting
@@ -6007,9 +6279,13 @@ export class VtesEngine implements EngineOps {
     const ba = this.blockAttempt();
     if (ba) {
       // "Contrary to Change of Target, Mirror Walk explicitly locks the
-      // blocking minion" (p. 49) — the one difference between the two.
+      // blocking minion" (p. 49) — the one difference between the two. It is
+      // still a lock FOR BLOCKING, so it goes through the same helper as the
+      // successful-block path: an exemption that applied to one and not the
+      // other would be a card that works or not depending on which card
+      // ended the action (docs/lock-as-price-design.md §3).
       if (args.lockBlocker && findMinion(this.state, ba.blocker)) {
-        this.emit({ type: "MinionLocked", minion: ba.blocker });
+        this.lockBlockerForBlocking(ba.blocker, af.acting);
       }
       ba.cancelled = true;
     }
@@ -6786,8 +7062,16 @@ export class VtesEngine implements EngineOps {
     if (pd.minion !== play.minion) {
       throw new Error("only the minion taking damage may prevent it");
     }
-    this.emit({ type: "DamagePrevented", minion: pd.minion, amount });
-    pd.amount -= amount;
+    // CLAMPED, like `preventDamageFor` below. "Prevent all damage" is
+    // compiled as `Number.MAX_SAFE_INTEGER` (compile.ts, `preventAll`) on
+    // the promise that the op trims it to what is pending — this one did
+    // not, so the arithmetic came out right and the EVENT said "prevents
+    // 9007199254740991 damage", which is what the game log then printed.
+    // The two halves of the family were written at different times and
+    // disagreed; the sibling was the one that was right.
+    const prevented = Math.min(amount, pd.amount);
+    this.emit({ type: "DamagePrevented", minion: pd.minion, amount: prevented });
+    pd.amount -= prevented;
     if (pd.amount <= 0) {
       // Fully prevented — nothing left to mend.
       cf.pendingDamage.shift();
@@ -7036,9 +7320,19 @@ export class VtesEngine implements EngineOps {
         attachedTo: null,
         statics: entry.statics ?? {},
         tags: entry.tags,
+        // WHO put it there. "Choose a YOUNGER Gangrel" (Gather) is younger
+        // than the acting vampire, and a seat-level card has no bearer to
+        // ask — so the actor is recorded as the card arrives rather than
+        // re-derived later, when the action frame is gone.
+        linkedMinion: af.acting,
       };
       if (entry.counters !== undefined) ev.counters = entry.counters;
       this.emit(ev);
+      // "Put this card in play, LOCKED" (Gather) — after the entry event,
+      // which is the only order in which there is a card to lock.
+      if (entry.locked === true) {
+        this.emit({ type: "PermanentLocked", cardId: af.card.instance.id });
+      }
       // `onEnterPlay` is documented as firing "from both entry paths", and
       // these two action paths were neither of them: a card that puts
       // ITSELF in play on a successful action arrived without its own
@@ -7718,6 +8012,15 @@ export class VtesEngine implements EngineOps {
         bloodHuntTarget: null,
         callingMinion: af.acting,
         voteGrants: {},
+        // What this referendum does to pool, declared by the card's
+        // referendum primitive. Read HERE, once, rather than on every
+        // view: the handler is already in hand at this line.
+        ...(this.handler(cardName)?.referendumEffect
+          ? { effectKind: this.handler(cardName)!.referendumEffect! }
+          : {}),
+        ...(this.handler(cardName)?.referendumSeats
+          ? { seatMap: this.handler(cardName)!.referendumSeats! }
+          : {}),
         step: "terms",
         terms: {},
         votes: [],
@@ -7868,7 +8171,22 @@ export class VtesEngine implements EngineOps {
           // settle() guarantees at least one term option here.
           const terms =
             this.handler(top.cardName).referendumTerms?.(top, this.state) ?? [];
-          return this.dp(top.caller, "referendum.terms", terms);
+          // WHAT EACH CHOICE WOULD DO, backfilled centrally so no handler
+          // has to remember. The caller used to answer this decision in
+          // offered order — a bot that landed Parity Shift chose its
+          // victim by coin flip (docs/ai-referendum-terms-design.md §1).
+          const seatMap = top.seatMap;
+          return this.dp(
+            top.caller,
+            "referendum.terms",
+            seatMap
+              ? terms.map((o) =>
+                  o.kind === "chooseTerms"
+                    ? { ...o, perSeat: resolvePerSeat(o.params, seatMap) }
+                    : o,
+                )
+              : terms,
+          );
         }
         const seat = cycleSeat(top.cycle);
         if (top.step === "afterResolution") {
@@ -7880,9 +8198,17 @@ export class VtesEngine implements EngineOps {
             ...this.abilityOptionsFor(seat, "referendum.afterResolution"),
           ]);
         }
+        // Whether the outcome is already settled, computed ONCE for the
+        // decision and stamped onto each vote so an agent does not pay a
+        // toll into a referendum it cannot affect. Derived on every read
+        // rather than stored: a referendum stops being decided the moment
+        // somebody grants votes (docs/ai-vote-economy-design.md).
+        const decided = this.referendumDecided(top);
         return this.dp(seat, "referendum.polling", [
           passOption("Done voting"),
-          ...this.pollingOptions(top, seat),
+          ...this.pollingOptions(top, seat).map((o) =>
+            o.kind === "castVote" && decided ? { ...o, decided } : o,
+          ),
           // Vote-granting cards and location abilities (p. 28).
           ...this.handlerOptions(seat, "referendum.polling"),
           ...this.abilityOptionsFor(seat, "referendum.polling"),
@@ -8434,6 +8760,13 @@ export class VtesEngine implements EngineOps {
       ) {
         continue;
       }
+      // "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier) —
+      // keyed on the ACTION, the third member of this family: unconditional,
+      // by actor kind, and now by what the action is aimed at
+      // (docs/block-taxes-design.md §4).
+      if (!af.directed && m.attached.some((p) => p.statics.cannotBlockUndirected)) {
+        continue;
+      }
       // "Allies AND vampires with capacity 3 or less cannot block this
       // vampire" (Rexton) — a persistent bar carried by the ACTING
       // minion's own crypt card, naming a union of groups. `blockToll`
@@ -8530,9 +8863,18 @@ export class VtesEngine implements EngineOps {
       registry: this.registry,
     };
     const options: LegalOption[] = [];
+    // "No more BOONS can be put in play" (Blood Trade) — a bar on a printed
+    // KEYWORD rather than on a card, so it belongs at the one place every
+    // card type's play options come from rather than in each type's
+    // enumerator (docs/blood-and-gear-design.md §5).
+    const boonsBarred = this.state.seats.some((s) =>
+      s.permanents.some((p) => p.statics.barsBoons),
+    );
     for (const card of getSeat(this.state, seat).hand) {
       const handler = this.registry[card.name];
-      if (handler) options.push(...handler.options(card, ctx));
+      if (!handler) continue;
+      if (boonsBarred && (handler.cardKeywords?.() ?? []).includes("boon")) continue;
+      options.push(...handler.options(card, ctx));
     }
     // "…can play cards from this card AS IF FROM YOUR HAND" (Gift of
     // Proteus, Mokolé Blood, Fleshforge Chamber). The same enumerator with
@@ -8637,6 +8979,14 @@ export class VtesEngine implements EngineOps {
               id: "maneuver:credit",
               kind: "useManeuver",
               label: closeOnly ? "Maneuver to close range" : "Maneuver (rush credit)",
+              // Whether opening or closing helps this minion depends on
+              // what it is holding, and the card's reach is not on the
+              // permanent — so the engine says.
+              rangedStrikeAvailable: this.hasRangedStrike(
+                cf.awaiting === "acting" ? cf.acting : cf.opposing,
+                cf.awaiting,
+                cf,
+              ),
             });
           }
         }
@@ -8795,7 +9145,20 @@ export class VtesEngine implements EngineOps {
           options.push(...this.handlerOptions(seat, "combat.chooseStrike"));
         }
         options.push(...this.abilityOptionsFor(seat, "combat.chooseStrike"));
-        return this.dp(seat, "combat.chooseStrike", options);
+        // WHICH OF THESE ACTUALLY REACHES. A weapon's strike arrives as an
+        // ability, so without this an agent at long range could tell only
+        // that its bare hands do not reach and nothing about the gun it is
+        // holding (docs/ai-combat-range-design.md §5.1). Stamped centrally
+        // here rather than at each weapon, so no card has to remember.
+        return this.dp(
+          seat,
+          "combat.chooseStrike",
+          options.map((o) =>
+            o.kind === "useAbility" && this.handler(this.findEntry(o.source)?.card.name ?? "")?.weaponProfile?.ranged
+              ? { ...o, strikeReaches: true }
+              : o,
+          ),
+        );
       }
       case "damageResolution": {
         const pd = cf.pendingDamage[0];
@@ -8977,6 +9340,20 @@ export class VtesEngine implements EngineOps {
           seat: tf.seat,
           minion: option.minion,
         });
+        // "For each blood counter you TRANSFER to the chosen vampire during
+        // your influence phase, move one counter from the blood bank to
+        // this card" (Tomb of Rameses III) — after the counter has landed,
+        // so a card that reads the total sees this one
+        // (docs/uncontrolled-graduation-design.md §4).
+        for (const { entry, owner } of this.allEntries()) {
+          this.registry[entry.card.name]?.onTransferToUncontrolled?.(
+            entry,
+            owner,
+            tf.seat,
+            option.minion,
+            this,
+          );
+        }
         return;
       }
       case "transferToPool": {
@@ -9001,19 +9378,7 @@ export class VtesEngine implements EngineOps {
       }
       case "influenceOut": {
         const tf = top as TurnFrame;
-        const entry = findUncontrolled(this.state, tf.seat, option.minion);
-        // "When any Methuselah moves a vampire from uncontrolled to
-        // controlled, he or she burns 1 ADDITIONAL POOL" (Masquerade
-        // Enforcement).
-        const moveTax = this.tableStatic("influenceOutPoolTax");
-        if (moveTax > 0) this.emit({ type: "PoolBurned", seat: tf.seat, amount: moveTax });
-        this.emit({
-          type: "VampireEnteredPlay",
-          seat: tf.seat,
-          minion: option.minion,
-          // Counters become blood; the excess drains immediately (p. 36).
-          blood: Math.min(entry.counters, capacityOf(entry.card)),
-        });
+        this.moveUncontrolledToReady(tf.seat, option.minion);
         return;
       }
       case "gainEdgePool": {
@@ -9255,8 +9620,15 @@ export class VtesEngine implements EngineOps {
           const [card] = hand.splice(idx, 1);
           this.emit({ type: "CardBurned", cardId: card!.id, name: card!.name, seat });
           this.drawToReplace(seat);
-        } else if (option.source === "grant") {
-          top.usedSources.push(`grant:${seat}`); // card-granted votes
+        } else if (
+          option.source === "grant" ||
+          option.source === "grantFor" ||
+          option.source === "grantAgainst"
+        ) {
+          // Card-granted votes, keyed by BUCKET: a seat holding a flexible
+          // grant and a directed one has two sources, and spending one must
+          // not spend the other.
+          top.usedSources.push(`${option.source}:${seat}`);
         } else if (option.source.startsWith("blood:")) {
           // A bought vote spends blood, not a vote SOURCE — the vampire's
           // own title votes are still theirs to cast, and the offer stays
@@ -9464,6 +9836,12 @@ export class VtesEngine implements EngineOps {
       case "minion":
         throw new Error("minion phase uses endMinionPhase, not pass");
       case "influence": {
+        // "AT THE END OF your influence phase, …" (Tomb of Rameses III) —
+        // fired before `tf.phase` moves, because the clause asks about the
+        // phase that is closing. The `onMinionPhaseEnd` treatment.
+        for (const { entry, owner } of this.allEntries()) {
+          this.registry[entry.card.name]?.onInfluencePhaseEnd?.(entry, owner, tf.seat, this);
+        }
         tf.phase = "discard";
         // "You receive by default one discard phase action" (p. 37).
         tf.discardActionsLeft = 1;
@@ -9861,6 +10239,18 @@ export class VtesEngine implements EngineOps {
     // torpid vampire take pays at announcement, like its printed cost.
     if (m.inTorpor && kind !== "leaveTorpor") {
       const tax = Math.min(this.tableStatic("torporActionTax"), m.blood);
+      if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
+    }
+    // "DIRECTED actions cost this vampire an additional blood" (Kaymakli
+    // Barrier) — a surcharge carried by a card ON THE ACTOR, charged here
+    // beside the torpor tax because that is the one tax of this shape and
+    // its guards (pay what you have, never below zero) are the right ones.
+    if (directed) {
+      const own = m.attached.reduce(
+        (n, p) => n + (p.statics.directedActionBloodTax ?? 0),
+        0,
+      );
+      const tax = Math.min(own, m.blood);
       if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
     }
     this.emit({

@@ -148,6 +148,53 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 .controls button:hover:not(:disabled) { background: var(--line); }
 .controls button:disabled { opacity: .4; cursor: default; }
 
+/* --- the stage ---------------------------------------------------------- */
+
+/* THE BAND NEVER GOES AWAY. Its height is the height of one strip with a
+   card scan in it (86px of scan plus the strip's own padding), so a card
+   arriving on the stack fills the space that was already there instead of
+   shoving the table down. `min-height`, not `height`: a vote with a
+   combat under it is genuinely taller, and clipping that would cost more
+   than the jump it saves. */
+.stage {
+  min-height: 100px;
+  display: flex; flex-direction: column;
+  border-bottom: 1px solid var(--line);
+  background: #14161f;
+}
+.stage > * { border-bottom: none; }
+.stageidle {
+  flex: 1; display: flex; align-items: center; padding: 6px 12px;
+  font-size: 11px; letter-spacing: .04em;
+}
+
+/* --- vote strip (the running tally) ------------------------------------- */
+
+.votestrip {
+  display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+  background: #1e1b2e; border-bottom: 1px solid var(--gold);
+  padding: 6px 12px; font-size: 12px;
+}
+.votetot {
+  display: inline-flex; gap: 5px; align-items: baseline;
+  padding: 2px 9px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--panel2);
+  font-variant-numeric: tabular-nums;
+}
+.votetot.passing { border-color: var(--good); }
+.votetot.failing { border-color: var(--accent); }
+.vfor { color: var(--good); }
+.vagainst { color: var(--accent); }
+.voteseats { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.vseat {
+  font-size: 11px; padding: 2px 7px; border-radius: 10px;
+  background: var(--panel2); border: 1px solid var(--line); white-space: nowrap;
+  color: var(--dim);
+}
+/* A seat that has cast something is the one worth reading. */
+.vseat.voted { color: var(--ink); border-color: var(--gold); }
+.vseat .num { margin-left: 5px; font-variant-numeric: tabular-nums; }
+
 /* --- combat strip (the battlefield) ------------------------------------ */
 
 .combat {
@@ -723,6 +770,35 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 }
 /* The set name spans the whole grid rather than taking a cell. */
 .preconset > .dim { grid-column: 1 / -1; font-size: 11px; }
+
+/* --- the deck picker's folds ------------------------------------------- */
+
+/* Every section of the picker is collapsed until it is asked for, so the
+   modal opens as a short list of headings rather than seven screens of
+   buttons. The summary IS the heading — `.sethead` already styles it —
+   so it only needs to look pressable. */
+.decksec { border-top: 1px solid var(--line); }
+.decksec:first-child { border-top: none; }
+.decksec > summary {
+  cursor: pointer; padding: 7px 2px; margin: 0; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.decksec > summary::-webkit-details-marker { display: none; }
+.decksec > summary::before {
+  content: "▸"; color: var(--dim); font-size: 10px;
+  transition: transform .12s ease; display: inline-block;
+}
+.decksec[open] > summary::before { transform: rotate(90deg); }
+.decksec > summary:hover { color: var(--ink); }
+.decksec[open] > summary { color: var(--gold); }
+.decksec > *:not(summary) { margin-bottom: 10px; }
+.deckfoot { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* The deck button and its die sit on one line; the button takes the room
+   and the die stays square whatever the deck is called. */
+.deckrow { display: flex; gap: 4px; align-items: stretch; }
+.deckrow .deckbtn { flex: 1; min-width: 0; }
+.deckrand { flex: 0 0 auto; padding: 4px 7px; line-height: 1; }
 .precon { font-size: 12px; padding: 6px 9px; height: 100%; }
 .pastebox {
   width: 100%; background: var(--bg); color: var(--ink);
@@ -920,7 +996,10 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .botnames .botnamerow > span:first-child {
   flex: 0 0 46px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
 }
-.botnames .botnamerow input { flex: 1 1 auto; }
+.botnames .botnamerow input { flex: 1 1 auto; min-width: 0; }
+/* The name field keeps the stretch; the dropdown takes what it needs and
+   no more, so the boxes do not jump width between rows. */
+.botnames .botnamerow select.botstyle { flex: 0 0 auto; width: auto; }
 
 .lbtable { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
 .lbtable th {
@@ -1260,6 +1339,34 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .gdeck { color: var(--dim); width: 99%; }
 .gvp { text-align: right; white-space: nowrap; }
 .gout { text-align: right; white-space: nowrap; font-size: 10px; }
+
+/* --- the allocation dialog ---------------------------------------------- */
+
+/* Narrow: it is a list of names with a number beside each and a total
+   underneath. It brings its own scrim so a click outside cancels. */
+.modal.allocmodal { background: none; z-index: 42; pointer-events: none; }
+.modal.allocmodal .modalcard { width: min(360px, 92vw); pointer-events: auto; }
+#alloc-scrim { z-index: 41; }
+.alloclist { margin: 10px 0 4px; }
+.allocrow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 5px 0; border-bottom: 1px solid var(--line);
+}
+.allocrow:last-child { border-bottom: none; }
+.allocwho { flex: 1; min-width: 0; font-size: 13px; }
+.allocnum {
+  width: 68px; text-align: right; font-variant-numeric: tabular-nums;
+  background: var(--bg); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px;
+}
+.allocnum:focus { border-color: var(--gold); outline: none; }
+/* The running total is the one thing that has to be right before Confirm
+   lights up, so it reads as a number and not as a footnote. */
+.alloctotal {
+  font-size: 12px; color: var(--ink);
+  border-top: 1px solid var(--line); padding-top: 8px; margin: 4px 0 10px;
+  font-variant-numeric: tabular-nums;
+}
 
 .modal.deckmodal { background: none; padding: 24px; pointer-events: none; }
 .modal.deckmodal .modalcard { pointer-events: auto; }

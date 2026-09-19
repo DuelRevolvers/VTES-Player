@@ -26,6 +26,7 @@
 import type { Agent, PlayerView } from "../engine/agent.ts";
 import type { DecisionPoint, LegalOption, PlayEffect, PlayEffectTag, WindowId } from "../engine/options.ts";
 import type { MinionState, SeatId } from "../engine/state.ts";
+import { preyOf, relationTo } from "./seats.ts";
 
 /**
  * Every weight the policy uses, in one place so it can be read, argued
@@ -133,6 +134,45 @@ export interface Weights {
   /** An action card — unknown in detail, but it cost them a card and an
    *  action, which is a floor on what it was worth to them. */
   blockCardEffect: number;
+  /**
+   * A POLITICAL ACTION, whose success calls a referendum (p. 24, p. 27).
+   *
+   * `ActionKind` has six members and one of them is `"cardEffect"`,
+   * meaning every action card in the game — so a Govern, an Embrace and a
+   * Kine Resources Contested about to burn four pool off the table all
+   * returned the same constant. **Blocking the action is the cheapest
+   * answer to politics in VTES**: no votes needed, no cards spent beyond
+   * the block, and the referendum never happens.
+   *
+   * Above `blockCardEffect` because a referendum is a TABLE-WIDE pool
+   * event rather than one seat's private gain, and below the lethal-bleed
+   * cliff because nothing outranks not being ousted.
+   */
+  blockPolitical: number;
+  /**
+   * WHOSE action it is, scaled by the actor's relation to you — and
+   * **ZERO, on the `influenceUnlocks` precedent.** Read this before
+   * raising it.
+   *
+   * The idea is reasonable: an action by your PREDATOR that grows their
+   * board is worth more to stop than the same action by a cross-table
+   * seat who is not coming for you. The information is real and the term
+   * is LIVE rather than inert — measured over 20 games it would change
+   * **30 of 255 block decisions (12%)** on the playtest table, which is
+   * the same order as `influenceUnlocks` at 9%.
+   *
+   * It is 0 because "live" is not "better". §8 measured this exact
+   * function and found that **two quite different blocking policies
+   * produce statistically identical games**, so a term here starts with a
+   * strong prior of doing nothing, and nothing has been measured that
+   * says otherwise. Kept at 0 with the code in place so the experiment is
+   * one flag away and nobody re-derives it from scratch.
+   *
+   * Note the asymmetry it encodes, which is the part worth arguing with:
+   * on the politics table the same term flips **1 of 290**, so whatever
+   * it is picking up is deck-shaped rather than general.
+   */
+  blockActorRelation: number;
   /** Anything `ActionKind` grows later. */
   blockOther: number;
   /** Blocking with a minion that will lose the fight badly. */
@@ -162,12 +202,180 @@ export interface Weights {
   /** Combat. */
   strikeLethal: number;
   strikeDamage: number;
+  /**
+   * A HAND STRIKE AT LONG RANGE, which does not reach (p. 29) — the
+   * engine resolves it to nothing at all: `range === "long" && !ranged`
+   * returns before any damage.
+   *
+   * Neither agent had ever read `view.combat.range`; a grep for it
+   * returned nothing. So the highest-scoring combat option was, in that
+   * position, worth zero — and worse, `lethal` was awarded on a strike
+   * that could not land, making a hand strike at long range the best
+   * thing on the list precisely when it was the emptiest.
+   *
+   * Below every real alternative, and deliberately NOT below `pass`: a
+   * strike must be chosen, so this only has to lose to the other strikes.
+   * It is the `declareBlock.wouldSucceed` rule one frame over — an option
+   * that cannot do the thing must not be priced as if it does.
+   */
+  strikeUnreachable: number;
+  /**
+   * Maneuvering to CLOSE the range, when the striker cannot reach.
+   *
+   * A maneuver is how you change the range (p. 29) and it was priced at
+   * a flat `playCard` beside "burn a blood for intercept" — two things
+   * that have nothing to do with each other. Worth roughly what the
+   * strike it enables is worth, and this VARIES across the option list
+   * (the maneuver and the strike are different options in the same
+   * decision), so it is the shape §8 says a term must have to matter.
+   */
+  maneuverToClose: number;
+  /**
+   * Maneuvering to OPEN the range, when you are the one who can shoot.
+   *
+   * The mirror of `maneuverToClose`, and it is a real VTES play rather
+   * than a curiosity: a ranged strike works at any range (p. 30) and a
+   * hand strike does not, so a minion holding a gun is strictly better
+   * off at long range against a minion holding nothing.
+   *
+   * Smaller than closing, because closing rescues a strike that would
+   * otherwise do nothing, while opening only denies the opponent theirs —
+   * and this policy cannot see whether the opponent has a gun too, in
+   * which case opening buys nothing.
+   */
+  maneuverToOpen: number;
+  /**
+   * A weapon strike that REACHES, chosen at long range.
+   *
+   * Above `playCard`, which is what every ability was worth before: the
+   * bot preferred its gun at long range only because the hand strike had
+   * been penalised, so it was choosing by elimination. This is the
+   * positive reason.
+   */
+  strikeRangedAtLong: number;
   dodgeWhenLosing: number;
   pressToFinish: number;
   pressWhenLosing: number;
-  /** Voting with the referendum you called, against everyone else's. */
+  /**
+   * A small bias toward your OWN referendum passing — you paid a card and
+   * an action for it, so a genuinely neutral one should still pass.
+   *
+   * It used to be the whole vote policy, together with
+   * `voteAgainstOthers`, and the pair were named for a condition —
+   * "is this MY referendum" — that **nothing in scope could evaluate**,
+   * because `PlayerView` did not project the referendum frame. So the
+   * code was `inFavor ? 6 : 4` unconditionally and the bots voted FOR
+   * everything: 70 for, 0 against, over 20 games
+   * (docs/ai-decision-profile-2026-09-18.md).
+   *
+   * Now it is what its name says, and it is a TIE-BREAK rather than the
+   * decision: the pool arithmetic below outranks it.
+   */
   voteOwn: number;
+  /**
+   * The prior on a RIVAL's referendum whose pool effect this policy
+   * cannot price — an "other" referendum, or one whose terms name no
+   * seats (docs/ai-vote-scoring-design.md §3).
+   *
+   * Someone paid a card and an action for it, so it is probably good for
+   * them and they are probably not you. That is a weak argument and it is
+   * deliberately a weak weight; it exists so the bots do not simply
+   * abstain from every title grant, which is what a pure
+   * pool-arithmetic scorer would do.
+   */
   voteAgainstOthers: number;
+  /**
+   * What a point of pool moving ONTO a seat is worth to you, by that
+   * seat's relation (src/ai/seats.ts). Positive means "I want this".
+   *
+   * The signs are the game rather than a preference: pool on you is your
+   * life (p. 4), pool on your prey is what you must remove to score, and
+   * pool on your predator is what they will bleed you with. Cross-table
+   * pool is somebody else's problem, and priced like it.
+   *
+   * These are what make a vote decision a real fork: the two options
+   * differ in DIRECTION, so a term that reads the referendum necessarily
+   * takes different values on them — which is exactly the condition
+   * `richer-options-design.md` §8 says a new term must meet, and the one
+   * `blockPressure` and `bleedPressure` structurally could not.
+   */
+  votePoolMe: number;
+  votePoolPrey: number;
+  votePoolPredator: number;
+  votePoolCross: number;
+  /**
+   * A referendum that would take a seat to ZERO POOL.
+   *
+   * Ousting your prey pays twice over and the engine says so:
+   * `processOusts` reads the predator before adjacency is rewritten and
+   * awards them a victory point (p. 44) **and 6 pool** (p. 36),
+   * whatever caused the oust. So a referendum that finishes your prey is
+   * not merely progress — it IS the point, and it is worth roughly what
+   * a lethal bleed is worth.
+   *
+   * There is no gradient below the cliff, for the reason §8 measured: the
+   * seat's pool is the same for both sides of the fork, so only the
+   * threshold can change a decision.
+   */
+  voteOustsPrey: number;
+  voteOustsPredator: number;
+  voteOustsCross: number;
+  /**
+   * Paying a cost in BLOOD rather than in POOL, when the choice is
+   * offered (Smiling Jack's unlock toll: "burn 1 pool, or 1 blood from a
+   * vampire").
+   *
+   * Pool is your life and the game is won by removing other people's
+   * (p. 4); blood is fuel. So blood first — unless the vampire cannot
+   * spare it, which is the guard below.
+   *
+   * This is the single commonest choice frame in real games: **53 of the
+   * 106 answerable choice decisions over 40 games**, every one of them a
+   * genuine pool-versus-blood fork, and every one of them previously
+   * decided by the seeded tie-break.
+   */
+  choicePayBlood: number;
+  /**
+   * Paying blood from a vampire who has little left.
+   *
+   * "A vampire with no blood left to mend goes to torpor" (p. 31), a
+   * vampire at 0 blood MUST hunt (p. 21), and one at 1 cannot pay the
+   * next toll. The same judgement `scoreBlock` already makes about a
+   * nearly-empty blocker, made in the one other place it matters.
+   */
+  choicePayBloodEmpty: number;
+  /**
+   * Discarding the card you can most afford to lose, per REDUNDANT copy —
+   * copies the deck was BUILT with, plus copies still in your hand.
+   *
+   * A discard-down (p. 7) is 45 of those 106 decisions and was answered
+   * in offered order. This scores what the policy can legitimately know:
+   * the owner's ruling of 2026-09-06 gives an agent its own deck
+   * COMPOSITION, so "how many more of these will I see" is arithmetic a
+   * player at a table does all the time.
+   *
+   * It is deliberately NOT a judgement about what the card DOES. That
+   * would need a table of card names, which is the failure mode every
+   * doc in this set refuses — and the projection gives a card in hand as
+   * `{id, name}` with no traits, so the policy could not make one
+   * honestly even if it wanted to.
+   */
+  choiceDiscardRedundant: number;
+  /** A blood hunt burns a VAMPIRE, not pool (p. 35), so it is priced by
+   *  whose vampire it is rather than through `perSeat`. */
+  voteBurnMyMinion: number;
+  voteBurnTheirMinion: number;
+  /**
+   * Per point of BLOOD a cast costs — Alexander Silverson's toll on
+   * voting against, or a vote bought with blood (Mob Rule, Rant!).
+   *
+   * The policy read `o.toll` nowhere at all before this, so it would
+   * happily burn blood to add votes to a referendum that was going to
+   * pass anyway. Blood is fuel rather than life, so this is smaller than
+   * a point of pool — but it is not free, and a vampire at 1 blood
+   * cannot pay tolls or mend (p. 31).
+   */
+  voteTollCost: number;
   /** Taking the Edge is nearly free pool. */
   gainEdge: number;
   /** Announcing a withdrawal (p. 38). Offered only once the library is
@@ -230,6 +438,8 @@ export const DEFAULT_WEIGHTS: Weights = {
   blockHunt: 0,
   blockRescue: 4,
   blockCardEffect: 3,
+  blockPolitical: 7,
+  blockActorRelation: 0,
   blockOther: 1,
   blockOutmatched: -6,
   playCard: 2,
@@ -280,11 +490,28 @@ export const DEFAULT_WEIGHTS: Weights = {
   selfOustGuard: -1000,
   strikeLethal: 12,
   strikeDamage: 2,
+  strikeUnreachable: -2,
+  maneuverToClose: 4,
+  maneuverToOpen: 2.5,
+  strikeRangedAtLong: 5,
   dodgeWhenLosing: 6,
   pressToFinish: 5,
   pressWhenLosing: -4,
-  voteOwn: 6,
-  voteAgainstOthers: 4,
+  voteOwn: 2,
+  voteAgainstOthers: 1.5,
+  votePoolMe: 1,
+  votePoolPrey: -1,
+  votePoolPredator: -0.6,
+  votePoolCross: -0.2,
+  voteOustsPrey: 25,
+  voteOustsPredator: 6,
+  voteOustsCross: 2,
+  voteBurnMyMinion: -20,
+  voteBurnTheirMinion: 6,
+  voteTollCost: 1.5,
+  choicePayBlood: 1.5,
+  choicePayBloodEmpty: -4,
+  choiceDiscardRedundant: 0.4,
   gainEdge: 5,
   withdraw: 12,
   discard: -1,
@@ -306,14 +533,6 @@ function nextInt(rng: Rng, bound: number): number {
   x ^= x << 5;
   rng.rngState = x | 0;
   return Math.abs(x) % Math.max(1, bound);
-}
-
-/** Who is whose prey, from the seating order in the view. */
-function preyOf(view: PlayerView, seat: SeatId): SeatId | null {
-  const live = view.seats.filter((s) => !s.ousted);
-  const i = live.findIndex((s) => s.id === seat);
-  if (i < 0 || live.length < 2) return null;
-  return live[(i + 1) % live.length]!.id;
 }
 
 function seatOf(view: PlayerView, id: SeatId) {
@@ -423,9 +642,7 @@ export class HeuristicAgent implements Agent {
         return this.scorePress(o, view, me);
 
       case "castVote":
-        // Vote with your own referendum, against everybody else's. The
-        // engine has already worked out that this source may cast.
-        return (o.inFavor ? w.voteOwn : w.voteAgainstOthers) + o.count * 0.5;
+        return this.scoreVote(o, dp, view, me);
 
       case "playCard":
         return this.scorePlay(o, dp, view, me);
@@ -451,13 +668,22 @@ export class HeuristicAgent implements Agent {
       case "diablerizeOffer":
         return w.diablerize;
 
-      case "useEntryAction":
       case "useAbility":
+        // A WEAPON THAT REACHES, at a range where hands do not. The
+        // engine says which abilities are ranged strikes, so this is a
+        // positive reason to pick the gun rather than the leftover after
+        // the hand strike was penalised.
+        if (o.strikeReaches && view.combat?.range === "long") return w.strikeRangedAtLong;
+        return w.playCard;
+
+      case "useEntryAction":
         // An ability of a card already in play costs nothing to try and
         // is usually why the card is there.
         return w.playCard;
 
       case "useManeuver":
+        return this.scoreManeuver(o, view);
+
       case "preventCredit":
       case "burnForIntercept":
       case "burnForUnlock":
@@ -472,25 +698,95 @@ export class HeuristicAgent implements Agent {
         // Withdrawing is rarely right for a policy this simple.
         return -1;
 
-      case "answerChoice":
       case "chooseTerms":
-        // WHICH answer still goes in offered order — reading them means
-        // parsing card text, which would be a second model of the pool.
-        //
-        // But whether to answer AT ALL was decided wrongly and in one
-        // direction: this scored 0 against `pass` at 0.5, and declining an
-        // optional ChoiceFrame IS a plain pass — so the AI turned down
-        // **every optional payoff in the game**. Those frames are how a
-        // long list of cards deliver what they are for (Cave of Apples,
-        // Dead Pool, Hunting the Beast, the rush-outcome riders), and they
-        // are raised by a card their own controller has already paid for.
-        //
-        // A frame that is NOT optional has no pass to lose to, so this
-        // changes nothing there — including the ones that are a cost
-        // addressed to a victim (an unlock toll, the p. 7 discard-down),
-        // where every answer is bad and one must be taken anyway.
-        return w.answerChoice;
+        // WHERE TO AIM IT. The caller used to answer this in offered
+        // order, so a bot that landed Parity Shift chose its victim by
+        // coin flip — and terms are the PAYLOAD, chosen on success only
+        // (p. 25's exception, p. 27), after the card, the action and the
+        // referendum have all been paid for.
+        return this.scoreTerms(o, view, me);
+
+      case "answerChoice":
+        return this.scoreChoice(o, view, me);
+
     }
+  }
+
+  /**
+   * WHICH answer to a choice frame (docs/ai-answer-choice-design.md).
+   *
+   * Two families, and they are the two that actually occur — measured
+   * over 40 games, 98 of the 106 answerable choice decisions are one or
+   * the other:
+   *
+   *  - **53 are a COST with a currency** (Smiling Jack's unlock toll:
+   *    "burn 1 pool, or 1 blood from a vampire");
+   *  - **45 are a discard-down** (p. 7).
+   *
+   * Everything else keeps `answerChoice` and falls to the seeded
+   * tie-break. THAT FALLBACK IS LOAD-BEARING and must never become 0:
+   * declining an optional choice frame is a plain `pass`, and when this
+   * scored 0 against `pass` at 0.5 the AI turned down **every optional
+   * payoff in the game** — Cave of Apples, Dead Pool, Hunting the Beast,
+   * the rush-outcome riders. The deltas below are added to it rather than
+   * replacing it, so that fix survives.
+   *
+   * No card text is read. The scorer is total over params it does not
+   * recognise, because a key means different things on different cards —
+   * the trap that ate a first draft of the referendum terms
+   * (docs/ai-referendum-view-design.md §5.1).
+   */
+  private scoreChoice(
+    o: Extract<LegalOption, { kind: "answerChoice" }>,
+    view: PlayerView,
+    me: SeatId,
+  ): number {
+    const w = this.w;
+    const base = w.answerChoice;
+
+    // A COST, with a choice of currency. Pool is life (p. 4); blood is
+    // fuel — so blood, unless the vampire cannot spare it.
+    const pay = o.params["pay"];
+    if (pay === "pool") return base;
+    if (pay === "blood") {
+      const payer = o.params["pick"] ? findMinion(view, o.params["pick"]) : null;
+      // A derived read must be TOTAL: the named vampire can have left
+      // play between the frame opening and this decision.
+      if (!payer) return base;
+      // "A vampire with no blood left to mend goes to torpor" (p. 31) and
+      // one at 0 MUST hunt (p. 21). Taking the last blood is not a saving.
+      if (payer.m.blood <= 1) return base + w.choicePayBloodEmpty;
+      return base + w.choicePayBlood;
+    }
+
+    // A DISCARD, or any choice that names one of my cards: shed the most
+    // redundant one.
+    //
+    // `deckList` is the deck AS BUILT, not what is left in it — it is not
+    // decremented as cards are drawn, and `search.ts` has to subtract the
+    // ash heap and the table to get a remainder. Copies-as-built is a
+    // deliberately cruder signal and the right one here: it is monotone
+    // with what remains, it needs no second reconstruction of the deck,
+    // and "I built four of these" is exactly the reason one of them is
+    // cheap to lose.
+    const mine = seatOf(view, me);
+    const hand = Array.isArray(mine?.hand) ? mine.hand : [];
+    // The engine backfills the card's NAME where it can — but a
+    // discard-down names the card by INSTANCE ID in `params.card`, and
+    // measured over 40 games that is the form 45 of 45 of them take, so
+    // reading only `o.card` fired on none of them. Resolve the id against
+    // the hand, which the viewer may read in full (p. 7).
+    const name = o.card ?? hand.find((c) => c.id === o.params["card"])?.name;
+    if (name) {
+      const built = (mine?.deckList?.library ?? []).filter((n) => n === name).length;
+      const inHand = hand.filter((c) => c.name === name).length;
+      // −1 so a singleton scores 0 rather than a bonus: the term is about
+      // REDUNDANCY, and one copy is not redundant.
+      const redundancy = Math.max(0, built + inHand - 1);
+      return base + redundancy * w.choiceDiscardRedundant;
+    }
+
+    return base;
   }
 
   /**
@@ -610,6 +906,226 @@ export class HeuristicAgent implements Agent {
     return w.bleedNonPrey;
   }
 
+  /**
+   * HOW TO VOTE (docs/ai-vote-scoring-design.md).
+   *
+   * Price the referendum, then take the side of the price. The bots used
+   * to vote FOR everything — 70 of 70 over 20 games, including
+   * referendums that burned their own pool — because the weights were
+   * named for a condition nothing in scope could evaluate.
+   *
+   * `value` is "how much I want this to pass", so the two sides of the
+   * fork are `+value` and `-value` and the argmax picks the side. That is
+   * the structural property §8 demands and the reason this is worth
+   * building where a pressure gradient was not.
+   */
+  private scoreVote(
+    o: Extract<LegalOption, { kind: "castVote" }>,
+    dp: DecisionPoint,
+    view: PlayerView,
+    me: SeatId,
+  ): number {
+    const w = this.w;
+    const ref = view.referendum;
+    const cost = (o.toll ?? 0) * w.voteTollCost;
+
+    // NEVER PAY INTO A SETTLED REFERENDUM. "More for than against passes,
+    // ties fail" (p. 28) — and the engine has already worked out that no
+    // combination of remaining sources changes it. A blood toll or a
+    // bought vote here buys nothing that exists.
+    //
+    // Gates the COST only, never the direction: a hand nobody can see can
+    // still grant votes, so `decided` has a known false-positive mode and
+    // must not be trusted with anything but money
+    // (docs/ai-vote-economy-design.md §4).
+    if (o.decided && cost > 0) return w.pass - 1;
+
+    // No referendum projected (an older view, or a granted referendum
+    // that declared nothing): fall back to the old prior rather than to
+    // zero, so the bots still take part.
+    if (!ref) return (o.inFavor ? w.voteOwn : w.voteAgainstOthers) + o.count * 0.5 - cost;
+
+    const value = this.referendumValue(ref, view, me);
+
+    // A DIRECTED GRANT can only be cast one way — "+N votes AGAINST the
+    // referendum" (Protected District) is bucketed by direction and may
+    // only be spent that way (docs/polling-votes-design.md §3). So this
+    // is not a fork at all: it is cast-or-decline, and scoring it as one
+    // half of a fork would compare it against `pass` by accident.
+    //
+    // Found by a test rather than by reading: 30 of 31 vote decisions on
+    // the politics table fork, and the one that does not is a grant
+    // (docs/ai-vote-scoring-design.md §2.1).
+    const sameSource = dp.options.filter(
+      (x): x is Extract<LegalOption, { kind: "castVote" }> =>
+        x.kind === "castVote" && x.source === o.source,
+    );
+    const oneWay = !sameSource.some((x) => x.inFavor !== o.inFavor);
+    const wanted = o.inFavor ? value : -value;
+    if (oneWay) {
+      // Cast it only if it pushes the way we want; otherwise leave the
+      // source unspent, which is a real option and costs nothing.
+      return wanted > 0 ? wanted + o.count * 0.5 - cost : w.pass - 1;
+    }
+    return wanted + o.count * 0.5 - cost;
+  }
+
+  /**
+   * How much this seat wants the referendum to PASS. Positive means yes.
+   *
+   * Everything here is read off the projection, which carries only what
+   * is face up at the table: who called it, what it declared, and which
+   * seats its terms named.
+   */
+  private referendumValue(
+    ref: NonNullable<PlayerView["referendum"]>,
+    view: PlayerView,
+    me: SeatId,
+  ): number {
+    const w = this.w;
+
+    // A BLOOD HUNT burns a vampire, not pool (p. 35), so `perSeat` is the
+    // wrong instrument entirely — the question is whose vampire it is.
+    if (ref.variant === "bloodHunt") {
+      const target = ref.bloodHuntTarget ? findMinion(view, ref.bloodHuntTarget) : null;
+      if (!target) return 0;
+      return target.seat === me ? w.voteBurnMyMinion : w.voteBurnTheirMinion;
+    }
+
+    let value = 0;
+    const perSeat = ref.perSeat;
+    if (perSeat) {
+      for (const [seat, delta] of Object.entries(perSeat)) {
+        // `delta` is signed: positive means that seat GAINS pool.
+        value += delta * this.poolWeight(view, me, seat);
+        // The cliff. A seat this would take to zero is ousted, and the
+        // seat that profits is their PREDATOR — 1 victory point and 6
+        // pool (p. 44, p. 36), whoever caused it.
+        const pool = seatOf(view, seat)?.pool ?? 0;
+        if (delta < 0 && pool + delta <= 0) {
+          value += this.oustWeight(view, me, seat);
+        }
+      }
+    }
+
+    // Nothing priceable — a title grant, or a card that charges the table
+    // from the board rather than from its terms. Fall back to the prior:
+    // mine is probably good for me, theirs is probably good for them.
+    if (value === 0) {
+      value += ref.caller === me ? w.voteOwn : -w.voteAgainstOthers;
+    } else if (ref.caller === me) {
+      // A tie-break, not a decision — it must never outweigh the pool
+      // arithmetic, which is why it is small and added rather than
+      // replacing anything. The bot CAN vote against its own referendum
+      // when the terms turned out badly, which is a real VTES play.
+      value += w.voteOwn * 0.25;
+    }
+    return value;
+  }
+
+  /**
+   * WHERE TO AIM YOUR OWN REFERENDUM
+   * (docs/ai-referendum-terms-design.md).
+   *
+   * Reads the deltas the engine resolved onto the option — no parsing of
+   * `params` here, deliberately. The same keys carry opposite signs on
+   * different cards, so a scorer that parsed them would aim a burn at its
+   * own prey on one card and a gift at it on another.
+   *
+   * **The whole option list is ONE referendum**, so the polarity, the
+   * card and the caller are constant across it — by the
+   * `richer-options-design.md` §8 law only what VARIES can change the
+   * choice, and what varies is exactly which seats the option names.
+   * That is why this term works where a pressure gradient did not.
+   *
+   * An option the engine could not price (a clan, a location, a minion,
+   * a title) scores at the old flat value and falls to the seeded
+   * tie-break — which is the previous behaviour, kept on purpose so an
+   * unpriceable card is no worse off than it was.
+   */
+  private scoreTerms(
+    o: Extract<LegalOption, { kind: "chooseTerms" }>,
+    view: PlayerView,
+    me: SeatId,
+  ): number {
+    const w = this.w;
+    if (!o.perSeat) return w.answerChoice;
+    let value = w.answerChoice;
+    for (const [seat, delta] of Object.entries(o.perSeat)) {
+      value += delta * this.poolWeight(view, me, seat);
+      // Aiming a referendum at a seat it would OUST is the best a
+      // political action ever does — and at yourself, the worst.
+      const pool = seatOf(view, seat)?.pool ?? 0;
+      if (delta < 0 && pool + delta <= 0) value += this.oustWeight(view, me, seat);
+    }
+    return value;
+  }
+
+  /**
+   * WHICH RANGE SUITS THIS MINION (docs/ai-combat-range-design.md §5.1).
+   *
+   * A ranged strike works at any range and a hand strike only at close
+   * (p. 30), so the question is not "close is good" but "which of us is
+   * armed for the range we would end up at":
+   *
+   *  - **no reach, and we are at LONG** — our strike does nothing where
+   *    we stand. Closing rescues it, and this is the big one.
+   *  - **reach, and we are at CLOSE** — opening denies a bare-handed
+   *    opponent their strike while ours still works. Smaller, because it
+   *    only denies rather than rescues, and because this policy cannot
+   *    see whether they are armed too.
+   *  - otherwise the range already suits us, and moving is a cost.
+   *
+   * Below `pass` in that last case rather than merely cheap: "spend the
+   * credit because it is there" is how a bot maneuvers itself out of its
+   * own combat.
+   */
+  private scoreManeuver(
+    o: Extract<LegalOption, { kind: "useManeuver" }>,
+    view: PlayerView,
+  ): number {
+    const w = this.w;
+    const long = view.combat?.range === "long";
+    const armed = o.rangedStrikeAvailable === true;
+    if (long && !armed) return w.maneuverToClose;
+    if (!long && armed) return w.maneuverToOpen;
+    return w.pass - 1;
+  }
+
+  /** What a point of pool moving onto `seat` is worth to `me`. */
+  private poolWeight(view: PlayerView, me: SeatId, seat: SeatId): number {
+    const w = this.w;
+    switch (relationTo(view, me, seat)) {
+      case "me":
+        return w.votePoolMe;
+      case "prey":
+        return w.votePoolPrey;
+      case "predator":
+        return w.votePoolPredator;
+      case "cross":
+        return w.votePoolCross;
+    }
+  }
+
+  /** What ousting `seat` is worth to `me`. */
+  private oustWeight(view: PlayerView, me: SeatId, seat: SeatId): number {
+    const w = this.w;
+    switch (relationTo(view, me, seat)) {
+      // Ousting yourself dominates everything, exactly as it does
+      // everywhere else in this file.
+      case "me":
+        return w.selfOustGuard;
+      case "prey":
+        return w.voteOustsPrey;
+      // Good — the pressure on us stops — but their predator takes the
+      // victory point, not us.
+      case "predator":
+        return w.voteOustsPredator;
+      case "cross":
+        return w.voteOustsCross;
+    }
+  }
+
   private scoreBlock(
     o: Extract<LegalOption, { kind: "declareBlock" }>,
     view: PlayerView,
@@ -662,7 +1178,12 @@ export class HeuristicAgent implements Agent {
         case "leaveTorpor":
           return w.blockRescue;
         case "cardEffect":
-          return w.blockCardEffect;
+          // WHAT THE CARD IS, which the projection now says. Only one
+          // distinction is drawn, and only one is safe to draw without a
+          // table of card names: a political action's success calls a
+          // referendum, and stopping the action is the cheapest way there
+          // is to stop the referendum.
+          return act.political ? w.blockPolitical : w.blockCardEffect;
         // A bleed aimed at somebody else. Stopping it protects a player
         // we are not trying to protect, and costs us the blocker.
         case "bleed":
@@ -670,6 +1191,21 @@ export class HeuristicAgent implements Agent {
       }
     };
     let score = worthStopping() - toll;
+
+    // WHOSE action it is. At 0 by default — live, unvalidated, and one
+    // flag away (see the weight). The actor is the same for every blocker
+    // in this decision, so by the §8 law it cannot choose BETWEEN
+    // blockers; what it can move is whether to block at all, which is a
+    // real fork against `pass`.
+    if (w.blockActorRelation !== 0) {
+      const byRelation: Record<string, number> = {
+        predator: 1,
+        prey: 0.4,
+        cross: -0.8,
+        me: 0,
+      };
+      score += w.blockActorRelation * (byRelation[relationTo(view, me, act.actingSeat)] ?? 0);
+    }
 
     // A bleed that would oust us must be stopped almost regardless of
     // what the combat costs.
@@ -711,9 +1247,18 @@ export class HeuristicAgent implements Agent {
     const losing =
       mine && foe ? power(foe) >= mine.blood : this.fragile(view, me);
 
+    // "A hand strike does not reach at long range" (p. 29) — the engine
+    // resolves it to nothing. Only the BARE hand strike is affected: a
+    // weapon's strike arrives as a `useAbility` option, never as a
+    // `chooseStrike`, so this cannot silently disarm a gun.
+    const unreachable = c?.range === "long";
+
     switch (o.strike) {
       case "hand":
-        return w.strikeDamage + (lethal ? w.strikeLethal : 0);
+        // Before the `lethal` bonus, not after: a strike that cannot land
+        // cannot be the killing blow, and awarding it there made a futile
+        // hand strike the best-scoring option on the list.
+        return unreachable ? w.strikeUnreachable : w.strikeDamage + (lethal ? w.strikeLethal : 0);
       case "dodge":
         // Dodging is right when the minion in the fight is the one at
         // risk — and pointless when our own strike would end it first.

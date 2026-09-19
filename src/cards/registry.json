@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-18T00:11:29.438Z",
+ "fetchedAt": "2026-09-18T13:44:44.285Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -119,6 +119,34 @@
     "sets": [
      "Lost Kindred",
      "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "100018": {
+   "card": {
+    "kind": "library",
+    "id": 100018,
+    "name": "Aching Beauty",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Toreador"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Put this card on a Toreador. If this Toreador is blocked, the blocking minion's controller burns 1 pool before block resolution.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/achingbeauty.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition",
+     "First Blood",
+     "2021 Promo Pack 3"
     ]
    },
    "supported": true
@@ -725,6 +753,29 @@
    },
    "supported": true
   },
+  "100101": {
+   "card": {
+    "kind": "library",
+    "id": 100101,
+    "name": "Artistically Inept",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Brujah"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master.\nPut this card on any ready Brujah. Toreador cannot attempt to block the actions of that vampire. This card may be burned by any Toreador as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/artisticallyinept.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
   "100104": {
    "card": {
     "kind": "library",
@@ -789,6 +840,29 @@
     "image": "https://static.krcg.org/card/asylumhuntingground.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100109": {
+   "card": {
+    "kind": "library",
+    "id": 100109,
+    "name": "Atonement",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "+1 stealth action. Requires a vampire with capacity 5 or less.\nPut this card on this vampire. This vampire gets +1 intercept and does not lock for blocking a vampire the same age or younger. Any vampire can burn this card as a Ⓓ action; Followers of Set get -1 stealth during that action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/atonement.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -1418,6 +1492,28 @@
    },
    "supported": true
   },
+  "100215": {
+   "card": {
+    "kind": "library",
+    "id": 100215,
+    "name": "Blood Trade",
+    "types": [
+     "Event"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Gehenna.\nBurn all boons. No more boons can be put in play. During each Methuselah's unlock phase, that Methuselah can move 1 blood from a vampire they control to a vampire controlled by another Methuselah.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bloodtrade.jpg",
+    "sets": [
+     "Gehenna",
+     "Echoes of Gehenna"
+    ]
+   },
+   "supported": true
+  },
   "100226": {
    "card": {
     "kind": "library",
@@ -1730,6 +1826,27 @@
      "Legacies of Blood",
      "Heirs to the Blood",
      "2023 Belgian Championship Promo"
+    ]
+   },
+   "supported": true
+  },
+  "100268": {
+   "card": {
+    "kind": "library",
+    "id": 100268,
+    "name": "Burden the Mind",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master.\nPut this card on any minion. While it is not this minion's turn, using an effect to unlock this minion or to allow this minion to block as if unlocked costs an additional pool. This minion may burn this card and unlock as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/burdenthemind.jpg",
+    "sets": [
+     "Lords of the Night"
     ]
    },
    "supported": true
@@ -2248,6 +2365,27 @@
    },
    "supported": true
   },
+  "100339": {
+   "card": {
+    "kind": "library",
+    "id": 100339,
+    "name": "Children of Osiris",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master.\nPut this card in play. Followers of Set do not unlock as normal. Each Follower of Set may burn 1 blood to unlock during each of his or her controller's unlock phases. This card may be burned by any vampire as a Ⓓ action; Followers of Set get -1 stealth when attempting that action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/childrenofosiris.jpg",
+    "sets": [
+     "Ancient Hearts"
+    ]
+   },
+   "supported": true
+  },
   "100354": {
    "card": {
     "kind": "library",
@@ -2446,6 +2584,28 @@
     "sets": [
      "Dark Sovereigns",
      "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100385": {
+   "card": {
+    "kind": "library",
+    "id": 100385,
+    "name": "Communal Haven: Cathedral",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master: location.\nYou may lock this card during your master phase to transfer equipment and/or move blood between any two ready Sabbat vampires you control.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/communalhavencathedral.jpg",
+    "sets": [
+     "Black Hand",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -3391,6 +3551,28 @@
    },
    "supported": true
   },
+  "100533": {
+   "card": {
+    "kind": "library",
+    "id": 100533,
+    "name": "Detection",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nPut this card on a Lasombra. The vampire with this card does not unlock as normal. During his or her controller's unlock phase, this vampire may burn 1 blood to unlock. This vampire cannot cast votes or ballots. He or she may burn this card as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/detection.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
   "100541": {
    "card": {
     "kind": "library",
@@ -4068,6 +4250,52 @@
    },
    "supported": true
   },
+  "100630": {
+   "card": {
+    "kind": "library",
+    "id": 100630,
+    "name": "Elysium: Sforzesco Castle",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nWhen a vampire you control blocks a Camarilla vampire, you may lock this card instead of locking the blocking vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/elysiumsforzescocastle.jpg",
+    "sets": [
+     "Gehenna",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "100631": {
+   "card": {
+    "kind": "library",
+    "id": 100631,
+    "name": "Elysium: The Arboretum",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nOnly usable when a Camarilla vampire you control is in combat with another Camarilla vampire. You may lock this card before range is determined to end combat. Any Camarilla vampire can call a referendum to burn this card as a +1 stealth political action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/elysiumthearboretum.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100632": {
    "card": {
     "kind": "library",
@@ -4273,6 +4501,29 @@
     "image": "https://static.krcg.org/card/esteem.jpg",
     "sets": [
      "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
+  "100666": {
+   "card": {
+    "kind": "library",
+    "id": 100666,
+    "name": "Eternal Vigilance",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+1 stealth action. Requires a ready archbishop, priscus, cardinal or regent.\nPut this card on the acting vampire. During an action, this Sabbat vampire can burn 1 blood to unlock and attempt to block. Burn this card if this vampire goes to torpor.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/eternalvigilance.jpg",
+    "sets": [
+     "Sabbat War",
+     "Third Edition",
+     "Heirs to the Blood"
     ]
    },
    "supported": true
@@ -4801,6 +5052,27 @@
     "sets": [
      "Final Nights",
      "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
+  "100736": {
+   "card": {
+    "kind": "library",
+    "id": 100736,
+    "name": "Firebrand",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires an anarch.\nIf this referendum is successful, put this card on the acting anarch. This anarch gets 1 additional vote during a political action. During your minion phase, this anarch can burn 1 blood to unlock a ready younger anarch. Burn this card if this anarch goes to torpor. An anarch may have only 1 Firebrand.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/firebrand.jpg",
+    "sets": [
+     "Anarchs"
     ]
    },
    "supported": true
@@ -5357,6 +5629,30 @@
    },
    "supported": true
   },
+  "100812": {
+   "card": {
+    "kind": "library",
+    "id": 100812,
+    "name": "Gather",
+    "types": [
+     "Action"
+    ],
+    "clans": [
+     "Gangrel"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Unique.\nPut this card in play, locked, and choose a younger Gangrel in your uncontrolled region. During the influence phase, you may lock this card to move that Gangrel from your uncontrolled region to your ready region, with any counters he or she has, unless that Gangrel would contest a vampire in play. Any vampire can burn this card as a Ⓓ action that costs 1 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/gather.jpg",
+    "sets": [
+     "Anarchs",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100817": {
    "card": {
     "kind": "library",
@@ -5812,6 +6108,31 @@
     "image": "https://static.krcg.org/card/heartofthecity.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "100906": {
+   "card": {
+    "kind": "library",
+    "id": 100906,
+    "name": "Heartblood of the Clan",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Banu Haqim"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique location.\nAny Assamite can add 1 blood to this card as an action. During your influence phase, you can move any amount of blood from this card to an Assamite in your uncontrolled region.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/heartbloodoftheclan.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -6395,6 +6716,27 @@
     "image": "https://static.krcg.org/card/kalisfang.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "101034": {
+   "card": {
+    "kind": "library",
+    "id": 101034,
+    "name": "Kaymakli Barrier",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Requires a ready vampire. Unique.\nⒹ Put this card on a younger ready vampire. You still control this card. This vampire cannot block undirected actions. Directed actions cost this vampire an additional blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/kaymaklibarrier.jpg",
+    "sets": [
+     "Black Hand"
     ]
    },
    "supported": true
@@ -9121,6 +9463,27 @@
    },
    "supported": true
   },
+  "101442": {
+   "card": {
+    "kind": "library",
+    "id": 101442,
+    "name": "Powerbase: Savannah",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Elysium.\nYou may lock any other unique location you control to end combat involving an acting vampire you control before range is chosen. Any vampire may steal this location for his or her controller as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/powerbasesavannah.jpg",
+    "sets": [
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
   "101444": {
    "card": {
     "kind": "library",
@@ -11216,6 +11579,28 @@
    },
    "supported": true
   },
+  "101820": {
+   "card": {
+    "kind": "library",
+    "id": 101820,
+    "name": "Social Ladder",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nPut this card on a ready vampire you control. During your influence phase, remove this vampire from the game and move all the blood counters from that vampire to an older vampire in your uncontrolled region.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/socialladder.jpg",
+    "sets": [
+     "Black Hand",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101821": {
    "card": {
     "kind": "library",
@@ -11258,6 +11643,31 @@
     "image": "https://static.krcg.org/card/soulburn.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "101839": {
+   "card": {
+    "kind": "library",
+    "id": 101839,
+    "name": "The Spawning Pool",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Nosferatu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nDuring your unlock phase, you may move 1 blood from a ready Nosferatu you control to this card. If a minion you control blocks a bleed against you, you may lock this card during the second round of the resulting combat to inflict 1 damage to the acting minion for each blood on the Spawning Pool. This damage cannot be prevented.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/spawningpoolthe.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -12072,6 +12482,29 @@
      "Sabbat",
      "Sabbat War",
      "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101987": {
+   "card": {
+    "kind": "library",
+    "id": 101987,
+    "name": "Tomb of Rameses III",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nWhen this card is played or the controller of this card changes, the controller chooses a vampire in his or her uncontrolled region. For each blood counter you transfer to the chosen vampire during your influence phase, move one counter from the blood bank to the Tomb. At the end of your influence phase, if the total number of counters on the chosen vampire and on the Tomb equals or exceeds that vampire's capacity, you may move the vampire to the ready region. Burn this card (and the counters on it) when this vampire leaves the uncontrolled region.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/tomboframesesiii.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Sabbat War",
+     "Final Nights"
     ]
    },
    "supported": true

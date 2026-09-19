@@ -19,6 +19,7 @@
 import { formatMatch, runMatch, type PolicySpec } from "../src/ai/bench.ts";
 import { DEFAULT_SEARCH_WEIGHTS, SearchAgent, type SearchWeights } from "../src/ai/search.ts";
 import { DEFAULT_WEIGHTS, HeuristicAgent, type Weights } from "../src/ai/heuristic.ts";
+import { PLAYSTYLES, PLAYSTYLES_LIST, isPlaystyle, type Playstyle } from "../src/ai/playstyles.ts";
 import { buildHandlerRegistry } from "../src/cards/effects/cards.ts";
 import { preconDeck, supportedPrecons } from "../src/ui/deckimport.ts";
 import { buildGame, validateDecks } from "../src/ui/decks.ts";
@@ -136,7 +137,28 @@ function main(): void {
   // slower per decision than a policy (it plays every candidate move), so
   // expect to want fewer `--deals` and a wider margin.
   const searchSpec = str("search");
-  const challenger: PolicySpec = searchSpec
+  // `--style stalker` puts a PLAYSTYLE in the challenger seat against the
+  // tuned default. The design doc promised a style was one line from
+  // being measurable, on the grounds that it is only a weight overlay;
+  // this is that line. `--against-style` does the same for the baseline,
+  // so two styles can be played off against each other.
+  const styleSpec = str("style");
+  const againstStyleSpec = str("against-style");
+  for (const [flag, value] of [
+    ["--style", styleSpec],
+    ["--against-style", againstStyleSpec],
+  ] as const) {
+    if (value !== null && !isPlaystyle(value)) {
+      console.error(`${flag}: unknown playstyle "${value}" — expected one of ${PLAYSTYLES_LIST.join(", ")}`);
+      process.exit(1);
+    }
+  }
+  const challenger: PolicySpec = styleSpec
+    ? {
+        name: styleSpec,
+        make: (s) => new HeuristicAgent({ seed: s, weights: PLAYSTYLES[styleSpec as Playstyle] }),
+      }
+    : searchSpec
     ? {
         name: `search(${searchSpec})`,
         make: (s) =>
@@ -153,12 +175,18 @@ function main(): void {
           make: (s) => new HeuristicAgent({ seed: s, weights: parseWeights(weightSpec) }),
         }
       : { name: "current default", make: (s) => new HeuristicAgent({ seed: s }) };
-  const baseline: PolicySpec = againstSpec
+  const baseline: PolicySpec = againstStyleSpec
     ? {
-        name: "against",
-        make: (s) => new HeuristicAgent({ seed: s, weights: parseWeights(againstSpec) }),
+        name: againstStyleSpec,
+        make: (s) =>
+          new HeuristicAgent({ seed: s, weights: PLAYSTYLES[againstStyleSpec as Playstyle] }),
       }
-    : { name: "current default", make: (s) => new HeuristicAgent({ seed: s }) };
+    : againstSpec
+      ? {
+          name: "against",
+          make: (s) => new HeuristicAgent({ seed: s, weights: parseWeights(againstSpec) }),
+        }
+      : { name: "current default", make: (s) => new HeuristicAgent({ seed: s }) };
 
   console.log(
     `mirror match: ${precon.set} / ${precon.name}, ${seatCount} seats\n` +
@@ -170,7 +198,7 @@ function main(): void {
       (searchSpec ? `\nchallenger: SEARCH agent (${searchSpec})` : "") +
       (weightSpec ? `\nchallenger weights: ${weightSpec}` : "") +
       (againstSpec ? `\nagainst:    ${againstSpec}` : "") +
-      (weightSpec || againstSpec || searchSpec
+      (weightSpec || againstSpec || searchSpec || styleSpec || againstStyleSpec
         ? ""
         : `\nCONTROL RUN: both sides are the default policy`),
   );

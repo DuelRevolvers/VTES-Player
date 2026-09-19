@@ -190,4 +190,27 @@ describe("regression: preventAll modes are enumerated at all", () => {
     ).toBe(true);
     void state;
   });
+
+  it("reports the damage actually stopped, not the preventAll sentinel", () => {
+    // "Prevent all" is compiled as Number.MAX_SAFE_INTEGER on the promise
+    // that the op clamps it; `preventDamage` did not, so the log read
+    // "prevents 9007199254740991 damage". The AMOUNT is the assertion —
+    // every other prevention test only asks whether the event exists,
+    // which is exactly why this survived.
+    const { state, engine } = intoStrikes(["Touch of Valeren"], { for: "superior" });
+    const before = find(state, "V1").blood;
+    runTrace(engine, [["Alice", "strike:hand"], ["Bob", "strike:hand"]]);
+    const dp = engine.decision()!;
+    const opt = dp.options.find((o) => o.id.startsWith("play:Touch of Valeren:basic"));
+    expect(opt).toBeDefined();
+    runTrace(engine, [["Alice", opt!.id]]);
+    drainCombat(engine, state);
+
+    const prevented = state.eventLog.filter((e) => e.type === "DamagePrevented");
+    expect(prevented).toHaveLength(1);
+    // One hand strike, so exactly one point was pending and one stopped.
+    expect(prevented[0]).toMatchObject({ minion: "V1", amount: 1 });
+    // And the mechanics still hold: no damage landed, no blood mended.
+    expect(find(state, "V1").blood).toBe(before);
+  });
 });

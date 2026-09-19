@@ -128,14 +128,15 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 250 test files, 2539 tests**, with `npm run typecheck`,
+**Green baseline: 267 test files, 2738 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
 **Saved games and default bot names** landed 2026-09-09
 (`docs/saved-games-design.md`): named slots plus a **Last game** slot the
 table rewrites every turn, loadable from there or from a `.json` file. A
-save records **which seats were bots** (`SavedGame.botSeats`).
+save records **which seats were bots** (`SavedGame.botSeats`) **and how
+each one was playing** (`botPlaystyles`, added 2026-09-19).
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 
@@ -190,6 +191,185 @@ save records **which seats were bots** (`SavedGame.botSeats`).
    their hidden cards and is always a guess, because deck lists are
    private.
 
+   **Weight-tweaking being exhausted is not the same as the policy being
+   finished.** Eleven changes were designed on 2026-09-18 and **none are
+   built** — index and build order in
+   `docs/ai-improvements-roadmap-2026-09-18.md`. They are about
+   INFORMATION the projection throws away, not about weights: the
+   headline is that `viewFor` never projected the referendum frame, so
+   the bots vote **FOR 70, AGAINST 0** — measured — including on
+   referendums that oust them. Plus **bot playstyles** (owner request,
+   same date): Balanced / Bruiser / Turtle / Politician, attached to the
+   precons, overridable per bot in Profile, never labelled in the UI.
+   **The three gating decisions were TAKEN on 2026-09-18** (roadmap
+   §"The three gating decisions"): a referendum primitive **declares
+   whether it burns or gains**; the styles are **Balanced / Bruiser /
+   Turtle / Politician**, fixed as stored values; a **save records each
+   bot's playstyle**. Nothing gates the build order now.
+
+   **Item 0 is BUILT (0.10.66):** `config/playtest-decks-politics.json`
+   (Toreador / Ventrue / Nosferatu, generated from the precons),
+   `npm run simulate:politics`, and `tests/ai/politics-table.test.ts`.
+   **4.5× the referendum density** of the default table, which is
+   untouched and still the default so old measurements stay comparable.
+   It immediately falsified a claim in its own design doc — see
+   `ai-vote-scoring-design.md` §2.1.
+
+   **Item 1 is BUILT (0.10.67):** `PlayerView.referendum` is projected
+   like `action`/`combat`, and **every political action declares which
+   way it moves pool** (`referendumPolarity` in `compile.ts` is a
+   `Record` over the `ref*` kinds, so a new primitive is a compile error
+   until it declares; `CardSpec.referendumEffect` covers the bespoke
+   tail). A generic per-seat parse of the TERMS was built and **cut** —
+   Parity Shift takes pool off the *chosen* seat and gives it to the
+   *allocated* ones, the reverse of an allocate-burn, so the same key
+   carries opposite signs on different cards
+   (`ai-referendum-view-design.md` §5.1). Signing the pool needs per-card
+   knowledge and moved to item 3.
+
+   **Item 2 is BUILT (0.10.68):** `src/ai/seats.ts` is the one ring walk
+   — `preyOf`, `predatorOf`, `relationTo`, `relations` — structural over
+   both a `PlayerView` and a `GameState`, so `heuristic.ts` and
+   `search.ts` can no longer drift. **The policy has a `predatorOf` for
+   the first time.** No behaviour change; it is measured through its
+   consumers.
+
+   **Item 3 is BUILT (0.10.69) — the bots vote properly now.** The 70/0
+   is gone: 20 games gives **FOR 26 / AGAINST 44** on the default table
+   and **FOR 82 / AGAINST 60** on the politics one, plus directed grants
+   left unspent when they push the wrong way. The scorer prices the
+   referendum by seat relation and takes the side of the price, with an
+   oust cliff that reads the NET delta (a card can name one seat as both
+   beneficiary and victim). **Limit worth knowing: only 9 of the 22
+   pool-moving political actions name seats in their TERMS**; the other
+   13 charge the table from the board and still fall back to a weak
+   prior (`ai-vote-scoring-design.md` §5.1).
+
+   **Item 4 is BUILT (0.10.70):** a bot now AIMS its own referendum
+   instead of answering the terms in offered order. The engine backfills
+   `chooseTerms.perSeat` centrally (the `answerChoice.card` treatment),
+   `resolvePerSeat` moved to `state.ts` so the view and the terms
+   decision share one parse, and `scoreTerms` reuses the vote scorer's
+   `poolWeight`/`oustWeight` so aiming and voting cannot disagree.
+   Measured: 15 of 16 terms decisions priced, aimed at the prey; the one
+   case that hits the caller is a heads-up table where the card forces
+   it.
+
+   **Item 5 is BUILT (0.10.71):** `VtesEngine.referendumDecided` answers
+   "can any remaining vote change this" from public information (p. 28,
+   ties fail), stamped on each vote as `castVote.decided`, and the policy
+   now reads `o.toll` — which it never did — refusing to pay into a
+   settled referendum. **One polling decision in five is already
+   settled.** But **no tolled vote exists in either deck**, so the cost
+   half is correct, tested and unreachable in a real game until a toll
+   card joins the politics table (`ai-vote-economy-design.md` §5.1).
+   **Item 6 is BUILT (0.10.72):** the AI reads `view.combat.range` for
+   the first time — a grep for it used to return nothing. **16% of strike
+   decisions happen at LONG range**, where a bare hand strike resolves to
+   nothing (p. 29) and used to score highest on the list, lethal bonus
+   included. It now loses to any alternative, and `useManeuver` is priced
+   by whether it CLOSES rather than at a flat `playCard`. **No engine
+   change was needed**: a weapon's strike arrives as a `useAbility`, so
+   every `chooseStrike` with `strike: "hand"` is the bare one
+   (`ai-combat-range-design.md` §5.1). Round-awareness in press was
+   **deliberately not built** — the round is identical across the press
+   options, so by the §8 law it cannot change an argmax.
+   **Item 7 is BUILT (0.10.73):** `view.action` now carries `cardName`
+   and a `political` flag, and a referendum is worth more to stop than a
+   plain action card. **But it is UNREACHABLE on these decks** — 0 of 45
+   political block decisions had a block that could succeed, because an
+   undirected action has +1 stealth (p. 22) and nothing in these decks
+   answers it. `blockCardEffect` was never reached either. The follow-up
+   is a deck with INTERCEPT in it, not a policy change
+   (`ai-block-action-value-design.md` §5.1). The actor-relation term (c)
+   ships at **0** on the `influenceUnlocks` precedent: live (flips 12% of
+   block decisions on one table, 0.3% on the other) but unvalidated.
+   **Item 8 is BUILT (0.10.74):** choice frames are no longer answered in
+   offered order. Two families are 98 of the 106 answerable choice
+   decisions in 40 games — Smiling Jack's toll (pool vs blood: blood
+   unless the vampire is at ≤1) and the p. 7 discard-down (shed the most
+   redundant card, using the agent's own deck composition). The
+   discard half **fired on 0 of 45 decisions at first**: it keyed off the
+   backfilled card NAME, and a discard-down names its card by INSTANCE ID
+   (`ai-answer-choice-design.md` §4.1). §3(c) is not built — 3 decisions
+   in 40 games, and the one needing a polarity the frame lacks.
+   **Item 9 is BUILT (0.10.75):** `SearchAgent` evaluates a vote at the
+   TALLY. `settle` did not count a referendum as in flight, so a cast
+   vote was valued *at the cast* and both directions looked identical.
+   **The project's first OPPONENT MODEL** (owner ruling 2026-09-19,
+   option c): other seats' polling decisions are modelled with the same
+   policy formula, from a state **already redacted for the searcher** —
+   so a modelled opponent is never better informed than the searcher, only
+   less. Scoped to votes only; `SearchAgent` is still guarded and not the
+   default, and **no strength claim is made**
+   (`ai-vote-search-horizon-design.md` §5.1).
+   **PLAYSTYLES ARE BUILT — SIX of them (0.10.80).** Balanced / Bruiser /
+   **Stalker** / Turtle / Politician / **Builder** as `Partial<Weights>`
+   overlays (`src/ai/playstyles.ts`). Stalker and Builder were added
+   after re-deriving the precon assignment from what cards DO (effect
+   families) rather than from card types: stealth-bleed is **seven**
+   decks, not one, and six precons are mostly PERMANENTS and fitted none
+   of the first four. Economy and damage-prevention were measured and
+   rejected as clusters (`ai-playstyles-design.md` §9.3);
+   `config/deck-playstyles.json` attaches one to each of the 32 precons;
+   **`src/ui/botagent.ts` is the ONE place a bot is built** — a grep for
+   `new HeuristicAgent` in `src/ui/` returns nothing. A dropdown beside
+   each bot-name box overrides it, defaulting to "Default" = the deck's.
+   **Nothing labels a deck with its style**, asserted structurally.
+   `balanced` is `{}`, so the feature ships inert. **No strength claim**:
+   no style has been benched (`ai-playstyles-design.md` §9.2).
+
+   **Item 10 (ash heap) is CLOSED as measured-and-declined (2026-09-19),
+   not skipped.** Its two proposed uses came out opposite ways: the terms
+   tie-break flips **0 of 15** ties (dead), the block term flips 6–21%
+   (live). It is still not built because **`PlayerView`'s ash heap is
+   `{id, name}` with no card types**, so the AI cannot classify a
+   discard without a registry — and putting one there is the second model
+   of the pool every doc refuses. Building it means either a registry in
+   `viewFor` or recording the type as a card enters the ash heap (the
+   `CardInstance.capacity` pattern). Not worth it for a 6% flip rate in a
+   function §8 measured as indifferent. **Revisit when a deck has real
+   intercept**, or when a second consumer wants types out of the ash heap
+   (`ai-ash-heap-reading-design.md` §5.1).
+
+   **THE WHOLE 2026-09-18 SET IS NOW RESOLVED** — items 0–9 built,
+   playstyles built, item 10 measured and declined.
+
+   **Both follow-ups done (0.10.77).** The politics table is now
+   generated from the precons **and then augmented**, so two rules that
+   were correct-but-unreachable can occur: Alexander Silverson ×3 (a vote
+   TOLL) took tolled vote decisions from **0 to 22 in 40 games**, and
+   Oluwafunmilayo ×3 plus intercept retainers took viable political
+   blocks from **0 of 45 to 2 of 41 — and the bot blocked both**, which
+   demonstrates `blockPolitical` rather than arguing it. The cards being
+   present is asserted statically (`ai-politics-bench-design.md` §7.3).
+
+   **Combat range finished off (0.10.79).** A weapon now declares whether
+   it REACHES (`weaponProfile.ranged`), the engine stamps it on the
+   strike option, and the bot takes a gun at long range for a positive
+   reason rather than by elimination. **`.44 Magnum` declared no weapon
+   profile at all** — the flagship gun was the one weapon that could not
+   say it reaches; fixed. Maneuvering now asks which range suits the
+   minion: close when it cannot reach, **open when it is holding a gun**,
+   stay otherwise (`ai-combat-range-design.md` §5.2).
+
+   **CANDIDATE ITEM, now CONTESTED BY EVIDENCE: "the policy never plays
+   its defensive permanents."** A permanent is scored at `playCard` (2)
+   against a bleed at `bleedPrey` (12+), so bots rarely employ retainers.
+   That was called a policy defect — but the **Builder** playstyle raises
+   exactly that valuation, plays **+41% to +61% more permanents** and
+   **does not win more** (`ai-playstyles-design.md` §9.4). Do not build
+   on the original claim without re-testing it.
+
+   **PLAYSTYLES ARE BENCHED (0.10.81), and none beats the default.**
+   `npm run bench -- --style <name> [--against-style <name>]`. Control is
+   a clean 0.000 VP. All five styles land INSIDE their margins on their
+   own decks — and **all five are negative** (−0.021 to −0.125), which is
+   a weak collective signal that hand-written styles are slightly worse
+   than a default that is four rounds of measurement deep. They change
+   BEHAVIOUR measurably; they do not change strength. Treat them as a
+   feel feature, not a strength feature.
+
 ---
 
 ## The lessons that keep paying (read these)
@@ -225,6 +405,11 @@ doc named beside it.
 - **A parenthetical often DESCRIBES existing behaviour** rather than
   asking for new behaviour. Building to it is how a re-entrancy bug gets
   written. Five instances.
+- **AN OPEN QUESTION PHRASED AS ACCOUNTING GETS AN ACCOUNTING ANSWER.**
+  "Per seat or per vampire — the tally is identical" never mentioned that
+  Protected District prints "votes AGAINST", so the sign-off could not
+  see it. Put the card's sentence in the question
+  (`polling-votes-design.md` §9).
 
 ### Tests that lie
 
@@ -541,6 +726,10 @@ file.
 
 - `npm run play` (server + browser) / `dev` / `build` / `preview` /
   `typecheck` / `test` / `test:watch`
+- `npm run simulate:politics` — the same, on the POLITICS table
+  (`--decks config/playtest-decks-politics.json`). Use it for anything
+  that touches referendums; the default table has almost no politics in
+  it (`docs/ai-politics-bench-design.md`).
 - `npm run simulate` — batch AI games (`-- --games 200 --seed 7
   --verbose`); exits non-zero if any game errors, so it doubles as a soak
   test
@@ -584,7 +773,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-162 files under `docs/`, one per mechanic that took a decision. **Read the
+182 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -605,7 +794,7 @@ dawn-operation, outside-combat, round-recurring-combat,
 combat-attachments, round-end, last-combat.
 
 **Actions and blocking:** lock-as-currency, buying-a-block, rush-actions,
-rush-outcome, granted-actions, granted-rush, block-restrictions,
+rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pay-to-unlock, lock-as-price, blood-and-gear,
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions.
@@ -624,7 +813,7 @@ table-rule-events, gehenna-taxes, discipline-masters, clan-sect,
 on-vampire-statics, conditional-statics, opposing-statics, counters,
 cost-sources, counter-sinks, play-cost, discipline-filtered,
 library-search, store-plays, ash-heap, pool-drain, unlock-tolls, stun,
-transfer-currency, temporary-hand-size, allies-retainers, destroyer-allies,
+transfer-currency, uncontrolled-graduation, temporary-hand-size, allies-retainers, destroyer-allies,
 vozhd-allies,
 retainer-wave, retainer-prices, retainer-upkeep, archetypes,
 combat-retainers, wraith-zombie, token-vampire, path-cards, diablerie,
@@ -635,10 +824,17 @@ remaining-mechanics-roadmap, one-off-sweep, library-audit,
 ledger-closeout, partial-support, card-status-by-set.
 
 **AI:** ai-v1-design, ai-bench-design, richer-options-design, ai-v2-design.
+**AI — the 2026-09-18 improvement set, all DESIGNED AND NOT BUILT:**
+`ai-improvements-roadmap-2026-09-18` is the index and the build order;
+`ai-decision-profile-2026-09-18` is the measurement they all cite. Then
+ai-politics-bench, ai-referendum-view, ai-seat-relationships,
+ai-vote-scoring, ai-referendum-terms, ai-vote-economy, ai-combat-range,
+ai-block-action-value, ai-answer-choice, ai-vote-search-horizon,
+ai-ash-heap-reading, ai-playstyles.
 
 **UI, net and shipping:** debug-ui, shell, saved-games, lobby,
 lobby-rework-2026-09-06, multiplayer, deck-import, fresh-game, game-log,
-futile-options, playtest-2026-09-05, table-ux-2026-09-11, pages,
+futile-options, playtest-2026-09-05, table-ux-2026-09-11, table-ux-2026-09-18, pages,
 cockatrice-lessons.
 
 **Archive:** `project-memory-archive-2026-09-07.md`.

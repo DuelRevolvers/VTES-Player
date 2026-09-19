@@ -360,6 +360,10 @@ const JUSTICARS: CardSpec[] = JUSTICAR_CLANS.map(([krcgId, clan]) => ({
   name: `${clan} Justicar`,
   cardType: "politicalAction" as const,
   bloodCost: 0,
+  // A title grant; no pool moves. On the FACTORY, so all eight declare —
+  // the Justicars are the family this project has already had to fix once
+  // for being edited one at a time (docs/justicars-design.md).
+  referendumEffect: "other" as const,
   unique: true,
   usable: [],
   // The grant itself is bespoke (`titleGrant`): the card is held aside
@@ -8609,8 +8613,15 @@ export const cardSpecs: CardSpec[] = [
         usable: ["bleedTargetsYou"],
         effects: [{ kind: "modifyBleed", amount: -3, limited: false }],
       },
-      // "+3 votes against" — modeled as a flexible grant (owner-approved).
-      { level: "basic", discipline: null, variant: "votes", effects: [{ kind: "modifyVotes", amount: 3 }] },
+      // "+3 votes AGAINST the referendum" — the only one of the ten
+      // modifyVotes cards whose text names a direction, and the direction is
+      // the whole point: it is a reaction played to stop the referendum.
+      {
+        level: "basic",
+        discipline: null,
+        variant: "votes",
+        effects: [{ kind: "modifyVotes", amount: 3, direction: "against" }],
+      },
     ],
   },
   // --- Legacy locations (docs/pool-widening-design.md §6, tranche 3
@@ -10633,6 +10644,554 @@ export const cardSpecs: CardSpec[] = [
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
 
+  // --- Moving blood and gear between minions
+  //     (docs/blood-and-gear-design.md) ---
+  {
+    // "Master: location. You may lock this card during your master phase to
+    //  transfer equipment and/or move blood between any two ready Sabbat
+    //  vampires you control."
+    //
+    // "AND/OR" with ONE lock: the option list offers both kinds and the lock
+    // is spent on whichever is taken, which is the honest reading of a
+    // single-lock card (docs/blood-and-gear-design.md §3).
+    krcgId: 100385,
+    name: "Communal Haven: Cathedral",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Communal Haven: Cathedral", "location"],
+      carryTransfer: {
+        window: "master",
+        lock: true,
+        who: { sect: "sabbat" },
+        blood: 1,
+        equipment: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. During your unlock phase, you may move 1
+    //  blood from a ready Nosferatu you control to this card. If a minion you
+    //  control blocks a bleed against you, you may lock this card during the
+    //  second round of the resulting combat to inflict 1 damage to the acting
+    //  minion for each blood on the Spawning Pool. This damage cannot be
+    //  prevented."
+    krcgId: 101839,
+    name: "The Spawning Pool",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["The Spawning Pool", "location"],
+      carryTransfer: {
+        window: "unlock",
+        who: { clan: "Nosferatu" },
+        blood: 1,
+        toCard: true,
+      },
+      blockedBleedPunish: { round: 2, perCounter: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Gehenna. Burn all boons. No more boons can be put in play. During each
+    //  Methuselah's unlock phase, that Methuselah can move 1 blood from a
+    //  vampire they control to a vampire controlled by another Methuselah."
+    //
+    // The blood clause is the odd one in this family: it moves blood ACROSS
+    // the table, and every Methuselah gets it in their own phase. The two
+    // boon clauses read the printed `boon` keyword (§5).
+    krcgId: 100215,
+    name: "Blood Trade",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: { barsBoons: true },
+      tags: ["event", "gehenna", "Blood Trade"],
+      carryTransfer: {
+        window: "unlock",
+        blood: 1,
+        crossSeat: true,
+        anySeat: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- The lock as a price (docs/lock-as-price-design.md) ---
+  {
+    // "Master: unique location. When a vampire you control blocks a Camarilla
+    //  vampire, you may lock this card instead of locking the blocking
+    //  vampire."
+    krcgId: 100630,
+    name: "Elysium: Sforzesco Castle",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: { lockInsteadOfBlocker: { sect: "camarilla" } },
+      tags: ["Elysium: Sforzesco Castle", "location", "elysium"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. Only usable when a Camarilla vampire you
+    //  control is in combat with another Camarilla vampire. You may lock this
+    //  card before range is determined to end combat. Any Camarilla vampire
+    //  can call a referendum to burn this card as a +1 stealth political
+    //  action."
+    //
+    // `combatEndGrant.sect` is Garibaldi's field verbatim: both combatants of
+    // the sect, one of them yours.
+    krcgId: 100631,
+    name: "Elysium: The Arboretum",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Elysium: The Arboretum", "location", "elysium"],
+      combatEndGrant: { sect: "camarilla" },
+      vulnerableTo: {
+        who: { kind: "vampire", sect: "camarilla" },
+        stealth: 1,
+        via: "politicalAction",
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. Elysium. You may lock any other unique
+    //  location you control to end combat involving an acting vampire you
+    //  control before range is chosen. Any vampire may steal this location
+    //  for his or her controller as a Ⓓ action."
+    //
+    // The price is ANOTHER card's lock, so this location stays unlocked and
+    // can do it again — as long as you have locations to spend.
+    krcgId: 101442,
+    name: "Powerbase: Savannah",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Powerbase: Savannah", "location", "elysium"],
+      combatEndGrant: { ownActing: true, lockOtherLocation: true },
+      vulnerableTo: { who: { kind: "vampire" }, outcome: "steal" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "+1 stealth action. Requires a vampire with capacity 5 or less. Put
+    //  this card on this vampire. This vampire gets +1 intercept and does not
+    //  lock for blocking a vampire the same age or younger. Any vampire can
+    //  burn this card as a Ⓓ action; Followers of Set get -1 stealth during
+    //  that action."
+    krcgId: 100109,
+    name: "Atonement",
+    cardType: "action",
+    // 2 blood, paid by the acting vampire — the same slip wave 66 made with
+    // Eternal Vigilance, caught by the same metadata cross-check.
+    bloodCost: 2,
+    poolCost: 0,
+    requiresMaxCapacity: 5,
+    permanent: {
+      where: "bearer",
+      statics: { intercept: 1, noLockForBlocking: { sameAgeOrYounger: true } },
+      tags: ["Atonement"],
+      vulnerableTo: {
+        who: { kind: "vampire" },
+        stealthFor: [{ clan: "Ministry", delta: -1 }],
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "actionStealth", amount: 1 }, { kind: "attachSelf" }],
+      },
+    ],
+  },
+
+  // --- Paying blood to unlock (docs/pay-to-unlock-design.md) ---
+  {
+    // "Master. Put this card on a Lasombra. The vampire with this card does
+    //  not unlock as normal. During his or her controller's unlock phase,
+    //  this vampire may burn 1 blood to unlock. This vampire cannot cast
+    //  votes or ballots. He or she may burn this card as a Ⓓ action."
+    //
+    // A hate card: "a Lasombra" names no controller, so it goes on somebody
+    // else's vampire, and the offer to buy the unlock back belongs to THEM.
+    krcgId: 100533,
+    name: "Detection",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { bearerDoesNotUnlock: true, cannotCastVotes: true },
+      tags: ["Detection"],
+      attach: { scope: "any", kind: "vampire", clan: "Lasombra" },
+      payToUnlock: { blood: 1, window: "unlock", who: "bearer" },
+      // "HE OR SHE may burn this card as a Ⓓ action" — the bearer alone.
+      vulnerableTo: { who: { bearerOnly: true } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Put this card in play. Followers of Set do not unlock as
+    //  normal. Each Follower of Set may burn 1 blood to unlock during each
+    //  of his or her controller's unlock phases. This card may be burned by
+    //  any vampire as a Ⓓ action; Followers of Set get -1 stealth when
+    //  attempting that action."
+    //
+    // The table-wide twin of Detection, from one play area. "Follower of
+    // Set" is the card's word; the registry's is Ministry.
+    krcgId: 100339,
+    name: "Children of Osiris",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 2,
+    permanent: {
+      where: "seat",
+      statics: { clanDoesNotUnlock: "Ministry" },
+      tags: ["Children of Osiris"],
+      payToUnlock: { blood: 1, window: "unlock", who: { clan: "Ministry" } },
+      vulnerableTo: {
+        who: { kind: "vampire" },
+        // The clan it taxes is the clan that finds it hardest to remove.
+        stealthFor: [{ clan: "Ministry", delta: -1 }],
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Requires an anarch. If this referendum is successful, put this card
+    //  on the acting anarch. This anarch gets 1 additional vote during a
+    //  political action. During your minion phase, this anarch can burn 1
+    //  blood to unlock a ready younger anarch. Burn this card if this anarch
+    //  goes to torpor. An anarch may have only 1 Firebrand."
+    krcgId: 100736,
+    name: "Firebrand",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresSect: ["anarch"],
+    permanent: {
+      where: "bearer",
+      statics: { votes: 1 },
+      tags: ["Firebrand"],
+      exclusiveKey: "Firebrand",
+      // The bearer pays, and the vampire who unlocks is somebody else.
+      payToUnlock: {
+        blood: 1,
+        window: "minion",
+        who: { sect: "anarch", youngerThanBearer: true },
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "refPutInPlay", onActor: true },
+          { kind: "attachSelf", burnWhenBearerLeavesReady: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a ready archbishop, priscus, cardinal or
+    //  regent. Put this card on the acting vampire. During an action, this
+    //  Sabbat vampire can burn 1 blood to unlock and attempt to block. Burn
+    //  this card if this vampire goes to torpor."
+    krcgId: 100666,
+    name: "Eternal Vigilance",
+    cardType: "action",
+    // The action costs the acting vampire 1 blood (KRCG's printed cost);
+    // the 1 blood the card's own ability asks for later is a separate price.
+    bloodCost: 1,
+    poolCost: 0,
+    requiresControlledTitle: ["archbishop", "priscus", "cardinal", "regent"],
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Eternal Vigilance"],
+      payToUnlock: { blood: 1, window: "action", who: "bearer", andBlock: true },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "attachSelf", burnWhenBearerLeavesReady: true },
+        ],
+      },
+    ],
+  },
+
+  // --- Taxing and barring a block from a card in play
+  //     (docs/block-taxes-design.md) ---
+  {
+    // "Put this card on a Toreador. If this Toreador is blocked, the
+    //  blocking minion's controller burns 1 pool before block resolution."
+    //
+    // `blockedPoolToll` is Terrifying Visage's static, printed here on a
+    // master with no other clause: the whole card is one existing field.
+    krcgId: 100018,
+    name: "Aching Beauty",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 2,
+    permanent: {
+      where: "bearer",
+      statics: { blockedPoolToll: { amount: 1 } },
+      tags: ["Aching Beauty"],
+      // "a Toreador" with no "you control": any Methuselah's, and the card
+      // answers to whoever played it (p. 16).
+      attach: { scope: "any", kind: "vampire", clan: "Toreador" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Put this card on any ready Brujah. Toreador cannot attempt
+    //  to block the actions of that vampire. This card may be burned by
+    //  any Toreador as a Ⓓ action."
+    krcgId: 100101,
+    name: "Artistically Inept",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    permanent: {
+      where: "bearer",
+      statics: { cannotBeBlockedBy: { clans: ["Toreador"] } },
+      tags: ["Artistically Inept"],
+      attach: { scope: "any", kind: "vampire", clan: "Brujah" },
+      // The counter-play is the clan the card shuts out, which is the
+      // card's own joke and a real gate: a table with no Toreador cannot
+      // remove it.
+      vulnerableTo: { who: { kind: "vampire", clan: "Toreador" } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Requires a ready vampire. Unique.
+    //  Ⓓ Put this card on a younger ready vampire. You still control this
+    //  card. This vampire cannot block undirected actions. Directed actions
+    //  cost this vampire an additional blood."
+    krcgId: 101034,
+    name: "Kaymakli Barrier",
+    cardType: "action",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { cannotBlockUndirected: true, directedActionBloodTax: 1 },
+      tags: ["Kaymakli Barrier"],
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "attachSelf",
+            // "Ⓓ put this card on a younger ready VAMPIRE" — any
+            // Methuselah's, and "you still control this card" (p. 16) is
+            // what `attachSelf` already records.
+            target: "anyMinion",
+            targetFilter: { kind: "vampire", youngerThanActor: true },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Master. Put this card on any minion. While it is not this minion's
+    //  turn, using an effect to unlock this minion or to allow this minion
+    //  to block as if unlocked costs an additional pool. This minion may
+    //  burn this card and unlock as a Ⓓ action."
+    krcgId: 100268,
+    name: "Burden the Mind",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    permanent: {
+      where: "bearer",
+      statics: { unlockEffectPoolTax: 1 },
+      tags: ["Burden the Mind"],
+      attach: { scope: "any" },
+      // "THIS MINION may burn this card and unlock as a Ⓓ action" — the
+      // bearer and nobody else, and the burn leaves them unlocked.
+      vulnerableTo: { who: { bearerOnly: true }, unlockBearerOnBurn: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- The uncontrolled region
+  //     (docs/uncontrolled-graduation-design.md) ---
+  {
+    // "+1 stealth action. Unique.
+    //  Put this card in play, locked, and choose a younger Gangrel in your
+    //  uncontrolled region. During the influence phase, you may lock this
+    //  card to move that Gangrel from your uncontrolled region to your
+    //  ready region, with any counters he or she has, unless that Gangrel
+    //  would contest a vampire in play. Any vampire can burn this card as
+    //  a Ⓓ action that costs 1 pool."
+    //
+    // It enters LOCKED, so the graduation is never the same turn: the card
+    // unlocks in its controller's next unlock phase and pays out then.
+    krcgId: 100812,
+    name: "Gather",
+    cardType: "action",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    requiresClan: ["Gangrel"],
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Gather", "location"],
+      uncontrolled: {
+        chooseOnEntry: { clan: "Gangrel", youngerOnly: true },
+        graduateChosen: { lock: true, notIfContest: true },
+      },
+      vulnerableTo: { cost: { pool: 1 } },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "putInPlayOnSuccess", tags: ["Gather", "location"], locked: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "Unique location.
+    //  Any Assamite can add 1 blood to this card as an action. During your
+    //  influence phase, you can move any amount of blood from this card to
+    //  an Assamite in your uncontrolled region."
+    //
+    // "Assamite" is the card's word and "Banu Haqim" is the registry's.
+    // The feeding action prints no Ⓓ, so it is undirected — and it is open
+    // to ANY Assamite, including another Methuselah's.
+    krcgId: 100906,
+    name: "Heartblood of the Clan",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Heartblood of the Clan", "location"],
+      bloodStore: {
+        offers: [{ window: "influence", kind: "cardToUncontrolled", clan: "Banu Haqim" }],
+      },
+      vulnerableTo: {
+        who: { kind: "vampire", clan: "Banu Haqim" },
+        cost: { blood: 1 },
+        outcome: "addCounter",
+        undirected: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Put this card on a ready vampire you control. During your
+    //  influence phase, remove this vampire from the game and move all the
+    //  blood counters from that vampire to an older vampire in your
+    //  uncontrolled region."
+    krcgId: 101820,
+    name: "Social Ladder",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Social Ladder"],
+      attach: { scope: "own", kind: "vampire" },
+      uncontrolled: { spendBearer: { olderOnly: true } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location.
+    //  When this card is played or the controller of this card changes, the
+    //  controller chooses a vampire in his or her uncontrolled region. For
+    //  each blood counter you transfer to the chosen vampire during your
+    //  influence phase, move one counter from the blood bank to the Tomb.
+    //  At the end of your influence phase, if the total number of counters
+    //  on the chosen vampire and on the Tomb equals or exceeds that
+    //  vampire's capacity, you may move the vampire to the ready region.
+    //  Burn this card (and the counters on it) when this vampire leaves the
+    //  uncontrolled region."
+    //
+    // The Tomb's counters COUNT toward the threshold and never move onto
+    // the vampire, so a 7-capacity vampire can come out on 4 transfers.
+    // "When the controller of this card changes" needs no code of its own
+    // while nothing in the pool can steal it: the card is not
+    // `vulnerableTo` anything.
+    krcgId: 101987,
+    name: "Tomb of Rameses III",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Tomb of Rameses III", "location"],
+      uncontrolled: {
+        chooseOnEntry: {},
+        matchTransfers: true,
+        graduateAtPhaseEnd: true,
+        burnWhenChosenLeaves: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
   // --- Transfers as a currency (docs/transfer-currency-design.md) ---
   {
     // "Master: unique location. [Gangrel / Gangrel antitribu]
@@ -11116,6 +11675,12 @@ export const cardSpecs: CardSpec[] = [
     name: "Parity Shift",
     cardType: "politicalAction",
     bloodCost: 0,
+    // "Allocate 3 of THEIR pool among 1 or more other Methuselahs" — the
+    // CHOSEN seat loses it and the allocated seats gain it, which is the
+    // opposite way round from a plain allocate-burn. Declared here rather
+    // than inferred from the terms for exactly that reason.
+    referendumEffect: "burn",
+    referendumSeats: { losers: { key: "chosen", each: 3 }, gainers: { key: "alloc" } },
     requiresTitle: ["prince", "justicar"],
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }], // bespoke terms
@@ -11125,6 +11690,8 @@ export const cardSpecs: CardSpec[] = [
     name: "Banishment",
     cardType: "politicalAction",
     bloodCost: 0,
+    // Moves a vampire to the uncontrolled region; no pool changes hands.
+    referendumEffect: "other",
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }], // bespoke terms
   },
@@ -11233,6 +11800,8 @@ export const cardSpecs: CardSpec[] = [
     name: "Cardinal Benediction",
     cardType: "politicalAction",
     bloodCost: 0,
+    // A title grant; no pool moves.
+    referendumEffect: "other",
     requiresSect: ["sabbat"],
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }], // bespoke title grant
@@ -16337,6 +16906,11 @@ const magnum44: CardHandler = {
   isEquipment: true,
   permanentStatics: {},
   permanentTags: ["weapon", "gun"],
+  // Declared the way every spec-compiled weapon declares it. This one is
+  // hand-rolled, so it has to say so itself — and without it the flagship
+  // gun was the single weapon that could not tell an agent it reaches
+  // (docs/ai-combat-range-design.md §5.1). 2R: two damage, at any range.
+  weaponProfile: { damage: 2, aggravated: false, ranged: true },
   options(card, ctx) {
     if (ctx.window !== "turn.minion") return [];
     const seat = getSeat(ctx.state, ctx.seat);
@@ -17053,7 +17627,11 @@ function titleGrant(opts: {
         const n = s.minions.filter(
           (m) => m.kind === "vampire" && isReady(m) && m.clan === opts.voteBonusClan,
         ).length;
-        if (n > 0) frame.voteGrants[s.id] = (frame.voteGrants[s.id] ?? 0) + n;
+        if (n > 0) {
+          const g = (frame.voteGrants[s.id] ??= { any: 0, for: 0, against: 0 });
+          // The rider says only "+1 vote" — each seat aims its own.
+          g.any += n;
+        }
       }
     },
     applyReferendum(frame, ops) {

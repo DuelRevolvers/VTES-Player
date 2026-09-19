@@ -11,6 +11,7 @@
  * throws on access and a missing preference is never an error.
  */
 
+import { isPlaystyle, type Playstyle } from "../ai/playstyles.ts";
 import { nameProblem } from "./profile.ts";
 
 const KEY = "vtes-ui-settings";
@@ -60,6 +61,20 @@ export interface UiSettings {
    * per game — this is only what it starts as.
    */
   botNames: string[];
+  /**
+   * How each bot seat PLAYS, positionally — box 1 is bot seat 1, exactly
+   * like `botNames` beside it.
+   *
+   * `"default"` (and an absent entry) means **whatever that seat's DECK
+   * is set to**, which is the owner's requested behaviour: the styles are
+   * attached to the precons and the dropdown is an override, not the
+   * primary mechanism. Stored as the style's own value otherwise —
+   * "balanced", "bruiser", "turtle", "politician".
+   *
+   * A LOCAL setting like `autoPass` and `aiSeats`: bots run on the host,
+   * so the host's settings decide, and nothing here crosses the wire.
+   */
+  botPlaystyles: string[];
 }
 
 /**
@@ -83,6 +98,22 @@ export const MAX_BOT_NAMES = 5;
 export function botNameFor(settings: UiSettings, index: number): string {
   const configured = settings.botNames[index - 1]?.trim();
   return configured ? configured : `Bot ${index}`;
+}
+
+/** The stored value meaning "use whatever this seat's deck is set to". */
+export const PLAYSTYLE_DEFAULT = "default";
+
+/**
+ * The OVERRIDE for bot seat `index` (1-based), or null when that seat
+ * should use its deck's style.
+ *
+ * THE ONE PLACE THAT ANSWERS IT, for the same reason `botNameFor` is:
+ * the rule is read wherever a bot is built, and five copies of a
+ * two-branch rule is five chances to drift.
+ */
+export function botPlaystyleFor(settings: UiSettings, index: number): Playstyle | null {
+  const configured = settings.botPlaystyles[index - 1];
+  return isPlaystyle(configured) ? configured : null;
 }
 
 /** The card-text sizes offered in Settings. */
@@ -127,6 +158,9 @@ export const DEFAULT_SETTINGS: UiSettings = {
   // to read "Bot 1" should behave the same, and `botNameFor` is the one
   // place that knows what unset looks like.
   botNames: [],
+  // Empty rather than five "default" strings, for the reason above it: an
+  // unset entry and a chosen "Default" must behave identically.
+  botPlaystyles: [],
 };
 
 /** A stable per-seat seed, so two AI seats do not make identical choices
@@ -160,12 +194,30 @@ function cleanBotNames(value: unknown): string[] {
     .map((n) => (typeof n === "string" && !nameProblem(n) ? n.trim() : ""));
 }
 
+/**
+ * A stored playstyle list, made safe to use — the sibling of
+ * `cleanBotNames`, and for the same reason.
+ *
+ * **A stored settings blob is untrusted input.** A hand edit, or a
+ * version of this build that knew a style this one does not, can put
+ * anything in here, and these values select a weight table. Anything
+ * that is not one of the four becomes `PLAYSTYLE_DEFAULT`, which is
+ * identical to never having chosen — `botPlaystyleFor` returns null and
+ * the seat falls back to its deck.
+ */
+function cleanBotPlaystyles(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, MAX_BOT_NAMES)
+    .map((s) => (isPlaystyle(s) ? s : PLAYSTYLE_DEFAULT));
+}
+
 export function loadSettings(): UiSettings {
   try {
     const raw = localStorage.getItem(KEY);
     // The spread would share DEFAULT_SETTINGS' own objects and arrays with
     // every caller, so each mutable field is replaced with a fresh one.
-    if (!raw) return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [] };
+    if (!raw) return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [], botPlaystyles: [] };
     const parsed = JSON.parse(raw) as Partial<UiSettings>;
     return {
       autoPass:
@@ -186,9 +238,10 @@ export function loadSettings(): UiSettings {
           : DEFAULT_SETTINGS.cardTextPx,
       omniscient: parsed.omniscient === true,
       botNames: cleanBotNames(parsed.botNames),
+      botPlaystyles: cleanBotPlaystyles(parsed.botPlaystyles),
     };
   } catch {
-    return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [] };
+    return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [], botPlaystyles: [] };
   }
 }
 

@@ -540,7 +540,20 @@ export function buildGame(setup: GameSetup): GameState {
         trifleGained: false,
       },
     ],
-    eventLog: [],
+    // TURN 1 IS A TURN, and the log says so (owner request).
+    //
+    // Every other turn is announced by the `TurnBegan` the engine emits
+    // when it rotates the turn frame, so the log reads "— Alice's turn 2
+    // —", "— Bob's turn 3 —" and so on with nothing above the first of
+    // them. The first turn frame is BUILT here rather than rotated into,
+    // so no emit site was ever reached for it: the log opened in the
+    // middle of somebody's turn without saying whose.
+    //
+    // Seeding the event rather than teaching the engine a start hook,
+    // because the frame it would announce is the one this function has
+    // just written. It changes no resource, so replaying the log for the
+    // fuzz's pool/blood conservation is unaffected.
+    eventLog: [{ type: "TurnBegan", seat: order[0]!.id, turnNumber: 1 }],
     commandLog: [],
     decisionSeq: 0,
     rngState: rng.rngState,

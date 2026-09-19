@@ -8,6 +8,7 @@
  * out. No snapshot stack, no state diffing.
  */
 
+import { isPlaystyle } from "../ai/playstyles.ts";
 import { buildHandlerRegistry } from "../cards/effects/cards.ts";
 import type { CommandLogEntry } from "../engine/index.ts";
 import { VtesEngine } from "../engine/index.ts";
@@ -34,6 +35,26 @@ export interface SavedGame {
    * loader says what it assumed rather than guessing silently.
    */
   botSeats?: string[];
+  /**
+   * How each bot seat was PLAYING when this was saved, keyed by seat id.
+   *
+   * It passes the same test `botSeats` beside it does, and for the same
+   * reason: the rule that a save carries no preferences is about REPLAY,
+   * which is unaffected — the answers are all in `commands`. What a
+   * playstyle affects is the decisions a bot makes **from here**, so a
+   * save without it resumes a different game from the same board. That
+   * is the continuity problem `botSeats` was added to solve, one step
+   * further in (owner decision, 2026-09-18).
+   *
+   * Keyed by SEAT rather than positional: the Profile panel's list is
+   * "Bot 1…5" slots, and a save knows real seats.
+   *
+   * Optional, and `version` stays 1 — a save written before this field
+   * simply does not have it, and an absent field falls back to the DECK's
+   * style, which is exactly the "Default" behaviour. The
+   * backwards-compatible path and the correct path are the same path.
+   */
+  botPlaystyles?: Record<string, string>;
 }
 
 /** Replay `commands` (or a prefix of them) into a brand new engine. */
@@ -78,8 +99,17 @@ export function toSave(
   setup: GameSetup,
   commands: CommandLogEntry[],
   botSeats?: string[],
+  botPlaystyles?: Record<string, string>,
 ): SavedGame {
-  return { version: 1, setup, commands, ...(botSeats ? { botSeats } : {}) };
+  return {
+    version: 1,
+    setup,
+    commands,
+    ...(botSeats ? { botSeats } : {}),
+    // Omitted entirely when empty, so a table of humans writes the same
+    // save it always did.
+    ...(botPlaystyles && Object.keys(botPlaystyles).length > 0 ? { botPlaystyles } : {}),
+  };
 }
 
 /**
@@ -106,6 +136,14 @@ export function isSavedGame(value: unknown): value is SavedGame {
   if (s.botSeats !== undefined) {
     if (!Array.isArray(s.botSeats)) return false;
     if (!s.botSeats.every((b) => typeof b === "string")) return false;
+  }
+  if (s.botPlaystyles !== undefined) {
+    // A save file is untrusted input — it is the one that arrives
+    // attached to a bug report. An unknown style is REJECTED rather than
+    // trusted, because these values select a weight table.
+    if (typeof s.botPlaystyles !== "object" || s.botPlaystyles === null) return false;
+    if (Array.isArray(s.botPlaystyles)) return false;
+    if (!Object.values(s.botPlaystyles).every((v) => isPlaystyle(v))) return false;
   }
   return true;
 }

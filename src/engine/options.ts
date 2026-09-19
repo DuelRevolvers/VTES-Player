@@ -218,6 +218,18 @@ export type LegalOption =
       params?: Record<string, string>;
     }
   | { id: string; kind: "usePress"; label: string; toContinue: boolean }
+  /** Change the range (p. 29). `rangedStrikeAvailable` says whether the
+   *  maneuvering minion has a strike that works at LONG range, which is
+   *  what decides whether opening or closing helps them: a minion whose
+   *  only strike is its hands wants close, and one holding a gun is
+   *  happy at long where the other's hands cannot reach.
+   *  docs/ai-combat-range-design.md §5.1 */
+  | {
+      id: string;
+      kind: "useManeuver";
+      label: string;
+      rangedStrikeAvailable?: boolean;
+    }
   | {
       id: string;
       kind: "useAbility";
@@ -225,6 +237,17 @@ export type LegalOption =
       /** Card instance in play providing the ability. */
       source: CardInstanceId;
       params: Record<string, string>;
+      /**
+       * This ability is a WEAPON STRIKE that reaches at long range
+       * (p. 30) — set only in the choose-strike window.
+       *
+       * A weapon's strike arrives as an ability rather than as a
+       * `chooseStrike`, so without this an agent could tell that a bare
+       * hand strike does not reach and nothing at all about what it was
+       * holding. It preferred a gun at long range by elimination, not
+       * because the gun works (docs/ai-combat-range-design.md §5.1).
+       */
+      strikeReaches?: boolean;
     }
   /** An action granted by a card in play ("can enter combat as a Ⓓ
    *  action" — rush design §2.5): announcing it locks the minion and
@@ -238,7 +261,6 @@ export type LegalOption =
       params: Record<string, string>;
     }
   /** Spend a "1 optional maneuver during that combat" credit. */
-  | { id: string; kind: "useManeuver"; label: string }
   /** Spend a "can prevent N damage during the resulting combat" credit
    *  (Beast Meld) — one point of prevention, repeatable while credit
    *  remains. */
@@ -270,7 +292,34 @@ export type LegalOption =
     }
   /** Referendum terms — the caller's choices, made only on success
    *  (p. 25 exception, p. 27). */
-  | { id: string; kind: "chooseTerms"; label: string; params: Record<string, string> }
+  | {
+      id: string;
+      kind: "chooseTerms";
+      label: string;
+      params: Record<string, string>;
+      /**
+       * WHAT THIS CHOICE WOULD DO, as signed pool deltas by seat:
+       * positive means that seat GAINS pool.
+       *
+       * The `richer-options-design.md` §1 pattern — the engine resolved
+       * the card's declared seat map to build the referendum in the first
+       * place, so asking it is cheaper and safer than re-deriving. And
+       * re-deriving is not merely wasteful here, it is unsafe: `alloc`
+       * names the seats that LOSE on Kine Resources Contested and the
+       * ones that GAIN on Parity Shift, so a generic parse of `params`
+       * gets the sign backwards on one of them
+       * (docs/ai-referendum-view-design.md §5.1).
+       *
+       * Backfilled CENTRALLY where the terms decision is raised, not by
+       * each of the thirteen construction sites, so a handler cannot
+       * forget it — the same treatment `answerChoice.card` gets.
+       *
+       * Absent where the card's terms name no seats, which is most of
+       * them: a clan, a location, a minion or a title names no Methuselah
+       * directly. Absent is "cannot say", never "nothing happens".
+       */
+      perSeat?: Record<SeatId, number>;
+    }
   /** Cast all votes from one source, for or against (p. 28). */
   | {
       id: string;
@@ -289,6 +338,24 @@ export type LegalOption =
        *  BOUGHT with blood has source `blood:<minion>`, which is not a
        *  minion id. docs/referendum-blood-design.md §1 */
       tollFrom?: MinionId;
+      /**
+       * Set when the outcome cannot change however this vote is cast —
+       * "more for than against passes, ties fail" (p. 28) already decided
+       * even if every remaining source opposes it.
+       *
+       * It is the same value on every option in the decision, like
+       * `action.stealth` rather than like `declareBlock.wouldSucceed`, and
+       * it is here because the engine is the only thing that knows what a
+       * vote source IS. An agent re-deriving it would be a second model of
+       * the polling rules.
+       *
+       * FOR PRICING COSTS ONLY. A referendum can stop being decided when
+       * somebody plays a vote-granting card from a hand nobody can see, so
+       * this must never gate which WAY a bot votes — only whether it pays
+       * a toll or buys votes for an outcome that is already settled
+       * (docs/ai-vote-economy-design.md §4).
+       */
+      decided?: "pass" | "fail";
     }
   /** A blocking vampire's chance to diablerise the acting torpor vampire
    *  after a blocked leave-torpor (p. 24). */

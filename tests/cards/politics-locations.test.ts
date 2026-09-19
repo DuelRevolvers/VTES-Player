@@ -114,7 +114,7 @@ describe("Elysium: The Palace of Versailles (100632)", () => {
     const opt = dp.options.find((o) => o.id.startsWith("ability:Elysium"))!;
     expect(opt.label).toContain("+2 votes");
     runTrace(engine, [["Alice", opt.id]]);
-    expect(referendum(state).voteGrants["Alice"]).toBe(2);
+    expect(referendum(state).voteGrants["Alice"]).toEqual({ any: 2, for: 0, against: 0 });
     expect(state.seats[0]!.permanents[0]!.locked).toBe(true);
   });
 
@@ -141,7 +141,7 @@ describe("Ferraille (100722)", () => {
     const opt = engine.decision()!.options.find((o) => o.id.startsWith("ability:Ferraille"))!;
     expect(opt.label).toContain("burn 1 pool for +3 votes");
     runTrace(engine, [["Alice", opt.id]]);
-    expect(referendum(state).voteGrants["Alice"]).toBe(3);
+    expect(referendum(state).voteGrants["Alice"]).toEqual({ any: 3, for: 0, against: 0 });
     expect(state.seats[0]!.pool).toBe(pool - 1);
     expect(state.seats[0]!.permanents[0]!.locked).toBe(false);
   });

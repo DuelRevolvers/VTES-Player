@@ -24,9 +24,17 @@ import { autoSave, loadSaves, saveAs } from "./savedgames.ts";
 import { DEFAULT_CHAT_COLOR } from "./profile.ts";
 import type { FinishedView, ModerationView, SeatFace } from "./render.ts";
 import { DEFAULT_EMOJI_CATEGORY } from "./render.ts";
-import { actionsByTableCard, orderHand, playsByCard, render, stillOffered } from "./render.ts";
+import {
+  actionsByTableCard,
+  allocationChoices,
+  allocKey,
+  orderHand,
+  playsByCard,
+  render,
+  stillOffered,
+} from "./render.ts";
 import type { UiSettings } from "./settings.ts";
-import { HeuristicAgent } from "../ai/heuristic.ts";
+import { botAgentFor, playstyleOf } from "./botagent.ts";
 import { loadSettings, saveSettings, seatSeed } from "./settings.ts";
 import type { GameTransport } from "./transport.ts";
 import { LocalTransport } from "./transport.ts";
@@ -154,6 +162,21 @@ export class DebugApp {
   private pointer = { x: 0, y: 0 };
   /** Whose deck list is open, as "<seat>:crypt" / "<seat>:library". */
   private deckOpen: string | null = null;
+  /**
+   * THE ALLOCATION DIALOG, and the split being assembled in it.
+   *
+   * View state like every other panel: a draft is a split nobody has
+   * chosen yet, so it never reaches the command log. It is thrown away
+   * whenever the decision changes — a draft for one referendum means
+   * nothing at the next, and leaving it would offer a stale split against
+   * a fresh decision.
+   */
+  private allocOpen = false;
+  private allocDraft: Record<string, number> = {};
+  private allocContext: string | null = null;
+  /** The decision the draft was assembled against, so a new one clears
+   *  it. `seq` is the engine's own decision counter. */
+  private allocSeq = -1;
   /** The moderation panel is open. View state, like the settings panel. */
   private modOpen = false;
   private chatSettingsOpen = false;
@@ -191,7 +214,7 @@ export class DebugApp {
       }
       // A seat handed to the AI stays handed over across a reload.
       for (const [seat, on] of Object.entries(this.settings.aiSeats)) {
-        if (on) this.transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
+        if (on) this.transport.setAgent(seat, botAgentFor(seat));
       }
     }
     // Once: these listeners live on the root, which survives every repaint.
@@ -350,6 +373,29 @@ export class DebugApp {
     }
   }
 
+  /**
+   * A DRAFT BELONGS TO ONE DECISION. The same reasoning as
+   * `pruneSelection`: a split assembled against one referendum is not an
+   * answer to the next one, and a dialog left open over a decision that
+   * no longer asks for an allocation would offer a Confirm with nothing
+   * behind it.
+   */
+  private pruneAlloc(dp: LegalDecision): void {
+    const choices = allocationChoices(dp);
+    if (choices.length === 0) {
+      this.allocOpen = false;
+      this.allocDraft = {};
+      this.allocContext = null;
+      this.allocSeq = -1;
+      return;
+    }
+    if (dp && dp.seq !== this.allocSeq) {
+      this.allocSeq = dp.seq;
+      this.allocDraft = {};
+      this.allocContext = null;
+    }
+  }
+
   private repaint(): void {
     // Read the scroll positions BEFORE the markup that holds them is
     // thrown away — see `saveScroll`.
@@ -357,6 +403,7 @@ export class DebugApp {
     const dp = this.transport.decision();
     const state = this.transport.view();
     this.pruneSelection(dp, state);
+    this.pruneAlloc(dp);
     this.root.innerHTML = render({
       state,
       dp,
@@ -391,6 +438,9 @@ export class DebugApp {
       localSeat: this.table.localSeat ?? null,
       ashOpen: this.ashOpen,
       deckOpen: this.deckOpen,
+      allocOpen: this.allocOpen,
+      allocDraft: this.allocDraft,
+      allocContext: this.allocContext,
       canLeave: this.table.onLeave !== undefined,
       canChat: this.table.say !== undefined,
       canModerate: this.table.moderate !== undefined,
@@ -785,6 +835,111 @@ export class DebugApp {
     }
   }
 
+  /**
+   * ANSWER THE DECISION. One path, whether the id came from a button in
+   * the bar, a card on the table or the allocation dialog — a second copy
+   * of this would be a second place the busy latch and the rejection
+   * alert have to be got right.
+   */
+  private submitOption(id: string): void {
+    // Disable the whole bar while the submission is in flight: over a
+    // network the answer does not come back on this tick, and a second
+    // click would submit against a stale decision.
+    this.setBusy(true);
+    void this.transport
+      .choose(id)
+      .catch((err: unknown) => {
+        // A rejected option means an engine or UI bug (or, later, that
+        // the host disagreed). Surface it rather than swallowing it.
+        alert(`Rejected "${id}":\n\n${(err as Error).message}`);
+        this.paint();
+      })
+      .finally(() => this.setBusy(false));
+  }
+
+  /**
+   * The allocation dialog (docs/table-ux-2026-09-18.md §3).
+   *
+   * The boxes DO NOT REPAINT as they are typed in: a repaint is
+   * `innerHTML =`, which would take the caret out of the box mid-number.
+   * So the total line and the Confirm button are updated in place, and
+   * the draft is only read back out of the DOM.
+   */
+  private wireAlloc(): void {
+    const q = <T extends HTMLElement>(sel: string): T | null =>
+      this.root.querySelector<T>(sel);
+
+    q<HTMLButtonElement>("#alloc-open")?.addEventListener("click", () => {
+      if (this.isThinking()) return;
+      this.allocOpen = true;
+      this.paint();
+    });
+    const close = (): void => {
+      this.allocOpen = false;
+      this.paint();
+    };
+    q<HTMLButtonElement>("#alloc-cancel")?.addEventListener("click", close);
+    q<HTMLElement>("#alloc-scrim")?.addEventListener("click", close);
+    // Changing WHO the split is for changes which splits are legal, so
+    // the draft it was assembled against is thrown away with it.
+    q<HTMLSelectElement>("#alloc-ctx")?.addEventListener("change", (ev) => {
+      this.allocContext = (ev.target as HTMLSelectElement).value;
+      this.allocDraft = {};
+      this.paint();
+    });
+
+    const boxes = Array.from(this.root.querySelectorAll<HTMLInputElement>(".allocnum"));
+    if (boxes.length === 0) return;
+    const choices = allocationChoices(this.transport.decision());
+    const choice = choices.find((c) => c.key === this.allocContext) ?? choices[0];
+    if (!choice) return;
+    const total = q<HTMLElement>("#alloc-total");
+    const ok = q<HTMLButtonElement>("#alloc-ok");
+
+    const refresh = (): void => {
+      this.allocDraft = {};
+      for (const box of boxes) {
+        const who = box.dataset["who"];
+        if (who === undefined) continue;
+        // A box can hold anything a keyboard can type, including nothing
+        // and a minus sign. Clamp on the way IN rather than trusting the
+        // `min`/`max` attributes, which the browser enforces on its own
+        // spinner and not on typing.
+        const cap = choice.caps[who] ?? choice.points;
+        const n = Math.max(0, Math.min(cap, Math.floor(Number(box.value) || 0)));
+        if (n > 0) this.allocDraft[who] = n;
+      }
+      const spent = Object.values(this.allocDraft).reduce((a, b) => a + b, 0);
+      const id = choice.byAlloc.get(allocKey(this.allocDraft));
+      if (total) {
+        total.textContent =
+          `${spent} of ${choice.points} allocated` +
+          (id !== undefined
+            ? ""
+            : spent === choice.points
+              ? " — not a legal split"
+              : spent > choice.points
+                ? " — too many"
+                : "");
+      }
+      if (ok) ok.disabled = id === undefined;
+    };
+    for (const box of boxes) {
+      box.addEventListener("input", refresh);
+      box.addEventListener("change", refresh);
+    }
+    ok?.addEventListener("click", () => {
+      refresh();
+      // The id came from an option the engine offered — this never builds
+      // one. A split with no id is not legal and Confirm is disabled, so
+      // reaching here without one means something moved under us.
+      const id = choice.byAlloc.get(allocKey(this.allocDraft));
+      if (id === undefined || this.isThinking()) return;
+      this.allocOpen = false;
+      this.submitOption(id);
+    });
+  }
+
   private wire(): void {
     this.wireHand();
     this.wireTable();
@@ -794,21 +949,10 @@ export class DebugApp {
       btn.addEventListener("click", () => {
         const id = btn.dataset["opt"];
         if (!id || this.isThinking()) return;
-        // Disable the whole bar while the submission is in flight: over a
-        // network the answer does not come back on this tick, and a second
-        // click would submit against a stale decision.
-        this.setBusy(true);
-        void this.transport
-          .choose(id)
-          .catch((err: unknown) => {
-            // A rejected option means an engine or UI bug (or, later, that
-            // the host disagreed). Surface it rather than swallowing it.
-            alert(`Rejected "${id}":\n\n${(err as Error).message}`);
-            this.paint();
-          })
-          .finally(() => this.setBusy(false));
+        this.submitOption(id);
       });
     }
+    this.wireAlloc();
 
     const history = this.transport.history;
     const on = (sel: string, fn: () => void): void => {
@@ -852,7 +996,15 @@ export class DebugApp {
                 for (const seat of save.setup.decks.map((d) => d.seat)) {
                   this.transport.setAgent(
                     seat,
-                    wanted.has(seat) ? new HeuristicAgent({ seed: seatSeed(seat) }) : null,
+                    wanted.has(seat)
+                      ? botAgentFor(seat, {
+                          // The save says how each bot was PLAYING, so a load
+                          // resumes the same game rather than the same board.
+                          ...(playstyleOf({ playstyle: save.botPlaystyles?.[seat] })
+                            ? { playstyle: playstyleOf({ playstyle: save.botPlaystyles?.[seat] })! }
+                            : {}),
+                        })
+                      : null,
                   );
                 }
               }
@@ -1188,7 +1340,7 @@ export class DebugApp {
         saveSettings(this.settings);
         // A fresh agent per seat, seeded from the seat name so two AI
         // seats do not make identical choices in identical spots.
-        t.setAgent(seat, on ? new HeuristicAgent({ seed: seatSeed(seat) }) : null);
+        t.setAgent(seat, on ? botAgentFor(seat) : null);
         this.paint();
       });
     }

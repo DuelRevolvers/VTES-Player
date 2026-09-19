@@ -938,6 +938,49 @@ export interface PermanentStatics {
    *  direction only: the bearer may still be blocked by anything.
    *  docs/cheap-tail-design.md §2 */
   cannotBlockKind?: "vampire" | "ally";
+  /** "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier) —
+   *  the same restriction keyed on the ACTION rather than on the actor, so
+   *  it bars a bleed at the table's other end and leaves the bearer free to
+   *  block what is aimed at their own Methuselah.
+   *  docs/block-taxes-design.md §4 */
+  cannotBlockUndirected?: boolean;
+  /** "DIRECTED actions cost this vampire an additional blood" (Kaymakli
+   *  Barrier) — a surcharge on the bearer's own actions, charged at
+   *  announcement beside the torpor tax, which is the one existing tax of
+   *  this shape. §4 */
+  directedActionBloodTax?: number;
+  /** "While it is not this minion's turn, using an effect to unlock this
+   *  minion or to allow this minion to block as if unlocked costs an
+   *  additional pool" (Burden the Mind) — paid by whoever USES the effect,
+   *  which is not the bearer's controller. §5 */
+  unlockEffectPoolTax?: number;
+  /** "The vampire with this card DOES NOT UNLOCK AS NORMAL" (Detection) —
+   *  the persistent, bearer-keyed form of `skipNextUnlock`, read through
+   *  `unlockSuppressed` like every other version of this clause.
+   *  docs/pay-to-unlock-design.md §2 */
+  bearerDoesNotUnlock?: boolean;
+  /** "\<Clan\> DO NOT UNLOCK AS NORMAL" (Children of Osiris) — the same
+   *  clause aimed at a clan across the whole table, from one Methuselah's
+   *  play area. §2 */
+  clanDoesNotUnlock?: string;
+  /** "This vampire cannot cast votes or ballots" (Detection) — the
+   *  persistent form of `MinionState.expelledThisTurn`, which is one turn
+   *  long. §4 */
+  cannotCastVotes?: boolean;
+  /** "This vampire DOES NOT LOCK for blocking a vampire the same age or
+   *  younger" (Atonement) — an exemption from the lock a block costs (p. 25),
+   *  carried by a card on the BLOCKER and conditional on who they blocked.
+   *  docs/lock-as-price-design.md §3 */
+  noLockForBlocking?: { sameAgeOrYounger?: boolean };
+  /** "When a vampire you control blocks a \<sect\> vampire, you may lock
+   *  THIS CARD instead of locking the blocking vampire" (Elysium: Sforzesco
+   *  Castle) — the same price, paid by a card. §2 */
+  lockInsteadOfBlocker?: { sect: Sect };
+  /** "No more BOONS can be put in play" (Blood Trade) — read by the play
+   *  gate against the card's own `boon` keyword, so the bar exists whether
+   *  or not a boon is in the pool today.
+   *  docs/blood-and-gear-design.md §5 */
+  barsBoons?: boolean;
   /** "Allies and younger vampires get −1 intercept against this Anarch"
    *  (Stolen Police Cruiser) — a PERSISTENT penalty carried by a card on
    *  the ACTING minion, so it holds for every action they take. The
@@ -1209,6 +1252,13 @@ export interface PermanentInPlay {
    *  Herd sits on the predator's vampire and feeds — and dies with — the
    *  vampire that played it). docs/taking-actions-design.md §6 */
   linkedMinion?: MinionId;
+  /** The vampire in the UNCONTROLLED REGION this card names — "choose a
+   *  younger Gangrel in your uncontrolled region" (Gather), "the controller
+   *  chooses a vampire in his or her uncontrolled region" (Tomb of Rameses
+   *  III). Its own field rather than `linkedMinion`, because that one names
+   *  a minion IN PLAY and every reader of it assumes so.
+   *  docs/uncontrolled-graduation-design.md §2 */
+  linkedUncontrolled?: MinionId;
   /** Face up (public) or face down — the owner may look at them at any
    *  time, nobody else may (Shilmulo Tarot). Masked in `redactFor`. */
   storedFaceUp?: boolean;
@@ -1705,6 +1755,15 @@ export type GameEvent =
    *  turn" (Expulsion). */
   | { type: "MinionExpelled"; minion: MinionId }
   | { type: "UncontrolledBloodAdded"; seat: SeatId; minion: MinionId; amount: number }
+  /** "Choose a vampire in your uncontrolled region" — the card in play now
+   *  names that vampire, and the choice is recorded rather than re-derived
+   *  (docs/uncontrolled-graduation-design.md §2). */
+  | { type: "UncontrolledChosen"; cardId: CardInstanceId; minion: MinionId }
+  /** "Transfer equipment between any two ready Sabbat vampires you control"
+   *  (Communal Haven: Cathedral) — the card in play MOVES, keeping its
+   *  counters and lock state: it is the same card on a different minion.
+   *  docs/blood-and-gear-design.md §3 */
+  | { type: "EquipmentMoved"; cardId: CardInstanceId; from: MinionId; to: MinionId }
   // Allies and retainers (phase 3, allies gate).
   /** `disciplines`: "plays cards requiring \<X\> as a vampire" (p. 11) —
    *  optional, so every existing fixture and saved log is untouched.
@@ -1756,6 +1815,57 @@ export interface ImpulseCycle {
   cursor: number;
   /** Consecutive passes; reaching order.length means quiescence. */
   passes: number;
+}
+
+/**
+ * Resolve declared referendum terms to signed per-seat pool deltas, using
+ * the map the CARD declared: **positive means that seat GAINS pool.**
+ *
+ * Lives here rather than in either caller because it has two, and they
+ * are asking the same question about different things:
+ *
+ *  - `viewFor` resolves the terms the caller HAS chosen, so a voter can
+ *    price the referendum in front of it;
+ *  - the terms decision resolves each CANDIDATE option's params, so the
+ *    caller can aim it.
+ *
+ * One question asked in two places will drift, and the drift here would
+ * be a sign error — which is the one mistake this whole mechanism exists
+ * to prevent. A generic parse over the keys was built first and cut,
+ * because `alloc` names the losers on Kine Resources Contested and the
+ * GAINERS on Parity Shift (docs/ai-referendum-view-design.md §5.1).
+ */
+export function resolvePerSeat(
+  terms: Record<string, string>,
+  map: { losers?: { key: string; each?: number }; gainers?: { key: string; each?: number } },
+): Record<SeatId, number> {
+  const out: Record<SeatId, number> = {};
+  /** The seats one key names, each with the amount that key carries. */
+  const named = (key: string): Array<[SeatId, number]> => {
+    const value = terms[key];
+    if (!value) return [];
+    // "Bob=2,Carol=1" is the only key that carries its own amounts.
+    if (value.includes("=")) {
+      return value
+        .split(",")
+        .map((pair) => pair.split("="))
+        .filter(([seat, n]) => seat && Number.isFinite(Number(n)))
+        .map(([seat, n]) => [seat as SeatId, Number(n)]);
+    }
+    return value
+      .split(",")
+      .filter(Boolean)
+      .map((seat) => [seat as SeatId, 1]);
+  };
+  const apply = (side: { key: string; each?: number } | undefined, sign: 1 | -1): void => {
+    if (!side) return;
+    for (const [seat, amount] of named(side.key)) {
+      out[seat] = (out[seat] ?? 0) + sign * amount * (side.each ?? 1);
+    }
+  };
+  apply(map.losers, -1);
+  apply(map.gainers, 1);
+  return out;
 }
 
 export function newCycle(order: SeatId[]): ImpulseCycle {
@@ -1911,6 +2021,17 @@ export interface ActionFrame {
   actionKind: ActionKind;
   /** Non-null when the action was announced with an action card. */
   card: ActionCardRef | null;
+  /**
+   * This action was announced with a POLITICAL ACTION card, so success
+   * calls a referendum (p. 24, p. 27).
+   *
+   * On the frame rather than looked up from the card's handler on each
+   * read, because `viewFor` is the consumer and it is given a state
+   * rather than a registry — and a projection that had to consult the
+   * handler registry would be a second place that knows what a political
+   * action is. docs/ai-block-action-value-design.md §3
+   */
+  political?: boolean;
   acting: MinionId;
   actingSeat: SeatId;
   /** Current target Methuselah for directed actions (bleed); null for
@@ -3019,6 +3140,15 @@ export interface CombatFrame {
   cycle: ImpulseCycle;
 }
 
+/** Votes a card handed a seat during polling, split by the direction the
+ *  card printed. `any` is the ordinary case — "this vampire gets +2 votes"
+ *  says nothing about which way, so the seat aims them. */
+export interface VoteGrants {
+  any: number;
+  for: number;
+  against: number;
+}
+
 /** A successful political action's referendum (p. 27–28, politics
  *  design): terms chosen by the caller only now (the one exception to
  *  details-at-announcement, p. 25), then polling on an impulse cycle
@@ -3051,8 +3181,13 @@ export interface ReferendumFrame {
    *  for blood-hunt referendums (no calling minion). */
   callingMinion: MinionId | null;
   /** Bonus votes granted per seat by cards played during polling
-   *  (docs/polling-votes-design.md §3), cast as a source. */
-  voteGrants: Record<SeatId, number>;
+   *  (docs/polling-votes-design.md §3), cast as a source. Bucketed by the
+   *  DIRECTION the granting card printed: "+3 votes AGAINST the referendum"
+   *  (Protected District) may only be cast that way, where a bare "+2 votes"
+   *  (Bewitching Oration) is the seat's to aim. One record rather than a
+   *  flexible one and a directed sibling, so there is exactly one place a
+   *  grant lives. Each bucket is its own vote source, spent separately. */
+  voteGrants: Record<SeatId, VoteGrants>;
   /** "Non-<sect> vampires cannot cast votes or ballots this referendum"
    *  (Closed Session, Private Audience, Cardinal Benediction) — restricts
    *  the per-vampire title vote sources to this sect. */
@@ -3124,6 +3259,25 @@ export interface ReferendumFrame {
   votesAgainst?: number;
   margin?: number;
   passed?: boolean;
+  /**
+   * Which way this referendum moves POOL, copied from the calling card's
+   * handler when the frame is pushed.
+   *
+   * It is on the FRAME rather than looked up from `cardName` on each read
+   * because the frame is what `viewFor` projects, and a projection that
+   * had to consult the handler registry would be a second place that
+   * knows how a referendum is priced. Absent for a blood hunt (no card)
+   * and for a bespoke handler that declares nothing — both of which mean
+   * "unknown", never "other". docs/ai-referendum-view-design.md §5
+   */
+  effectKind?: "burn" | "gain" | "other";
+  /** Which terms key names the seats that lose pool and which those that
+   *  gain it, copied from the calling card's handler with `effectKind`.
+   *  Absent where the terms name no seats. */
+  seatMap?: {
+    losers?: { key: string; each?: number };
+    gainers?: { key: string; each?: number };
+  };
   /** The caller's choices (allocations, chosen seats/minions). */
   terms: Record<string, string>;
   votes: Array<{ seat: SeatId; source: string; count: number; inFavor: boolean }>;

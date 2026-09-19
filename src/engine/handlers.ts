@@ -39,6 +39,7 @@ import type {
   SeatId,
   StrikeKind,
   GrantedStrike,
+  VoteGrants,
 } from "./state.ts";
 
 /** What a handler may see when enumerating options. Pure — no mutation. */
@@ -372,8 +373,11 @@ export interface EngineOps {
    *  refund, its already-paid cost is returned (Sudden Reversal). */
   cancelPendingCard(refundCost: boolean): void;
   /** Grant a seat bonus votes in the current referendum, cast as a source
-   *  in the polling step (docs/polling-votes-design.md §3). */
-  grantVotes(seat: SeatId, amount: number): void;
+   *  in the polling step (docs/polling-votes-design.md §3). `direction` is
+   *  what the granting CARD printed, not what the seat wants: "+3 votes
+   *  against the referendum" (Protected District) cannot be cast for it.
+   *  Omitted means "any", which is every other vote grant in the pool. */
+  grantVotes(seat: SeatId, amount: number, direction?: keyof VoteGrants): void;
   /** "If this vampire blocks, it gets N maneuvers/presses in the resulting
    *  combat" (Spirit's Touch). */
   grantBlockerCombatRider(
@@ -684,6 +688,14 @@ export interface EngineOps {
   /** "…(discarding and shuffling afterward)" (Inconnu Tutelage) — p. 7's
    *  discard-down, asked of the engine, which owns the question. */
   discardDownToHandSize(seat: SeatId, cardName: string, cardId: CardInstanceId): void;
+  /** "Move that vampire from your uncontrolled region to your ready region,
+   *  with any counters he or she has" (Gather, Tomb of Rameses III) — the
+   *  same move `inf:out` makes, pool tax and all.
+   *  docs/uncontrolled-graduation-design.md §2 */
+  moveUncontrolledToReady(seat: SeatId, minion: MinionId): void;
+  /** "Choose a vampire in your uncontrolled region" (Gather, Tomb of
+   *  Rameses III) — the card in play remembers which one. §2 */
+  linkUncontrolled(cardId: CardInstanceId, minion: MinionId): void;
   /** An integer in [0, n) from the seeded RNG — "a card at random"
    *  (Constant Revolution, The Gate of Acheron). Principle 2 says all
    *  randomness flows through the one generator, and this is the
@@ -1018,6 +1030,16 @@ export interface CardHandler {
     /** PRINTED and unconditional only: Poker's aggravated damage against
      *  Kiasyd is conditional and does not count [LSJ 20020729]. */
     aggravated: boolean;
+    /**
+     * Does this weapon's strike REACH at long range (p. 30)?
+     *
+     * The thing a minion standing at long range most needs to know about
+     * what it is holding. Without it the policy could only tell that a
+     * bare hand strike does NOT reach, and preferred a gun by process of
+     * elimination rather than because the gun works
+     * (docs/ai-combat-range-design.md §5.1).
+     */
+    ranged: boolean;
   };
   /** Does this MODE restrict the opposing minion's CHOICE OF STRIKES?
    *  Answered centrally in `compileSpec` and stamped onto
@@ -1049,6 +1071,24 @@ export interface CardHandler {
   isAlly?: boolean;
   /** Political action card: success calls a referendum (p. 24, p. 27). */
   isPoliticalAction?: boolean;
+  /**
+   * Which way this card's referendum moves POOL — "burn", "gain", or
+   * "other" for the many that move minions, cards or titles instead.
+   *
+   * Declared by the spec's referendum primitive and carried onto the
+   * frame when the referendum is pushed, so an agent deciding how to vote
+   * can tell a burn from a gift (docs/ai-referendum-view-design.md §5).
+   * Absent for a bespoke handler with no referendum primitive, which
+   * reads as "unknown" and must NOT be read as "other".
+   */
+  referendumEffect?: "burn" | "gain" | "other";
+  /** Which terms key names the seats that lose pool and which names those
+   *  that gain it. Absent where the terms name no seats — most
+   *  pool-moving referendums charge the table from the BOARD instead. */
+  referendumSeats?: {
+    losers?: { key: string; each?: number };
+    gainers?: { key: string; each?: number };
+  };
   /** Which combatant this frenzy mode is used ON: true when its effects
    *  reach across at the other combatant (Terror Frenzy), false for a
    *  self-buff (Rage of Apedemak). Derived from the mode's own effects by
@@ -1159,6 +1199,10 @@ export interface CardHandler {
      *  an open hand", Revelations superior). Hard-coded empty until
      *  2026-09-02, which was invisible while all ten users had none. */
     statics?: PermanentStatics;
+    /** "Put this card in play, LOCKED" (Gather) — so its own ability
+     *  cannot be used until it unlocks, which is the turn's delay the card
+     *  is paying for. docs/uncontrolled-graduation-design.md §3 */
+    locked?: boolean;
   } | null;
   /** Referendum step 1: the caller's term choices (p. 27). Empty/absent
    *  means the referendum has no terms and goes straight to polling. */
@@ -1500,6 +1544,29 @@ export interface CardHandler {
     turnSeat: SeatId,
     ops: EngineOps,
   ): void;
+  /** "AT THE END OF your influence phase, …" (Tomb of Rameses III) — the
+   *  fifth sibling, and the second that fires as a phase CLOSES.
+   *  docs/uncontrolled-graduation-design.md §4 */
+  onInfluencePhaseEnd?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    turnSeat: SeatId,
+    ops: EngineOps,
+  ): void;
+  /** "For each blood counter you TRANSFER to the chosen vampire during your
+   *  influence phase, …" (Tomb of Rameses III) — one transfer of one
+   *  counter onto `minion`, already applied. §4 */
+  onTransferToUncontrolled?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    turnSeat: SeatId,
+    minion: MinionId,
+    ops: EngineOps,
+  ): void;
+  /** "Burn this card when this vampire leaves the uncontrolled region"
+   *  (Tomb of Rameses III) — read by the engine wherever a vampire leaves
+   *  that region, so the clause cannot be missed by one of the ways out. §5 */
+  burnWhenLinkedUncontrolledLeaves?: boolean;
   /**
    * A referendum did NOT pass (Cedrick Calhoun). Fired from BOTH paths,
    * because "cancelled or fails" names two outcomes the engine

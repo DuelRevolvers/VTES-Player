@@ -665,6 +665,45 @@ function fourSeatGame(seed: number): GameState {
     "King's Rising",
     "Whispers of the Nictuku",
     "Inconnu Tutelage",
+    // The uncontrolled region (docs/uncontrolled-graduation-design.md,
+    // wave 64). These move vampires INTO PLAY outside the influence
+    // phase's own door, and the Tomb burns itself on the way — so the
+    // fuzz's blood/pool conservation replay is the guard, plus the fact
+    // that a card naming a vampire in another zone cannot dangle.
+    "Gather",
+    "Heartblood of the Clan",
+    "Social Ladder",
+    "Tomb of Rameses III",
+    // Taxing and barring a block (docs/block-taxes-design.md, wave 65).
+    // Three of these four sit on a minion ANOTHER Methuselah controls, and
+    // two of them shrink the block option list — which is what the fuzz's
+    // "options are never empty" invariant is for.
+    "Aching Beauty",
+    "Artistically Inept",
+    "Kaymakli Barrier",
+    "Burden the Mind",
+    // Paying blood to unlock (docs/pay-to-unlock-design.md, wave 66). Two of
+    // these SUPPRESS an unlock, which is the change most likely to strand a
+    // seat with nothing to do — so the fuzz's "options are never empty" and
+    // "every game ends" invariants are the guards that matter here.
+    "Detection",
+    "Children of Osiris",
+    "Firebrand",
+    "Eternal Vigilance",
+    // The lock as a price (docs/lock-as-price-design.md, wave 67). Two of
+    // these END a combat from outside it and one takes a blocker's lock back,
+    // so the guards that matter are the fuzz's "every game ends" and its
+    // lock-at-announcement invariant.
+    "Elysium: Sforzesco Castle",
+    "Elysium: The Arboretum",
+    "Powerbase: Savannah",
+    "Atonement",
+    // Moving blood and gear (docs/blood-and-gear-design.md, wave 68). Blood
+    // moving SIDEWAYS is new to the conservation replay, and Blood Trade
+    // moves it across seats — so the fuzz's blood/pool fold is the guard.
+    "Communal Haven: Cathedral",
+    "The Spawning Pool",
+    "Blood Trade",
     "Banu Haqim Justicar",
     "Brujah Justicar",
     "Lasombra Justicar",

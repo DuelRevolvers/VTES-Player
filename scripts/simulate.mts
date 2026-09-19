@@ -4,6 +4,13 @@
  *   npm run simulate                 -- 20 games, seed 1
  *   npm run simulate -- --games 200 --seed 7
  *   npm run simulate -- --games 50 --verbose
+ *   npm run simulate:politics        -- the politics table
+ *   npm run simulate -- --decks config/playtest-decks-politics.json
+ *
+ * `--decks` picks the table. The DEFAULT is unchanged and must stay so:
+ * every AI measurement this project has taken was on
+ * `config/playtest-decks.json`, and silently moving it would make those
+ * numbers uncomparable (docs/ai-politics-bench-design.md §3).
  *
  * Plays whole games with an AI in every seat and prints a summary. It is
  * a script, not part of the engine: it reaches into the deck builder for
@@ -25,13 +32,24 @@ function arg(name: string, fallback: number): number {
   const v = Number(process.argv[i + 1]);
   return Number.isFinite(v) ? v : fallback;
 }
+/** A string flag, or null when it was not given. Same shape as `arg`, and
+ *  the same shape `aibench.mts` already uses — one spelling for one
+ *  question. */
+function str(name: string): string | null {
+  const i = process.argv.indexOf(`--${name}`);
+  if (i < 0) return null;
+  return process.argv[i + 1] ?? null;
+}
 const VERBOSE = process.argv.includes("--verbose");
 
 async function main() {
   const games = arg("games", 20);
   const seed = arg("seed", 1);
 
-  const cfgPath = path.join(process.cwd(), "config", "playtest-decks.json");
+  const wantDecks = str("decks");
+  const cfgPath = wantDecks
+    ? path.resolve(process.cwd(), wantDecks)
+    : path.join(process.cwd(), "config", "playtest-decks.json");
   const config = JSON.parse(await readFile(cfgPath, "utf-8")) as {
     decks: DeckDef[];
     seed: number;
@@ -55,7 +73,10 @@ async function main() {
 
   console.log(
     `simulating ${games} games, seeds ${seed}..${seed + games - 1}, ` +
-      `${seats.length} seats: ${seats.join(", ")}`,
+      `${seats.length} seats: ${seats.join(", ")}\n` +
+      // WHICH TABLE, always — a run whose numbers cannot be attributed to
+      // a table is a run nobody can compare to anything later.
+      `table: ${path.basename(cfgPath)}`,
   );
 
   const started = Date.now();

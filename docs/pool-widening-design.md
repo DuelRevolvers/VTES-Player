@@ -1006,6 +1006,174 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 68 — moving blood and gear (3 cards), 2026-09-18
+
+Library **738 → 741**. Communal Haven: Cathedral, The Spawning Pool, Blood
+Trade. Write-up: `docs/blood-and-gear-design.md`.
+
+Blood had only ever moved from the bank to a vampire or out of one as a cost.
+These three move it SIDEWAYS — between two of your own, onto a card, and
+across the table — and the Cathedral moves EQUIPMENT the same way, on the same
+one lock. One new event (`EquipmentMoved`, which keeps the entry so counters
+and lock state travel with it), one new spec field, and a bar on a printed
+KEYWORD.
+
+Three cards rather than four: the family's other members are inert here
+(Giovanni is not a V5 clan, so Powerbase: Cape Verde and Glass Walker Pact
+name nobody), and The Status Perfectus needs a one-sided "cannot use any
+strikes" that the combat kernel does not have — named in the write-up for a
+later wave rather than half-built.
+
+**What it found: nothing broken, and three fixture truths** — each a lesson
+already in CLAUDE.md, aimed somewhere new:
+
+- **The unlock phase cannot be set by hand.** The sweep runs as a turn BEGINS
+  and only then opens the window, so a fixture that assigns `tf.phase =
+  "unlock"` is asked for a MASTER-phase decision. Walk from the previous
+  seat's discard phase, as wave 66's tests do.
+- **A bleed goes to the actor's PREY**, so "a bleed against you" needs your
+  PREDATOR to act — the first draft had the wrong seat bleeding and saw no
+  option, with the card's gate perfectly correct.
+- **A combat does not reach round two by itself** (p. 32): a clause in the
+  second round is reachable only when somebody paid for a press. That is the
+  Spawning Pool's real cost of entry, not a test artefact.
+
+Also recorded: the Pool's unpreventable damage goes through
+`applyEnvironmentalDamage`, which is documented as damage OUTSIDE combat. What
+the card needs is its two guarantees — no prevention window, no strike source
+— and no other op gives them.
+
+### Wave 67 — the lock as a price (4 cards), 2026-09-18
+
+Library **734 → 738**. Elysium: Sforzesco Castle, Elysium: The Arboretum,
+Powerbase: Savannah, Atonement. Write-up: `docs/lock-as-price-design.md`.
+
+Blocking costs a lock (p. 25); ending a combat from outside costs a card's
+lock. These four move that price onto a card, onto ANOTHER card, or off the
+table. Half the wave was already built (`combatEndGrant.sect` is the
+Arboretum verbatim), and the two new statics are an exemption and a
+substitution at the one place a blocker's lock is emitted.
+
+**What it found: a failed block attempt could be repeated for ever.** The
+dealt-game test walked 20,000 steps of `block → fail → block → fail`,
+because nothing was consumed: the engine's own comment said "a failed
+attempt does not lock the blocker … the same Methuselah may attempt again",
+and with stealth persisting for the whole action a second attempt by the
+same minion faces identical numbers. The failed blocker now goes into
+`cannotBlock` — the bookkeeping the `forceFail` path beside it already did.
+**Recorded reading, for the owner** (`lock-as-price-design.md` §5): the
+alternative is that one minion may re-attempt within an action, which only
+matters if their intercept rose in between.
+
+**And `undefined === undefined`.** Wave 66's `clanDoesNotUnlock` compared
+straight against the minion's clan, so a card without the field and a minion
+without a clan matched — `unlockSuppressed` returned true for every ally and
+clanless vampire, and the game stalled. **An equality between two optionals
+is a claim that both are set.** Both bugs surfaced in the same run of the
+same test, which is worth remembering: the dealt game builds its decks by
+NAME ORDER over the whole supported pool, so every wave reshuffles it.
+
+Also, for the second wave running, `supported.test.ts` caught a printed COST
+the spec had as 0 (Atonement costs 2 blood). Read the cost off the raw
+snapshot, not off the card's sentence.
+
+### Wave 66 — paying blood to unlock (4 cards), 2026-09-18
+
+Library **730 → 734**. Detection, Children of Osiris, Firebrand, Eternal
+Vigilance. Write-up: `docs/pay-to-unlock-design.md`.
+
+Unlocking is free (p. 17). These four put a price on it or sell it back, in
+four different windows — the controller's unlock phase (twice: one bearer,
+one clan across the whole table), their minion phase (for somebody else's
+vampire), and mid-action to block into. One new spec field
+(`permanent.payToUnlock`) pays for all four, and the two "does not unlock as
+normal" halves went into `unlockSuppressed`, which already carried three
+forms of that clause.
+
+**What it found: nothing broken in the engine** — the first wave in a while
+where the cards fell out of existing machinery plus one primitive. Two
+things worth recording anyway:
+
+- **Whose offer it is.** Three of the four sit on a vampire their own
+  controller does not control (Detection is a hate card; Children of Osiris
+  taxes every Ministry vampire at the table), so the buy-back belongs to the
+  BEARER's controller and is enumerated for `ctx.seat` before the controller
+  gate, with `abilityAnySeat`. **Which seat an ability belongs to is a
+  per-card question** — sixth instance.
+- **`supported.test.ts` earned its keep.** Eternal Vigilance prints a 1
+  blood cost on the ACTION, and the first draft had 0 there while correctly
+  implementing the 1 blood its ABILITY asks for later. Two prices on one
+  card, and the obvious one is the one a reader skips.
+
+Also: Eternal Vigilance's `andBlock` goes through `unlockAndAttemptBlock`
+rather than emitting the unlock itself, so wave 65's Burden the Mind
+surcharge charges it correctly — two consecutive waves meeting through the
+funnel the first one taxed.
+
+### Wave 65 — taxing and barring a block (4 cards), 2026-09-18
+
+Library **726 → 730**. Aching Beauty, Artistically Inept, Kaymakli Barrier,
+Burden the Mind. Write-up: `docs/block-taxes-design.md`.
+
+The persistent side of the block-restriction family: cards that sit on a
+minion and change what blocking costs or whether it is possible.
+
+**Half the wave was already built.** Aching Beauty is `blockedPoolToll`
+(written for Terrifying Visage, which prints the same sentence) and
+Artistically Inept is `cannotBeBlockedBy.clans` (written for Cloak of the
+Abalone). Two cards, zero new machinery, found by looking before designing
+— **a NON-deferral is also a claim about the code**, and the cheap half of
+a wave is usually a field that exists under another card's name. Their
+tests still earn their place on the negative space: Aching Beauty charges
+nothing when the bleed goes UNBLOCKED, which is what separates it from the
+block tax.
+
+The two new statics each went in beside an existing sibling rather than
+somewhere new: `cannotBlockUndirected` is the third member of the
+cannot-block family (unconditional, by actor kind, by what the action is
+aimed at) and `directedActionBloodTax` sits next to the torpor tax and
+copies its guards. **Burden the Mind's surcharge is one private helper both
+unlock-to-react ops call** — the `onAnyUnlock` lesson applied before it bit,
+rather than after.
+
+**What the tests found, about tests:** an option id is
+`play:<Name>:<mode>:<actor>:<target>:<cardId>`, so a substring probe for
+`:M:` answers about the ACTOR segment as readily as the target. The first
+draft of the Kaymakli test "failed" against correct code; it now asserts
+the whole option list. Same family as the guard-clause lesson: a probe that
+can match the wrong thing is a test that can lie in both directions.
+
+### Wave 64 — the uncontrolled region (4 cards), 2026-09-18
+
+Library **722 → 726**. Gather, Heartblood of the Clan, Social Ladder, Tomb
+of Rameses III. Write-up: `docs/uncontrolled-graduation-design.md`.
+
+Wave 63 made the influence phase's currency a thing cards touch; this wave
+touches the REGION it feeds. Nothing had ever moved a vampire OUT of the
+uncontrolled region except the phase's own `inf:out`, so the move is now
+one helper — the pool tax and the counters-become-blood cap are rules of
+the MOVE, not of the phase. Two new hooks:
+`onTransferToUncontrolled` (per transfer) and `onInfluencePhaseEnd` (the
+fifth phase hook, and the second that fires as a phase closes).
+
+**What it found: the granted-action recogniser was a regex spelling the
+verbs.** `vulnerableTo` writes an option id
+`act:<Name>:<cardId>:<verb>:<actor>`, and the merged granted-action
+provider decides who owns a chosen id with
+`/:(burn|steal|shuffle|strip|raid|vote):/` — three thousand lines away.
+Heartblood of the Clan's friendly outcome writes `feed`, so its action
+**enumerated perfectly and threw the moment it was used**. The verb now
+comes from one function and the recogniser's list is derived from it.
+**A VOCABULARY KEPT IN A REGEX IS A LIST NOBODY GREPS**, verbatim, and the
+second half-right bug in three waves.
+
+**And, in this wave's own code: `ops.emit` applies immediately.** Social
+Ladder moves all of a vampire's blood to an uncontrolled vampire with two
+events, and the first draft read `bearer.blood` for both — so the
+destination got 0. **An amount that appears twice is read once, into a
+local.** The test caught it only because it asserted the DESTINATION's
+counters rather than just that the bearer was gone.
+
 ### Wave 63 — transfers as a currency (4 cards), 2026-09-17
 
 Library **718 → 722**. Ennoia's Theater, King's Rising, Whispers of the

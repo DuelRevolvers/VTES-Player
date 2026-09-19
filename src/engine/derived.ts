@@ -1462,13 +1462,34 @@ export function blockWouldSucceed(
  *  a card in play naming this minion suppresses its unlock for as long as
  *  the card is there. The one-shot form is `MinionState.skipNextUnlock`. */
 export function unlockSuppressed(state: GameState, minion: MinionId): boolean {
+  // "<Clan> do not unlock as normal" (Children of Osiris) — one Methuselah's
+  // card, aimed at a clan across the whole table, so the clan is read off
+  // the minion and every seat's play area is asked
+  // (docs/pay-to-unlock-design.md §2).
+  const who = findMinion(state, minion);
+  // The clan bar is compared FIELD-PRESENT first: a card with no
+  // `clanDoesNotUnlock` and a minion with no clan are both `undefined`, and
+  // `undefined === undefined` suppressed every clanless minion's unlock —
+  // which stalls a game rather than misplaying a card
+  // (docs/lock-as-price-design.md §5).
+  const clanBarred = (p: { statics: { clanDoesNotUnlock?: string } }): boolean =>
+    p.statics.clanDoesNotUnlock !== undefined &&
+    who !== null &&
+    who.clan !== null &&
+    who.clan !== undefined &&
+    p.statics.clanDoesNotUnlock === who.clan;
   for (const seat of state.seats) {
     for (const p of seat.permanents) {
       if (p.preventsUnlock === minion) return true;
+      if (clanBarred(p)) return true;
     }
     for (const m of seat.minions) {
       for (const p of m.attached) {
         if (p.preventsUnlock === minion) return true;
+        // "The vampire WITH THIS CARD does not unlock as normal" (Detection)
+        // — the bearer's own attached cards only.
+        if (m.id === minion && p.statics.bearerDoesNotUnlock === true) return true;
+        if (clanBarred(p)) return true;
       }
     }
   }

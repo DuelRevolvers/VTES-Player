@@ -14,7 +14,8 @@
  * the table, which owns the game from then on.
  */
 
-import { HeuristicAgent } from "../ai/heuristic.ts";
+import { PLAYSTYLES_LIST, PLAYSTYLE_LABELS } from "../ai/playstyles.ts";
+import { botAgentFor, playstyleOf } from "./botagent.ts";
 import { LobbyHost, LobbyPeer } from "../net/lobby.ts";
 import type { HostSession } from "../net/host.ts";
 import { PeerTransport } from "../net/peer.ts";
@@ -73,6 +74,7 @@ import {
 import bannerUrl from "../assets/banner.png";
 import { PLATFORM_VERSION_LABEL } from "../version.ts";
 import {
+  PLAYSTYLE_DEFAULT,
   botNameFor,
   botNameProblem,
   loadSettings,
@@ -435,11 +437,23 @@ export class Shell {
     const rows = [];
     for (let i = 1; i <= MAX_BOT_NAMES; i++) {
       const configured = settings.botNames[i - 1] ?? "";
+      const style = settings.botPlaystyles[i - 1] ?? PLAYSTYLE_DEFAULT;
+      // "Default" is a stored value, not a style: it means "whatever the
+      // deck this seat is playing is set to".
+      const styleOptions = [
+        `<option value="${PLAYSTYLE_DEFAULT}"${style === PLAYSTYLE_DEFAULT ? " selected" : ""}>Default</option>`,
+        ...PLAYSTYLES_LIST.map(
+          (p) => `<option value="${p}"${style === p ? " selected" : ""}>${PLAYSTYLE_LABELS[p]}</option>`,
+        ),
+      ].join("");
       rows.push(`
         <label class="field botnamerow">
           <span>Bot ${i}</span>
           <input class="botname" data-bot="${i}" maxlength="${MAX_NAME_LENGTH}"
                  value="${esc(configured)}" placeholder="Bot ${i}" />
+          <select class="botstyle" data-bot="${i}" aria-label="Bot ${i} playstyle">
+            ${styleOptions}
+          </select>
         </label>`);
     }
     return `
@@ -456,10 +470,14 @@ export class Shell {
           <button id="botnames-reset">Reset to Bot 1…${MAX_BOT_NAMES}</button>
         </div>
         <p class="note dim">
-          A bot's name decides how it plays: the AI is seeded from it, so
-          "Bea" makes the same choices in the same spots every game, and
-          renaming a bot gives it a different personality. Leaderboard
-          standings are kept per name too.
+          A bot's name fixes its luck: the AI is seeded from it, so "Bea"
+          makes the same choices in the same spots every game, and
+          renaming a bot shuffles which way its close calls fall.
+          Leaderboard standings are kept per name too.
+        </p>
+        <p class="note dim">
+          The dropdown decides how a bot <em>plays</em>. Leave it on
+          Default and the bot plays to suit whichever deck it is dealt.
         </p>
         ${this.botNameError ? `<p class="err">${esc(this.botNameError)}</p>` : ""}
       </div>`;
@@ -807,7 +825,21 @@ export class Shell {
             ? `<span class="ldeck ${seat.deck ? "ready" : ""}">${esc(
                 seat.deck ? deckLabel : "no deck yet",
               )}</span>`
-            : `<button class="deckbtn" data-i="${i}">${esc(deckLabel)}</button>`
+            : `<div class="deckrow">
+                 <button class="deckbtn" data-i="${i}">${esc(deckLabel)}</button>
+                 ${
+                   // RANDOM DECK, for a bot only (owner request). Filling
+                   // four seats by hand is four trips through the picker
+                   // to make a choice nobody is making on merit; a die
+                   // beside the button does it in one click. Not offered
+                   // for the host's own seat — choosing your deck is the
+                   // one decision in this screen that is yours.
+                   seat.kind === "ai"
+                     ? `<button class="deckrand" data-i="${i}"
+                                title="give this bot a random preconstructed deck">🎲</button>`
+                     : ""
+                 }
+               </div>`
         }
         ${hash ? `<span class="dhash" title="deck fingerprint">${esc(hash)}</span>` : ""}
       </div>`;
@@ -879,6 +911,34 @@ export class Shell {
   private emojiOpen = false;
   /** Which emoji tab is showing. View state, like the pad itself. */
   private emojiCategory: string = DEFAULT_EMOJI_CATEGORY;
+  /**
+   * WHICH SECTIONS OF THE DECK PICKER ARE OPEN.
+   *
+   * Every section is COLLAPSED BY DEFAULT (owner request): seven precon
+   * sets, your own decks, a paste box and a save box is several screens
+   * of panel, and a player who knows which set they want was scrolling
+   * past the other six to reach it.
+   *
+   * The open set is view state HERE rather than left to the browser's own
+   * `<details>` memory, because a repaint is `innerHTML =` and destroys
+   * every element: saving a deck to the library repaints this panel while
+   * it is still open, and without this every section would snap shut
+   * underneath the player. Same treatment as the How to Play sections
+   * (`helpOpenSections` in loop.ts).
+   */
+  private deckSectionsOpen = new Set<string>();
+
+  /** One collapsible section of the deck picker. The key is what
+   *  `deckSectionsOpen` remembers, so it must be stable across repaints —
+   *  a set name or a fixed literal, never an index. */
+  private deckSection(key: string, title: string, body: string): string {
+    return `
+      <details class="decksec" data-sec="${esc(key)}" ${this.deckSectionsOpen.has(key) ? "open" : ""}>
+        <summary class="sethead">${esc(title)}</summary>
+        ${body}
+      </details>`;
+  }
+
   private deckPanel(i: number, precons: PreconSummary[]): string {
     const bySet = new Map<string, PreconSummary[]>();
     for (const p of precons) bySet.set(p.set, [...(bySet.get(p.set) ?? []), p]);
@@ -890,8 +950,10 @@ export class Shell {
       <div class="deckpanel">
         ${
           saved.length > 0
-            ? `<div class="sethead">Your decks</div>
-               <div class="preconset">
+            ? this.deckSection(
+                "mine",
+                `Your decks (${saved.length})`,
+                `<div class="preconset">
                  ${saved
                    .map((d) => {
                      const s = deckSummary(d.source);
@@ -901,13 +963,18 @@ export class Shell {
                                      title="${esc(s.detail)}">${esc(d.name)}</button>`;
                    })
                    .join("")}
-               </div>`
+               </div>`,
+              )
             : ""
         }
         <div class="sethead">Preconstructed decks</div>
         ${[...bySet.entries()]
           .map(
-            ([set, list]) => `<div class="preconset"><span class="dim">${esc(set)}</span>
+            ([set, list]) =>
+              this.deckSection(
+                `set:${set}`,
+                `${set} (${list.length})`,
+                `<div class="preconset">
               ${list
                 .map((p) => {
                   // The play-style line is the button's tooltip AND its
@@ -934,10 +1001,13 @@ export class Shell {
                           </button>`;
                 })
                 .join("")}</div>`,
+              ),
           )
           .join("")}
-        <div class="sethead">…or paste a deck list</div>
-        <p class="note">
+        ${this.deckSection(
+          "paste",
+          "…or paste a deck list",
+          `<p class="note">
           From VDB, Amaranth, ARDB, JOL, Lackey or the TWD archive — any of
           their text exports. Unknown or unimplemented cards are reported,
           never dropped.
@@ -946,9 +1016,7 @@ export class Shell {
                   placeholder="2x Blood Doll&#10;..."></textarea>
         <div class="row">
           <button class="pasteuse primary" data-i="${i}">Use this list</button>
-          <button class="deckclose" data-i="${i}">Close</button>
         </div>
-        <div class="sethead">…or keep it</div>
         <p class="note">
           Save the pasted list under a name and it appears at the top of
           this panel every time — here, and in a lobby.
@@ -957,8 +1025,18 @@ export class Shell {
           <input class="deckname" data-i="${i}" maxlength="${MAX_DECK_NAME}"
                  placeholder="My Malkavian deck" />
           <button class="decksave" data-i="${i}">Save to my decks</button>
-        </div>
+        </div>`,
+        )}
         ${this.deckError ? `<p class="err">${esc(this.deckError)}</p>` : ""}
+        <!--
+          CLOSE LIVES OUTSIDE THE SECTIONS. It used to sit in the row
+          beside "Use this list"; with every section collapsed by default
+          that put the only way out of the picker inside a fold, and a
+          modal you cannot dismiss is a trap.
+        -->
+        <div class="row deckfoot">
+          <button class="deckclose" data-i="${i}">Close</button>
+        </div>
       </div>`;
   }
 
@@ -1494,6 +1572,12 @@ export class Shell {
       }
       const settings = loadSettings();
       settings.botNames = names;
+      // The row saves as a ROW. Two save buttons in one panel would be a
+      // worse UI than one that saves what is in front of you.
+      settings.botPlaystyles = Array.from(
+        this.root.querySelectorAll<HTMLSelectElement>(".botstyle"),
+        (sel) => sel.value,
+      );
       saveSettings(settings);
       this.botNameError = "";
       // A TABLE ALREADY BUILT DOES NOT RENAME ITSELF. `this.table` was
@@ -1513,6 +1597,9 @@ export class Shell {
     this.on("#botnames-reset", () => {
       const settings = loadSettings();
       settings.botNames = [];
+      // Reset means the whole row, styles included — back to Default,
+      // which is "play to suit the deck".
+      settings.botPlaystyles = [];
       saveSettings(settings);
       this.botNameError = "";
       if (!this.lobbyHost && !this.lobbyPeer) {
@@ -1586,7 +1673,13 @@ export class Shell {
       // `restart` makes the same distinction, for the same reason.
     });
     for (const seat of bots.seats) {
-      transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
+      // The save records how each bot was PLAYING; without it the seat
+      // falls back to balanced, which is what an older save means.
+      const saved = game.botPlaystyles?.[seat];
+      transport.setAgent(
+        seat,
+        botAgentFor(seat, playstyleOf({ playstyle: saved }) ? { playstyle: playstyleOf({ playstyle: saved })! } : {}),
+      );
     }
     this.saveError = "";
     this.toTable(transport);
@@ -1655,6 +1748,36 @@ export class Shell {
         name: el.dataset["name"] ?? "",
       }),
     );
+
+    // THE DIE. Playable-as-printed precons only: a New Blood starter is
+    // half a deck by design (p. 14's two minimums), so handing one to a
+    // bot at random would deal a seat that cannot legally play — the
+    // chooser offers them labelled, which is a different thing from
+    // picking one for somebody.
+    //
+    // `Math.random`, not the seeded RNG: this happens in the lobby,
+    // BEFORE the game exists. The deal's own seed still reproduces the
+    // game from the decks it was given (principle 2) — what is random
+    // here is which deck the owner asked for, not anything the engine
+    // does with it.
+    this.on(".deckrand", (el) => {
+      const pool = supportedPrecons().filter((p) => p.playable);
+      const pick = pool[Math.floor(Math.random() * pool.length)];
+      if (pick) chooseDeck(seatAt(el), { kind: "precon", set: pick.set, name: pick.name });
+    });
+
+    // `toggle` does not bubble, so it is wired per section — and these
+    // elements are rebuilt by every repaint, so the listeners cannot
+    // stack up. No repaint of our own: the browser has already done the
+    // only visible work.
+    for (const el of Array.from(this.root.querySelectorAll<HTMLDetailsElement>(".decksec"))) {
+      el.addEventListener("toggle", () => {
+        const key = el.dataset["sec"];
+        if (!key) return;
+        if (el.open) this.deckSectionsOpen.add(key);
+        else this.deckSectionsOpen.delete(key);
+      });
+    }
     this.on(".pasteuse", (el) => {
       const i = seatAt(el);
       const box = this.root.querySelector<HTMLTextAreaElement>(`.pastebox[data-i="${i}"]`);
@@ -1780,9 +1903,18 @@ export class Shell {
       aiDelayMs: loadSettings().aiDelayMs,
       openingDelayMs: OPENING_DELAY_MS,
     });
-    for (const seat of botSeats(this.table)) {
-      transport.setAgent(seat, new HeuristicAgent({ seed: seatSeed(seat) }));
-    }
+    const settings = loadSettings();
+    botSeats(this.table).forEach((seat, i) => {
+      transport.setAgent(
+        seat,
+        botAgentFor(seat, {
+          settings,
+          // 1-based and positional, matching the "Bot 1…5" boxes.
+          botIndex: i + 1,
+          deck: this.table.seats.find((s) => s.name === seat)?.deck ?? null,
+        }),
+      );
+    });
     this.toTable(transport);
   }
 

@@ -8,6 +8,7 @@
 import type { DecisionPoint, LegalOption } from "./options.ts";
 import type { ActionKind, CardInstance, CombatStep, GameState, MinionId, MinionState, PermanentInPlay, Range, SeatId } from "./state.ts";
 import { currentBleed, currentIntercept, currentStealth, openHandsFor } from "./derived.ts";
+import { resolvePerSeat } from "./state.ts";
 
 export interface PlayerView {
   you: SeatId;
@@ -108,6 +109,29 @@ export interface PlayerView {
      * they are about to lose.
      */
     bleed?: number;
+    /**
+     * The card this action was announced with, or null for a built-in
+     * (a bleed, a hunt, a rescue).
+     *
+     * It is announced FACE UP and its text is public (p. 25) — every
+     * other seat at the table is reading it right now — and the
+     * projection was dropping it, so `ActionKind` was all a blocker had.
+     * Six kinds, one of which is `"cardEffect"`, meaning **every action
+     * card in the game**: a Govern, an Embrace and a referendum about to
+     * burn six pool all looked identical to the seat deciding whether to
+     * stop them (docs/ai-block-action-value-design.md §2).
+     */
+    cardName: string | null;
+    /**
+     * That card is a POLITICAL ACTION, so success calls a referendum.
+     *
+     * A flag rather than a card type, and deliberately the ONLY thing
+     * this projection says about what the card is: blocking the action is
+     * the cheapest answer to politics in VTES, and it is the one
+     * distinction that can be drawn without teaching the AI a table of
+     * card names — the failure mode every doc in this set refuses.
+     */
+    political: boolean;
     /** Intercept each of the VIEWER's own minions currently has against
      *  this action — what a block attempt would be worth right now. */
     intercept: Record<MinionId, number>;
@@ -146,6 +170,98 @@ export interface PlayerView {
     opponent: MinionId | null;
     /** True when this combat came from a successful block. */
     fromBlock: boolean;
+  };
+  /**
+   * The referendum in progress, if there is one.
+   *
+   * THE THIRD TIME THIS GAP HAS BEEN FOUND, and the last frame that was
+   * being dropped. `action` exists because a seat asked to block was
+   * given no numbers; `combat` exists because a seat asked to strike was
+   * given nothing at all; and a seat asked to VOTE was given the option's
+   * `source`, `count` and `inFavor` and nothing else — not who called it,
+   * not what it does, not who it hits.
+   *
+   * The cost was measured before this was written: the policy voted **FOR
+   * 70, AGAINST 0** over 20 games, because `voteOwn` and
+   * `voteAgainstOthers` are named for a condition — "is this MY
+   * referendum" — that nothing in scope could evaluate
+   * (docs/ai-decision-profile-2026-09-18.md).
+   *
+   * Every field is OPEN INFORMATION, which is the same test `action` and
+   * `combat` were held to: the calling card is announced face up and its
+   * text is public (p. 25), the terms are declared aloud on success
+   * (p. 27), and the running tally is what the table has been watching —
+   * `src/ui/render.ts` already draws it for the human sitting there. The
+   * bot was strictly worse informed than the person beside it.
+   */
+  referendum?: {
+    /** Who called it — the question the vote weights are named for. */
+    caller: SeatId;
+    /** Handler key of the calling card; "" for a blood hunt (p. 35). */
+    cardName: string;
+    variant: "political" | "bloodHunt";
+    /** The calling vampire, for the p. 28 modifier/reaction split. Null
+     *  for a blood hunt, which has no calling minion. */
+    callingMinion: MinionId | null;
+    step: "terms" | "polling" | "afterResolution";
+    /**
+     * The caller's declared choices — structured params, not prose, so a
+     * scorer never has to parse card text. Empty until the terms step has
+     * been answered (they are chosen on success only: p. 25's one
+     * exception, p. 27).
+     *
+     * **THE SAME KEY MEANS OPPOSITE THINGS ON DIFFERENT CARDS**, and this
+     * was found the hard way while building this projection. A first cut
+     * folded these keys into a signed per-seat pool delta on the
+     * assumption that `alloc` names the seats that LOSE and `chosen`
+     * names the beneficiary. Parity Shift is the other way round: "choose
+     * a Methuselah who has more pool than you do and allocate 3 of THEIR
+     * pool among 1 or more other Methuselahs" — the chosen seat loses and
+     * the allocated seats gain.
+     *
+     * So a generic parse over these keys **cannot sign the pool**, and a
+     * wrong sign is worse than no rule: it would aim a burn at the
+     * voter's own prey believing it a gift. Signing belongs with the card
+     * that knows, and is specified per card by the consumer that needs it
+     * (docs/ai-vote-scoring-design.md).
+     */
+    terms: Record<string, string>;
+    /** The running tally, as the table can count it. */
+    votesFor: number;
+    votesAgainst: number;
+    /** Vote sources already spent, so an agent can price what is LEFT. */
+    usedSources: string[];
+    /** The vampire a blood hunt would burn (p. 35), null otherwise. */
+    bloodHuntTarget: MinionId | null;
+    /**
+     * WHICH WAY THIS REFERENDUM MOVES POOL — declared by the calling
+     * card, not inferred (owner ruling, 2026-09-18).
+     *
+     * ABSENT means UNKNOWN — a blood hunt (p. 35 — no card at all), or a
+     * handler that declares nothing — and must never be read as "no pool
+     * moves". That is what `"other"` says, and it is a different claim.
+     *
+     * WHICH SEATS, and by how much, is `perSeat` — present only when the
+     * card's terms name seats at all.
+     */
+    effectKind?: "burn" | "gain" | "other";
+    /**
+     * Signed pool deltas by seat, resolved from the declared terms:
+     * **positive means that seat GAINS pool, negative means it LOSES it.**
+     *
+     * Empty during the terms step (nothing chosen yet), and **absent
+     * where the card's terms name no seats** — which is most pool-moving
+     * referendums, because they charge the whole table from the BOARD
+     * (Anarch Salon per Sabbat vampire, Tithings per seat with more pool,
+     * Diversity per distinct clan) rather than from anything the caller
+     * declared. Absent is "I cannot say", never "nothing happens".
+     *
+     * The MAGNITUDE can be a floor: a conditional extra that depends on
+     * what a seat controls is not counted (Empires Fall's +3). The SIGN
+     * is exact, which is the right way round — a scorer that under-rates
+     * a burn still votes for it, where a wrong sign votes backwards.
+     */
+    perSeat?: Record<SeatId, number>;
   };
 }
 
@@ -308,6 +424,8 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
           target: af.target,
           directed: af.directed,
           stealth: currentStealth(state, af.actionId),
+          cardName: af.card?.instance.name ?? null,
+          political: af.political === true,
           // Only for a bleed: every other action kind has no such number,
           // and reporting a 0 would read as "a bleed worth nothing".
           ...(af.actionKind === "bleed" ? { bleed: currentBleed(state, af) } : {}),
@@ -345,6 +463,32 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
           opponent:
             cf.actingSeat === seat ? cf.opposing : cf.opposingSeat === seat ? cf.acting : null,
           fromBlock: cf.fromBlock,
+        }
+      : null;
+  // The referendum, same treatment and the same argument: a card
+  // announced face up, terms declared aloud, and a tally the table has
+  // been counting. Innermost first, like the two above — a referendum can
+  // sit under another frame, and the one being voted on is the live one.
+  const rf = [...state.frames].reverse().find((f) => f.kind === "referendum");
+  const referendum =
+    rf && rf.kind === "referendum"
+      ? {
+          caller: rf.caller,
+          cardName: rf.cardName,
+          variant: rf.variant,
+          callingMinion: rf.callingMinion,
+          step: rf.step,
+          terms: { ...rf.terms },
+          // Counted from the cast votes rather than read from `votesFor`,
+          // which the frame only fills in AT THE TALLY — so a seat
+          // deciding mid-polling would otherwise be told 0 to 0 while
+          // votes were plainly on the table.
+          votesFor: rf.votes.filter((v) => v.inFavor).reduce((n, v) => n + v.count, 0),
+          votesAgainst: rf.votes.filter((v) => !v.inFavor).reduce((n, v) => n + v.count, 0),
+          usedSources: [...rf.usedSources],
+          bloodHuntTarget: rf.bloodHuntTarget,
+          ...(rf.effectKind ? { effectKind: rf.effectKind } : {}),
+          ...(rf.seatMap ? { perSeat: resolvePerSeat(rf.terms, rf.seatMap) } : {}),
         }
       : null;
   // The count/array split has to agree with the masking above, so it asks
@@ -385,6 +529,7 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
     })),
     ...(action ? { action } : {}),
     ...(combat ? { combat } : {}),
+    ...(referendum ? { referendum } : {}),
   };
 }
 

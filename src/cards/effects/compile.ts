@@ -212,6 +212,11 @@ export function meetsRequirements(m: MinionState, spec: CardSpec): boolean {
   if (spec.requiresCapacity !== undefined && capacityOf(m) < spec.requiresCapacity) {
     return false;
   }
+  // "Requires a vampire with capacity 5 OR LESS" (Atonement) — the ceiling,
+  // checked here beside the floor so a card with both is one question.
+  if (spec.requiresMaxCapacity !== undefined && capacityOf(m) > spec.requiresMaxCapacity) {
+    return false;
+  }
   // "Requires a (ready) VAMPIRE" (Surprise Influence, Sense the Savage
   // Way, Ghoul Escort) — an ally is a minion and may otherwise play
   // reactions or employ retainers. Found by the 2026-09-14 library audit.
@@ -893,6 +898,68 @@ function requiresDiscipline(
   return modes.some((m) => (h.requiresDisciplines?.(m, undefined) ?? []).includes(discipline));
 }
 
+/**
+ * The verb segment of a `vulnerableTo` granted action's option id —
+ * `act:<Name>:<cardId>:<verb>:<actor>`.
+ *
+ * ONE function, because the id is written here and RECOGNISED three
+ * thousand lines away, where the granted-action providers decide which of
+ * them owns a chosen id. That recogniser was a regex spelling the verbs,
+ * and adding an outcome to this family without editing it produced a card
+ * whose action enumerated perfectly and threw the moment it was used —
+ * half-right, which is the worst state for a bug. `VULNERABLE_VERBS` is
+ * derived from this function so the two cannot disagree.
+ * docs/uncontrolled-graduation-design.md §6
+ */
+function vulnerableVerb(outcome: string | undefined, political: boolean): string {
+  if (political) return "vote";
+  switch (outcome) {
+    case "steal":
+      return "steal";
+    case "shuffleIntoLibrary":
+      return "shuffle";
+    case "burnCounters":
+      return "strip";
+    case "takeCounters":
+      return "raid";
+    case "addCounter":
+      return "feed";
+    default:
+      return "burn";
+  }
+}
+
+/** Every verb `vulnerableVerb` can produce — the recogniser's list, built
+ *  from the producer rather than spelled again. */
+const VULNERABLE_VERBS = [
+  vulnerableVerb(undefined, true),
+  ...(
+    [
+      undefined,
+      "steal",
+      "shuffleIntoLibrary",
+      "burnCounters",
+      "takeCounters",
+      "addCounter",
+    ] as const
+  ).map((o) => vulnerableVerb(o, false)),
+];
+
+/**
+ * "…unless that vampire would CONTEST a vampire in play" (Gather).
+ *
+ * A vampire coming out of the uncontrolled region contests a vampire in
+ * play with the SAME NAME (p. 17) — a crypt card's uniqueness is its name,
+ * and a contest is keyed on it. Any seat's copy counts: the contest is
+ * between the two cards, not between two Methuselahs.
+ * docs/uncontrolled-graduation-design.md §3
+ */
+function wouldContestInPlay(state: GameState, minion: MinionId): boolean {
+  const entry = state.seats.flatMap((s) => s.uncontrolled).find((u) => u.card.id === minion);
+  if (!entry) return false;
+  return state.seats.some((s) => s.minions.some((m) => m.name === entry.card.name));
+}
+
 /** Does an unlock drain apply to the Methuselah whose phase it is?
  *  (docs/pool-drain-design.md §3). */
 function drainConditionHolds(
@@ -1478,8 +1545,17 @@ function compileActionCard(spec: CardSpec): CardHandler {
               attach.target === "ownMinion"
                 ? seat.minions
                 : ctx.state.seats.filter((s) => !s.ousted).flatMap((s) => s.minions);
+            const filter = attach.targetFilter;
             for (const t of pool) {
               if (t.attached.some((p) => p.tags.includes(spec.name))) continue;
+              // "…on a YOUNGER READY VAMPIRE" (Kaymakli Barrier). Ready is
+              // p. 6's ready — a vampire in torpor is not one — and
+              // "younger" is smaller capacity than the acting vampire.
+              if (filter?.kind !== undefined && t.kind !== filter.kind) continue;
+              if (filter !== undefined && !isReady(t)) continue;
+              if (filter?.youngerThanActor === true && capacityOf(t) >= capacityOf(m)) {
+                continue;
+              }
               // "…cannot be the target of other Methuselahs' actions".
               if (untargetableBy(t, ctx.seat, m)) continue;
               push(mode, { target: t.id });
@@ -2308,10 +2384,18 @@ function compileActionCard(spec: CardSpec): CardHandler {
       // lookup cannot answer a question whose answer differs by mode
       // (docs/combat-attachments-design.md §3).
       if (!eff) return null;
-      const r: { counters?: number; tags: string[]; statics?: PermanentStatics } = {
+      const r: {
+        counters?: number;
+        tags: string[];
+        statics?: PermanentStatics;
+        locked?: boolean;
+      } = {
         tags: eff.tags ?? [spec.name, "location"],
       };
       if (eff.counters !== undefined) r.counters = eff.counters;
+      // "Put this card in play, LOCKED" (Gather) — the card pays a turn
+      // before its own ability is available.
+      if (eff.locked === true) r.locked = true;
       // "Your prey plays with an open hand" (Revelations superior) — the
       // card in play carries statics like any other permanent.
       if (spec.permanent?.statics) r.statics = spec.permanent.statics;
@@ -4434,7 +4518,7 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       // Polling-step vote grant — no action underway.
       if (mode.effects.some((e) => e.kind === "modifyVotes")) {
         for (const e of mode.effects) {
-          if (e.kind === "modifyVotes") ops.grantVotes(play.seat, e.amount);
+          if (e.kind === "modifyVotes") ops.grantVotes(play.seat, e.amount, e.direction ?? "any");
         }
         return;
       }
@@ -6498,17 +6582,7 @@ export function vulnerableGrant(
       if (ctx.window !== "turn.minion") return [];
       // Enumerated for the acting seat, whoever controls the card.
       const acting = getSeat(ctx.state, ctx.seat);
-      const verb = political
-        ? "vote"
-        : v.outcome === "steal"
-          ? "steal"
-          : v.outcome === "shuffleIntoLibrary"
-            ? "shuffle"
-            : v.outcome === "burnCounters"
-              ? "strip"
-              : v.outcome === "takeCounters"
-                ? "raid"
-                : "burn";
+      const verb = vulnerableVerb(v.outcome, political);
       const options: LegalOption[] = [];
       for (const m of acting.minions) {
         if (!eligible(ctx.state, m, owner.seat, owner.minion)) continue;
@@ -6564,9 +6638,15 @@ export function vulnerableGrant(
                       ? "stripCounters"
                       : v.outcome === "takeCounters"
                         ? "takeCounters"
-                        : "burnCard",
+                        : v.outcome === "addCounter"
+                          ? "addCounterToCard"
+                          : "burnCard",
             },
-            targetPermanent: entry.card.id,
+            // An UNDIRECTED grant passes no `targetPermanent` — that field
+            // is what makes an action directed at the card's controller
+            // when they are somebody else, and Heartblood of the Clan
+            // prints no Ⓓ. The resolve is handed the entry either way.
+            ...(v.undirected === true ? {} : { targetPermanent: entry.card.id }),
           };
       const stealth = (v.stealth ?? 0) + stealthFor(actor);
       if (stealth !== 0) args.stealth = stealth;
@@ -6585,6 +6665,15 @@ export function vulnerableGrant(
       }
       if (af.grantedEffect?.key === "shuffleCard") {
         ops.shuffleIntoLibrary(entry.card.id);
+        return;
+      }
+      if (af.grantedEffect?.key === "addCounterToCard") {
+        // "Any Assamite can ADD 1 BLOOD to this card as an action"
+        // (Heartblood of the Clan). The blood comes off the acting vampire
+        // — the cost `v.cost.blood` already took it at resolution (p. 27) —
+        // and lands on the card as a counter; p. 5 says the two are the
+        // same physical thing.
+        ops.addCounters(entry.card.id, 1);
         return;
       }
       if (af.grantedEffect?.key === "stripCounters") {
@@ -6624,6 +6713,15 @@ export function vulnerableGrant(
             ops.emit({ type: "MinionLocked", minion: bearer.id });
           }
           if (penalty.skipNextUnlock) bearer.skipNextUnlock = true;
+        }
+      }
+      // "This minion may burn this card AND UNLOCK as a Ⓓ action" (Burden
+      // the Mind) — read BEFORE the burn, like the penalty above, because
+      // the bearer is only findable through the entry.
+      if (v?.unlockBearerOnBurn === true) {
+        const bearer = bearerOf(ops.state, entry.card.id);
+        if (bearer?.locked === true) {
+          ops.emit({ type: "MinionUnlocked", minion: bearer.id });
         }
       }
       // "…that inflicts 1 unpreventable environmental damage on acting
@@ -6835,6 +6933,7 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
     handler.weaponProfile = {
       damage: w.combatEndsStrike ? 0 : (w.damage ?? 1 + (w.handBonus ?? 0)),
       aggravated: w.aggravated,
+      ranged: w.ranged,
     };
     const priorOptions = handler.abilityOptions?.bind(handler);
     const priorUse = handler.useAbility?.bind(handler);
@@ -7501,12 +7600,152 @@ function ops_allMinionIds(state: GameState): MinionId[] {
   return state.seats.filter((s) => !s.ousted).flatMap((s) => s.minions.map((m) => m.id));
 }
 
+/**
+ * WHICH WAY A REFERENDUM MOVES POOL — burn, gain, or neither.
+ *
+ * Owner ruling, 2026-09-18 (docs/ai-referendum-view-design.md §5, option
+ * a): **the primitive declares it.** An agent asked to vote could see
+ * which seats the terms named and not whether being named was good or
+ * bad, so it could not tell a burn from a gift — and the alternative,
+ * a table of card names in the AI, is a second model of the card pool
+ * that goes stale on every card wave in silence.
+ *
+ * `Record` over the extracted `ref*` kinds rather than a `switch` with a
+ * default, so **a new referendum primitive is a COMPILE ERROR until it
+ * declares**. A primitive that silently defaulted would be worse than no
+ * declaration at all: a wrong sign aims a burn at the voter's own prey.
+ *
+ * "other" is a real answer, not a shrug — most referendums move minions,
+ * locations, titles or cards rather than pool, and saying so is what
+ * keeps a scorer from inventing a pool swing that never happens.
+ */
+export type ReferendumEffectKind = "burn" | "gain" | "other";
+
+type ReferendumPrimitive = Extract<EffectPrimitive, { kind: `ref${string}` }>;
+
+const REFERENDUM_POLARITY: Record<ReferendumPrimitive["kind"], ReferendumEffectKind> = {
+  // Pool OFF a Methuselah.
+  refAllocateBurn: "burn",
+  refBurnPerMinion: "burn",
+  refBurnSeatOrLocation: "burn",
+  refChooseSeatsBurn: "burn",
+  // "Take pool from each Methuselah with more than you" — the seats it
+  // names lose it, which is what a voter is deciding about.
+  refStealPerSeat: "burn",
+  // Pool ONTO a Methuselah.
+  refClanBoon: "gain",
+  refClanDiversity: "gain",
+  refSectPayout: "gain",
+  // Neither: these move minions, cards, titles, locations or the Edge.
+  refAttachToChosen: "other",
+  refBurnAllKeepable: "other",
+  refExpelMinions: "other",
+  refGiveEdge: "other",
+  refLockAndAllocate: "other",
+  refLockClan: "other",
+  refMoveLocation: "other",
+  refPerSeatCards: "other",
+  refPutInPlay: "other",
+  refRemoveChosenMinion: "other",
+  // Decided by its own `effect` field rather than by its kind — see below.
+  refPerMinion: "other",
+};
+
+/**
+ * HOW A REFERENDUM'S DECLARED TERMS MAP TO POOL MOVING.
+ *
+ * `referendumPolarity` says which way; this says **onto whom, and how
+ * much**. They are separate because they were learned separately: a first
+ * cut folded the terms into per-seat deltas generically, on the
+ * assumption that `alloc` always names the seats that LOSE. Parity Shift
+ * is the reverse — "allocate 3 of THEIR pool among 1 or more other
+ * Methuselahs" — so the chosen seat loses and the allocated seats gain.
+ *
+ * **The same key carries opposite signs on different cards**, so the card
+ * has to say. Derived from the primitive where there is one, exactly as
+ * the polarity is, so a new card in an existing family is covered without
+ * anybody remembering to declare.
+ *
+ * `each` absent means the amounts live in the key itself, which is true
+ * of `alloc` and of nothing else.
+ */
+export interface ReferendumSeatMap {
+  /** Terms key naming the seats that LOSE pool. */
+  losers?: { key: string; each?: number };
+  /** Terms key naming the seats that GAIN it. */
+  gainers?: { key: string; each?: number };
+}
+
+/**
+ * The seat map for a primitive, or null where the terms name no seats.
+ *
+ * Null is the common case and an honest answer: most pool-moving
+ * referendums charge the whole table from the BOARD rather than from the
+ * terms (Anarch Salon per Sabbat vampire, Tithings per seat with more
+ * pool, Diversity per distinct clan). Those need the board walked, not
+ * the terms parsed, and a scorer gets `kind` without `perSeat` — which is
+ * strictly more than it had and honestly less than everything.
+ */
+export function referendumSeatMap(primitive: EffectPrimitive | null): ReferendumSeatMap | null {
+  if (!primitive) return null;
+  switch (primitive.kind) {
+    case "refAllocateBurn":
+      // "Allocate N points … each Methuselah burns 1 pool for each point
+      // allocated" (Kine Resources Contested, Conservative Agitation,
+      // Reckless Agitation), plus the one card that also pays somebody:
+      // "…and the chosen Methuselah gains 1 pool" (Camarilla's Iron Fist).
+      return {
+        losers: { key: "alloc" },
+        ...(primitive.beneficiary
+          ? { gainers: { key: "chosen", each: primitive.beneficiary.gainPool } }
+          : {}),
+      };
+    case "refChooseSeatsBurn":
+      // "Each chosen Methuselah burns `base` pool", plus a conditional
+      // extra this does NOT model — `capBonus` depends on what they
+      // control, so counting it would mean walking the board. The SIGN is
+      // exact and the magnitude is a floor, which is the right way round:
+      // a scorer that under-rates a burn still votes for it.
+      return { losers: { key: "seats", each: primitive.base } };
+    case "refBurnSeatOrLocation":
+      // "The chosen Methuselah burns 3 pool" (Cold War). The location
+      // half names no seat and is left out rather than guessed at.
+      return { losers: { key: "seat", each: primitive.poolBurn } };
+    default:
+      return null;
+  }
+}
+
+/** The polarity of one card's referendum primitive, or null when the card
+ *  has none (a bespoke handler, or a granted referendum with no spec). */
+export function referendumPolarity(primitive: EffectPrimitive | null): ReferendumEffectKind | null {
+  if (!primitive) return null;
+  // `refPerMinion` is the one primitive whose polarity is a property of
+  // the INSTANCE, not of the kind: the same primitive gains pool on one
+  // card and burns blood on another. A field that exists at two levels
+  // needs its reader checked, not its spelling.
+  if (primitive.kind === "refPerMinion") {
+    return primitive.effect === "gainPool"
+      ? "gain"
+      : primitive.effect === "burnPool"
+        ? "burn"
+        : // burnBlood is charged to MINIONS, so it is not a pool swing at
+          // all and must not be scored as one.
+          "other";
+  }
+  return REFERENDUM_POLARITY[primitive.kind as ReferendumPrimitive["kind"]] ?? null;
+}
+
 /** Political action cards: only vampires may play them (p. 10); one
  *  political action per vampire per turn (p. 24); undirected +1 stealth;
  *  success calls the referendum, whose terms and effects come from the
  *  spec's referendum primitive. */
 function compilePoliticalAction(spec: CardSpec): CardHandler {
   const primitive = spec.modes[0]?.effects[0] ?? null;
+  // The primitive where there is one; the spec's own declaration for a
+  // card whose terms are bespoke and whose `effects` are therefore empty.
+  const polarity = referendumPolarity(primitive) ?? spec.referendumEffect ?? null;
+  const seatMap = referendumSeatMap(primitive) ?? spec.referendumSeats ?? null;
 
   return {
     name: spec.name,
@@ -7514,6 +7753,8 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
     poolCost: spec.poolCost ?? 0,
     isActionCard: true,
     isPoliticalAction: true,
+    ...(polarity ? { referendumEffect: polarity } : {}),
+    ...(seatMap ? { referendumSeats: seatMap } : {}),
 
     options(card, ctx) {
       if (ctx.window !== "turn.minion") return [];
@@ -10172,8 +10413,10 @@ export function compileSpec(spec: CardSpec): CardHandler {
   const providers: GrantedActionProvider[] = [];
   if (spec.permanent?.vulnerableTo) {
     providers.push({
-      // act:<Name>:<cardId>:<burn|steal|shuffle|strip>:<actor>
-      owns: (id) => /:(burn|steal|shuffle|strip|raid|vote):/.test(id),
+      // act:<Name>:<cardId>:<verb>:<actor>, where the verbs are exactly the
+      // ones `vulnerableVerb` writes — the list is derived from the producer
+      // rather than spelled here, which is what this line got wrong once.
+      owns: (id) => VULNERABLE_VERBS.some((verb) => id.includes(`:${verb}:`)),
       ...vulnerableGrant(spec),
     });
   }
@@ -14173,6 +14416,10 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   const rescue = perm?.torporRescue;
   const transfers = perm?.transferAbilities;
   const handSize = perm?.handSizeLock;
+  const payUnlock = perm?.payToUnlock;
+  const carry = perm?.carryTransfer;
+  const punish = perm?.blockedBleedPunish;
+  const unc = perm?.uncontrolled;
   const peek = perm?.cryptPeek;
   const ambush = perm?.preReferendumAmbush;
   const store = perm?.bloodStore;
@@ -14180,6 +14427,11 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   if (
     offers.length === 0 &&
     !handSize &&
+    !payUnlock &&
+    !carry &&
+    !punish &&
+    !perm?.statics?.lockInsteadOfBlocker &&
+    !unc &&
     !afterBlood &&
     !frenzy &&
     !exchange &&
@@ -14212,6 +14464,13 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   // "ANY Methuselah can …": the options above are built for `ctx.seat`, and
   // without this flag the engine only asks the controller's card at all.
   if (transfers?.burnByAnySeat || transfers?.tutor) handler.abilityAnySeat = true;
+  // The pay-to-unlock offer belongs to the BEARER's controller, who is
+  // usually not the card's controller — Detection and Children of Osiris are
+  // played at somebody else's vampires (docs/pay-to-unlock-design.md §3).
+  if (payUnlock) handler.abilityAnySeat = true;
+  // "During EACH Methuselah's unlock phase, THAT Methuselah can…" (Blood
+  // Trade): one card in one play area, used by everyone in their own phase.
+  if (carry?.anySeat === true) handler.abilityAnySeat = true;
 
   handler.abilityOptions = (entry, owner, ctx) => {
     const out: LegalOption[] = baseOptions ? [...baseOptions(entry, owner, ctx)] : [];
@@ -14257,7 +14516,211 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         }
       }
     }
+    // "…may burn 1 blood to unlock" (docs/pay-to-unlock-design.md §3). Built
+    // for `ctx.seat` and BEFORE the controller gate: the vampire whose unlock
+    // is being bought belongs to the asking Methuselah, not to whoever played
+    // the card. Getting this backwards offers the card to nobody, silently.
+    if (payUnlock) {
+      const bearer = owner.minion === null ? null : findMinion(ctx.state, owner.minion);
+      const who = payUnlock.who;
+      const inWindow =
+        payUnlock.window === "unlock"
+          ? ctx.window === "turn.unlock" && ctx.turnSeat === ctx.seat
+          : payUnlock.window === "minion"
+            ? ctx.window === "turn.minion" && ctx.turnSeat === ctx.seat
+            : ctx.action !== null && ctx.window === "action.effects";
+      if (inWindow) {
+        // Every arm names who UNLOCKS and who PAYS: the bearer for
+        // themselves, each own vampire of a clan for itself (Children of
+        // Osiris has no bearer at all), and the bearer for Firebrand's
+        // younger anarch.
+        const candidates: Array<{ unlocks: MinionState; payer: MinionState }> = [];
+        if (who === "bearer") {
+          if (bearer && bearer.controller === ctx.seat) {
+            candidates.push({ unlocks: bearer, payer: bearer });
+          }
+        } else if ("clan" in who) {
+          for (const m of getSeat(ctx.state, ctx.seat).minions) {
+            if (m.clan !== who.clan) continue;
+            candidates.push({ unlocks: m, payer: m });
+          }
+        } else if (bearer && bearer.controller === ctx.seat) {
+          for (const m of getSeat(ctx.state, ctx.seat).minions) {
+            if (m.id === bearer.id) continue;
+            if (m.sect !== who.sect) continue;
+            if (who.youngerThanBearer === true && capacityOf(m) >= capacityOf(bearer)) {
+              continue;
+            }
+            candidates.push({ unlocks: m, payer: bearer });
+          }
+        }
+        for (const c of candidates) {
+          // Nothing to buy for a vampire who is already unlocked, a vampire
+          // in torpor is not ready (p. 6), and a price that cannot be paid
+          // is not an option.
+          if (!c.unlocks.locked || c.unlocks.inTorpor) continue;
+          if (c.payer.blood < payUnlock.blood) continue;
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:payunlock:${c.unlocks.id}`,
+            kind: "useAbility",
+            label:
+              `${c.payer.name}: burn ${payUnlock.blood} blood to unlock ${c.unlocks.name}` +
+              (payUnlock.andBlock === true ? " and attempt to block" : ""),
+            source: entry.card.id,
+            params: { act: "payUnlock", target: c.unlocks.id, payer: c.payer.id },
+          });
+        }
+      }
+    }
+    // Moving blood and equipment between minions
+    // (docs/blood-and-gear-design.md). Before the controller gate, because
+    // Blood Trade is used by every Methuselah in their own unlock phase.
+    if (carry) {
+      const mine = carry.anySeat === true ? ctx.seat : controller;
+      const inWindow =
+        carry.window === "master"
+          ? ctx.window === "turn.master" && ctx.turnSeat === mine
+          : ctx.window === "turn.unlock" && ctx.turnSeat === mine;
+      // "During X, do Y" is once per phase (p. 16) — and for the cards that
+      // lock, the lock says so as well.
+      const spent = (entry.phaseUses ?? 0) > 0 || (carry.lock === true && entry.locked);
+      if (inWindow && !spent && (carry.anySeat === true || ctx.seat === controller)) {
+        const who = carry.who ?? {};
+        const eligible = getSeat(ctx.state, mine).minions.filter(
+          (m) =>
+            isReady(m) &&
+            (who.sect === undefined || m.sect === who.sect) &&
+            (who.clan === undefined || m.clan === who.clan),
+        );
+        if (carry.blood !== undefined) {
+          const amount = carry.blood;
+          for (const from of eligible) {
+            if (from.blood < amount) continue;
+            if (carry.toCard === true) {
+              out.push({
+                id: `ability:${spec.name}:${entry.card.id}:carryblood:${from.id}:card`,
+                kind: "useAbility",
+                label: `${spec.name}: move ${amount} blood from ${from.name} onto it`,
+                source: entry.card.id,
+                params: { act: "carryBlood", from: from.id, to: "card" },
+              });
+              continue;
+            }
+            // "…to a vampire controlled by ANOTHER Methuselah" (Blood Trade)
+            // vs "between any two ready Sabbat YOU control" (Cathedral).
+            const targets = carry.crossSeat === true
+              ? ctx.state.seats
+                  .filter((s) => s.id !== mine && !s.ousted)
+                  .flatMap((s) => s.minions)
+                  .filter((m) => m.kind === "vampire" && isReady(m))
+              : eligible.filter((m) => m.id !== from.id);
+            for (const to of targets) {
+              // A vampire already at capacity gains nothing: the counter
+              // would drain straight back (docs/futile-options-design.md).
+              if (to.kind === "vampire" && to.blood >= capacityOf(to)) continue;
+              out.push({
+                id: `ability:${spec.name}:${entry.card.id}:carryblood:${from.id}:${to.id}`,
+                kind: "useAbility",
+                label: `${spec.name}: move ${amount} blood from ${from.name} to ${to.name}`,
+                source: entry.card.id,
+                params: { act: "carryBlood", from: from.id, to: to.id },
+              });
+            }
+          }
+        }
+        if (carry.equipment === true) {
+          for (const from of eligible) {
+            for (const p of from.attached) {
+              if (!p.tags.includes("weapon") && !p.tags.includes("equipment")) {
+                // Equipment is recognised by the entry's own tags; a card
+                // with neither tag is a retainer, a title or an action card
+                // sitting on the vampire, and none of those transfer.
+                if (ctx.registry[p.card.name]?.isEquipment !== true) continue;
+              }
+              for (const to of eligible) {
+                if (to.id === from.id) continue;
+                out.push({
+                  id: `ability:${spec.name}:${entry.card.id}:carrygear:${p.card.id}:${to.id}`,
+                  kind: "useAbility",
+                  label: `${spec.name}: move ${p.card.name} from ${from.name} to ${to.name}`,
+                  source: entry.card.id,
+                  params: { act: "carryGear", card: p.card.id, from: from.id, to: to.id },
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+    // "If a minion you control blocks a bleed against you, you may lock this
+    // card during the SECOND ROUND of the resulting combat…" (The Spawning
+    // Pool, docs/blood-and-gear-design.md §4).
+    if (punish && !entry.locked && ctx.seat === controller) {
+      const cf = ctx.combat;
+      const af = ctx.action;
+      const held = entry.counters ?? 0;
+      if (
+        cf !== null &&
+        af !== null &&
+        held > 0 &&
+        cf.round === punish.round &&
+        af.actionKind === "bleed" &&
+        af.target === controller &&
+        findMinion(ctx.state, cf.opposing)?.controller === controller
+      ) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:punish`,
+          kind: "useAbility",
+          label: `${spec.name}: lock it to inflict ${held * punish.perCounter} unpreventable damage`,
+          source: entry.card.id,
+          params: { act: "punish", target: cf.acting },
+        });
+      }
+    }
     if (ctx.seat !== controller) return out;
+    // The uncontrolled region (docs/uncontrolled-graduation-design.md).
+    if (unc && ctx.window === "turn.influence" && ctx.turnSeat === controller) {
+      const seat = getSeat(ctx.state, controller);
+      const grad = unc.graduateChosen;
+      const chosen = entry.linkedUncontrolled;
+      if (grad && chosen !== undefined && !(grad.lock === true && entry.locked)) {
+        // The chosen vampire may have left the region since — a card that
+        // names a vampire has to re-ask where they are (a derived read must
+        // be TOTAL).
+        const still = seat.uncontrolled.some((u) => u.card.id === chosen);
+        // "…UNLESS that vampire would contest a vampire in play": a gate on
+        // the option, not a no-op on use, so the player is never offered a
+        // move that cannot happen (§3).
+        const contested =
+          grad.notIfContest === true && wouldContestInPlay(ctx.state, chosen);
+        if (still && !contested) {
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:graduate:${chosen}`,
+            kind: "useAbility",
+            label: `${spec.name}: move ${chosen} to your ready region`,
+            source: entry.card.id,
+            params: { act: "graduate", target: chosen },
+          });
+        }
+      }
+      // "During your influence phase, remove this vampire from the game and
+      // move all the blood counters from that vampire to an OLDER vampire in
+      // your uncontrolled region" (Social Ladder) — the bearer is the price.
+      const spend = unc.spendBearer;
+      const bearer = owner.minion === null ? null : findMinion(ctx.state, owner.minion);
+      if (spend && bearer) {
+        for (const u of seat.uncontrolled) {
+          if (spend.olderOnly === true && capacityOf(u.card) <= capacityOf(bearer)) continue;
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:spendbearer:${u.card.id}`,
+            kind: "useAbility",
+            label: `${spec.name}: remove ${bearer.name} from the game, moving their blood to ${u.card.name}`,
+            source: entry.card.id,
+            params: { act: "spendBearer", target: u.card.id },
+          });
+        }
+      }
+    }
     // "Lock to get +1 hand size THIS TURN" (Ennoia's Theater) — the card
     // prints no timing restriction, so it is offered wherever its
     // controller has an impulse, like Dreams of the Sphinx's own hand-size
@@ -14284,7 +14747,9 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         const inWindow =
           o.window === "unlock"
             ? ctx.window === "turn.unlock" && ctx.turnSeat === controller
-            : ctx.window === "turn.master" && ctx.seat === ctx.turnSeat;
+            : o.window === "influence"
+              ? ctx.window === "turn.influence" && ctx.turnSeat === controller
+              : ctx.window === "turn.master" && ctx.seat === ctx.turnSeat;
         if (!inWindow) continue;
         if (o.usesMasterAction && (tf?.kind !== "turn" || tf.masterActionsLeft <= 0)) continue;
         const price = o.poolCost ?? 0;
@@ -14313,6 +14778,31 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
             source: entry.card.id,
             params: { act: "bloodStore", offer: String(i) },
           });
+        } else if (o.kind === "cardToUncontrolled") {
+          // "Move ANY AMOUNT of blood from this card to an <clan> in your
+          // uncontrolled region" — one option per (vampire, amount). The
+          // ceiling is what the vampire can still hold: counters past
+          // capacity drain back to the bank the moment they arrive (p. 6),
+          // so offering them is offering nothing
+          // (docs/futile-options-design.md).
+          for (const u of seat.uncontrolled) {
+            if (o.clan !== undefined && u.card.clan !== o.clan) continue;
+            const room = capacityOf(u.card) - u.counters;
+            for (let n = 1; n <= Math.min(held, room); n++) {
+              out.push({
+                id: `ability:${spec.name}:${entry.card.id}:store:${i}:${u.card.id}:${n}`,
+                kind: "useAbility",
+                label: `${spec.name}: move ${n} blood to ${u.card.name}`,
+                source: entry.card.id,
+                params: {
+                  act: "bloodStore",
+                  offer: String(i),
+                  amount: String(n),
+                  target: u.card.id,
+                },
+              });
+            }
+          }
         } else {
           // "Move up to N pool to this card and add 1 blood from the blood
           // bank for each pool you move" — one option per amount, since
@@ -14418,26 +14908,77 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
             m.controller === controller &&
             combatEnd.ownMinionTags!.some((t) => minionHasTag(m, t)),
         );
+      // Savannah: "a combat involving an ACTING VAMPIRE YOU CONTROL" — the
+      // acting side is mine and the other side is unconstrained.
+      const byActing =
+        combatEnd.ownActing === true && a !== null && a.controller === controller;
       const affordable =
         combatEnd.bloodCost === undefined ||
         (bearer !== null && bearer.blood >= combatEnd.bloodCost);
       const readyOk =
         !combatEnd.requiresBearerReady || (bearer !== null && isReady(bearer));
       if (
-        (bySect || byTag) &&
+        (bySect || byTag || byActing) &&
         affordable &&
         readyOk &&
         !(combatEnd.oncePerTurn && entry.usedThisTurn)
       ) {
+        if (combatEnd.lockOtherLocation === true) {
+          // "You may lock ANY OTHER UNIQUE LOCATION YOU CONTROL to …": the
+          // price is a different card's lock, so it is one option per
+          // candidate and the chosen card rides in the id. A seat with no
+          // other unlocked unique location cannot pay, and is offered
+          // nothing at all.
+          for (const p of getSeat(ctx.state, controller).permanents) {
+            if (p.card.id === entry.card.id) continue;
+            if (p.locked) continue;
+            if (!p.tags.includes("location")) continue;
+            if (ctx.registry[p.card.name]?.isUnique !== true) continue;
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:endcombat:${p.card.id}`,
+              kind: "useAbility",
+              label: `${spec.name}: lock ${p.card.name} to end this combat`,
+              source: entry.card.id,
+              params: { act: "endCombat", lock: p.card.id },
+            });
+          }
+        } else {
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:endcombat`,
+            kind: "useAbility",
+            label:
+              combatEnd.bloodCost !== undefined
+                ? `${spec.name}: burn ${combatEnd.bloodCost} blood to end this combat`
+                : `${spec.name}: lock to end this combat`,
+            source: entry.card.id,
+            params: { act: "endCombat" },
+          });
+        }
+      }
+    }
+    // "When a vampire you control blocks a <sect> vampire, you may lock THIS
+    // CARD instead of locking the blocking vampire" (Elysium: Sforzesco
+    // Castle). Offered in the first window of the resulting combat, where the
+    // blocker's controller has an impulse: block resolution is not a decision
+    // point, so the lock is TRADED BACK rather than skipped — same end state,
+    // and the log says what happened (docs/lock-as-price-design.md §2).
+    const sub = entry.statics.lockInsteadOfBlocker;
+    if (sub && ctx.window === "combat.beforeRange" && !entry.locked) {
+      const cf = ctx.combat;
+      const acting = cf ? findMinion(ctx.state, cf.acting) : null;
+      const blocker = cf ? findMinion(ctx.state, cf.opposing) : null;
+      if (
+        acting?.sect === sub.sect &&
+        blocker !== null &&
+        blocker.controller === controller &&
+        blocker.locked
+      ) {
         out.push({
-          id: `ability:${spec.name}:${entry.card.id}:endcombat`,
+          id: `ability:${spec.name}:${entry.card.id}:lockinstead:${blocker.id}`,
           kind: "useAbility",
-          label:
-            combatEnd.bloodCost !== undefined
-              ? `${spec.name}: burn ${combatEnd.bloodCost} blood to end this combat`
-              : `${spec.name}: lock to end this combat`,
+          label: `${spec.name}: lock it instead of ${blocker.name}`,
           source: entry.card.id,
-          params: { act: "endCombat" },
+          params: { act: "lockInstead", target: blocker.id },
         });
       }
     }
@@ -14721,6 +15262,22 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         const take = o.amount === "all" ? held : Math.min(o.amount, held);
         ops.removeCounters(entry.card.id, take);
         ops.emit({ type: "PoolGained", seat: controller, amount: take });
+      } else if (o.kind === "cardToUncontrolled") {
+        const n = Number(choice.params["amount"] ?? "0");
+        const target = choice.params["target"];
+        if (!target || n <= 0) return;
+        // The counters MOVE: off the card, onto the vampire. Read now
+        // rather than trusted from enumeration — a card's counters can
+        // change between the option being offered and this line.
+        const take = Math.min(n, entry.counters ?? 0);
+        if (take <= 0) return;
+        ops.removeCounters(entry.card.id, take);
+        ops.emit({
+          type: "UncontrolledBloodAdded",
+          seat: controller,
+          minion: target,
+          amount: take,
+        });
       } else {
         const n = Number(choice.params["amount"] ?? "0");
         ops.emit({ type: "PoolBurned", seat: controller, amount: n });
@@ -14788,6 +15345,122 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     };
     void 0;
   }
+  if (perm?.statics?.lockInsteadOfBlocker) {
+    extraUse["lockInstead"] = (entry, _owner, choice, ops) => {
+      const target = choice.params["target"];
+      if (!target) return;
+      ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      ops.emit({ type: "MinionUnlocked", minion: target });
+    };
+  }
+  if (carry) {
+    extraUse["carryBlood"] = (entry, _owner, choice, ops) => {
+      const from = choice.params["from"];
+      const to = choice.params["to"];
+      const amount = carry.blood ?? 0;
+      if (!from || !to || amount <= 0) return;
+      if (carry.lock === true) ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      entry.phaseUses = (entry.phaseUses ?? 0) + 1;
+      ops.emit({ type: "BloodBurned", minion: from, amount });
+      if (to === "card") ops.addCounters(entry.card.id, amount);
+      else ops.emit({ type: "BloodGained", minion: to, amount });
+    };
+    extraUse["carryGear"] = (entry, _owner, choice, ops) => {
+      const card = choice.params["card"];
+      const from = choice.params["from"];
+      const to = choice.params["to"];
+      if (!card || !from || !to) return;
+      if (carry.lock === true) ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      entry.phaseUses = (entry.phaseUses ?? 0) + 1;
+      ops.emit({ type: "EquipmentMoved", cardId: card, from, to });
+    };
+  }
+  // "BURN ALL BOONS" (Blood Trade) — as the card arrives, over every seat's
+  // play area, reading the printed keyword and the entry's own tags. No boon
+  // in the pool stays in play today, so this burns nothing; it is written as a
+  // read over a set rather than as a no-op, which is what makes the clause
+  // true rather than absent (docs/blood-and-gear-design.md §5).
+  if (perm?.statics?.barsBoons === true) {
+    const priorBoonBurn = handler.onEnterPlay;
+    handler.onEnterPlay = (entry, owner, ops) => {
+      priorBoonBurn?.(entry, owner, ops);
+      for (const p of allPermanents(ops.state)) {
+        if (p.card.id === entry.card.id) continue;
+        if (!p.tags.includes("boon")) continue;
+        ops.burnPermanent(p.card.id);
+      }
+    };
+  }
+  if (punish) {
+    extraUse["punish"] = (entry, _owner, choice, ops) => {
+      const target = choice.params["target"];
+      if (!target) return;
+      const held = entry.counters ?? 0;
+      ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      // "THIS DAMAGE CANNOT BE PREVENTED": the environmental path is the one
+      // that lands damage with no prevention window (p. 31), which is what
+      // the card asks for even though this damage happens inside a combat.
+      // docs/blood-and-gear-design.md §4
+      if (held > 0) ops.applyEnvironmentalDamage(target, held * punish.perCounter, false);
+    };
+  }
+  if (payUnlock) {
+    extraUse["payUnlock"] = (_entry, _owner, choice, ops) => {
+      const target = choice.params["target"];
+      const payer = choice.params["payer"];
+      if (!target || !payer) return;
+      ops.emit({ type: "BloodBurned", minion: payer, amount: payUnlock.blood });
+      if (payUnlock.andBlock === true) {
+        // The op emits the unlock AND registers the block attempt — and it
+        // charges Burden the Mind's surcharge on the way through, which is
+        // exactly the interaction that funnel was built for.
+        ops.unlockAndAttemptBlock(target, {});
+        return;
+      }
+      // No block to attempt: a plain unlock, in the phase the card names.
+      ops.emit({ type: "MinionUnlocked", minion: target });
+    };
+  }
+  if (unc) {
+    extraUse["graduate"] = (entry, owner, choice, ops) => {
+      const controller = entry.controller ?? owner.seat;
+      const target = choice.params["target"];
+      if (!target) return;
+      if (unc.graduateChosen?.lock === true) {
+        ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      }
+      // One helper for the move, so the pool tax and the counters-become-
+      // blood rule are the phase's own (§2).
+      ops.moveUncontrolledToReady(controller, target);
+    };
+    extraUse["spendBearer"] = (entry, owner, choice, ops) => {
+      const controller = entry.controller ?? owner.seat;
+      const target = choice.params["target"];
+      const bearer = owner.minion === null ? null : findMinion(ops.state, owner.minion);
+      if (!target || !bearer) return;
+      // The blood MOVES: off the vampire being spent, onto the vampire in
+      // the uncontrolled region. Both halves, so the table's blood is
+      // conserved and the log reads as the card does.
+      //
+      // The amount is read ONCE, INTO A LOCAL, because `emit` applies
+      // immediately: reading `bearer.blood` again for the second event
+      // reads it after the first event emptied him, and the vampire in the
+      // region silently got nothing (docs/uncontrolled-graduation-design.md §7).
+      const moved = bearer.blood;
+      if (moved > 0) {
+        ops.emit({ type: "BloodBurned", minion: bearer.id, amount: moved });
+        ops.emit({
+          type: "UncontrolledBloodAdded",
+          seat: controller,
+          minion: target,
+          amount: moved,
+        });
+      }
+      // REMOVED from the game (p. 16) — not burned, so nothing reaches the
+      // ash heap and no card that watches for a burn fires.
+      ops.removeMinionFromGame(bearer.id);
+    };
+  }
   if (handSize) {
     extraUse["handSize"] = (entry, owner, _choice, ops) => {
       ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
@@ -14837,6 +15510,124 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         // answer, and "find nothing" is an answer (p. 48).
         optional: false,
       });
+    };
+  }
+  if (unc) {
+    // "…and choose a younger <clan> in your uncontrolled region" (Gather);
+    // "the controller chooses a vampire in his or her uncontrolled region"
+    // (Tomb) — asked as the card ARRIVES. Composed onto whatever else owns
+    // the arrival hook.
+    if (unc.chooseOnEntry) {
+      const priorEnter = handler.onEnterPlay;
+      handler.onEnterPlay = (entry, owner, ops) => {
+        priorEnter?.(entry, owner, ops);
+        ops.raiseChoice({
+          seat: entry.controller ?? owner.seat,
+          cardName: spec.name,
+          cardId: entry.card.id,
+          key: "chooseUncontrolled",
+          // "CHOOSE a vampire": not optional. With nobody there the frame
+          // pops harmlessly and the card sits there naming no one, which is
+          // exactly what the card does on an empty region.
+          optional: false,
+        });
+      };
+    }
+    // "For each blood counter you transfer to the chosen vampire during your
+    // influence phase, move one counter from the blood bank to this card."
+    if (unc.matchTransfers) {
+      handler.onTransferToUncontrolled = (entry, owner, turnSeat, minion, ops) => {
+        const controller = entry.controller ?? owner.seat;
+        if (turnSeat !== controller) return;
+        if (entry.linkedUncontrolled !== minion) return;
+        ops.addCounters(entry.card.id, 1);
+      };
+    }
+    // "At the end of your influence phase, if the total number of counters on
+    // the chosen vampire and on this card equals or exceeds that vampire's
+    // capacity, you MAY move the vampire to the ready region."
+    if (unc.graduateAtPhaseEnd) {
+      handler.onInfluencePhaseEnd = (entry, owner, turnSeat, ops) => {
+        const controller = entry.controller ?? owner.seat;
+        if (turnSeat !== controller) return;
+        const chosen = entry.linkedUncontrolled;
+        if (chosen === undefined) return;
+        const u = getSeat(ops.state, controller).uncontrolled.find((x) => x.card.id === chosen);
+        if (!u) return;
+        // "…AND ON THIS CARD": the Tomb's own counters count toward the
+        // threshold without ever moving onto the vampire.
+        if (u.counters + (entry.counters ?? 0) < capacityOf(u.card)) return;
+        ops.raiseChoice({
+          seat: controller,
+          cardName: spec.name,
+          cardId: entry.card.id,
+          key: "graduateAtEnd",
+          // "you MAY": declining an optional frame is a plain pass.
+          optional: true,
+        });
+      };
+    }
+    if (unc.burnWhenChosenLeaves) handler.burnWhenLinkedUncontrolledLeaves = true;
+    const priorUncOptions = handler.choiceOptions?.bind(handler);
+    const priorUncApply = handler.applyChoice?.bind(handler);
+    handler.choiceOptions = (frame, state, registry) => {
+      if (frame.key === "chooseUncontrolled") {
+        const choose = unc.chooseOnEntry;
+        if (!choose) return [];
+        const entry = allPermanents(state).find((p) => p.card.id === frame.cardId);
+        const actor =
+          entry?.linkedMinion === undefined ? null : findMinion(state, entry.linkedMinion);
+        return getSeat(state, frame.seat)
+          .uncontrolled.filter((u) => {
+            if (choose.clan !== undefined && u.card.clan !== choose.clan) return false;
+            // "a YOUNGER <clan>" — younger than the vampire who played the
+            // card, and with that vampire gone there is nothing to be
+            // younger than, so the filter cannot be answered and nobody
+            // qualifies.
+            if (choose.youngerOnly === true) {
+              if (!actor) return false;
+              if (capacityOf(u.card) >= capacityOf(actor)) return false;
+            }
+            return true;
+          })
+          .map((u) => ({
+            id: `choice:${spec.name}:${frame.cardId}:chooseUncontrolled:${u.card.id}`,
+            kind: "answerChoice" as const,
+            label: `${spec.name}: choose ${u.card.name}`,
+            params: { pick: u.card.id },
+          }));
+      }
+      if (frame.key === "graduateAtEnd") {
+        return [
+          {
+            id: `choice:${spec.name}:${frame.cardId}:graduateAtEnd:yes`,
+            kind: "answerChoice" as const,
+            label: `${spec.name}: move the vampire to your ready region`,
+            params: {},
+          },
+        ];
+      }
+      return priorUncOptions ? priorUncOptions(frame, state, registry) : [];
+    };
+    handler.applyChoice = (frame, choice, ops) => {
+      if (frame.key === "chooseUncontrolled") {
+        const pick = choice.params["pick"];
+        if (pick) ops.linkUncontrolled(frame.cardId, pick);
+        return;
+      }
+      if (frame.key === "graduateAtEnd") {
+        const entry = allPermanents(ops.state).find((p) => p.card.id === frame.cardId);
+        const chosen = entry?.linkedUncontrolled;
+        // Re-read: the answer is given after the phase has closed, and the
+        // vampire could have left the region in between.
+        if (!chosen) return;
+        if (!getSeat(ops.state, frame.seat).uncontrolled.some((u) => u.card.id === chosen)) {
+          return;
+        }
+        ops.moveUncontrolledToReady(frame.seat, chosen);
+        return;
+      }
+      priorUncApply?.(frame, choice, ops);
     };
   }
   // "…to search for ANY CARD in his or her library and put it in his or her
@@ -14974,7 +15765,7 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     };
   }
   if (combatEnd) {
-    extraUse["endCombat"] = (entry, owner, _choice, ops) => {
+    extraUse["endCombat"] = (entry, owner, choice, ops) => {
       // Blood INSTEAD of locking (Tommaso), not as well: the card names
       // one price, and locking a vampire is not something his own text
       // asks for.
@@ -14982,6 +15773,12 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         if (owner.minion) {
           ops.emit({ type: "BloodBurned", minion: owner.minion, amount: combatEnd.bloodCost });
         }
+      } else if (combatEnd.lockOtherLocation === true) {
+        // Savannah locks the OTHER location and stays unlocked itself, which
+        // is why it can do this every combat as long as you have locations.
+        const other = choice.params["lock"];
+        if (!other) return;
+        ops.emit({ type: "PermanentLocked", cardId: other });
       } else {
         ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
       }

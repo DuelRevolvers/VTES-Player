@@ -148,3 +148,69 @@ describe("Ventrue Headquarters (102109) / Oxford University (101341) — locatio
     expect(alice.pool).toBe(2); // 5 − 2 (Oxford) − 1 (Anarchist Uprising)
   });
 });
+
+describe("Protected District (102214) — a grant the CARD aims", () => {
+  /** Bob's W is the primogen the card requires. A primogen also votes on
+   *  its own title, which is what makes the two sources worth telling
+   *  apart: the title vote is Bob's to aim, the card's +3 is not. */
+  function districtGame(): { state: GameState; engine: VtesEngine } {
+    const state = threeSeatGame();
+    const alice = state.seats[0]!;
+    alice.hand.push({ id: "au1", name: "Anarchist Uprising" });
+    const bob = state.seats[1]!;
+    bob.minions.find((x) => x.id === "W")!.title = "primogen";
+    bob.hand.push({ id: "pd1", name: "Protected District" });
+    return { state, engine: new VtesEngine(state, testRegistry) };
+  }
+
+  it('casts its +3 AGAINST, and the "for" half of that source is never offered', () => {
+    const { state, engine } = districtGame();
+    runTrace(engine, [
+      ...toPolling(),
+      ["Alice", "pass"], // → Bob polls
+      ["Bob", "play:Protected District:basic:W:votes"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as-played
+      ["Alice", "pass"], // impulse rewound to the caller; Alice declines
+    ]);
+
+    // THE POINT OF THE CARD. The granted votes exist in one direction only:
+    // no `for` option for this source, and no flexible bucket to launder
+    // them through. Asserted BEFORE casting, because an option list is the
+    // only place a too-permissive grant shows.
+    const ids = engine.decision()!.options.map((o) => o.id);
+    expect(ids).toContain("vote:grantAgainst:against");
+    expect(ids).not.toContain("vote:grantAgainst:for");
+    expect(ids).not.toContain("vote:grant:for");
+    expect(ids).not.toContain("vote:grant:against");
+    // The primogen's OWN title vote is untouched by any of this — it is a
+    // separate source and Bob may still aim it either way.
+    expect(ids).toContain("vote:W:for");
+    expect(ids).toContain("vote:W:against");
+
+    runTrace(engine, [
+      ["Bob", "vote:grantAgainst:against"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // quiesce
+    ]);
+
+    const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved")!;
+    expect(resolved).toMatchObject({ passed: false, votesFor: 0, votesAgainst: 3 });
+  });
+
+  it("spends only its own bucket: the primogen can still cast after it", () => {
+    const { state, engine } = districtGame();
+    runTrace(engine, [
+      ...toPolling(),
+      ["Alice", "pass"],
+      ["Bob", "play:Protected District:basic:W:votes"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"],
+      ["Bob", "vote:grantAgainst:against"],
+      ["Alice", "pass"],
+      ["Bob", "vote:W:against"], // the title vote is a DIFFERENT source
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+
+    const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved")!;
+    expect(resolved).toMatchObject({ passed: false, votesAgainst: 4 }); // 3 + 1
+  });
+});

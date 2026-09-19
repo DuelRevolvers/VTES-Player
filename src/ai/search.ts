@@ -32,11 +32,13 @@
  */
 
 import type { Agent, PlayerView } from "../engine/agent.ts";
+import { viewFor } from "../engine/agent.ts";
 import { VtesEngine } from "../engine/engine.ts";
 import type { HandlerRegistry } from "../engine/handlers.ts";
 import type { DecisionPoint, LegalOption } from "../engine/options.ts";
 import type { GameState, SeatId } from "../engine/state.ts";
 import { HeuristicAgent, type Weights } from "./heuristic.ts";
+import { predatorOf, preyOf } from "./seats.ts";
 
 /** How a position is judged. Every term is something a player can see. */
 export interface SearchWeights {
@@ -95,14 +97,6 @@ export const DEFAULT_SEARCH_WEIGHTS: SearchWeights = {
   lookahead: 1,
 };
 
-/** Table order is a cycle: your prey sits on your left (p. 15). */
-function neighbour(state: GameState, me: SeatId, step: 1 | -1): SeatId | null {
-  const live = state.seats.filter((s) => !s.ousted);
-  const i = live.findIndex((s) => s.id === me);
-  if (i < 0 || live.length < 2) return null;
-  return live[(i + step + live.length) % live.length]?.id ?? null;
-}
-
 export interface SearchOptions {
   registry: HandlerRegistry;
   seed?: number;
@@ -125,6 +119,16 @@ export class SearchAgent implements Agent {
    *  engine worth reporting, and silently falling back would hide it. */
   public simulationFailures = 0;
   public simulationsRun = 0;
+  /**
+   * Votes the OPPONENT MODEL cast inside a simulation.
+   *
+   * Public for the same reason the two counters above are: a model that
+   * never ran would look exactly like one that ran and changed nothing,
+   * and the difference is the whole feature. A test that asserts the
+   * agent's final CHOICE cannot tell them apart — the policy votes
+   * correctly on its own since item 3, so the argmax agrees either way.
+   */
+  public modelledVotes = 0;
   private rng: number;
 
   constructor(opts: SearchOptions) {
@@ -259,7 +263,7 @@ export class SearchAgent implements Agent {
       // be searching a different game than the one being played.
       if (!seen || seen.seq !== dp.seq || !seen.options.some((x) => x.id === o.id)) return null;
       sim.choose(o.id);
-      this.settle(sim);
+      this.settle(sim, dp.seat);
       return this.evaluate(sim.state, dp.seat);
     } catch {
       this.simulationFailures++;
@@ -283,21 +287,92 @@ export class SearchAgent implements Agent {
    * opponents: it is the branch where nobody reacts. It is also the only
    * branch this agent may legitimately explore, since it cannot see their
    * hands and so cannot know what they would answer with (§6).
+   *
+   * **WITH ONE EXCEPTION, and it is the one place in VTES where it is
+   * legitimate: POLLING** (owner ruling, 2026-09-19;
+   * docs/ai-vote-search-horizon-design.md §4). See `settleChoice`.
    */
-  private settle(sim: VtesEngine, limit = 60): void {
+  private settle(sim: VtesEngine, me: SeatId, limit = 60): void {
     for (let i = 0; i < limit; i++) {
       const dp = sim.decision();
       if (!dp) return;
       // Stop as soon as nothing is in flight: the action has resolved and
       // anything further is the next decision, not this one's consequence.
+      //
+      // A REFERENDUM COUNTS AS IN FLIGHT, and it did not before — which
+      // is why a cast vote used to be evaluated at the cast rather than
+      // at the tally, leaving both directions identical and the whole
+      // lookahead contributing nothing to a vote (§1). It is the same
+      // argument as the rest of this comment: almost nothing in VTES pays
+      // off at the moment it is chosen.
       const busy = sim.state.frames.some(
-        (f) => f.kind === "action" || f.kind === "combat" || f.kind === "cardPlay",
+        (f) =>
+          f.kind === "action" ||
+          f.kind === "combat" ||
+          f.kind === "cardPlay" ||
+          f.kind === "referendum",
       );
       if (!busy) return;
-      const pass = dp.options.find((o) => o.kind === "pass");
-      if (!pass) return;
-      sim.choose(pass.id);
+      const choice = this.settleChoice(sim, dp, me);
+      if (choice === null) return;
+      sim.choose(choice);
     }
+  }
+
+  /**
+   * What the simulated table does at one decision: pass, except at
+   * another seat's POLLING decision, where it votes.
+   *
+   * THIS IS THE PROJECT'S FIRST OPPONENT MODEL, and it is narrow on
+   * purpose. `ai-v2-design.md` §6 called modelling a reply unsolved
+   * because a reply normally depends on a hidden hand. **Polling is the
+   * exception**: a vote is decided from the referendum's declared terms,
+   * the seating, and pool totals — all of it face up — so computing what
+   * another seat would do is a model of a rational player rather than a
+   * peek at their cards.
+   *
+   * Three properties keep it honest:
+   *
+   *  - it runs the SAME policy formula the seat itself would use, from
+   *    `viewFor(sim.state, thatSeat)` — one formula, one place;
+   *  - the state it reads is **already redacted for the SEARCHER**, so a
+   *    modelled opponent is given no more than the searcher can see and
+   *    usually less (their own hand is blanked to them). The model can
+   *    only ever be more ignorant than the real player, never better
+   *    informed, which is the safe direction;
+   *  - it models only VOTES. The modelled seat never plays a card, so
+   *    nothing here can invent a reaction out of a hand nobody can see.
+   *
+   * Known false-positive mode, stated rather than hidden: a vote-granting
+   * card played later from a hand nobody can see can change an outcome
+   * this model called. That is the same limit `castVote.decided` carries
+   * (docs/ai-vote-economy-design.md §4), and the same reason this drives
+   * an evaluation rather than a rule.
+   */
+  private settleChoice(sim: VtesEngine, dp: DecisionPoint, me: SeatId): string | null {
+    const pass = dp.options.find((o) => o.kind === "pass");
+    if (dp.seat !== me && dp.window === "referendum.polling") {
+      const votes = dp.options.filter((o) => o.kind === "castVote");
+      if (votes.length > 0) {
+        const view = viewFor(sim.state, dp.seat);
+        // Seeded with PASSING, so a vote has to beat declining to be
+        // cast — the same shape as the search's own fallback seeding.
+        let bestId: string | null = pass?.id ?? null;
+        let best = pass ? this.policy.score(pass, dp, view) : -Infinity;
+        for (const o of votes) {
+          const s = this.policy.score(o, dp, view);
+          if (s > best) {
+            best = s;
+            bestId = o.id;
+          }
+        }
+        if (bestId !== null) {
+          if (bestId !== pass?.id) this.modelledVotes++;
+          return bestId;
+        }
+      }
+    }
+    return pass?.id ?? null;
   }
 
   /** What this position is worth to `me`. */
@@ -312,8 +387,10 @@ export class SearchAgent implements Agent {
       v += m.capacity * w.board + m.blood * w.blood;
     }
     for (const u of mine.uncontrolled) v += u.counters * w.uncontrolled;
-    const prey = neighbour(state, me, 1);
-    const predator = neighbour(state, me, -1);
+    // The SAME ring walk the policy uses (src/ai/seats.ts). These were
+    // two implementations of one question until 2026-09-18.
+    const prey = preyOf(state, me);
+    const predator = predatorOf(state, me);
     if (prey && prey !== me) {
       v += (state.seats.find((s) => s.id === prey)?.pool ?? 0) * w.preyPool;
     }

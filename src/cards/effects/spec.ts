@@ -100,8 +100,11 @@ export type EffectPrimitive =
       thenStealth?: number;
     }
   | { kind: "modifyIntercept"; amount: number; bonus?: { extra: number; when: ModifierCondition } }
-  /** "This vampire gets +N votes" during the polling step (p. 28). */
-  | { kind: "modifyVotes"; amount: number }
+  /** "This vampire gets +N votes" during the polling step (p. 28).
+   *  `direction` for the card that prints one — "+3 votes AGAINST the
+   *  referendum" (Protected District) is a defensive card and cannot be
+   *  cast for. Omitted is the ordinary case: the seat aims the votes. */
+  | { kind: "modifyVotes"; amount: number; direction?: "for" | "against" }
   /** "Vampires who do not follow the Path of \<x\> get −1 vote" (Absolute
    *  Tyranny superior) — a modifier on EVERY vampire's vote count for this
    *  referendum, not a bonus to the player. `exceptPath` names the Path
@@ -435,7 +438,7 @@ export type EffectPrimitive =
   /** "+1 stealth action. Put this card in play with N counters" (Under
    *  Siege and many counter actions) — the card becomes a seat-level
    *  permanent on a successful action instead of being burned. */
-  | { kind: "putInPlayOnSuccess"; counters?: number; tags?: string[] }
+  | { kind: "putInPlayOnSuccess"; counters?: number; tags?: string[]; locked?: boolean }
   /** "Put this card in play. It becomes a 1-capacity (non-unique)
    *  \<clan/sect\> vampire and must hunt this turn" (Waters of Duat,
    *  Childe of the Revolution). The token enters with 0 blood, so the
@@ -479,6 +482,11 @@ export type EffectPrimitive =
        *  player who played it (p. 16).
        *  docs/action-attachments-design.md §2 */
       target?: "ownMinion" | "anyMinion";
+      /** "Ⓓ Put this card on a YOUNGER READY VAMPIRE" (Kaymakli Barrier) —
+       *  filters on the chosen target, which `target` alone does not: a
+       *  bare "anyMinion" would offer allies and elders too.
+       *  docs/block-taxes-design.md §4 */
+      targetFilter?: { kind?: "vampire" | "ally"; youngerThanActor?: boolean };
       /** "Put this card on this vampire, LOCKED" (Rutor's Hand). */
       locked?: boolean;
       /** "…to represent the unique Anarch title of Baron OF BOSTON"
@@ -1668,8 +1676,9 @@ export type EffectPrimitive =
  * difference between them.
  */
 export type BloodStoreOffer = {
-  /** "During your unlock phase" / "as a master phase action". */
-  window: "unlock" | "master";
+  /** "During your unlock phase" / "as a master phase action" / "during
+   *  your influence phase" (Heartblood of the Clan). */
+  window: "unlock" | "master" | "influence";
   /** "As a MASTER PHASE ACTION" — spends the turn's one (p. 8). A card
    *  that merely says "during your master phase" does not. */
   usesMasterAction?: boolean;
@@ -1685,6 +1694,12 @@ export type BloodStoreOffer = {
    *  for each pool you move" (Powerbase: Washington, D.C.) — one option
    *  per amount, each leaving 2 counters per pool spent. */
   | { kind: "poolToCardMatched"; max: number }
+  /** "Move ANY AMOUNT of blood from this card to an \<clan\> in your
+   *  uncontrolled region" (Heartblood of the Clan) — one option per
+   *  (vampire, amount), and never past the vampire's capacity, which those
+   *  counters would drain off for nothing (p. 6).
+   *  docs/uncontrolled-graduation-design.md §6 */
+  | { kind: "cardToUncontrolled"; clan?: string }
 );
 
 /**
@@ -2341,6 +2356,105 @@ export interface CardSpec {
      *  on the TURN frame, which is what makes it lapse after the discard
      *  phase rather than before it (docs/temporary-hand-size-design.md). */
     handSizeLock?: { amount: number };
+    /**
+     * Moving what a minion CARRIES — their blood, or the equipment on them —
+     * from one minion to another (docs/blood-and-gear-design.md).
+     *
+     * Three cards, one clause with different filters: between two ready
+     * Sabbat you control (Cathedral), from a ready Nosferatu onto the card
+     * itself (The Spawning Pool), and across the table (Blood Trade).
+     */
+    carryTransfer?: {
+      window: "master" | "unlock";
+      /** "LOCK this card during your master phase to …" (Cathedral). Absent
+       *  means the clause is free and p. 16's once-per-phase is the limit. */
+      lock?: boolean;
+      /** Who may give and receive. */
+      who?: { sect?: Sect; clan?: string };
+      /** "…move N blood between them." */
+      blood?: number;
+      /** "…to THIS CARD" (The Spawning Pool): the blood becomes a counter on
+       *  the card, which another clause then counts. */
+      toCard?: boolean;
+      /** "…TRANSFER EQUIPMENT and/or…" (Cathedral) — one option per
+       *  equipment on a candidate, per other candidate. §3 */
+      equipment?: boolean;
+      /** "…to a vampire controlled by ANOTHER Methuselah" (Blood Trade). */
+      crossSeat?: boolean;
+      /** Offered to EVERY Methuselah in their own phase: one card in one play
+       *  area ruling the table (Blood Trade is a Gehenna event). */
+      anySeat?: boolean;
+    };
+    /** "If a minion you control blocks a bleed against you, you may lock this
+     *  card during the SECOND ROUND of the resulting combat to inflict 1
+     *  damage to the acting minion FOR EACH BLOOD on this card. This damage
+     *  cannot be prevented" (The Spawning Pool). §4 */
+    blockedBleedPunish?: { round: number; perCounter: number };
+    /** "Burn all boons. No more boons can be put in play" (Blood Trade) —
+     *  both halves read the `boon` KEYWORD, which one card in the pool
+     *  already carries. §5 */
+    barsBoons?: boolean;
+    /**
+     * "…may burn 1 blood to unlock" (docs/pay-to-unlock-design.md) — one
+     * offer in four windows, and the reason the wave is one wave.
+     *
+     * The offer belongs to the BEARER'S CONTROLLER, not to the card's: three
+     * of these four cards are played onto somebody else's vampire, and it is
+     * their blood and their unlock. §3
+     */
+    payToUnlock?: {
+      blood: number;
+      /** Which window it is offered in: the controller's unlock phase
+       *  (Detection, Children of Osiris), their minion phase (Firebrand) or
+       *  any action, to block into it (Eternal Vigilance). */
+      window: "unlock" | "minion" | "action";
+      /** Who unlocks — the bearer, every own vampire of a clan, or a ready
+       *  younger vampire of a sect that the BEARER pays for. */
+      who:
+        | "bearer"
+        | { clan: string }
+        | { sect: Sect; youngerThanBearer?: boolean };
+      /** "…to unlock AND ATTEMPT TO BLOCK" (Eternal Vigilance). */
+      andBlock?: boolean;
+    };
+    /**
+     * The UNCONTROLLED REGION as something a card in play works on
+     * (docs/uncontrolled-graduation-design.md). Four cards, one zone: two
+     * of them name a vampire there when they arrive and work on that one
+     * vampire for the rest of their life, one feeds whichever vampire is
+     * there now, and one feeds it by killing a vampire in play.
+     */
+    uncontrolled?: {
+      /** "…and choose a younger \<clan\> in your uncontrolled region"
+       *  (Gather); "the controller chooses a vampire in his or her
+       *  uncontrolled region" (Tomb) — asked as the card ARRIVES, and
+       *  recorded on the entry (`linkedUncontrolled`). */
+      chooseOnEntry?: { clan?: string; youngerOnly?: boolean };
+      /** "During the influence phase, you may LOCK this card to move that
+       *  vampire from your uncontrolled region to your ready region, with
+       *  any counters he or she has, unless that vampire would contest a
+       *  vampire in play" (Gather). */
+      graduateChosen?: { lock?: boolean; notIfContest?: boolean };
+      /** "For each blood counter you transfer to the chosen vampire during
+       *  your influence phase, move one counter from the blood bank to this
+       *  card" (Tomb) — the card matches the transfer, one for one. */
+      matchTransfers?: boolean;
+      /** "At the end of your influence phase, if the total number of
+       *  counters on the chosen vampire AND ON THIS CARD equals or exceeds
+       *  that vampire's capacity, you MAY move the vampire to the ready
+       *  region" (Tomb) — an offer, so it is a ChoiceFrame and declining is
+       *  legal. */
+      graduateAtPhaseEnd?: boolean;
+      /** "Burn this card (and the counters on it) when this vampire leaves
+       *  the uncontrolled region" (Tomb). */
+      burnWhenChosenLeaves?: boolean;
+      /** "During your influence phase, REMOVE THIS VAMPIRE FROM THE GAME
+       *  and move all the blood counters from that vampire to an older
+       *  vampire in your uncontrolled region" (Social Ladder) — the bearer
+       *  is what is spent, which is why the clause lives on an attached
+       *  card. "Older" is greater capacity, as everywhere else. */
+      spendBearer?: { olderOnly?: boolean };
+    };
     /** "If you control the Edge during your unlock phase, burn this card"
      *  (King's Rising) — a card that pays out and then leaves the moment
      *  its controller is doing well. §3 */
@@ -2380,6 +2494,15 @@ export interface CardSpec {
       ownMinionTags?: string[];
       /** Paid by the BEARER, in blood, instead of locking the card. */
       bloodCost?: number;
+      /** "…involving an ACTING VAMPIRE YOU CONTROL" (Powerbase: Savannah) —
+       *  the third form of "which combat": the acting side is yours and the
+       *  other side is unconstrained. docs/lock-as-price-design.md §4 */
+      ownActing?: boolean;
+      /** "You may lock ANY OTHER UNIQUE LOCATION YOU CONTROL to …"
+       *  (Powerbase: Savannah) — the price is another card's lock, so it is
+       *  one option per candidate location and the chosen one rides in the
+       *  option id. §4 */
+      lockOtherLocation?: boolean;
       oncePerTurn?: boolean;
       /** "If HE is ready" — Tommaso need not be in the combat at all, but
        *  he must not be in torpor. */
@@ -3251,7 +3374,24 @@ export interface CardSpec {
        *  pool as a Ⓓ action" (the Powerbase raid,
        *  docs/blood-banking-locations-design.md §4). The raid is not
        *  `burnCounters`: the counters go somewhere. */
-      outcome?: "burn" | "steal" | "shuffleIntoLibrary" | "burnCounters" | "takeCounters";
+      outcome?:
+        | "burn"
+        | "steal"
+        | "shuffleIntoLibrary"
+        | "burnCounters"
+        | "takeCounters"
+        /** "Any Assamite can ADD 1 BLOOD TO THIS CARD as an action"
+         *  (Heartblood of the Clan) — the one member of this family that
+         *  HELPS the card. It is the same machinery all the way down (who
+         *  may act, the cost at resolution, p. 27's success), and only the
+         *  outcome differs, so it belongs here rather than in a parallel
+         *  grant nobody would keep in step.
+         *  docs/uncontrolled-graduation-design.md §6 */
+        | "addCounter";
+      /** The action has NO Ⓓ icon (Heartblood of the Clan) — printed
+       *  actions against a card are directed unless the card says
+       *  otherwise, so this is the exception and not the default. */
+      undirected?: boolean;
       /** "Vampires can call a REFERENDUM to burn this card as a +1 stealth
        *  political action" (Anarch Revolt, War of Ages) — the action is
        *  political and undirected, and the referendum decides, rather than
@@ -3269,6 +3409,12 @@ export interface CardSpec {
        *  `MinionState.skipNextUnlock` was built for Toreador Grand Ball
        *  and has been waiting for this. docs/opposing-statics-design.md §2 */
       bearerPenalty?: { lock?: boolean; skipNextUnlock?: boolean };
+      /** "This minion may burn this card AND UNLOCK as a Ⓓ action" (Burden
+       *  the Mind) — the mirror of `bearerPenalty`: the bearer's own escape
+       *  action leaves them unlocked, which is the point of taking it, since
+       *  announcing the action locked them (p. 25).
+       *  docs/block-taxes-design.md §5 */
+      unlockBearerOnBurn?: boolean;
       /** "…as a Ⓓ action that INFLICTS 1 unpreventable environmental
        *  damage on acting vampires" (the four Path masters). A price on
        *  the ACTOR for taking the burn, not on the card's bearer — the
@@ -3487,6 +3633,30 @@ export interface CardSpec {
   /** "Requires a prince or justicar" — the acting vampire's title must be
    *  one of these (p. 28 titles). */
   requiresTitle?: VampireTitle[];
+  /**
+   * Which way this political action's referendum moves POOL, for a card
+   * whose terms are BESPOKE and so has no `ref*` primitive to read it
+   * from (Parity Shift, Banishment, Cardinal Benediction, the Justicars).
+   *
+   * The primitive declares it where there is one; this is the same
+   * declaration for the cards that hand-roll their terms, so that "every
+   * political action says which way the pool moves" has no exceptions
+   * (docs/ai-referendum-view-design.md §5).
+   */
+  referendumEffect?: "burn" | "gain" | "other";
+  /**
+   * Which declared terms key names the seats that lose pool, and which
+   * names those that gain it — for a card whose terms are bespoke.
+   *
+   * Parity Shift is why this is per card and not a convention: "allocate
+   * 3 of THEIR pool among 1 or more other Methuselahs" makes the CHOSEN
+   * seat the loser and the allocated seats the gainers, the reverse of
+   * every allocate-burn beside it.
+   */
+  referendumSeats?: {
+    losers?: { key: string; each?: number };
+    gainers?: { key: string; each?: number };
+  };
   /** "Requires a TITLED Camarilla vampire" — any title at all, which is
    *  a different question from the named list above.
    *  docs/referendum-terms-design.md */
@@ -3535,6 +3705,9 @@ export interface CardSpec {
   };
   /** "…with capacity N or more". */
   requiresCapacity?: number;
+  /** "Requires a vampire with capacity 5 OR LESS" (Atonement) — the ceiling
+   *  to `requiresCapacity`'s floor. docs/lock-as-price-design.md §3 */
+  requiresMaxCapacity?: number;
   /** "Requires a (ready) VAMPIRE" (Surprise Influence, Sense the Savage
    *  Way, Ghoul Escort) — the playing or employing minion must be a
    *  vampire, not an ally. Read by `meetsRequirements`. */

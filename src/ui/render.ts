@@ -23,6 +23,10 @@ import type {
 import type { DecisionPoint, LegalOption } from "../engine/index.ts";
 import { isFaceDown } from "../engine/index.ts";
 import { currentIntercept, currentStealth, predatorOf, preyOf } from "../engine/index.ts";
+// The one reader of the `seat=N,seat=N` allocation format is the one that
+// writes it (`allocToParams` beside it), so the picker below cannot drift
+// from the option ids the engine enumerates.
+import { parseAlloc } from "../cards/effects/compile.ts";
 import { cardNamePattern, cardText, imageFor } from "./cardinfo.ts";
 import { chatLines, MAX_CHAT_TEXT } from "./chat.ts";
 import { minionName, narrate, owned } from "./narrate.ts";
@@ -569,6 +573,83 @@ function actionStrip(state: GameState): string {
   return `<div class="playstrip">${cards}${action}</div>`;
 }
 
+/**
+ * THE RUNNING TALLY, while a referendum is on the stack (owner request).
+ *
+ * A referendum is the one thing at this table where the state that
+ * matters is a pair of numbers nobody can see: every vote is cast in the
+ * log, and a player deciding whether to spend a card on it was scrolling
+ * back through the log adding them up by eye. So it goes where the card
+ * being played goes — across the top, in front of everyone.
+ *
+ * It leaks nothing. Votes are cast openly (p. 28): who voted, with what,
+ * and which way is public the moment it happens. This is arithmetic on
+ * the log, not information out of it.
+ *
+ * `rf.votes` IS the ledger the tally sums (`resolveReferendum`), so the
+ * two cannot drift. One thing it deliberately does not add: the blood
+ * hunt's "additional votes against" static (Urban Jungle), which nobody
+ * casts and which is only counted at the tally — it is named instead, so
+ * a total that jumps at the end is not a surprise.
+ */
+function voteStrip(state: GameState): string {
+  const rf = state.frames.find((f) => f.kind === "referendum");
+  if (!rf || rf.kind !== "referendum") return "";
+  const forBy = new Map<string, number>();
+  const againstBy = new Map<string, number>();
+  for (const v of rf.votes) {
+    const into = v.inFavor ? forBy : againstBy;
+    into.set(v.seat, (into.get(v.seat) ?? 0) + v.count);
+  }
+  const sum = (m: Map<string, number>): number =>
+    [...m.values()].reduce((a, b) => a + b, 0);
+  const totalFor = sum(forBy);
+  const totalAgainst = sum(againstBy);
+  // "More for than against passes; ties fail" (p. 28) — the same test
+  // `resolveReferendum` makes, so the reading on the bar and the result
+  // cannot disagree.
+  const passing = totalFor > totalAgainst;
+  const what =
+    rf.variant === "bloodHunt"
+      ? "blood hunt"
+      : rf.cardName
+        ? rf.cardName
+        : "referendum";
+  return `
+    <div class="votestrip">
+      <span class="clabel">VOTE</span>
+      <span><b>${esc(what)}</b></span>
+      <span class="dim">called by ${esc(rf.caller)}</span>
+      <span class="dim">${esc(rf.step)}</span>
+      <span class="votetot ${passing ? "passing" : "failing"}">
+        <b class="vfor">${totalFor}</b> for
+        <span class="dim">·</span>
+        <b class="vagainst">${totalAgainst}</b> against
+        <span class="dim">— ${passing ? "would pass" : "would fail"}</span>
+      </span>
+      ${
+        rf.variant === "bloodHunt"
+          ? `<span class="dim">any "votes against blood hunts" are added at the tally</span>`
+          : ""
+      }
+      <span class="voteseats">
+        ${state.seats
+          .filter((s) => !s.ousted)
+          .map((s) => {
+            const f = forBy.get(s.id) ?? 0;
+            const a = againstBy.get(s.id) ?? 0;
+            return `<span class="vseat ${f + a > 0 ? "voted" : ""}"
+                          title="${esc(`${s.id}: ${f} for, ${a} against`)}">
+              ${esc(s.id)}
+              <b class="num vfor">${f}</b>
+              <b class="num vagainst">${a}</b>
+            </span>`;
+          })
+          .join("")}
+      </span>
+    </div>`;
+}
+
 /** The battlefield strip — only while a combat frame is on the stack. */
 function combatStrip(state: GameState): string {
   const cf = state.frames.find((f) => f.kind === "combat");
@@ -602,6 +683,33 @@ function combatStrip(state: GameState): string {
       <span class="vs">${side(cf.acting, "acting")} <b>⚔</b> ${side(cf.opposing, "opposing")}</span>
       <span>strikes: ${strikeOf(cf.strikes.acting)} / ${strikeOf(cf.strikes.opposing)}</span>
       <span>pending damage: ${pending}</span>
+    </div>`;
+}
+
+/**
+ * THE STAGE: one band across the top that is ALWAYS THERE (owner request).
+ *
+ * The three strips used to appear and vanish with the frames they
+ * describe, which meant the whole table jumped down a hundred pixels the
+ * moment a card was played and back up again when it resolved — every
+ * card, every combat, every vote. A player following a card with their
+ * eyes lost the board underneath it.
+ *
+ * So the band keeps its height whether or not there is anything in it.
+ * The cost is a strip of empty space during the quiet parts of a turn;
+ * the gain is that nothing else on the screen ever moves. `min-height`
+ * rather than a fixed one: a four-way vote with a combat under it is
+ * taller than the floor, and clipping it would be worse than the jump.
+ */
+function stage(state: GameState): string {
+  const body = `${actionStrip(state)}${voteStrip(state)}${combatStrip(state)}`;
+  return `
+    <div class="stage">
+      ${
+        body === ""
+          ? `<div class="stageidle"><span class="dim">nothing on the stack</span></div>`
+          : body
+      }
     </div>`;
 }
 
@@ -690,6 +798,173 @@ const GROUP_LABEL: Record<string, string> = {
   pass: "Pass",
 };
 
+/**
+ * ONE ALLOCATION QUESTION, gathered from the options that answer it.
+ *
+ * "Allocate 5 points among two or more Methuselahs" (Kine Resources
+ * Contested) is enumerated by the legal-move generator as every legal
+ * split — which is correct, and is what makes the AI and the host
+ * validator work, but as a column of buttons it is dozens of rows of
+ * `Allocate: Methuselah 2=3,Methuselah 4=2` that a player has to read
+ * like a spreadsheet (owner request). The numbers are what the player is
+ * choosing; the options are how the engine spells them.
+ *
+ * So the picker is built FROM the options and answers WITH one of them.
+ * It never constructs an option id: `byAlloc` maps a normalised
+ * allocation back to the id the engine offered, so a split the player
+ * assembles that is not legal simply has no id and cannot be sent. That
+ * is what enforces "the exact number of points" and the card's
+ * "two or more" at once, without this file knowing either rule.
+ *
+ * `key` is everything the option chose BESIDES the split — the
+ * beneficiary (Reckless Agitation) or the vampires being locked
+ * (Revolutionary Council). Those are a separate question and get a
+ * separate control; the spinners are only ever the split.
+ */
+export interface AllocChoice {
+  /** The non-allocation half of these options' params, normalised. */
+  key: string;
+  /** What that half says, for the selector. Empty when the split is the
+   *  whole question. */
+  label: string;
+  points: number;
+  /** Recipients in the order the engine listed them, which is target
+   *  order — seats first, then locations and equipment. */
+  recipients: string[];
+  /** Per-recipient ceiling. A location is BURNED by one point, so the
+   *  engine never offers it two; the spinner must not either. */
+  caps: Record<string, number>;
+  /** Normalised split → the option id that is that split. */
+  byAlloc: Map<string, string>;
+}
+
+/** Order-independent identity of a split, so a draft assembled by hand
+ *  and an option enumerated by the engine compare equal. */
+export function allocKey(alloc: Record<string, number>): string {
+  return Object.entries(alloc)
+    .filter(([, n]) => n > 0)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([who, n]) => `${who}=${n}`)
+    .join(",");
+}
+
+export function allocationChoices(dp: DecisionPoint | null): AllocChoice[] {
+  const out: AllocChoice[] = [];
+  const byKey = new Map<string, AllocChoice>();
+  for (const o of dp?.options ?? []) {
+    if (o.kind !== "chooseTerms") continue;
+    const spelled = o.params["alloc"];
+    if (spelled === undefined || spelled === "") continue;
+    const rest = Object.entries(o.params)
+      .filter(([k]) => k !== "alloc")
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    const key = rest.map(([k, v]) => `${k}=${v}`).join(";");
+    let choice = byKey.get(key);
+    if (!choice) {
+      choice = {
+        key,
+        // The option's own words for the other half of the choice —
+        // "Alice gains", "Lock Lucita, Anson" — which is everything its
+        // label says before it starts spelling out the split.
+        label: rest.length === 0 ? "" : o.label.replace(/;?\s*[Aa]llocate.*$/, "").trim(),
+        points: 0,
+        recipients: [],
+        caps: {},
+        byAlloc: new Map(),
+      };
+      byKey.set(key, choice);
+      out.push(choice);
+    }
+    const entries = parseAlloc(spelled);
+    let total = 0;
+    const draft: Record<string, number> = {};
+    for (const [who, n] of entries) {
+      total += n;
+      draft[who] = n;
+      if (!choice.recipients.includes(who)) choice.recipients.push(who);
+      choice.caps[who] = Math.max(choice.caps[who] ?? 0, n);
+    }
+    // Every option for one context spends the same points — the card says
+    // how many — so this is a read, not a max.
+    choice.points = total;
+    choice.byAlloc.set(allocKey(draft), o.id);
+  }
+  return out;
+}
+
+/**
+ * The allocation dialog: how many points are going, who may have them,
+ * and a box per recipient.
+ *
+ * The boxes are plain number inputs and NOTHING HERE REPAINTS while they
+ * are being typed in — a repaint is `innerHTML =`, which would take the
+ * caret out of the box mid-number. The running total and the Confirm
+ * button are updated in place by the wiring in loop.ts instead.
+ */
+function allocPanel(
+  choices: AllocChoice[],
+  contextKey: string | null,
+  draft: Record<string, number>,
+): string {
+  const choice = choices.find((c) => c.key === contextKey) ?? choices[0];
+  if (!choice) return "";
+  const spent = choice.recipients.reduce((a, who) => a + (draft[who] ?? 0), 0);
+  const legal = choice.byAlloc.has(allocKey(draft));
+  return `
+    <div class="scrim" id="alloc-scrim"></div>
+    <div class="modal allocmodal" role="dialog" aria-label="Allocate points">
+      <div class="modalcard">
+        <h2>Allocate ${choice.points} point${choice.points === 1 ? "" : "s"}</h2>
+        ${
+          // The other half of the choice, when the card asks one. A
+          // selector rather than a second dialog: the two halves are one
+          // option in the engine, and answering them in one place is what
+          // keeps the picker honest about which splits are legal for
+          // which beneficiary.
+          choices.length > 1
+            ? `<label class="field">
+                 <span>…for</span>
+                 <select id="alloc-ctx">
+                   ${choices
+                     .map(
+                       (c) =>
+                         `<option value="${esc(c.key)}" ${c.key === choice.key ? "selected" : ""}>${esc(
+                           c.label || "this split",
+                         )}</option>`,
+                     )
+                     .join("")}
+                 </select>
+               </label>`
+            : choice.label
+              ? `<p class="note">${esc(choice.label)}</p>`
+              : ""
+        }
+        <div class="alloclist">
+          ${choice.recipients
+            .map(
+              (who) => `
+            <div class="allocrow">
+              <span class="allocwho">${esc(who)}</span>
+              <input class="allocnum" type="number" inputmode="numeric"
+                     data-who="${esc(who)}" min="0" max="${choice.caps[who] ?? choice.points}"
+                     value="${draft[who] ?? 0}" />
+            </div>`,
+            )
+            .join("")}
+        </div>
+        <p class="note alloctotal" id="alloc-total">
+          ${spent} of ${choice.points} allocated${
+            legal ? "" : spent === choice.points ? " — not a legal split" : ""
+          }
+        </p>
+        <div class="row">
+          <button id="alloc-ok" class="primary" ${legal ? "" : "disabled"}>Confirm</button>
+          <button id="alloc-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function decisionBar(
   dp: DecisionPoint | null,
   thinking: boolean,
@@ -765,7 +1040,15 @@ function decisionBar(
   const groups = new Map<string, LegalOption[]>();
   let cardPlays = 0;
   let tablePlays = 0;
+  // Every legal split of an allocation is an option, and there are dozens
+  // of them. They are answered in a dialog with a box per recipient
+  // instead (owner request) — so they are taken out of the bar here and
+  // replaced by the one button that opens it.
+  const allocs = allocationChoices(dp);
+  const allocIds = new Set<string>();
+  for (const c of allocs) for (const id of c.byAlloc.values()) allocIds.add(id);
   for (const o of dp.options) {
+    if (allocIds.has(o.id)) continue;
     // Card plays live ON the cards in hand, not as buttons up here — click
     // or drag the card itself.
     if (o.kind === "playCard" || o.kind === "discard" || o.kind === "burnOptionDiscard") {
@@ -833,6 +1116,18 @@ function decisionBar(
         <span class="dwindow">${esc(dp.window)}</span>
         <span class="dim">seq ${dp.seq}</span>
       </div>
+      ${
+        allocs.length > 0 && allocs[0]
+          ? `<div class="ogroup">
+               <div class="olabel">Terms</div>
+               <div class="obuttons">
+                 <button id="alloc-open" class="opt chooseTerms primary">
+                   Allocate ${allocs[0].points} point${allocs[0].points === 1 ? "" : "s"}…
+                 </button>
+               </div>
+             </div>`
+          : ""
+      }
       ${body}
     </div>`;
 }
@@ -1478,6 +1773,20 @@ export interface RenderInput {
   /** The moderation panel, when it is open: who is here and who is
    *  chat-banned. Null when closed. */
   moderation: ModerationView | null;
+  /**
+   * The allocation dialog (Kine Resources Contested and its family).
+   *
+   * Pure view state, like every other panel: the draft is a split the
+   * player is assembling and has not chosen, so it never reaches the
+   * command log. Optional so the existing render fixtures keep their
+   * shape.
+   */
+  allocOpen?: boolean;
+  /** Recipient → points, as the boxes currently read. */
+  allocDraft?: Record<string, number>;
+  /** Which half-of-the-choice context is selected, when the card asks
+   *  one. Null means the first. */
+  allocContext?: string | null;
 }
 
 export function render(input: RenderInput): string {
@@ -1554,7 +1863,16 @@ export function render(input: RenderInput): string {
           for. The file is for handing over with a bug report, which is a
           different errand and now has its own button.
         -->
-        <button id="download" title="a .json to attach to a bug report">Download</button>
+        <!--
+          "DOWNLOAD LOG" (owner request), because that is what the file
+          is: a save records the whole command log, so opening it replays
+          every decision of the game from the deal. "Download" on its own
+          sat next to Save and Load and read as a third way to do the
+          same thing.
+        -->
+        <button id="download" title="the game's full log as a .json, to attach to a bug report">
+          Download Log
+        </button>
         <button id="restart">Restart</button>
       </div>`
           : ""
@@ -1572,8 +1890,7 @@ export function render(input: RenderInput): string {
       <button id="settings-btn" class="gear" title="Settings">⚙ Settings</button>
       ${input.canLeave ? `<button id="leave-btn" class="gear leave" title="Leave this game">⏻ Leave</button>` : ""}
     </div>
-    ${actionStrip(state)}
-    ${combatStrip(state)}
+    ${stage(state)}
     <!--
       THE SIDE COLUMN RUNS THE FULL HEIGHT, and the hand and action bar
       sit beside it rather than under it (owner request 2026-09-06:
@@ -1629,6 +1946,13 @@ export function render(input: RenderInput): string {
     ${helpPanel(input)}
     ${ashPanel(state, input.ashOpen)}
     ${deckPanel(state, input.deckOpen ?? null)}
+    ${
+      // Only ever over a decision this client may actually answer: the
+      // same gate the buttons are behind, since the dialog IS a button.
+      input.allocOpen && !input.thinking && input.waitingFor === null
+        ? allocPanel(allocationChoices(dp), input.allocContext ?? null, input.allocDraft ?? {})
+        : ""
+    }
     <div id="zoom" class="zoom" hidden style="--cardtext:${input.cardTextPx}px">
       <!-- The card's name, which FADES (owner request): it is what you
            need in the first second of a hover and clutter after that. The

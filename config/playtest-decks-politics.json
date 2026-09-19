@@ -1,0 +1,400 @@
+{
+  "_comment": "The POLITICS table (docs/ai-politics-bench-design.md). Toreador and Ventrue both call referendums; Nosferatu answers them. Generated from the shipped precons, then AUGMENTED so two rules the precons never produce can actually occur: Alexander Silverson (a vote TOLL on his own referendums) in the caller's crypt, and Oluwafunmilayo plus intercept retainers in the answerer's, so a political action can be BLOCKED at all. Without them the toll rule and the blockPolitical weight are correct and unreachable.",
+  "seed": 20260918,
+  "maxTurns": null,
+  "decks": [
+    {
+      "kind": "deck",
+      "seat": "Alice",
+      "crypt": [
+        {
+          "id": 201538
+        },
+        {
+          "id": 201540
+        },
+        {
+          "id": 201540
+        },
+        {
+          "id": 201547
+        },
+        {
+          "id": 201547
+        },
+        {
+          "id": 201552
+        },
+        {
+          "id": 201558
+        },
+        {
+          "id": 201560
+        },
+        {
+          "id": 201561
+        },
+        {
+          "id": 201561
+        },
+        {
+          "id": 201564
+        },
+        {
+          "id": 201571
+        },
+        {
+          "id": 201530
+        },
+        {
+          "id": 201530
+        },
+        {
+          "id": 201530
+        }
+      ],
+      "library": [
+        "Aire of Elation",
+        "Aire of Elation",
+        "Art Museum",
+        "Bewitching Oration",
+        "Bewitching Oration",
+        "Bewitching Oration",
+        "Bewitching Oration",
+        "Change of Target",
+        "Change of Target",
+        "Consanguineous Boon",
+        "Consanguineous Boon",
+        "Consanguineous Boon",
+        "Consanguineous Boon",
+        "Creepshow Casino",
+        "Elysium: The Palace of Versailles",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Parity Shift",
+        "Parity Shift",
+        "Parity Shift",
+        "Parity Shift",
+        "Perfect Paragon",
+        "Perfect Paragon",
+        "Perfect Paragon",
+        "Perfect Paragon",
+        "Resist Earth's Grasp",
+        "Resist Earth's Grasp",
+        "Resist Earth's Grasp",
+        "Resist Earth's Grasp",
+        "Resist Earth's Grasp",
+        "Resist Earth's Grasp",
+        "Resist Earth's Grasp",
+        "Resist Earth's Grasp",
+        "Scalpel Tongue",
+        "Scalpel Tongue",
+        "Scalpel Tongue",
+        "Scalpel Tongue",
+        "Second Tradition: Domain",
+        "Second Tradition: Domain",
+        "Second Tradition: Domain",
+        "Second Tradition: Domain",
+        "Society Hunting Ground",
+        "Toreador Grand Ball",
+        "Toreador Grand Ball",
+        "Toreador Grand Ball",
+        "Toreador Grand Ball",
+        "Toreador Justicar",
+        "Villein",
+        "Villein",
+        "Villein",
+        "Villein",
+        "Villein",
+        "Villein",
+        "Voter Captivation",
+        "Voter Captivation",
+        "Voter Captivation",
+        "Voter Captivation",
+        "Voter Captivation",
+        "Voter Captivation"
+      ]
+    },
+    {
+      "kind": "deck",
+      "seat": "Bob",
+      "crypt": [
+        {
+          "id": 201529
+        },
+        {
+          "id": 201531
+        },
+        {
+          "id": 201531
+        },
+        {
+          "id": 201539
+        },
+        {
+          "id": 201541
+        },
+        {
+          "id": 201550
+        },
+        {
+          "id": 201550
+        },
+        {
+          "id": 201557
+        },
+        {
+          "id": 201562
+        },
+        {
+          "id": 201565
+        },
+        {
+          "id": 201570
+        },
+        {
+          "id": 201570
+        }
+      ],
+      "library": [
+        "Anarch Troublemaker",
+        "Ancilla Empowerment",
+        "Bewitching Oration",
+        "Bewitching Oration",
+        "Bewitching Oration",
+        "Bewitching Oration",
+        "Blood Doll",
+        "Blood Doll",
+        "Blood Doll",
+        "Conditioning",
+        "Conditioning",
+        "Conditioning",
+        "Conditioning",
+        "Daring the Dawn",
+        "Deflection",
+        "Deflection",
+        "Deflection",
+        "Deflection",
+        "Deflection",
+        "Deflection",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Enchant Kindred",
+        "Freak Drive",
+        "Freak Drive",
+        "Freak Drive",
+        "Freak Drive",
+        "Freak Drive",
+        "Freak Drive",
+        "Hidden Strength",
+        "Hidden Strength",
+        "Hidden Strength",
+        "Hidden Strength",
+        "Information Highway",
+        "Intimidation",
+        "Intimidation",
+        "Intimidation",
+        "Intimidation",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Kine Resources Contested",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Majesty",
+        "Misdirection",
+        "Parity Shift",
+        "Parity Shift",
+        "Parity Shift",
+        "Parity Shift",
+        "Parity Shift",
+        "Second Tradition: Domain",
+        "Second Tradition: Domain",
+        "Second Tradition: Domain",
+        "Second Tradition: Domain",
+        "Uptown Hunting Ground",
+        "Ventrue Headquarters",
+        "Visit from the Capuchin",
+        "Voter Captivation",
+        "Voter Captivation",
+        "Wake with Evening's Freshness",
+        "Wake with Evening's Freshness",
+        "Wake with Evening's Freshness",
+        "Wake with Evening's Freshness",
+        "Wider View",
+        "Wider View"
+      ]
+    },
+    {
+      "kind": "deck",
+      "seat": "Carol",
+      "crypt": [
+        {
+          "id": 201534
+        },
+        {
+          "id": 201536
+        },
+        {
+          "id": 201537
+        },
+        {
+          "id": 201537
+        },
+        {
+          "id": 201545
+        },
+        {
+          "id": 201549
+        },
+        {
+          "id": 201553
+        },
+        {
+          "id": 201553
+        },
+        {
+          "id": 201555
+        },
+        {
+          "id": 201555
+        },
+        {
+          "id": 201568
+        },
+        {
+          "id": 201573
+        },
+        {
+          "id": 201656
+        },
+        {
+          "id": 201656
+        },
+        {
+          "id": 201656
+        }
+      ],
+      "library": [
+        "Carrion Crows",
+        "Carrion Crows",
+        "Cats' Guidance",
+        "Cats' Guidance",
+        "Cats' Guidance",
+        "Cats' Guidance",
+        "Deep Song",
+        "Deep Song",
+        "Deep Song",
+        "Deep Song",
+        "Deep Song",
+        "Deep Song",
+        "Fame",
+        "Guard Dogs",
+        "Guard Dogs",
+        "Guard Dogs",
+        "Guard Dogs",
+        "Guardian Angel",
+        "Haven Uncovered",
+        "Immortal Grapple",
+        "Immortal Grapple",
+        "Immortal Grapple",
+        "Immortal Grapple",
+        "Instinctive Reaction",
+        "Instinctive Reaction",
+        "Instinctive Reaction",
+        "Instinctive Reaction",
+        "The Labyrinth",
+        "Lost in Crowds",
+        "Lost in Crowds",
+        "Lost in Crowds",
+        "Lost in Crowds",
+        "Murder of Crows",
+        "Murder of Crows",
+        "On the Qui Vive",
+        "On the Qui Vive",
+        "On the Qui Vive",
+        "On the Qui Vive",
+        "On the Qui Vive",
+        "Preternatural Strength",
+        "Preternatural Strength",
+        "Raven Spy",
+        "Raven Spy",
+        "Rebel",
+        "Slum Hunting Ground",
+        "Smiling Jack, The Anarch",
+        "Taste of Vitae",
+        "Taste of Vitae",
+        "Taste of Vitae",
+        "Taste of Vitae",
+        "Underbridge Stray",
+        "Underbridge Stray",
+        "Vessel",
+        "Vessel",
+        "Vessel",
+        "Vessel",
+        "Warsaw Station",
+        "Creeping Sabotage",
+        "Creeping Sabotage",
+        "Creeping Sabotage",
+        "Creeping Sabotage",
+        "Protected District",
+        "Protected District",
+        "Protected District",
+        "Protected District",
+        "Roundhouse",
+        "Roundhouse",
+        "Roundhouse",
+        "Roundhouse",
+        "Roundhouse",
+        "Roundhouse",
+        "Roundhouse",
+        "Roundhouse",
+        "The Warrens",
+        "The Warrens",
+        "The Warrens",
+        "The Warrens",
+        "Revenant",
+        "Revenant",
+        "Revenant",
+        "Revenant",
+        "Raven Spy",
+        "Raven Spy",
+        "Raven Spy",
+        "Raven Spy",
+        "Revenant",
+        "Revenant",
+        "Revenant",
+        "Revenant"
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 
 Status: **IMPLEMENTED** (2026-07-19; owner sign-off: per-seat vote
 accounting; full 8-card wave; Protected District against-votes as a
-flexible grant). Implementation notes: `ReferendumFrame` gained
+flexible grant — **reversed 2026-09-18, see §9**). Implementation notes: `ReferendumFrame` gained
 `callingMinion` + `voteGrants`; `PlayContext` gained `referendum`; the
 polling decision now also offers `handlerOptions`/`abilityOptions` in the
 `referendum.polling` window (a play rewinds the polling impulse like a
@@ -56,6 +56,9 @@ pass. Two changes:
   p. 8) — exactly like casting a vote already does.
 
 ## 3. Kernel: vote accounting
+
+> **Superseded in part by §9 (2026-09-18).** The record below is now
+> bucketed by direction. Everything else in this section still holds.
 
 ```ts
 // ReferendumFrame gains:
@@ -117,9 +120,11 @@ pool → +2X votes"), enumerating X like Lightning Reflexes' per-blood-X.
 | **Ventrue Headquarters** | lock → +3 votes |
 | **Oxford University, England** | lock + burn X pool → +2X votes |
 
-Protected District's "+3 votes **against**" is modeled as a flexible
+~~Protected District's "+3 votes **against**" is modeled as a flexible
 grant (the primogen's controller casts them against, as they would
-anyway) — §7 Q3.
+anyway) — §7 Q3.~~ **Reversed 2026-09-18 (§9): they would not "anyway", and
+a real game showed a seat casting them for the referendum they were played
+to stop.** The grant is direction-locked.
 
 ## 6. Deferred (out of this gate)
 
@@ -159,3 +164,84 @@ Glare's vote mode not offered outside polling; Ominous Chorus playable by
 both caller and reactor; Oxford's X enumerated by pool). Fuzz: add the
 wave; referendums still terminate (grants are bounded per card, each
 card/location played at most once per its limits).
+
+---
+
+## 9. Reversal: Protected District's grant is direction-locked (2026-09-18)
+
+**§7 Q3 was answered "flexible" and that answer was wrong.** A real game
+(`logs/vtes-game-2026-09-18T04-53-41-025Z.json`, seq 1069–1078) shows what
+it costs: Bad Guy played Protected District — *"this vampire gains +3
+votes **against** the referendum"* — to stop Alice's Consanguineous Boon,
+and then cast the resulting grant **for** it. The card was played as a
+defence and spent as a vote in favour of the thing it was defending
+against. Nothing on the table showed it happening, which is exactly the
+shape of bug "no partial cards" exists to prevent.
+
+### Why the original answer looked safe
+
+Q3 was asked as a question about *accounting* — per seat or per vampire,
+and does the tally come out the same. It does. But the direction is not an
+accounting detail, it is the card's text, and it is the **only** one of
+the ten `modifyVotes` cards that prints one:
+
+| Card | Printed | Direction |
+|---|---|---|
+| Bewitching Oration, Iron Glare, Old Friends, Ominous Chorus, Perfect Paragon, Absolute Tyranny, Surprise Influence, Party Out Of Bounds | "this vampire gets +N votes" | none — the seat aims them |
+| Elysium / Ventrue HQ / Oxford / Ferraille | "+N votes" | none |
+| **Protected District** | "+3 votes **against** the referendum" | **against** |
+
+So "flexible" was right for nine cards and wrong for one, and the one is
+the only one anybody would notice — because it is the only one whose whole
+purpose is the direction.
+
+### The shape
+
+`voteGrants` is now bucketed, in **one** record rather than a flexible one
+plus a directed sibling, because two records holding the same question is
+how they drift:
+
+```ts
+export interface VoteGrants { any: number; for: number; against: number }
+voteGrants: Record<SeatId, VoteGrants>;
+```
+
+- `ops.grantVotes(seat, amount, direction = "any")` — the default keeps all
+  seven existing callers unchanged, so the nine direction-less cards say
+  nothing and get the old behaviour.
+- `spec.modifyVotes` gains an optional `direction: "for" | "against"`.
+  Protected District sets `"against"`; nothing else sets it.
+- **Each bucket is its own vote source, spent separately**:
+  `vote:grant:*`, `vote:grantFor:for`, `vote:grantAgainst:against`, with
+  `usedSources` keys to match. A seat holding both a flexible grant and a
+  directed one can cast both — spending one must not silently spend the
+  other.
+- A directed grant is offered by `oneWay`, a sibling of `both` that emits
+  the single legal option. Like the untolled branch of `both` it takes no
+  `voter`, so no against-toll applies — a card-granted vote is untolled by
+  construction.
+
+### The lesson
+
+**A parameter named for the ACCOUNTING will be decided on accounting
+grounds.** Q3 asked "per seat or per vampire?" and got a tally-identical
+answer; the word "against" in the card text never entered the question, so
+the design review could not catch it. When an open question is about how
+to *store* something a card prints, put the card's sentence in the
+question — otherwise the reviewer is answering a different one.
+
+And: **"the tally comes out the same" is a claim about totals, not about
+legal options.** The fuzz cannot see a too-permissive option list (CLAUDE.md,
+"Tests that lie"), and the tally was never wrong — only the set of things a
+seat was allowed to do. Negative-space assertions are the only instrument
+that reads this, which is why the test pins the *absent* `vote:grant:for`
+and `vote:grantAgainst:for` before it pins the outcome.
+
+### Tests
+
+`tests/cards/polling-votes.test.ts`, "Protected District (102214) — a grant
+the CARD aims": the `for` half of the source is never offered and no
+flexible bucket exists to launder it through, asserted on the option list
+before any vote is cast; and the primogen's own title vote still casts
+afterwards, so the two sources are spent independently. Both fail against
+the pre-2026-09-18 code, which offered `vote:grant:for`.
