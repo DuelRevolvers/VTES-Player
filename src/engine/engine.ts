@@ -165,12 +165,34 @@ function parsePayFrom(
  *  the round-1 pool (Precognition), whatever is left of a per-round RATE
  *  (Bear's Skin superior, Tranquility Shield) and the combat-long pool
  *  (Beast Meld). docs/round-recurring-combat-design.md §2 */
-function preventPoints(cf: CombatFrame, side: "acting" | "opposing"): number {
+function preventPoints(
+  cf: CombatFrame,
+  side: "acting" | "opposing",
+  pd?: PendingDamage,
+): number {
   return (
     cf.preventCredits[side] +
     (cf.round === 1 ? cf.preventCreditsFirstRound[side] : 0) +
-    Math.max(0, cf.preventPerRound[side] - cf.preventPerRoundUsed[side])
+    Math.max(0, cf.preventPerRound[side] - cf.preventPerRoundUsed[side]) +
+    usableRoundCredits(cf, side, pd).length
   );
+}
+
+/**
+ * The round pool's entries that this damage can actually be prevented with.
+ * "This damage cannot be prevented by cards requiring Fortitude" (Blood
+ * Fury, Soul Burn) reaches a CREDIT too, because the credit remembers what
+ * its granting card required. docs/armour-design.md §4
+ */
+function usableRoundCredits(
+  cf: CombatFrame,
+  side: "acting" | "opposing",
+  pd?: PendingDamage,
+): string[][] {
+  const pool = cf.preventCreditsRound?.[side] ?? [];
+  const barred = pd?.noPreventBy;
+  if (!barred || barred.length === 0) return pool;
+  return pool.filter((ds) => !ds.some((d) => barred.includes(d)));
 }
 
 export class VtesEngine implements EngineOps {
@@ -555,6 +577,16 @@ export class VtesEngine implements EngineOps {
       case "WentToTorpor":
         getMinion(this.state, ev.minion).inTorpor = true;
         break;
+      case "DisciplineGained": {
+        // "Gain ONE LEVEL": absent → basic, basic → superior, and superior is
+        // the ceiling — there is no third level (p. 11).
+        // docs/torpor-prey-design.md §3
+        const gained = findMinion(this.state, ev.minion);
+        if (!gained) break;
+        gained.disciplines[ev.discipline] =
+          gained.disciplines[ev.discipline] === undefined ? "basic" : "superior";
+        break;
+      }
       case "VictoryPointGained":
         getSeat(this.state, ev.seat).victoryPoints += 1;
         break;
@@ -621,6 +653,22 @@ export class VtesEngine implements EngineOps {
         getMinion(this.state, ev.minion).inTorpor = false;
         break;
       case "PermanentEnteredPlay": {
+        // A card cannot be in play AND in a pile. `resolveCardPlay` files a
+        // played card unless it went into play "instead" — and it asks that
+        // question at CARD resolution, which is too early for a card whose
+        // effect puts it in play at STRIKE resolution (Molotov Cocktail's
+        // "ranged strike: put this card on this minion"). So the Cocktail
+        // was filed, then attached, and lived in both zones: it was offered
+        // twice by every ash-heap card and burned twice at end of combat.
+        //
+        // Asked HERE, at the one chokepoint every permanent enters through,
+        // rather than by teaching the filing guard to predict the future.
+        // The strike that never resolves (a dodge, a "combat ends" from the
+        // other side) needs no special case either: the card simply stays
+        // filed. docs/thrown-objects-design.md §4
+        for (const s of this.state.seats) {
+          if (s.ashHeap) s.ashHeap = s.ashHeap.filter((c) => c.id !== ev.cardId);
+        }
         const entry: PermanentInPlay = {
           card: { id: ev.cardId, name: ev.name },
           locked: false,
@@ -941,7 +989,13 @@ export class VtesEngine implements EngineOps {
       }
       case "CardToAshHeap": {
         const seat = getSeat(this.state, ev.seat);
-        (seat.ashHeap ??= []).push({ id: ev.cardId, name: ev.name });
+        // Idempotent: a pile holds an instance once. Filing a card that is
+        // already filed used to append a second copy, which showed up as a
+        // duplicate option id from every card that reads the ash heap
+        // (docs/thrown-objects-design.md §4).
+        if (!(seat.ashHeap ??= []).some((c) => c.id === ev.cardId)) {
+          seat.ashHeap.push({ id: ev.cardId, name: ev.name });
+        }
         break;
       }
       case "CardRemovedFromGame": {
@@ -1956,7 +2010,16 @@ export class VtesEngine implements EngineOps {
       votes: [],
       usedSources: [],
       cycle: newCycle(sequencingOrder(this.state, seat, [])),
+      // "In the RESULTING blood hunt referendum…" (Cloak of Blood, Stealing
+      // Years): the rider was seeded on the diablerist by the card that made
+      // them one, and belongs to THIS referendum alone — so it moves onto the
+      // frame and is cleared, never read off the minion again.
+      // docs/torpor-prey-design.md §4
+      ...(hunted.bloodHuntVoteRiders !== undefined
+        ? { extraVotes: hunted.bloodHuntVoteRiders }
+        : {}),
     });
+    delete hunted.bloodHuntVoteRiders;
   }
 
   /** Returns true if a transition was made and settling should continue. */
@@ -2377,6 +2440,8 @@ export class VtesEngine implements EngineOps {
             cf.usedThisRound = []; // "each round" abilities recharge
             cf.playedThisRound = []; // "one X each round" resets
             cf.handStrikesAggravated = { acting: false, opposing: false };
+            // "…for the remainder of THIS ROUND" (Skin of Night).
+            cf.aggravatedAsNormalRound = [];
             // "…that minion's INITIAL STRIKE THIS ROUND gets first
             // strike" (Haymaker) — a round-scoped grant, and the
             // half-finished round it belongs to is over either way.
@@ -2416,6 +2481,9 @@ export class VtesEngine implements EngineOps {
             cf.weaponDamageNullified = { acting: false, opposing: false };
             // "…this round" (Rolling with the Punches superior).
             cf.preventAllFrom = { acting: false, opposing: false };
+            // "…can prevent 1 damage LATER THIS ROUND" (Unflinching
+            // Persistence superior, Obedient Flesh, Bear's Skin basic).
+            cf.preventCreditsRound = { acting: [], opposing: [] };
             // "This round, this vampire gets +1 strength" (Obedient Flesh)
             // — unlike strengthBonus, which lasts the whole combat.
             cf.strengthBonusRound = { acting: 0, opposing: 0 };
@@ -2928,6 +2996,17 @@ export class VtesEngine implements EngineOps {
               return n + c.amount;
             }, 0)
           : 0;
+      // "In the resulting blood hunt referendum, this vampire gets an
+      // additional 2 votes" / "each anarch gets an additional vote" (Cloak of
+      // Blood, Stealing Years) — counted INTO the total, not added after it.
+      // The skip below means "this vampire has no voice"; a rider that GIVES
+      // a titleless vampire a voice has to be inside the sum, or the skip
+      // throws it away first (docs/torpor-prey-design.md §4).
+      const referendumRider = (rf.extraVotes ?? []).reduce((n, r) => {
+        if (r.minion !== undefined && r.minion !== m.id) return n;
+        if (r.sect !== undefined && m.sect !== r.sect) return n;
+        return n + r.amount;
+      }, 0);
       const votes = Math.max(
         0,
         titleVotes +
@@ -2937,7 +3016,8 @@ export class VtesEngine implements EngineOps {
           // vote" — a crypt card's conditional static, board-conditioned.
           conditionalStaticNoAction(this.state, m, "votes") +
           refMod +
-          callerBonus,
+          callerBonus +
+          referendumRider,
       );
       if (votes <= 0) continue;
       if (rf.usedSources.includes(m.id)) continue;
@@ -3029,6 +3109,16 @@ export class VtesEngine implements EngineOps {
       if (!cp.asAction && !this.allEntries().some((e) => e.entry.card.id === cp.card.id)) {
         this.toAshHeap(cp.seat, cp.card);
       }
+      // "Do not replace this card until AFTER you discard your hand" (Deal
+      // with the Devil) — the replacement is owed once the card's own
+      // resolution is over, which is exactly here. Drawn any earlier it lands
+      // in the hand the card throws away.
+      //
+      // `drawUpToHandSize`, not one card: "replacement" means bringing the
+      // hand back to size, and this card's own effect has already drawn a new
+      // hand — a flat extra draw would leave it one card OVER size
+      // (docs/hand-churn-design.md §2).
+      if (handler.delayedReplace === "afterResolve") this.drawUpToHandSize(cp.seat);
       // "When a Methuselah successfully plays a trifle, they gain an
       // additional master phase action" — once per master phase (p. 10).
       if (
@@ -4180,6 +4270,7 @@ export class VtesEngine implements EngineOps {
         opposing: riders?.noCombatEndsFirstRound ?? false,
       },
       preventCredits: { acting: 0, opposing: 0 },
+      preventCreditsRound: { acting: [], opposing: [] },
       preventPerRound: { acting: 0, opposing: 0 },
       preventPerRoundUsed: { acting: 0, opposing: 0 },
       roundDamage: [],
@@ -5419,6 +5510,21 @@ export class VtesEngine implements EngineOps {
   /** Extra cards, not replacements — an empty library simply stops. */
   drawCards(seatId: SeatId, count: number): void {
     for (let i = 0; i < count; i++) this.drawToReplace(seatId, "extra");
+  }
+
+  /** "…and draw a new one" / "…then draws back up to his or her hand size"
+   *  (Deal with the Devil, Lupine Assault) — refill to the size the seat
+   *  currently has, which is `handSizeOf` and so honours every temporary
+   *  grant in force. An empty library simply stops.
+   *  docs/hand-churn-design.md §2 */
+  drawUpToHandSize(seatId: SeatId): void {
+    const seat = getSeat(this.state, seatId);
+    // Bounded by the hand size rather than by a count: the draw itself can
+    // change what the hand holds (a redirect), so the loop re-reads.
+    for (let i = 0; i < 20; i++) {
+      if (seat.hand.length >= handSizeOf(this.state, seatId)) return;
+      if (!this.drawToReplace(seatId, "extra")) return;
+    }
   }
 
   /** "Shuffle this card into your library" (Aranthebes) — it leaves play
@@ -7032,9 +7138,36 @@ export class VtesEngine implements EngineOps {
 
   /** "…and can prevent 1 damage" (Obedient Flesh) — a credit spent in the
    *  damage-resolution step, not prevention applied now. */
-  grantPreventCredit(play: CardPlayFrame, amount: number): void {
+  /**
+   * "This vampire treats aggravated damage as normal damage for the
+   * remainder of this round" (Skin of Night). Recorded on the minion, not
+   * on the damage item: the item stays aggravated, so a card that prevents
+   * only NON-aggravated damage still cannot touch it
+   * [LSJ 20040812-2]. docs/armour-design.md §3
+   */
+  treatAggravatedAsNormal(play: CardPlayFrame): void {
     const cf = this.requireCombat();
-    cf.preventCredits[this.sideOf(cf, play.minion)] += amount;
+    if (!play.minion) return;
+    cf.aggravatedAsNormalRound ??= [];
+    if (!cf.aggravatedAsNormalRound.includes(play.minion)) {
+      cf.aggravatedAsNormalRound.push(play.minion);
+    }
+  }
+
+  /**
+   * "…and this vampire can prevent N damage later THIS ROUND"
+   * (`combatCredits.prevent`). The round pool, not the combat-long one —
+   * the primitive's own spec always said "this round only" and the code
+   * put it in the combat pool, so the credit outlived its sentence.
+   *
+   * `disciplines` is what the granting MODE required, kept per point so
+   * `noPreventBy` can filter a credit. docs/armour-design.md §4
+   */
+  grantPreventCredit(play: CardPlayFrame, amount: number, disciplines: string[] = []): void {
+    const cf = this.requireCombat();
+    const side = this.sideOf(cf, play.minion);
+    cf.preventCreditsRound ??= { acting: [], opposing: [] };
+    for (let i = 0; i < amount; i++) cf.preventCreditsRound[side].push([...disciplines]);
   }
 
   grantManeuverCredit(play: CardPlayFrame): void {
@@ -7981,6 +8114,20 @@ export class VtesEngine implements EngineOps {
       if (!a || !b || !isReady(a) || !isReady(b)) continue;
       this.pushCombat(a.id, a.controller, b.id, b.controller, null, false, q.outcome ?? null);
     }
+    // "Ⓓ Diablerize a vampire in torpor" (Cloak of Blood, Stealing Years) —
+    // queued for the same reason the combats above are: the diablerie's fifth
+    // step PUSHES A REFERENDUM (the blood hunt, p. 35), and a frame pushed
+    // while the action frame is still on the stack is discarded with it. The
+    // card's own effects run at resolution; the resolution itself waits until
+    // the action is off the stack. docs/torpor-prey-design.md §2
+    if (af.pendingDiablerie) {
+      const { diablerist, victim } = af.pendingDiablerie;
+      const d = findMinion(this.state, diablerist);
+      const v = findMinion(this.state, victim);
+      // Either can have left play in between, and a victim who has left
+      // torpor cannot be diablerised at all (p. 24).
+      if (d && v && v.inTorpor) this.commitDiablerie(diablerist, victim);
+    }
     // A successful political action calls its referendum (p. 27) — the
     // terms are chosen only now, the one exception to
     // details-at-announcement (p. 25).
@@ -8874,6 +9021,17 @@ export class VtesEngine implements EngineOps {
       const handler = this.registry[card.name];
       if (!handler) continue;
       if (boonsBarred && (handler.cardKeywords?.() ?? []).includes("boon")) continue;
+      // "Only one X may be played in a game" — a query over the log, not a
+      // latch: nothing to reset, nothing to serialize, and no gap between
+      // "played" and "called" (docs/hand-churn-design.md §4).
+      if (
+        handler.oncePerGameName !== undefined &&
+        this.state.eventLog.some(
+          (ev) => ev.type === "CardPlayed" && ev.name === handler.oncePerGameName,
+        )
+      ) {
+        continue;
+      }
       options.push(...handler.options(card, ctx));
     }
     // "…can play cards from this card AS IF FROM YOUR HAND" (Gift of
@@ -9203,12 +9361,14 @@ export class VtesEngine implements EngineOps {
           // whose remaining points are the grant minus what this round
           // has already spent. One button, whichever bucket pays: the
           // player is choosing to prevent a point, not to do bookkeeping.
-          ...(preventPoints(cf, side) > 0 && seat === victimSeat
+          // A credit the damage's `noPreventBy` filters out is not offered,
+          // the same gate a prevention CARD gets (§4).
+          ...(preventPoints(cf, side, pd) > 0 && seat === victimSeat
             ? [
                 {
                   id: "prevent:credit",
                   kind: "preventCredit" as const,
-                  label: `Prevent 1 damage (credit, ${preventPoints(cf, side)} left)`,
+                  label: `Prevent 1 damage (credit, ${preventPoints(cf, side, pd)} left)`,
                 },
               ]
             : []),
@@ -9719,10 +9879,17 @@ export class VtesEngine implements EngineOps {
         // end of round 1, the per-round rate at the end of THIS round,
         // and only `preventCredits` survives the combat (the
         // `closeManeuvers` rule, extended to a third bucket).
+        const roundPool = top.preventCreditsRound?.[side] ?? [];
+        const usable = usableRoundCredits(top, side, pd);
         if (top.round === 1 && top.preventCreditsFirstRound[side] > 0) {
           top.preventCreditsFirstRound[side] -= 1;
         } else if (top.preventPerRound[side] - top.preventPerRoundUsed[side] > 0) {
           top.preventPerRoundUsed[side] += 1;
+        } else if (usable.length > 0) {
+          // The round pool before the combat pool: it is gone at the end of
+          // this round either way, and a filtered entry is NOT spendable —
+          // so spend a point the filter allows, not simply the first one.
+          roundPool.splice(roundPool.indexOf(usable[0]!), 1);
         } else {
           top.preventCredits[side] -= 1;
         }
@@ -10157,7 +10324,15 @@ export class VtesEngine implements EngineOps {
       }
       return;
     }
-    if (pd.aggravated) {
+    // "This vampire treats aggravated damage as normal damage for the
+    // remainder of this round" (Skin of Night). Asked HERE, at the one
+    // place "aggravated" means "cannot be mended" — the item itself stays
+    // aggravated, which is what keeps Resilience's non-aggravated
+    // prevention off it [LSJ 20040812-2]. docs/armour-design.md §3
+    const cf = this.state.frames.find((f) => f.kind === "combat");
+    const asNormal =
+      cf?.kind === "combat" && (cf.aggravatedAsNormalRound ?? []).includes(pd.minion);
+    if (pd.aggravated && !asNormal) {
       // Aggravated cannot be mended (p. 34). An already-wounded (in
       // torpor) vampire burns 1 blood per point to prevent destruction,
       // else is burned; otherwise it goes straight to torpor (wounded).
@@ -10677,6 +10852,13 @@ export class VtesEngine implements EngineOps {
         for (const s of this.state.seats) {
           for (const m of s.minions) m.ignoresGehennaTax = false;
         }
+        // "After ANY METHUSELAH plays a Gehenna card, you may draw two
+        // additional cards" (Servitor of Irad) — every card in play is told,
+        // whoever played the Gehenna card, and the offer belongs to the
+        // bearer's controller (docs/hand-churn-design.md §5).
+        for (const { entry, owner } of this.allEntries()) {
+          this.registry[entry.card.name]?.onGehennaPlayed?.(entry, owner, this);
+        }
         // "After ANOTHER Gehenna event is played, burn 1 counter from this
         // card" (Fueled by Heart's Blood, Wormwood) — "another" is free
         // here: the card being played is not in play yet.
@@ -10723,6 +10905,9 @@ export class VtesEngine implements EngineOps {
     // the guard belongs around all of them rather than in each.
     if (store !== null) {
       // nothing to replace
+    } else if (handler.delayedReplace === "afterResolve") {
+      // Drawn in `resolveCardPlay` instead, once this card's own effect is
+      // done (docs/hand-churn-design.md §2).
     } else if (handler.delayedReplace === "afterCombat" && cfForDraw) {
       // "Do not replace until AFTER COMBAT" (Dodge, Fake Out, Boxed In).
       // Held on the combat frame, not the action's, because combat ends

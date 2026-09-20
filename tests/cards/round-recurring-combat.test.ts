@@ -127,7 +127,11 @@ describe("Bear's Skin (100145)", () => {
     const cf = combat(state);
     expect(cf.strengthBonusRound.acting).toBe(1);
     expect(cf.strengthBonus.acting).toBe(0);
-    expect(cf.preventCredits.acting).toBe(1);
+    // The ROUND pool, which is what this test's own name always claimed.
+    // It used to assert `preventCredits`, the combat-LONG pool — the field
+    // the credit was wrongly written to (docs/armour-design.md §4).
+    expect(cf.preventCreditsRound?.acting.length).toBe(1);
+    expect(cf.preventCredits.acting).toBe(0);
     // Nothing recurring was installed.
     expect(cf.preventPerRound.acting).toBe(0);
   });
@@ -144,7 +148,9 @@ describe("Bear's Skin (100145)", () => {
     const cf = combat(state);
     expect(cf.strengthBonus.acting).toBe(1);
     expect(cf.preventPerRound.acting).toBe(1);
-    expect(cf.preventCredits.acting).toBe(0); // a rate, not a pool
+    // A rate, not a pool — neither pool.
+    expect(cf.preventCredits.acting).toBe(0);
+    expect(cf.preventCreditsRound?.acting.length ?? 0).toBe(0);
   });
 
   it("the rate refreshes at the round boundary; a spent POOL credit does not", () => {

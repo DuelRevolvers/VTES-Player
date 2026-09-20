@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 267 test files, 2738 tests**, with `npm run typecheck`,
+**Green baseline: 272 test files, 2792 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -387,7 +387,9 @@ doc named beside it.
 - **A deferral is a claim about the code AS IT WAS — and so is a
   NON-deferral.** Five cut-list rows in eight waves named a blocker that
   had since been built. Check the tree before designing against a note;
-  "it already exists" is a claim to CHECK, not to make.
+  "it already exists" is a claim to CHECK, not to make. **And a recorded
+  DEVIATION is a claim about the card POOL as it was** — admitting
+  Unflinching Persistence expired one by itself (`armour-design.md` §4).
 - **A card can be WHOLE and still be INERT, and the pool wants neither.**
   Before implementing a card that filters on a clan, title, sect, card
   type or DISCIPLINE, check the pool actually contains one (Tradition
@@ -773,7 +775,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-182 files under `docs/`, one per mechanic that took a decision. **Read the
+187 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -791,10 +793,10 @@ conditional-weapons, basic-combat, first-strike, first-strike-cards,
 strike-effects, strike-sources, ammo, aim, dodge-additional-strikes,
 weapons, weapon-riders, one-shot-weapons, frenzy, actor-riders,
 dawn-operation, outside-combat, round-recurring-combat,
-combat-attachments, round-end, last-combat.
+combat-attachments, round-end, last-combat, positional-combat, armour, thrown-objects.
 
 **Actions and blocking:** lock-as-currency, buying-a-block, rush-actions,
-rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pay-to-unlock, lock-as-price, blood-and-gear,
+rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pay-to-unlock, lock-as-price, blood-and-gear, torpor-prey, hand-churn,
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions.

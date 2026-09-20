@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-18T13:44:44.285Z",
+ "fetchedAt": "2026-09-20T04:01:29.034Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -2431,6 +2431,27 @@
    },
    "supported": true
   },
+  "100360": {
+   "card": {
+    "kind": "library",
+    "id": 100360,
+    "name": "Cloak of Blood",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a vampire with capacity above 5 who can commit diablerie.\nⒹ Diablerize a vampire in torpor, and this vampire may gain one level of a Discipline the victim had. In the resulting blood hunt referendum, this vampire gets an additional 2 votes.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/cloakofblood.jpg",
+    "sets": [
+     "Sword of Caine"
+    ]
+   },
+   "supported": true
+  },
   "100361": {
    "card": {
     "kind": "library",
@@ -2891,6 +2912,27 @@
    },
    "supported": true
   },
+  "100431": {
+   "card": {
+    "kind": "library",
+    "id": 100431,
+    "name": "Corruption's Purge",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a prince, justicar, or Inner Circle member.\nIf this referendum is successful, each Follower of Set burns 2 blood. Each Follower of Set with zero blood then goes into torpor.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/corruptionspurge.jpg",
+    "sets": [
+     "Ancient Hearts"
+    ]
+   },
+   "supported": true
+  },
   "100435": {
    "card": {
     "kind": "library",
@@ -2930,6 +2972,29 @@
     "sets": [
      "Fifth Edition",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "100445": {
+   "card": {
+    "kind": "library",
+    "id": 100445,
+    "name": "Crematorium",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Harbinger of Skulls"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nLock during your unlock phase to burn a vampire in torpor with no blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crematorium.jpg",
+    "sets": [
+     "2006 Tournament promo"
     ]
    },
    "supported": true
@@ -3362,6 +3427,29 @@
    },
    "supported": true
   },
+  "100506": {
+   "card": {
+    "kind": "library",
+    "id": 100506,
+    "name": "Deal with the Devil",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nDiscard your hand and draw a new one. Do not replace this card until after you discard your hand.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/dealwiththedevil.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Tenth Anniversary"
+    ]
+   },
+   "supported": true
+  },
   "100510": {
    "card": {
     "kind": "library",
@@ -3657,6 +3745,31 @@
     "image": "https://static.krcg.org/card/disputedterritory.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100558": {
+   "card": {
+    "kind": "library",
+    "id": 100558,
+    "name": "Dissolution",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pro] Maneuver or press.\n[PRO] Maneuver, with an optional press.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/dissolution.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -4625,6 +4738,29 @@
    },
    "supported": true
   },
+  "100688": {
+   "card": {
+    "kind": "library",
+    "id": 100688,
+    "name": "Fade from View",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "obf"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[obf] Press.\n[OBF] Strike: dodge.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fadefromview.jpg",
+    "sets": [
+     "Sabbat"
+    ]
+   },
+   "supported": true
+  },
   "100692": {
    "card": {
     "kind": "library",
@@ -5372,6 +5508,31 @@
    },
    "supported": true
   },
+  "100772": {
+   "card": {
+    "kind": "library",
+    "id": 100772,
+    "name": "Form of the Ghost",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pro] Maneuver.\n[PRO] Press.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/formoftheghost.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Anarchs"
+    ]
+   },
+   "supported": true
+  },
   "100774": {
    "card": {
     "kind": "library",
@@ -5761,6 +5922,32 @@
      "Jyhad",
      "Vampire: The Eternal Struggle",
      "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100838": {
+   "card": {
+    "kind": "library",
+    "id": 100838,
+    "name": "Gleam of Red Eyes",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pro] Press.\n[PRO] Maneuver.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/gleamofredeyes.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Kindred Most Wanted"
     ]
    },
    "supported": true
@@ -7419,6 +7606,28 @@
    },
    "supported": true
   },
+  "101133": {
+   "card": {
+    "kind": "library",
+    "id": 101133,
+    "name": "Lupine Assault",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master. Do not replace until your influence phase.\nEach Methuselah (including you) discards 5 cards of his or her choice, then draws back up to his or her hand size. Only one Lupine Assault may be played in a game.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/lupineassault.jpg",
+    "sets": [
+     "Final Nights",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101136": {
    "card": {
     "kind": "library",
@@ -7841,6 +8050,29 @@
    },
    "supported": true
   },
+  "101202": {
+   "card": {
+    "kind": "library",
+    "id": 101202,
+    "name": "Mercury's Arrow",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[cel] Strike: 1R damage, with an optional maneuver.\n[CEL] Strike: 3R damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/mercurysarrow.jpg",
+    "sets": [
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
   "101211": {
    "card": {
     "kind": "library",
@@ -8141,6 +8373,30 @@
    },
    "supported": true
   },
+  "101246": {
+   "card": {
+    "kind": "library",
+    "id": 101246,
+    "name": "Movement of the Mind",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "tha"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[tha] Press, only usable to end combat.\n[THA] Maneuver.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/movementofthemind.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
+    ]
+   },
+   "supported": true
+  },
   "101249": {
    "card": {
     "kind": "library",
@@ -8395,6 +8651,34 @@
     "sets": [
      "Gehenna",
      "Echoes of Gehenna"
+    ]
+   },
+   "supported": true
+  },
+  "101288": {
+   "card": {
+    "kind": "library",
+    "id": 101288,
+    "name": "Nimble Feet",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Press.\n[CEL] Additional strike (limited).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/nimblefeet.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Kindred Most Wanted",
+     "Legacies of Blood",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -10060,6 +10344,30 @@
    },
    "supported": true
   },
+  "101528": {
+   "card": {
+    "kind": "library",
+    "id": 101528,
+    "name": "Quick Exit",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "obf"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[obf] Press, only usable to end combat.\n[OBF] Strike: dodge.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/quickexit.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
   "101529": {
    "card": {
     "kind": "library",
@@ -10333,6 +10641,33 @@
    },
    "supported": true
   },
+  "101558": {
+   "card": {
+    "kind": "library",
+    "id": 101558,
+    "name": "Read Intentions",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "aus"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[aus] Press, only usable to end combat.\n[AUS] Strike: dodge.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/readintentions.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101564": {
    "card": {
     "kind": "library",
@@ -10507,6 +10842,33 @@
     "sets": [
      "Fifth Edition (Anarch)",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101608": {
+   "card": {
+    "kind": "library",
+    "id": 101608,
+    "name": "Resilience",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "for"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[for] Prevent 1 damage.\n[FOR] Prevent 3 non-aggravated damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/resilience.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -10859,6 +11221,33 @@
    },
    "supported": true
   },
+  "101669": {
+   "card": {
+    "kind": "library",
+    "id": 101669,
+    "name": "Sacrament of Carnage",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pot] Strike: 2R damage.\n[POT] Strike: 3R damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sacramentofcarnage.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101670": {
    "card": {
     "kind": "library",
@@ -11188,6 +11577,27 @@
    },
    "supported": true
   },
+  "101729": {
+   "card": {
+    "kind": "library",
+    "id": 101729,
+    "name": "Servitor of Irad",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nPut this card on a ready vampire you control. After any Methuselah plays a Gehenna card, you may draw two additional cards from your library if this vampire is ready. Discard down to your hand size afterward. A vampire can have only one Servitor of Irad.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/servitorofirad.jpg",
+    "sets": [
+     "Gehenna"
+    ]
+   },
+   "supported": true
+  },
   "101753": {
    "card": {
     "kind": "library",
@@ -11325,6 +11735,90 @@
      "Ancient Hearts",
      "Tenth Anniversary",
      "Twenty-Fifth Anniversary"
+    ]
+   },
+   "supported": true
+  },
+  "101790": {
+   "card": {
+    "kind": "library",
+    "id": 101790,
+    "name": "Skin of Night",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "for"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[for] This vampire treats aggravated damage as normal damage for the remainder of this round.\n[FOR] As above, and prevent 1 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/skinofnight.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Anarchs",
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
+  "101791": {
+   "card": {
+    "kind": "library",
+    "id": 101791,
+    "name": "Skin of Rock",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "for"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[for] Prevent 1 damage.\n[FOR] Prevent 2 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/skinofrock.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs"
+    ]
+   },
+   "supported": true
+  },
+  "101792": {
+   "card": {
+    "kind": "library",
+    "id": 101792,
+    "name": "Skin of Steel",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "for"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[for] Prevent all damage from the opponent's strike.\n[FOR] As above, and prevent all damage from the opponent's strikes for the remainder of this round.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/skinofsteel.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Anarchs",
+     "Kindred Most Wanted",
+     "Legacies of Blood"
     ]
    },
    "supported": true
@@ -11672,6 +12166,28 @@
    },
    "supported": true
   },
+  "101842": {
+   "card": {
+    "kind": "library",
+    "id": 101842,
+    "name": "Specialization",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique master.\nPut this card in play. During your unlock phase, you may lock this card and discard two copies of the same card from your hand to gain 1 pool (draw afterward).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/specialization.jpg",
+    "sets": [
+     "Black Hand",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101850": {
    "card": {
     "kind": "library",
@@ -11761,6 +12277,27 @@
      "Fifth Edition",
      "Fifth Edition (Anarch)",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101866": {
+   "card": {
+    "kind": "library",
+    "id": 101866,
+    "name": "Stealing Years",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Requires an anarch.\nⒹ Diablerize an older vampire in torpor and put this card on the acting anarch. Capacity increases by 1. In the resulting blood hunt referendum, each anarch gets an additional vote.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/stealingyears.jpg",
+    "sets": [
+     "Twilight Rebellion"
     ]
    },
    "supported": true
@@ -12440,6 +12977,66 @@
    },
    "supported": true
   },
+  "101982": {
+   "card": {
+    "kind": "library",
+    "id": 101982,
+    "name": "Thrown Gate",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pot] Strike: 1R damage, with an optional maneuver.\n[POT] Strike: 2R damage, with an optional maneuver.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/throwngate.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Black Hand",
+     "Kindred Most Wanted",
+     "Legacies of Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101983": {
+   "card": {
+    "kind": "library",
+    "id": 101983,
+    "name": "Thrown Sewer Lid",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable at long range.\n[pot] Strike: 3R damage.\n[POT] As above, with an optional press.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/thrownsewerlid.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Black Hand",
+     "Legacies of Blood"
+    ]
+   },
+   "supported": true
+  },
   "101984": {
    "card": {
     "kind": "library",
@@ -12830,6 +13427,36 @@
     "image": "https://static.krcg.org/card/underworldhuntingground.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "102071": {
+   "card": {
+    "kind": "library",
+    "id": 102071,
+    "name": "Unflinching Persistence",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "for"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[for] Prevent 1 damage.\n[FOR] Maneuver, and this vampire can prevent 1 damage later this round.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/unflinchingpersistence.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Legacies of Blood",
+     "Heirs to the Blood",
+     "First Blood"
     ]
    },
    "supported": true
@@ -13606,6 +14233,30 @@
     "image": "https://static.krcg.org/card/weightedwalkingstick.jpg",
     "sets": [
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "102171": {
+   "card": {
+    "kind": "library",
+    "id": 102171,
+    "name": "Well-Aimed Car",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pot] Strike: 4R damage; only usable at long range. Not usable first round of combat.\n[POT] As above, with an optional press.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/wellaimedcar.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
     ]
    },
    "supported": true

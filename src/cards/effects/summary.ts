@@ -77,6 +77,14 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   // Tranche 3 wave 7 — the one-shot masters.
   gainPool: "poolGain",
   gainPoolThreshold: "poolGain",
+  // Diablerie is a board swing the summary vocabulary has no word for, and
+  // so is a table-wide blood burn: both report as board effects.
+  actionDiablerize: "board",
+  refClanBloodBurn: "board",
+  // Churning a hand changes what you can do next rather than the board, and
+  // the vocabulary has no "cards" currency — `board` is the honest bucket.
+  discardHandRedraw: "board",
+  tableDiscardRedraw: "board",
   redeemVampireFromAsh: "poolGain",
   actionGainPool: "poolGain",
   eachOwnReadyVampireBloodToPool: "poolGain",
@@ -139,6 +147,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   preventAll: "prevent",
   preventAllThisRound: "prevent",
   preventEachRound: "prevent",
+  treatAggravatedAsNormal: "prevent",
   preventForOther: "prevent",
   strikeDodge: "prevent",
 

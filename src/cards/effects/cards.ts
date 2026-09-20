@@ -10644,6 +10644,593 @@ export const cardSpecs: CardSpec[] = [
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
 
+  // --- The positional combat cards (docs/positional-combat-design.md) ---
+  //
+  // Eight cards whose whole printed text is a press, a maneuver, a dodge or
+  // an additional strike, at two levels. NO new primitive: this wave drains
+  // vocabulary that waves 1–70 built, which is what makes it eight cards
+  // rather than four.
+  {
+    // "[obf] Press. [OBF] Strike: dodge."
+    krcgId: 100688,
+    name: "Fade from View",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "obf", effects: [{ kind: "press", continueOnly: false }] },
+      { level: "superior", discipline: "obf", effects: [{ kind: "strikeDodge" }] },
+    ],
+  },
+  {
+    // "[pro] Press. [PRO] Maneuver."
+    krcgId: 100838,
+    name: "Gleam of Red Eyes",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pro", effects: [{ kind: "press", continueOnly: false }] },
+      { level: "superior", discipline: "pro", effects: [{ kind: "maneuver" }] },
+    ],
+  },
+  {
+    // "[pro] Maneuver. [PRO] Press." — Gleam of Red Eyes with the levels the
+    // other way round, which is exactly why they are in one wave: the pair
+    // asserts that the MODE decides, not the card.
+    krcgId: 100772,
+    name: "Form of the Ghost",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pro", effects: [{ kind: "maneuver" }] },
+      { level: "superior", discipline: "pro", effects: [{ kind: "press", continueOnly: false }] },
+    ],
+  },
+  {
+    // "[cel] Press. [CEL] Additional strike (limited)."
+    krcgId: 101288,
+    name: "Nimble Feet",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "cel", effects: [{ kind: "press", continueOnly: false }] },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [{ kind: "additionalStrike", count: 1, limited: true }],
+      },
+    ],
+  },
+  {
+    // "[obf] Press, ONLY USABLE TO END COMBAT. [OBF] Strike: dodge."
+    krcgId: 101528,
+    name: "Quick Exit",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "obf",
+        effects: [{ kind: "press", continueOnly: false, endOnly: true }],
+      },
+      { level: "superior", discipline: "obf", effects: [{ kind: "strikeDodge" }] },
+    ],
+  },
+  {
+    // "[aus] Press, only usable to end combat. [AUS] Strike: dodge."
+    krcgId: 101558,
+    name: "Read Intentions",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "aus",
+        effects: [{ kind: "press", continueOnly: false, endOnly: true }],
+      },
+      { level: "superior", discipline: "aus", effects: [{ kind: "strikeDodge" }] },
+    ],
+  },
+  {
+    // "[tha] Press, only usable to end combat. [THA] Maneuver."
+    krcgId: 101246,
+    name: "Movement of the Mind",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "tha",
+        effects: [{ kind: "press", continueOnly: false, endOnly: true }],
+      },
+      { level: "superior", discipline: "tha", effects: [{ kind: "maneuver" }] },
+    ],
+  },
+  {
+    // "[pro] Maneuver OR press. [PRO] Maneuver, with an optional press."
+    //
+    // "Or" is two VARIANTS of the basic mode — the same shape Indomitability
+    // uses — so the choice is in the option list rather than in a frame.
+    krcgId: 100558,
+    name: "Dissolution",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pro", effects: [{ kind: "maneuver" }] },
+      {
+        level: "basic",
+        discipline: "pro",
+        variant: "press",
+        effects: [{ kind: "press", continueOnly: false }],
+      },
+      {
+        level: "superior",
+        discipline: "pro",
+        effects: [{ kind: "maneuver" }, { kind: "grantPress" }],
+      },
+    ],
+  },
+
+  // --- The armour cards (docs/armour-design.md) ---
+  // Five [for] cards about TAKING damage. Four are existing prevention
+  // vocabulary; the fifth (Skin of Night) converts aggravated to normal,
+  // which is the wave's one new primitive — and a ruling on Resilience
+  // makes the two interact in a way neither card states alone (§3).
+  {
+    // "[for] Prevent 1 damage. [FOR] Prevent 2 damage."
+    krcgId: 101791,
+    name: "Skin of Rock",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "for",
+        effects: [{ kind: "prevent", base: 1, perBloodX: false }],
+      },
+      {
+        level: "superior",
+        discipline: "for",
+        effects: [{ kind: "prevent", base: 2, perBloodX: false }],
+      },
+    ],
+  },
+  {
+    // "[for] Prevent 1 damage. [FOR] Prevent 3 non-aggravated damage."
+    //
+    // The superior is WEAKER against aggravated damage than the basic is —
+    // the reason the mode list is not ordered by strength, and the reason
+    // the basic stays offered when the superior is gated out (§2).
+    krcgId: 101608,
+    name: "Resilience",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "for",
+        effects: [{ kind: "prevent", base: 1, perBloodX: false }],
+      },
+      {
+        level: "superior",
+        discipline: "for",
+        effects: [{ kind: "prevent", base: 3, perBloodX: false, nonAggravated: true }],
+      },
+    ],
+  },
+  {
+    // "[for] Prevent all damage from the opponent's strike. [FOR] As
+    //  above, and prevent all damage from the opponent's strikes for the
+    //  remainder of this round."
+    //
+    // The superior is exactly Rolling with the Punches' superior, whose
+    // round-scoped prevention already covers the strike being resolved —
+    // so "as above, AND" needs no second effect. The 1 blood is the
+    // card's own cost, not the extra some of these charge.
+    krcgId: 101792,
+    name: "Skin of Steel",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "for", effects: [{ kind: "preventAll" }] },
+      {
+        level: "superior",
+        discipline: "for",
+        effects: [{ kind: "preventAllThisRound", bloodCost: 0 }],
+      },
+    ],
+  },
+  {
+    // "[for] Prevent 1 damage. [FOR] Maneuver, and this vampire can
+    //  prevent 1 damage later this round."
+    //
+    // The two modes are played in DIFFERENT windows — the basic at damage
+    // resolution, the superior at the range step, because a maneuver is a
+    // range-step play and the prevention it grants is a credit for later
+    // (the Obedient Flesh shape).
+    krcgId: 102071,
+    name: "Unflinching Persistence",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "for",
+        effects: [{ kind: "prevent", base: 1, perBloodX: false }],
+      },
+      {
+        level: "superior",
+        discipline: "for",
+        effects: [{ kind: "maneuver" }, { kind: "combatCredits", prevent: 1 }],
+      },
+    ],
+  },
+  {
+    // "[for] This vampire treats aggravated damage as normal damage for
+    //  the remainder of this round. [FOR] As above, and prevent 1 damage."
+    krcgId: 101790,
+    name: "Skin of Night",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "for",
+        effects: [{ kind: "treatAggravatedAsNormal" }],
+      },
+      {
+        level: "superior",
+        discipline: "for",
+        effects: [
+          { kind: "treatAggravatedAsNormal" },
+          { kind: "prevent", base: 1, perBloodX: false },
+        ],
+      },
+    ],
+  },
+
+  // --- Thrown objects (docs/thrown-objects-design.md) ---
+  // Five ranged strikes with riders, two of them gated on the range and one
+  // also on the round. No new primitive and no new gate: the mode-level
+  // `onlyAtLongRange` and `onlyAfterFirstRound` both already existed — the
+  // second one only worked in ONE window, which is what this wave found.
+  {
+    // "[pot] Strike: 2R damage. [POT] Strike: 3R damage."
+    // The control card: a ranged strike with no rider and no gate, so the
+    // four below have something to be compared against.
+    krcgId: 101669,
+    name: "Sacrament of Carnage",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "strikeDamage", amount: 2, ranged: true, aggravated: false }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [{ kind: "strikeDamage", amount: 3, ranged: true, aggravated: false }],
+      },
+    ],
+  },
+  {
+    // "[pot] Strike: 1R damage, with an optional maneuver. [POT] Strike: 2R
+    //  damage, with an optional maneuver."
+    krcgId: 101982,
+    name: "Thrown Gate",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [
+          { kind: "strikeDamage", amount: 1, ranged: true, aggravated: false, riders: { maneuver: 1 } },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [
+          { kind: "strikeDamage", amount: 2, ranged: true, aggravated: false, riders: { maneuver: 1 } },
+        ],
+      },
+    ],
+  },
+  {
+    // "[cel] Strike: 1R damage, with an optional maneuver. [CEL] Strike: 3R
+    //  damage."
+    //
+    // The rider is on the INFERIOR only — the pair with Thrown Gate, whose
+    // rider is on both. A mode list is not a ladder, and a rider silently
+    // copied to the superior is invisible in a single-mode test.
+    krcgId: 101202,
+    name: "Mercury's Arrow",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [
+          { kind: "strikeDamage", amount: 1, ranged: true, aggravated: false, riders: { maneuver: 1 } },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [{ kind: "strikeDamage", amount: 3, ranged: true, aggravated: false }],
+      },
+    ],
+  },
+  {
+    // "Only usable at long range. [pot] Strike: 3R damage. [POT] As above,
+    //  with an optional press."
+    //
+    // The gate is printed ABOVE the modes, so it belongs to both.
+    krcgId: 101983,
+    name: "Thrown Sewer Lid",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        usable: ["onlyAtLongRange"],
+        effects: [{ kind: "strikeDamage", amount: 3, ranged: true, aggravated: false }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        usable: ["onlyAtLongRange"],
+        effects: [
+          { kind: "strikeDamage", amount: 3, ranged: true, aggravated: false, riders: { press: 1 } },
+        ],
+      },
+    ],
+  },
+  {
+    // "[pot] Strike: 4R damage; only usable at long range. Not usable first
+    //  round of combat. [POT] As above, with an optional press."
+    //
+    // BOTH gates, which is why it is in this wave: it is the card that made
+    // the round gate's one-window life visible.
+    krcgId: 102171,
+    name: "Well-Aimed Car",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        usable: ["onlyAtLongRange", "onlyAfterFirstRound"],
+        effects: [{ kind: "strikeDamage", amount: 4, ranged: true, aggravated: false }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        usable: ["onlyAtLongRange", "onlyAfterFirstRound"],
+        effects: [
+          { kind: "strikeDamage", amount: 4, ranged: true, aggravated: false, riders: { press: 1 } },
+        ],
+      },
+    ],
+  },
+
+  // --- Churning the hand (docs/hand-churn-design.md) ---
+  {
+    // "Master. Discard your hand and draw a new one. Do not replace this card
+    //  until after you discard your hand."
+    //
+    // The replacement clause is what stops the new card being drawn into the
+    // hand this card throws away, so it is deferred and the redraw is the
+    // refill (§2).
+    krcgId: 100506,
+    name: "Deal with the Devil",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    // Not `afterAction`: a master has no action frame, so that branch falls
+    // through to an immediate draw and the replacement lands in the very hand
+    // this card discards. `afterResolve` is the clause the card prints.
+    delayedReplace: "afterResolve",
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "discardHandRedraw" }] }],
+  },
+  {
+    // "Master. Do not replace until your influence phase. Each Methuselah
+    //  (including you) discards 5 cards of his or her choice, then draws back
+    //  up to his or her hand size. Only one Lupine Assault may be played in a
+    //  game."
+    krcgId: 101133,
+    name: "Lupine Assault",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    oncePerGameByName: true,
+    delayedReplace: "unlock",
+    usable: [],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "tableDiscardRedraw", count: 5 }] },
+    ],
+  },
+  {
+    // "Unique master. Put this card in play. During your unlock phase, you
+    //  may lock this card and discard two copies of the same card from your
+    //  hand to gain 1 pool (draw afterward)."
+    krcgId: 101842,
+    name: "Specialization",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Specialization"],
+      pairForPool: { window: "unlock", lock: true, pool: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Put this card on a ready vampire you control. After any
+    //  Methuselah plays a Gehenna card, you may draw two additional cards
+    //  from your library if this vampire is ready. Discard down to your hand
+    //  size afterward. A vampire can have only one Servitor of Irad."
+    krcgId: 101729,
+    name: "Servitor of Irad",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Servitor of Irad"],
+      exclusiveKey: "Servitor of Irad",
+      attach: { scope: "own", kind: "vampire" },
+      gehennaDraw: { cards: 2, requiresBearerReady: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- Preying on a vampire in torpor (docs/torpor-prey-design.md) ---
+  {
+    // "Requires a vampire with capacity above 5 who can commit diablerie.
+    //  Ⓓ Diablerize a vampire in torpor, and this vampire may gain one level
+    //  of a Discipline the victim had. In the resulting blood hunt
+    //  referendum, this vampire gets an additional 2 votes."
+    //
+    // "Capacity ABOVE 5" is capacity 6 or more. "Who can commit diablerie"
+    // is what the action itself requires (p. 24) — a vampire, not an ally —
+    // and the engine's own diablerie option answers it the same way.
+    krcgId: 100360,
+    name: "Cloak of Blood",
+    cardType: "action",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresCapacity: 6,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "actionDiablerize",
+            gainVictimDiscipline: true,
+            bloodHuntVotes: { amount: 2, actor: true },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires an anarch. Ⓓ Diablerize an older vampire
+    //  in torpor and put this card on the acting anarch. Capacity increases
+    //  by 1. In the resulting blood hunt referendum, each anarch gets an
+    //  additional vote."
+    //
+    // The capacity rise rides on the card, which is what makes it permanent
+    // and what makes it go away with the card (`capacityBonus`).
+    krcgId: 101866,
+    name: "Stealing Years",
+    cardType: "action",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresSect: ["anarch"],
+    permanent: {
+      // The entry's real statics come from `attachSelf` below — this block
+      // exists so the card HAS a permanent shape at all (the Tier of Souls
+      // treatment). Putting `capacityBonus` here instead was silent: the
+      // card attached and the capacity never moved.
+      where: "bearer",
+      statics: {},
+      tags: ["Stealing Years"],
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "actionDiablerize",
+            olderOnly: true,
+            bloodHuntVotes: { amount: 1, sect: "anarch" },
+          },
+          // "Capacity increases by 1": the rise rides on the card, so it is
+          // permanent while the card is and goes when the card goes.
+          { kind: "attachSelf", statics: { capacityBonus: 1 } },
+        ],
+      },
+    ],
+  },
+  {
+    // "Master: unique location. Lock during your unlock phase to burn a
+    //  vampire in torpor with no blood."
+    krcgId: 100445,
+    name: "Crematorium",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Crematorium", "location"],
+      burnTorpid: { window: "unlock", requireNoBlood: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Requires a prince, justicar, or Inner Circle member. If this
+    //  referendum is successful, each Follower of Set burns 2 blood. Each
+    //  Follower of Set with zero blood then goes into torpor."
+    //
+    // "Follower of Set" is the card's word; the registry's is Ministry. The
+    // two steps are in the card's own order, and the torpor reads what the
+    // burn left.
+    krcgId: 100431,
+    name: "Corruption's Purge",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresControlledTitle: ["prince", "justicar", "innerCircle"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "refClanBloodBurn", clan: "Ministry", blood: 2, torporAtZero: true },
+        ],
+      },
+    ],
+  },
+
   // --- Moving blood and gear between minions
   //     (docs/blood-and-gear-design.md) ---
   {

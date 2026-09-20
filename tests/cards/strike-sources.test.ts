@@ -133,9 +133,14 @@ describe("Backflip (100123)", () => {
     // can end the combat before it arrives.
     for (let i = 0; i < 6; i++) {
       const dp = engine.decision();
-      if (!dp || (combat(state)?.pressesCombat.acting ?? 0) > 0) break;
+      if (!dp || (combat(state)?.presses.acting ?? 0) > 0) break;
       runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
     }
-    expect(combat(state)!.pressesCombat.acting).toBe(1);
+    // The PER-ROUND pool: "the optional press can only be used during the
+    // current round" [TOM 19960521], which is printed in Backflip's own
+    // rulings. This used to assert `pressesCombat`, the combat-long pool —
+    // so the credit outlived the round (docs/thrown-objects-design.md §3).
+    expect(combat(state)!.presses.acting).toBe(1);
+    expect(combat(state)!.pressesCombat.acting).toBe(0);
   });
 });

@@ -439,6 +439,28 @@ export type EffectPrimitive =
    *  Siege and many counter actions) — the card becomes a seat-level
    *  permanent on a successful action instead of being burned. */
   | { kind: "putInPlayOnSuccess"; counters?: number; tags?: string[]; locked?: boolean }
+  /**
+   * "Ⓓ Diablerize a vampire in torpor" (Cloak of Blood, Stealing Years) —
+   * the diablerie ACTION as a card, where the engine's own `diablerize:`
+   * option is the built-in version of the same action (p. 24).
+   *
+   * The victim is chosen at announcement (p. 25) and the resolution is the
+   * engine's indivisible five-step unit (p. 34), riders and all.
+   * docs/torpor-prey-design.md §2
+   */
+  | {
+      kind: "actionDiablerize";
+      /** "an OLDER vampire in torpor" (Stealing Years) — greater capacity
+       *  than the acting vampire. */
+      olderOnly?: boolean;
+      /** "…and this vampire MAY GAIN ONE LEVEL of a Discipline the victim
+       *  had" (Cloak of Blood): asked before the victim burns, because
+       *  afterwards there is nothing to read. §3 */
+      gainVictimDiscipline?: boolean;
+      /** "In the resulting blood hunt referendum, <who> gets N additional
+       *  votes" — the acting vampire, or every vampire of a sect. §4 */
+      bloodHuntVotes?: { amount: number; actor?: boolean; sect?: Sect };
+    }
   /** "Put this card in play. It becomes a 1-capacity (non-unique)
    *  \<clan/sect\> vampire and must hunt this turn" (Waters of Duat,
    *  Childe of the Revolution). The token enters with 0 blood, so the
@@ -1184,6 +1206,19 @@ export type EffectPrimitive =
    *  cannot touch this damage is never offered against it.
    *  docs/combat-attachments-design.md §3 */
   | { kind: "prevent"; base: number; perBloodX: boolean; nonAggravated?: boolean }
+  /**
+   * "This vampire treats aggravated damage as normal damage for the
+   * remainder of this round" (Skin of Night, Jua Vema).
+   *
+   * NOT the same thing as prevention, and deliberately NOT a rewrite of
+   * `PendingDamage.aggravated`: a ruling on Resilience says its
+   * non-aggravated prevention still cannot touch damage the victim is
+   * treating as normal [LSJ 20040812-2]. The item stays aggravated, and
+   * only `applyResolvedDamage` — where "aggravated" means "cannot be
+   * mended" (p. 34) — asks the question.
+   * docs/armour-design.md §3
+   */
+  | { kind: "treatAggravatedAsNormal" }
   /** "Put this card on this vampire / on the opposing vampire" from a
    *  combat card that is NOT a strike (Wall of Filth, Disarm). The window
    *  is DATA rather than a fixed case in `combatWindowFor`, because one
@@ -1327,6 +1362,11 @@ export type EffectPrimitive =
    *  chosen clan they control" (Consanguineous Boon). The terms range
    *  over every clan in the POOL, not every clan in play (p. 49). §1 */
   | { kind: "refClanBoon"; poolPerVampire: number }
+  /** "Each \<clan\> burns N blood. Each \<clan\> with zero blood THEN goes
+   *  into torpor" (Corruption's Purge) — the table's whole clan, in two
+   *  steps whose order is what the card turns on: the burn first, the torpor
+   *  read from what the burn left. docs/torpor-prey-design.md §6 */
+  | { kind: "refClanBloodBurn"; clan: string; blood: number; torporAtZero?: boolean }
   /** "Each Methuselah gains/burns N pool for each \<minion\> they control",
    *  or "all \<vampires\> burn N blood" — one filtered per-minion tally
    *  covering four legacy referendums that differ only in the filter and
@@ -1588,6 +1628,15 @@ export type EffectPrimitive =
   /** "Gain N pool" (Ascendance) — the whole card, and the simplest
    *  possible master (docs/pool-widening-design.md §6, tranche 3 wave 7). */
   | { kind: "gainPool"; amount: number }
+  /** "Discard your hand and draw a new one" (Deal with the Devil) — the whole
+   *  hand goes, and the replacement for THIS card is deferred so it is not
+   *  drawn into the hand this card is about to throw away.
+   *  docs/hand-churn-design.md §2 */
+  | { kind: "discardHandRedraw" }
+  /** "Each Methuselah (including you) discards N cards of his or her choice,
+   *  then draws back up to his or her hand size" (Lupine Assault) — the
+   *  table-wide version, and the choice is each Methuselah's own. §4 */
+  | { kind: "tableDiscardRedraw"; count: number }
   /** "If you have N or fewer pool, gain X pool. Otherwise, gain Y"
    *  (King's Rising) — the pool is read BEFORE anything is gained, and the
    *  card is played, so the master-phase action is spent either way. */
@@ -2356,6 +2405,16 @@ export interface CardSpec {
      *  on the TURN frame, which is what makes it lapse after the discard
      *  phase rather than before it (docs/temporary-hand-size-design.md). */
     handSizeLock?: { amount: number };
+    /** "During your unlock phase, you may lock this card and discard TWO
+     *  COPIES OF THE SAME CARD from your hand to gain 1 pool (draw
+     *  afterward)" (Specialization) — the only card in the pool that reads a
+     *  DUPLICATE in hand, which is a question about the hand's shape rather
+     *  than about any one card. docs/hand-churn-design.md §3 */
+    pairForPool?: { window: "unlock"; lock?: boolean; pool: number };
+    /** "After any Methuselah plays a Gehenna card, you may draw N additional
+     *  cards if this vampire is ready. Discard down to your hand size
+     *  afterward" (Servitor of Irad). §5 */
+    gehennaDraw?: { cards: number; requiresBearerReady?: boolean };
     /**
      * Moving what a minion CARRIES — their blood, or the equipment on them —
      * from one minion to another (docs/blood-and-gear-design.md).
@@ -2390,6 +2449,11 @@ export interface CardSpec {
      *  damage to the acting minion FOR EACH BLOOD on this card. This damage
      *  cannot be prevented" (The Spawning Pool). §4 */
     blockedBleedPunish?: { round: number; perCounter: number };
+    /** "Lock during your unlock phase to burn a vampire in torpor with no
+     *  blood" (Crematorium) — the simplest thing a card can do to a torpid
+     *  vampire, and the only one that needs no diablerie.
+     *  docs/torpor-prey-design.md §5 */
+    burnTorpid?: { window: "unlock"; requireNoBlood?: boolean };
     /** "Burn all boons. No more boons can be put in play" (Blood Trade) —
      *  both halves read the `boon` KEYWORD, which one card in the pool
      *  already carries. §5 */
@@ -3780,7 +3844,17 @@ export interface CardSpec {
    *  UNCONTROLLED" (Instability) — a gate on where the token sits, read
    *  at play time. docs/the-edge-design.md §4 */
   requiresEdge?: "preyOrUncontrolled" | "self";
-  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard" | "whileInPlay";
+  /** `"afterResolve"` is "do not replace this card until AFTER you discard
+   *  your hand" (Deal with the Devil) — the replacement waits for the card's
+   *  own resolution, and means "bring the hand back to size".
+   *  docs/hand-churn-design.md §2 */
+  delayedReplace?:
+    | "unlock"
+    | "afterAction"
+    | "afterCombat"
+    | "discard"
+    | "whileInPlay"
+    | "afterResolve";
   /** "Do not replace until a vampire commits diablerie" / "…moves from
    *  torpor to the ready region" / "…until your prey is ousted" — the
    *  CONDITION form of the clause above, which waits on an event rather

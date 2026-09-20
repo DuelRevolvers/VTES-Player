@@ -60,19 +60,33 @@ It has real teeth today: six supported cards prevent damage and require
 Fortitude — Diversion, Hidden Strength, Indomitability, Martyr's
 Resilience, Soak and Touch of Valeren.
 
-### Recorded deviation: prevention CREDITS are not filtered
+### CLOSED (wave 72): prevention credits ARE filtered
 
-`CombatFrame.preventCredits` is a pair of counts, not a list of cards, so
-a credit has forgotten which card granted it. Filtering it would mean
-carrying the granting card's Disciplines alongside every credit.
+This section used to record a deviation. `CombatFrame.preventCredits` was a
+pair of counts, not a list of cards, so a credit had forgotten which card
+granted it and no `noPreventBy` could reach it. The note said that was safe
+**only while no credit-granting card required a Discipline the filters
+name** — Obedient Flesh, the one such card, requires `[dom][pro]` and the
+filters name Fortitude.
 
-**The only card in the V5 pool that grants a prevention credit is
-Obedient Flesh, which requires `[dom][pro]`** — so no filter written
-against Fortitude could ever bite on a credit today, and the refactor
-would buy nothing. `tests/cards/discipline-filtered.test.ts` asserts that
-no credit-granting spec requires a Discipline that any `noPreventBy` card
-names; a future card that breaks the assumption fails that test rather
-than silently preventing damage it should not.
+**Unflinching Persistence requires `[for]`** and grants a credit, so
+admitting it (wave 72) expired the deviation's own precondition. The
+round-scoped pool `CombatFrame.preventCreditsRound` now holds one entry per
+prevention POINT, each carrying the disciplines its granting mode required,
+and the built-in `prevent:credit` option is withheld exactly as a prevention
+CARD is. `docs/armour-design.md` §4 has the whole story, including the second
+defect found at the same time: the credit was being written to the
+combat-long pool although its primitive is documented "this round only".
+
+The test that pinned the deviation now asserts the thing still worth
+guarding: every `combatCredits.prevent` mode names a Discipline, because a
+mode naming none would put an anonymous point back in the pool and be
+unfilterable again, silently.
+
+**A recorded deviation is a claim about the CARD POOL as it was**, the same
+way a deferral is a claim about the code. A card wave can invalidate one
+without touching anything the note described — so check a deviation's
+precondition before relying on it.
 
 ## 4. Weapon damage nullified for a round
 

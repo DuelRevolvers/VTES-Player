@@ -334,7 +334,12 @@ export interface EngineOps {
   addRoundStrength(play: CardPlayFrame, amount: number): void;
   /** "…and can prevent N damage" — a credit spent in the damage-resolution
    *  step, not prevention applied now. */
-  grantPreventCredit(play: CardPlayFrame, amount: number): void;
+  /** "…can prevent N damage later this round" — `disciplines` is what the
+   *  granting mode required, so `noPreventBy` can filter the credit. */
+  grantPreventCredit(play: CardPlayFrame, amount: number, disciplines?: string[]): void;
+  /** "This vampire treats aggravated damage as normal damage for the
+   *  remainder of this round" (Skin of Night). */
+  treatAggravatedAsNormal(play: CardPlayFrame): void;
   /** "This combat, this vampire can prevent N damage EACH ROUND" (Bear's
    *  Skin superior, Tranquility Shield) — a rate that refreshes, unlike
    *  the credit above. docs/round-recurring-combat-design.md §2 */
@@ -632,6 +637,9 @@ export interface EngineOps {
   }): void;
   /** Draw N cards from the library (extra cards, not replacements). */
   drawCards(seat: SeatId, count: number): void;
+  /** "…and draw a new one" / "…draws back up to his or her hand size"
+   *  (Deal with the Devil, Lupine Assault). docs/hand-churn-design.md §2 */
+  drawUpToHandSize(seat: SeatId): void;
   /** Discard a card; No files replaced false skips the replacement draw (a
    *  "discard down" is not a play, p. 7). */
   discardFromHand(seat: SeatId, cardId: CardInstanceId, replace: boolean): void;
@@ -964,7 +972,17 @@ export interface CardHandler {
   isActionCard?: boolean;
   /** "Do not replace until …" — defer the replacement draw (p. 7 default
    *  is immediate replacement). */
-  delayedReplace?: "unlock" | "afterAction" | "afterCombat" | "discard" | "whileInPlay";
+  /** `"afterResolve"` is "do not replace this card until AFTER you discard
+   *  your hand" (Deal with the Devil): the replacement is drawn once the
+   *  card's own resolution is done, so it is not drawn into the hand the card
+   *  is about to throw away. docs/hand-churn-design.md §2 */
+  delayedReplace?:
+    | "unlock"
+    | "afterAction"
+    | "afterCombat"
+    | "discard"
+    | "whileInPlay"
+    | "afterResolve";
   /** "Do not replace until a vampire commits diablerie" and its siblings —
    *  the CONDITION form, which waits for an event rather than a phase.
    *  docs/gehenna-taxes-design.md §1 */
@@ -1237,6 +1255,12 @@ export interface CardHandler {
    * difference, and the one consequence of it is that a card that was
    * never in hand is never REPLACED. docs/store-plays-design.md §2
    */
+  /** "Only one \<name\> may be played in a game" (Lupine Assault, Reality
+   *  Mirror and the wave-61 referendums) — the name to look for in the event
+   *  log. Read by the engine's ONE hand-play enumerator, because the flag was
+   *  honoured by the political-action compiler alone and a master carrying it
+   *  could be played twice. docs/hand-churn-design.md §4 */
+  oncePerGameName?: string;
   storePlay?: {
     /** "THIS Gangrel can play these cards": the bearer and nobody else. */
     bearerOnly?: boolean;
@@ -1542,6 +1566,14 @@ export interface CardHandler {
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
     turnSeat: SeatId,
+    ops: EngineOps,
+  ): void;
+  /** "After any Methuselah plays a Gehenna card, …" (Servitor of Irad) —
+   *  fired for every card in play as the Gehenna card is played, whoever
+   *  played it. docs/hand-churn-design.md §5 */
+  onGehennaPlayed?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
     ops: EngineOps,
   ): void;
   /** "AT THE END OF your influence phase, …" (Tomb of Rameses III) — the

@@ -1006,6 +1006,167 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 73 — thrown objects (5 cards), 2026-09-19
+
+Library **762 → 767**. Sacrament of Carnage, Thrown Gate, Mercury's Arrow,
+Thrown Sewer Lid, Well-Aimed Car. Write-up: `docs/thrown-objects-design.md`.
+
+Five ranged strikes with riders, two gated on the range and one also on the
+round. **No new primitive and no new gate** — both mode-level gates already
+existed (a first grep found only the weapon profile's copies and suggested
+otherwise, which is "it already exists" being a claim to CHECK). The cards
+are a lens; three defects came out of it.
+
+1. **The round gates were each checked in ONE window.** The range gates had
+   been hoisted above the combat-window switch; `onlyAfterFirstRound` and
+   `onlyFirstRound` were left behind, so either clause printed on a card whose
+   effect lives in another window did nothing. Well-Aimed Car's own gate
+   worked by luck. Both are hoisted now.
+2. **"…with an optional press" granted a COMBAT-LONG press.** All four strike-
+   rider sites used `grantCombatPress`, though "the optional press can only be
+   used during the current round" [TOM 19960521] — a ruling printed on
+   **Backflip**, whose test asserted the wrong pool and kept the defect green.
+   Same shape as wave 72's prevention credit, one field over: **when a family
+   has two pools, check which one each member writes to.**
+3. **The fuzz found a card in two zones at once.** `resolveCardPlay` files a
+   played card unless it "went into play instead", asked at CARD resolution —
+   and Molotov Cocktail puts itself in play at STRIKE resolution. It was filed
+   AND attached, so every ash-heap card offered it twice and `onCombatEnded`
+   burned it twice. Fixed at the chokepoint: `PermanentEnteredPlay` clears the
+   card from every ash heap. The dodge case needs no special case — the card
+   stays filed, which is what [ANK 20200203-1] says.
+
+Also: the fuzz's duplicate-id error printed the DEDUPED id set, the one view
+in which a duplicate is invisible. It now prints the ids that repeat.
+
+### Wave 72 — the armour cards (5 cards), 2026-09-19
+
+Library **757 → 762**. Skin of Rock, Resilience, Skin of Steel, Unflinching
+Persistence, Skin of Night. Write-up: `docs/armour-design.md`.
+
+Five [for] cards about TAKING damage. Four are existing prevention
+vocabulary; the new primitive is `treatAggravatedAsNormal`, and a ruling
+shaped it: Resilience "cannot be used to prevent aggravated damage **even if
+the minion treats them as normal damage** (eg. Skin of Night)"
+[LSJ 20040812-2]. So the conversion is recorded on the MINION and read only
+where "aggravated" means "cannot be mended" (p. 34) — the damage item stays
+aggravated, and the ruling holds by construction rather than by a special
+case.
+
+**What it found: a prevention CREDIT forgot two things, and one card exposed
+both.**
+
+1. **It outlived its own sentence.** `combatCredits.prevent` is documented as
+   "this round only" and was written into the COMBAT-LONG pool, so Obedient
+   Flesh's and Bear's Skin basic's credits always survived into later rounds.
+   The tell was already in the tree: the covering test is *named* "ROUND-
+   scoped … gone next round" and asserted the combat-long field. There is now
+   a round pool, reset at the round boundary.
+2. **It could not be Discipline-filtered.** `discipline-filtered.test.ts`
+   carried an explicit recorded deviation — a credit is a bare count, so
+   `noPreventBy` ("cannot be prevented by cards requiring Fortitude") cannot
+   reach it — safe only while no credit-granting card required a Discipline
+   the filters name. **Unflinching Persistence requires [for].** Admitting
+   the card expired the deviation's own precondition. Each credit now carries
+   its granting mode's disciplines.
+
+A recorded deviation is a claim about the CARD POOL as it was, the same way a
+deferral is a claim about the code. A wave can invalidate one without
+touching anything the note described.
+
+### Wave 71 — positional combat (8 cards), 2026-09-19
+
+Library **749 → 757**. Fade from View, Gleam of Red Eyes, Form of the Ghost,
+Nimble Feet, Quick Exit, Read Intentions, Movement of the Mind, Dissolution.
+Write-up: `docs/positional-combat-design.md`.
+
+**The first wave with NO new primitive, on purpose.** Every one of the eight
+is a press, a maneuver, a dodge or an additional strike at two levels — all
+vocabulary waves 1–70 built. That is what made it eight cards instead of
+four for the same gate, and it is the shape the rest of the Combat bucket
+should take: once a bucket's primitives are finished, the wave's job is to
+DRAIN them rather than to add one.
+
+Three of the eight print a press that may only **end** the combat, which the
+`press.endOnly` gate already covered (Qetu). Dissolution's `maneuver OR
+press` is two variants of one mode offered in two different windows — the
+option list is the choice, so no frame is needed — and its superior is
+`maneuver` plus a per-round press credit.
+
+What it found: **a duplicate card-instance id is invisible to an "is it
+offered" test.** The fixture pushed the card in as `{ id: "c1" }`, which
+`threeSeatGame` already uses for Conditioning; the option was offered under
+the right NAME and `choose` resolved the other card. Twelve of seventeen
+assertions passed anyway. Only the three that went on to USE the card
+noticed. See `docs/positional-combat-design.md` §5.
+
+### Wave 70 — churning the hand (4 cards), 2026-09-19
+
+Library **745 → 749**. Deal with the Devil, Lupine Assault, Specialization,
+Servitor of Irad. Write-up: `docs/hand-churn-design.md`.
+
+Four cards whose whole effect is on HANDS: one throws its own away, one throws
+everybody's away, one sells a duplicate, one draws off another Methuselah's
+Gehenna card. One new op (`drawUpToHandSize`), one new deferral
+(`delayedReplace: "afterResolve"`), one new hook (`onGehennaPlayed`).
+
+**What it found: `oncePerGameByName` was honoured by ONE card type.** The flag
+has existed since wave 61 and was checked inside the political-action
+compiler's own enumerator — so a MASTER carrying it could be played twice,
+silently. It now lives in the engine's single hand-play enumerator, which
+every type flows through. **When you add a flag to a FAMILY, check which
+compiler reads it**: fourth instance of a flag living in one type's compiler
+when it meant every type.
+
+**And `afterAction` is not a deferral for a master.** That branch needs an
+action frame; a master has none, so the chain fell through to the immediate
+draw — the exact thing Deal with the Devil's printed clause exists to prevent.
+A card type without the frame a deferral names gets no deferral at all.
+"Replacement" also had to mean "bring the hand back to SIZE" rather than "draw
+one", or the new hand ended one card over size.
+
+**Two self-inflicted lessons, both already in CLAUDE.md.**
+`addLocationAbilities` early-returns unless one of its gate fields is present,
+and two new fields were added without being added to that gate (one in wave 69
+too) — the ability enumerates nothing and the hook is never installed, with
+nothing in a stack trace. And several patches were applied with shell
+string-replacement: **a replace whose anchor has drifted is a silent no-op**,
+which is why the rule says to edit source with the file-editing tools.
+
+### Wave 69 — preying on a vampire in torpor (4 cards), 2026-09-19
+
+Library **741 → 745**. Cloak of Blood, Stealing Years, Crematorium,
+Corruption's Purge. Write-up: `docs/torpor-prey-design.md`.
+
+Diablerie as an ACTION CARD for the first time (the engine's `diablerize:`
+built-in was the only route), plus a location that burns a bloodless torpid
+vampire and a referendum that creates them.
+
+**What it found: a frame pushed from inside action resolution is thrown
+away.** Calling `commitDiablerie` during a card's resolution silently lost
+the BLOOD HUNT — step 5 pushes a referendum, and the action's own `pop()`
+discarded it. The diablerie happened, the victim burned, and the hunt the
+rules attach to every diablerie never occurred, with nothing thrown. Now
+queued on the action frame and flushed in `finishAction`, beside
+`queuedCombats`, whose comment says the same thing. That is the THIRD
+mechanism in the engine that needs this rule (`deferChoices` is the second).
+
+**And a zero-vote skip ate a vote rider.** The vote enumerator's
+`if (votes <= 0) continue;` skipped every titleless vampire before the
+per-vampire bonuses were read — correct while every bonus modified an
+existing voice, wrong the moment a card GIVES one. Both new cards hand votes
+to vampires with no title, and neither worked until the rider was summed
+INTO the total. Wave 61's early-return lesson, in a different enumerator.
+
+**A choice KEY is a global namespace:** the card's "gain a Discipline the
+victim had" question was raised under `diablerieDiscipline`, which is the
+ENGINE's key for step 4, so the answer went to the engine and the card's
+question was never asked.
+
+Also recorded: `attachSelf`'s statics are the EFFECT's, not the permanent
+block's — Stealing Years' capacity rise in `permanent.statics` attached a
+card that did nothing.
+
 ### Wave 68 — moving blood and gear (3 cards), 2026-09-18
 
 Library **738 → 741**. Communal Haven: Cathedral, The Spawning Pool, Blood

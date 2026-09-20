@@ -704,6 +704,55 @@ function fourSeatGame(seed: number): GameState {
     "Communal Haven: Cathedral",
     "The Spawning Pool",
     "Blood Trade",
+    // Preying on a vampire in torpor (docs/torpor-prey-design.md, wave 69).
+    // Two of these DIABLERISE as an action, which calls a blood hunt in the
+    // middle of a turn — the fuzz's job here is the sequencing, and its
+    // blood/pool replay covers the five-step resolution.
+    "Cloak of Blood",
+    "Stealing Years",
+    "Crematorium",
+    "Corruption's Purge",
+    // Churning the hand (docs/hand-churn-design.md, wave 70). Two of these
+    // rewrite HANDS mid-turn, including everybody else's — so what the fuzz
+    // guards is that a seat always has a legal option afterwards and that the
+    // discard-down loops terminate.
+    "Deal with the Devil",
+    "Lupine Assault",
+    "Specialization",
+    "Servitor of Irad",
+    // Positional combat (docs/positional-combat-design.md, wave 71). Presses,
+    // maneuvers, dodges and additional strikes, at two levels each. What the
+    // fuzz guards is TERMINATION: a press credit that is offered but never
+    // spent, or an additional strike that re-enters its own sub-round, makes a
+    // combat that never ends — and the maxTurns draw would hide it.
+    "Fade from View",
+    "Gleam of Red Eyes",
+    "Form of the Ghost",
+    "Nimble Feet",
+    "Quick Exit",
+    "Read Intentions",
+    "Movement of the Mind",
+    "Dissolution",
+    // The armour cards (docs/armour-design.md, wave 72). Skin of Night
+    // changes what APPLYING damage does, which the fuzz's blood/pool replay
+    // is the guard for: a converted aggravated hit burns blood where the
+    // unconverted one burns none, so a conversion that leaked past its round
+    // would show up as a conservation failure rather than as a wrong table.
+    "Skin of Rock",
+    "Resilience",
+    "Skin of Steel",
+    "Unflinching Persistence",
+    "Skin of Night",
+    // Thrown objects (docs/thrown-objects-design.md, wave 73). Ranged
+    // strikes gated on the RANGE and the ROUND, which is what the fuzz is
+    // for here: a gate hoisted to every combat window could withhold an
+    // option somewhere nobody thought about, and an option list that empties
+    // is an invariant failure rather than a silent wrong table.
+    "Sacrament of Carnage",
+    "Thrown Gate",
+    "Mercury's Arrow",
+    "Thrown Sewer Lid",
+    "Well-Aimed Car",
     "Banu Haqim Justicar",
     "Brujah Justicar",
     "Lasombra Justicar",
@@ -1227,8 +1276,18 @@ function playFuzzGame(seed: number): void {
     }
     const ids = new Set(dp.options.map((o) => o.id));
     if (ids.size !== dp.options.length) {
+      // Print the ids that actually REPEAT. This used to print the deduped
+      // set — every id exactly once — which is the one view of the list in
+      // which a duplicate is invisible.
+      const seen = new Set<string>();
+      const dupes = new Set<string>();
+      for (const o of dp.options) {
+        if (seen.has(o.id)) dupes.add(o.id);
+        seen.add(o.id);
+      }
       throw new Error(
-        `[seed ${seed}] step ${steps}: duplicate option ids: ${[...ids].join(", ")}`,
+        `[seed ${seed}] step ${steps}: duplicate option ids in ${dp.window} ` +
+          `(seat ${dp.seat}): ${[...dupes].join(", ")}`,
       );
     }
     // NOTE: "the acting minion stays locked" is NOT an invariant — cards

@@ -1114,6 +1114,7 @@ function targetRider(mode: CardMode): EffectPrimitive | null {
       e.kind === "stealMinionOnSuccess" ||
       e.kind === "actionStun" ||
       e.kind === "actionStealBlood" ||
+      e.kind === "actionDiablerize" ||
       e.kind === "actionSteal" ||
       e.kind === "attachToOpponent"
     ) {
@@ -1361,6 +1362,21 @@ function enumerateActionTargets(
         // of other Methuselahs' actions" and Aggressive Corpse's
         // Discipline bar both apply to a steal like any other action.
         if (untargetableBy(m, seatId, actor, cardDisciplines)) continue;
+        targets.push(m.id);
+      }
+    }
+  } else if (e.kind === "actionDiablerize") {
+    // "Diablerize a vampire IN TORPOR" (p. 24): any Methuselah's, the
+    // actor's own included — the rules bar neither — and never an ally,
+    // which has no blood to drink and no torpor to lie in (p. 22).
+    const actorCapacity = capacityOf(actor);
+    for (const seat of state.seats) {
+      if (seat.ousted) continue;
+      for (const m of seat.minions) {
+        if (m.kind !== "vampire" || !m.inTorpor) continue;
+        // "an OLDER vampire in torpor" (Stealing Years).
+        if (e.olderOnly === true && capacityOf(m) <= actorCapacity) continue;
+        if (untargetableBy(m, seatId, actor)) continue;
         targets.push(m.id);
       }
     }
@@ -1712,6 +1728,11 @@ function compileActionCard(spec: CardSpec): CardHandler {
           params.targetMinion = target;
           params.noCombat = true;
         }
+        if (e.kind === "actionDiablerize") {
+          const target = play.params["target"];
+          if (!target) throw new Error(`${spec.name}: no diablerie target`);
+          params.targetMinion = target;
+        }
         if (e.kind === "actionStealBlood") {
           const target = play.params["target"];
           if (!target) throw new Error(`${spec.name}: no steal target`);
@@ -1836,6 +1857,50 @@ function compileActionCard(spec: CardSpec): CardHandler {
                 : undefined,
             );
             break;
+          case "actionDiablerize": {
+            // "Ⓓ Diablerize a vampire in torpor" — the engine's own
+            // five-step resolution (p. 34). This card's riders are read
+            // BEFORE it, because step 3 burns the victim and step 5 calls the
+            // blood hunt (docs/torpor-prey-design.md §2).
+            const victimId = af.card?.params["target"];
+            if (!victimId) throw new Error(`${spec.name}: no diablerie target`);
+            const prey = findMinion(ops.state, victimId);
+            const eater = findMinion(ops.state, af.acting);
+            if (!prey || !eater || !prey.inTorpor) break;
+            // "…may gain one level of a Discipline THE VICTIM HAD": read now,
+            // because after step 3 there is no victim to read.
+            const victimDisciplines =
+              e.gainVictimDiscipline === true ? Object.keys(prey.disciplines) : [];
+            if (e.bloodHuntVotes) {
+              const rider: { minion?: MinionId; sect?: Sect; amount: number } = {
+                amount: e.bloodHuntVotes.amount,
+              };
+              if (e.bloodHuntVotes.actor === true) rider.minion = eater.id;
+              if (e.bloodHuntVotes.sect !== undefined) rider.sect = e.bloodHuntVotes.sect;
+              eater.bloodHuntVoteRiders = [...(eater.bloodHuntVoteRiders ?? []), rider];
+            }
+            // QUEUED, not committed here: step 5 pushes the blood hunt, and a
+            // referendum pushed inside action resolution is popped with the
+            // action (§2). The engine flushes it as the action settles.
+            af.pendingDiablerie = { diablerist: eater.id, victim: prey.id };
+            if (victimDisciplines.length > 0) {
+              ops.raiseChoice({
+                seat: af.actingSeat,
+                cardName: spec.name,
+                cardId: af.card?.instance.id ?? "",
+                // NOT `diablerieDiscipline`: that key is the ENGINE's, for
+                // step 4's master-Discipline search (p. 34), and a choice key
+                // is a GLOBAL namespace — raising a frame under a key the
+                // engine owns sends the answer to the engine's handler and
+                // the card's own question is never asked.
+                key: "victimDiscipline",
+                // "MAY gain": declining is a plain pass.
+                optional: true,
+                params: { minion: eater.id, disciplines: victimDisciplines.join(",") },
+              });
+            }
+            break;
+          }
           case "actionStealBlood": {
             // "Steal 1 blood or life": it MOVES, so the victim burns and
             // the actor gains — clamped to what the victim actually has.
@@ -2533,6 +2598,10 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       case "preventAll":
       case "preventForOther":
       case "preventAllThisRound":
+      // Not prevention, but played in the same window and gated the same
+      // way: "cannot be used if there is no damage to prevent"
+      // [LSJ 20001114] is the window's own rule (Skin of Night).
+      case "treatAggravatedAsNormal":
         return "combat.damageResolution";
       default:
         break;
@@ -2761,6 +2830,14 @@ function compileCombatCard(spec: CardSpec): CardHandler {
         // carried a range clause that did nothing.
         if (mode.usable?.includes("onlyAtLongRange") && cf.range !== "long") continue;
         if (mode.usable?.includes("onlyAtCloseRange") && cf.range !== "close") continue;
+        // ROUND GATES, hoisted for the same reason (wave 73). They were
+        // left behind when the range gates moved: "not usable first round"
+        // was checked only inside `combat.chooseStrike` and "only usable
+        // during the first round" only inside `combat.beforeRange`, so
+        // either clause printed on a card whose effect lives in any other
+        // window did nothing at all. docs/thrown-objects-design.md §3
+        if (mode.usable?.includes("onlyAfterFirstRound") && cf.round <= 1) continue;
+        if (mode.usable?.includes("onlyFirstRound") && cf.round > 1) continue;
         switch (ctx.window) {
           case "combat.chooseStrike": {
             if (cf.strikes[side] !== null) continue;
@@ -2784,12 +2861,8 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             ) {
               continue;
             }
-            // (The two range gates now sit above the window switch, so
-            // every combat window gets them.)
-            // "Not usable during the first round" (Walk of Flame).
-            if (mode.usable?.includes("onlyAfterFirstRound") && cf.round <= 1) {
-              continue;
-            }
+            // (The range AND round gates now sit above the window switch,
+            // so every combat window gets them.)
             // "Minions in combat with the employer cannot strike: combat
             // ends" (Dog Pack) — a static on the OPPONENT gates this
             // minion's combat-ends strikes.
@@ -2947,8 +3020,7 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             break;
           }
           case "combat.beforeRange": {
-            // "Only usable during the first round" (Terror Frenzy).
-            if (mode.usable?.includes("onlyFirstRound") && cf.round > 1) continue;
+            // ("Only usable during the first round" is hoisted above.)
             // "If THIS minion has flight and the opposing minion does
             // not" (High Ground) — an asymmetry, not a property, so both
             // sides are read.
@@ -3146,7 +3218,21 @@ function compileCombatCard(spec: CardSpec): CardHandler {
               break;
             }
             const prevent = mode.effects.find((e) => e.kind === "prevent");
-            if (!prevent || prevent.kind !== "prevent") continue;
+            if (!prevent || prevent.kind !== "prevent") {
+              // "This vampire treats aggravated damage as normal damage for
+              // the remainder of this round" with NO prevention attached
+              // (Skin of Night basic) — the only thing it can do is convert,
+              // so against damage that is already normal it is futile and is
+              // not offered. The superior mode also prevents 1, so it falls
+              // through to the `prevent` gate below instead of here.
+              // docs/armour-design.md §3
+              if (mode.effects.some((e) => e.kind === "treatAggravatedAsNormal")) {
+                if (!pd.aggravated) continue;
+                if (m.blood < costOf(spec, ctx, m, mode).blood) continue;
+                options.push(makeOption(spec, card, m, mode, {}));
+              }
+              continue;
+            }
             // "Prevent N NON-AGGRAVATED damage" (Soak, Wall of Filth
             // basic) — a gate on the option, the `noPreventBy` precedent:
             // never offer a card against damage it provably cannot touch.
@@ -3189,8 +3275,15 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             if (e.riders?.maneuver) {
               for (let i = 0; i < e.riders.maneuver; i++) ops.grantManeuverCredit(play);
             }
+            // "…with an optional press" — the PER-ROUND pool. All four
+            // rider sites used to grant a combat-long press, so the credit
+            // outlived the round its strike happened in: "the optional
+            // press can only be used during the current round"
+            // [TOM 19960521]. `grantCombatPress` is for a card that SAYS
+            // "this combat" (Form of the Wolf).
+            // docs/thrown-objects-design.md §3
             if (e.riders?.press) {
-              for (let i = 0; i < e.riders.press; i++) ops.grantCombatPress(play);
+              for (let i = 0; i < e.riders.press; i++) ops.grantPress(play);
             }
             break;
           case "strikeCombatEnds":
@@ -3216,7 +3309,7 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           }
           case "strikeDodge":
             ops.chooseCardStrike(play, { dodge: true });
-            for (let i = 0; i < (e.riders?.press ?? 0); i++) ops.grantCombatPress(play);
+            for (let i = 0; i < (e.riders?.press ?? 0); i++) ops.grantPress(play);
             for (let i = 0; i < (e.riders?.maneuver ?? 0); i++) ops.grantManeuverCredit(play);
             break;
           case "grantStealBloodStrike":
@@ -3338,7 +3431,7 @@ function compileCombatCard(spec: CardSpec): CardHandler {
               for (let i = 0; i < e.riders.maneuver; i++) ops.grantManeuverCredit(play);
             }
             if (e.riders?.press) {
-              for (let i = 0; i < e.riders.press; i++) ops.grantCombatPress(play);
+              for (let i = 0; i < e.riders.press; i++) ops.grantPress(play);
             }
             break;
           case "playFromHand":
@@ -3464,7 +3557,7 @@ function compileCombatCard(spec: CardSpec): CardHandler {
               for (let i = 0; i < e.riders.maneuver; i++) ops.grantManeuverCredit(play);
             }
             if (e.riders?.press) {
-              for (let i = 0; i < e.riders.press; i++) ops.grantCombatPress(play);
+              for (let i = 0; i < e.riders.press; i++) ops.grantPress(play);
             }
             break;
           case "additionalStrike": {
@@ -3611,11 +3704,17 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             if (e.strength) ops.addRoundStrength(play, e.strength);
             for (let i = 0; i < (e.maneuver ?? 0); i++) ops.grantManeuverCredit(play);
             for (let i = 0; i < (e.press ?? 0); i++) ops.grantPress(play);
-            if (e.prevent) ops.grantPreventCredit(play, e.prevent);
+            // The mode's disciplines ride the credit: a `noPreventBy`
+            // filter names disciplines, and a credit that forgot its own
+            // was unfilterable (§4).
+            if (e.prevent) ops.grantPreventCredit(play, e.prevent, modeDisciplines(mode));
             break;
           }
           case "preventEachRound":
             ops.grantPreventEachRound(play, e.amount);
+            break;
+          case "treatAggravatedAsNormal":
+            ops.treatAggravatedAsNormal(play);
             break;
           case "roundDamage": {
             // Built field by field, never by spread: an optional field
@@ -5903,6 +6002,42 @@ function compileMasterCard(spec: CardSpec): CardHandler {
           case "gainPool":
             ops.emit({ type: "PoolGained", seat: play.seat, amount: e.amount });
             break;
+          case "discardHandRedraw": {
+            // "Discard your hand and draw a new one." The card itself is
+            // already out of hand (it is being played), and its replacement
+            // is what the printed clause is about: drawn BEFORE this would
+            // land in the hand about to be thrown away, so the card defers it
+            // and this redraw is what fills the hand
+            // (docs/hand-churn-design.md §2).
+            for (const c of [...getSeat(ops.state, play.seat).hand]) {
+              // No replacement per card: the redraw below is the refill, and
+              // replacing each one first would draw the new hand twice.
+              ops.discardFromHand(play.seat, c.id, false);
+            }
+            ops.drawUpToHandSize(play.seat);
+            break;
+          }
+          case "tableDiscardRedraw": {
+            // "EACH Methuselah (including you) discards N cards of his or her
+            // CHOICE, then draws back up to his or her hand size." The choice
+            // is each Methuselah's own, so one frame per seat — and they
+            // answer in stack order (§4).
+            for (const s of ops.state.seats) {
+              if (s.ousted) continue;
+              if (s.hand.length === 0) continue;
+              ops.raiseChoice({
+                seat: s.id,
+                cardName: spec.name,
+                cardId: play.card.id,
+                key: "tableDiscard",
+                params: { left: String(e.count) },
+                // NOT optional: the card says "discards", and the refill
+                // rides on the last answer.
+                optional: false,
+              });
+            }
+            break;
+          }
           case "gainPoolThreshold": {
             // "If you have 5 OR FEWER pool, gain 3 pool. Otherwise, gain 1."
             // The pool is read here, at resolution, and nothing else in the
@@ -7637,6 +7772,9 @@ const REFERENDUM_POLARITY: Record<ReferendumPrimitive["kind"], ReferendumEffectK
   refClanDiversity: "gain",
   refSectPayout: "gain",
   // Neither: these move minions, cards, titles, locations or the Edge.
+  // Corruption's Purge takes BLOOD off a clan and torpors the empty ones:
+  // costly to the table, but not in the pool the scorer weighs.
+  refClanBloodBurn: "other",
   refAttachToChosen: "other",
   refBurnAllKeepable: "other",
   refExpelMinions: "other",
@@ -7768,6 +7906,12 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
       ) {
         return [];
       }
+      // NOTE: the same bar now also lives in the engine's ONE hand-play
+      // enumerator (`handler.oncePerGameName`), because it was honoured HERE
+      // ONLY — a master or an action card carrying `oncePerGameByName` could
+      // be played twice. This check is the narrower copy and is kept because
+      // a political action reaches this enumerator by its own path.
+      // docs/hand-churn-design.md §4
       const seat = getSeat(ctx.state, ctx.seat);
       const options: LegalOption[] = [];
       for (const m of seat.minions) {
@@ -8082,6 +8226,29 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
                 seat: s.id,
                 amount: primitive.poolPerController,
               });
+            }
+          }
+          break;
+        }
+        case "refClanBloodBurn": {
+          // "Each <clan> burns N blood. Each <clan> with ZERO blood THEN
+          // goes into torpor" — two steps, in that order: the torpor reads
+          // what the burn left, which is the whole card. A vampire who was
+          // already empty goes to torpor too, which is what "each with zero
+          // blood" says (docs/torpor-prey-design.md §6).
+          const hit: MinionId[] = [];
+          for (const seat of standing) {
+            for (const m of seat.minions) {
+              if (m.kind !== "vampire" || m.clan !== primitive.clan) continue;
+              const owed = Math.min(primitive.blood, m.blood);
+              if (owed > 0) ops.emit({ type: "BloodBurned", minion: m.id, amount: owed });
+              hit.push(m.id);
+            }
+          }
+          if (primitive.torporAtZero === true) {
+            for (const id of hit) {
+              const m = findMinion(ops.state, id);
+              if (m && !m.inTorpor && m.blood === 0) ops.sendToTorpor(id);
             }
           }
           break;
@@ -8623,6 +8790,10 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // Printed keywords ("Grapple.", "Aim."), central for the same reason as
   // the queries above (docs/weapon-riders-design.md §5).
   handler.cardKeywords = () => spec.keywords ?? [];
+  // "Only one X may be played in a game" — read by the engine's one hand-play
+  // enumerator, so it holds for every card TYPE rather than for the one type
+  // whose compiler happened to check it (docs/hand-churn-design.md §4).
+  if (spec.oncePerGameByName) handler.oncePerGameName = spec.name;
   // Does this MODE restrict the opposing minion's CHOICE OF STRIKES?
   // Central for the same reason, and scoped by the rulings rather than by
   // what looks like a restriction: "cannot use equipment" and "hand
@@ -9698,6 +9869,65 @@ export function compileSpec(spec: CardSpec): CardHandler {
         // "If you search your library … you must shuffle it afterwards"
         // (p. 14) — either way, because the searcher looked at it.
         ops.shuffleLibrary(frame.seat);
+      },
+    };
+  }
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "tableDiscardRedraw"))) {
+    // "…discards N cards of HIS OR HER CHOICE, then draws back up to his or
+    // her hand size" (Lupine Assault). One card at a time, re-raised while
+    // any are owed — the `unlockToll` shape, because each answer changes the
+    // hand the next option list is computed from. The refill happens when the
+    // count runs out, or when the hand does (docs/hand-churn-design.md §4).
+    choiceByKey["tableDiscard"] = {
+      options: (frame, state) =>
+        getSeat(state, frame.seat).hand.map((c) => ({
+          id: `choice:${spec.name}:${frame.cardId}:tableDiscard:${c.id}`,
+          kind: "answerChoice" as const,
+          label: `Discard ${c.name}`,
+          params: { card: c.id },
+        })),
+      apply: (frame, choice, ops) => {
+        const card = choice.params["card"];
+        const left = Number(frame.params["left"] ?? "0") - 1;
+        // No replacement per card: the refill below is what the card calls
+        // "draws back up to his or her hand size".
+        if (card) ops.discardFromHand(frame.seat, card, false);
+        if (left > 0 && getSeat(ops.state, frame.seat).hand.length > 0) {
+          ops.raiseChoice({
+            seat: frame.seat,
+            cardName: spec.name,
+            cardId: frame.cardId,
+            key: "tableDiscard",
+            params: { left: String(left) },
+            optional: false,
+          });
+          return;
+        }
+        ops.drawUpToHandSize(frame.seat);
+      },
+    };
+  }
+  // "…may gain ONE LEVEL of a Discipline THE VICTIM HAD" (Cloak of Blood).
+  // The victim's list rode into the frame's params, because by the time this
+  // is answered the victim has been burned (docs/torpor-prey-design.md §3).
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "actionDiablerize"))) {
+    choiceByKey["victimDiscipline"] = {
+      options: (frame) => {
+        const minion = frame.params["minion"];
+        const list = (frame.params["disciplines"] ?? "").split(",").filter(Boolean);
+        if (!minion) return [];
+        return list.map((d) => ({
+          id: `choice:${spec.name}:${frame.cardId}:victimDiscipline:${d}`,
+          kind: "answerChoice" as const,
+          label: `Gain a level of ${d}`,
+          params: { discipline: d, minion },
+        }));
+      },
+      apply: (_frame, choice, ops) => {
+        const d = choice.params["discipline"];
+        const minion = choice.params["minion"];
+        if (!d || !minion) return;
+        ops.emit({ type: "DisciplineGained", minion, discipline: d });
       },
     };
   }
@@ -14418,6 +14648,8 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   const handSize = perm?.handSizeLock;
   const payUnlock = perm?.payToUnlock;
   const carry = perm?.carryTransfer;
+  const pairPool = perm?.pairForPool;
+  const burnTorpid = perm?.burnTorpid;
   const punish = perm?.blockedBleedPunish;
   const unc = perm?.uncontrolled;
   const peek = perm?.cryptPeek;
@@ -14429,6 +14661,9 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     !handSize &&
     !payUnlock &&
     !carry &&
+    !pairPool &&
+    !perm?.gehennaDraw &&
+    !burnTorpid &&
     !punish &&
     !perm?.statics?.lockInsteadOfBlocker &&
     !unc &&
@@ -14724,6 +14959,58 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     // "Lock to get +1 hand size THIS TURN" (Ennoia's Theater) — the card
     // prints no timing restriction, so it is offered wherever its
     // controller has an impulse, like Dreams of the Sphinx's own hand-size
+    // "Lock this card and discard TWO COPIES OF THE SAME CARD from your hand
+    // to gain 1 pool" (Specialization, docs/hand-churn-design.md §3). One
+    // option per NAME the hand holds twice — a question about the hand's
+    // shape, and the two copies are chosen for the player because any two
+    // copies of one name are the same two cards.
+    if (
+      pairPool &&
+      !entry.locked &&
+      ctx.seat === controller &&
+      ctx.window === "turn.unlock" &&
+      ctx.turnSeat === controller
+    ) {
+      const hand = getSeat(ctx.state, controller).hand;
+      const seen = new Set<string>();
+      for (const c of hand) {
+        if (seen.has(c.name)) continue;
+        if (hand.filter((x) => x.name === c.name).length < 2) continue;
+        seen.add(c.name);
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:pairpool:${c.name}`,
+          kind: "useAbility",
+          label: `${spec.name}: discard two ${c.name} for ${pairPool.pool} pool`,
+          source: entry.card.id,
+          params: { act: "pairPool", name: c.name },
+        });
+      }
+    }
+    // "Lock during your unlock phase to burn a vampire in torpor with no
+    // blood" (Crematorium, docs/torpor-prey-design.md §5). ANY Methuselah's
+    // torpid vampire: the card names no controller, and a vampire lying empty
+    // in torpor is the same target whoever put them there.
+    if (
+      burnTorpid &&
+      !entry.locked &&
+      ctx.window === "turn.unlock" &&
+      ctx.turnSeat === controller
+    ) {
+      for (const seat of ctx.state.seats) {
+        if (seat.ousted) continue;
+        for (const m of seat.minions) {
+          if (m.kind !== "vampire" || !m.inTorpor) continue;
+          if (burnTorpid.requireNoBlood === true && m.blood > 0) continue;
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:burntorpid:${m.id}`,
+            kind: "useAbility",
+            label: `${spec.name}: lock it to burn ${m.name}`,
+            source: entry.card.id,
+            params: { act: "burnTorpid", target: m.id },
+          });
+        }
+      }
+    }
     // clause (docs/temporary-hand-size-design.md).
     if (handSize && !entry.locked) {
       out.push({
@@ -15375,6 +15662,26 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       ops.emit({ type: "EquipmentMoved", cardId: card, from, to });
     };
   }
+  // "After any Methuselah plays a Gehenna card, you may draw two additional
+  // cards from your library IF THIS VAMPIRE IS READY. Discard down to your
+  // hand size afterward" (Servitor of Irad, docs/hand-churn-design.md §5).
+  //
+  // "You MAY" with no cost is taken: this project's direction is that a
+  // costless, purely beneficial option is taken (Show of Force) while one
+  // with a price is asked. The discard-down that follows is p. 7's, and it IS
+  // asked — it is a real choice about which cards to lose.
+  if (perm?.gehennaDraw) {
+    const gd = perm.gehennaDraw;
+    const priorGehenna = handler.onGehennaPlayed;
+    handler.onGehennaPlayed = (entry, owner, ops) => {
+      priorGehenna?.(entry, owner, ops);
+      const controller = entry.controller ?? owner.seat;
+      const bearer = owner.minion === null ? null : findMinion(ops.state, owner.minion);
+      if (gd.requiresBearerReady === true && (bearer === null || !isReady(bearer))) return;
+      ops.drawCards(controller, gd.cards);
+      ops.discardDownToHandSize(controller, spec.name, entry.card.id);
+    };
+  }
   // "BURN ALL BOONS" (Blood Trade) — as the card arrives, over every seat's
   // play area, reading the printed keyword and the entry's own tags. No boon
   // in the pool stays in play today, so this burns nothing; it is written as a
@@ -15389,6 +15696,40 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         if (!p.tags.includes("boon")) continue;
         ops.burnPermanent(p.card.id);
       }
+    };
+  }
+  if (pairPool) {
+    extraUse["pairPool"] = (entry, owner, choice, ops) => {
+      const controller = entry.controller ?? owner.seat;
+      const name = choice.params["name"];
+      if (!name) return;
+      // Re-read the hand: it can have changed since the option was offered.
+      const copies = getSeat(ops.state, controller)
+        .hand.filter((c) => c.name === name)
+        .slice(0, 2);
+      if (copies.length < 2) return;
+      if (pairPool.lock === true) {
+        ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      }
+      // "(draw afterward)" — the parenthetical describes the ordinary
+      // replacement for a discarded card, so both copies replace as normal
+      // and nothing extra is needed. Five instances of this shape.
+      for (const c of copies) ops.discardFromHand(controller, c.id, true);
+      ops.emit({ type: "PoolGained", seat: controller, amount: pairPool.pool });
+    };
+  }
+  if (burnTorpid) {
+    extraUse["burnTorpid"] = (entry, _owner, choice, ops) => {
+      const target = choice.params["target"];
+      if (!target) return;
+      ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      // Read again: the vampire could have left torpor — or play — between
+      // the option being offered and the lock being paid. A derived read in
+      // an apply must be as total as one in an enumerator.
+      const m = findMinion(ops.state, target);
+      if (!m || !m.inTorpor) return;
+      if (burnTorpid.requireNoBlood === true && m.blood > 0) return;
+      ops.burnMinion(target);
     };
   }
   if (punish) {

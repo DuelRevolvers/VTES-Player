@@ -292,6 +292,12 @@ export interface MinionState {
    *  consumed by the next unlock sweep. The persistent form lives on the
    *  card in play as PermanentInPlay.preventsUnlock. */
   skipNextUnlock?: boolean;
+  /** "In the resulting blood hunt referendum, this vampire gets an additional
+   *  2 votes" / "…each anarch gets an additional vote" (Cloak of Blood,
+   *  Stealing Years) — seeded on the DIABLERIST by the card that performed
+   *  the diablerie and consumed by the hunt it calls, which is the only
+   *  referendum the clause can mean. docs/torpor-prey-design.md §4 */
+  bloodHuntVoteRiders?: Array<{ minion?: MinionId; sect?: Sect; amount: number }>;
   /** "…gain 1 level of any one Discipline UNTIL YOUR NEXT UNLOCK PHASE"
    *  (Vial of Elder Vitae). The card is burnt to pay for it, so there is
    *  no permanent left to hang a static on and the boost lives on the
@@ -1764,6 +1770,11 @@ export type GameEvent =
    *  counters and lock state: it is the same card on a different minion.
    *  docs/blood-and-gear-design.md §3 */
   | { type: "EquipmentMoved"; cardId: CardInstanceId; from: MinionId; to: MinionId }
+  /** "…and this vampire may GAIN ONE LEVEL of a Discipline the victim had"
+   *  (Cloak of Blood) — a permanent rise on the vampire itself, since the
+   *  card that granted it is burned at action resolution. Absent → basic,
+   *  basic → superior. docs/torpor-prey-design.md §3 */
+  | { type: "DisciplineGained"; minion: MinionId; discipline: string }
   // Allies and retainers (phase 3, allies gate).
   /** `disciplines`: "plays cards requiring \<X\> as a vampire" (p. 11) —
    *  optional, so every existing fixture and saved log is untouched.
@@ -2317,6 +2328,12 @@ export interface ActionFrame {
    *  action is off the stack. Same shape as `afterResolutionDamage`.
    *  docs/other-vampire-modifiers-design.md */
   queuedCombats: Array<{ a: MinionId; b: MinionId; outcome?: AfterCombatRider }>;
+  /** "Ⓓ Diablerize a vampire in torpor" (Cloak of Blood, Stealing Years) —
+   *  queued like the combats above, because the diablerie's fifth step pushes
+   *  the blood hunt REFERENDUM (p. 35), and a frame pushed while this action
+   *  frame is still on the stack is discarded with it.
+   *  docs/torpor-prey-design.md §2 */
+  pendingDiablerie?: { diablerist: MinionId; victim: MinionId };
   /** "X cannot block this action" restrictions (Seduction, Visions of
    *  Gehenna) — consulted by the block-eligibility generator. */
   blockRestrictions: {
@@ -2808,6 +2825,17 @@ export interface CombatFrame {
   /** "Damage from this vampire's hand strikes is aggravated this round"
    *  (Claws of the Dead, Wolf Claws) — per-round, reset each round. */
   handStrikesAggravated: { acting: boolean; opposing: boolean };
+  /**
+   * "This vampire treats aggravated damage as normal damage for the
+   * remainder of this round" (Skin of Night) — the MINIONS doing the
+   * treating, reset each round beside `handStrikesAggravated`.
+   *
+   * Keyed by minion rather than by side, unlike its neighbours: a
+   * retainer takes damage in the same window as the vampire it is on, and
+   * a side-keyed flag would convert the retainer's damage too.
+   * docs/armour-design.md §3
+   */
+  aggravatedAsNormalRound?: MinionId[];
   /** "…that minion's initial strike this round gets FIRST STRIKE"
    *  (Haymaker, Forearm Block's next-round clause) — a round-scoped
    *  grant, reset with the rest of the round's riders. The other two
@@ -3001,6 +3029,21 @@ export interface CombatFrame {
    *  credit spent in the damage-resolution step, unlike a prevention card,
    *  which resolves on the spot. Persists across rounds until spent. */
   preventCredits: { acting: number; opposing: number };
+  /**
+   * The ROUND-scoped prevention pool — `combatCredits.prevent` (Obedient
+   * Flesh, Bear's Skin basic, Unflinching Persistence superior), which its
+   * own spec has always been documented as "this round only" while the code
+   * put it in the combat-long pool above.
+   *
+   * One entry per prevention POINT, and each entry carries the disciplines
+   * its granting mode required, because "this damage cannot be prevented by
+   * cards requiring Fortitude" (Blood Fury, Soul Burn) has to be answerable
+   * about a credit. A bare count cannot answer it — which is the deviation
+   * `tests/cards/discipline-filtered.test.ts` recorded, and which
+   * Unflinching Persistence ([for], grants a credit) is the first card to
+   * break. docs/armour-design.md §4
+   */
+  preventCreditsRound?: { acting: string[][]; opposing: string[][] };
   /** "This combat, this vampire can prevent N damage EACH ROUND" (Bear's
    *  Skin superior, Tranquility Shield) — a RATE, not a pool: granted
    *  once, never reset, and refreshed every round by zeroing
@@ -3170,6 +3213,11 @@ export interface ReferendumFrame {
   variant: "political" | "bloodHunt";
   /** The diablerist, burned if a blood-hunt referendum passes. */
   bloodHuntTarget: MinionId | null;
+  /** Extra votes this ONE referendum grants, by minion or by sect (Cloak of
+   *  Blood, Stealing Years) — copied off the diablerist as the hunt is
+   *  pushed, so the clause cannot leak into a later referendum.
+   *  docs/torpor-prey-design.md §4 */
+  extraVotes?: Array<{ minion?: MinionId; sect?: Sect; amount: number }>;
   /** This referendum was called by a card ALREADY IN PLAY granting a
    *  political action ("vampires can call a referendum to burn this
    *  card"), not by a political action card from hand. Carried so one

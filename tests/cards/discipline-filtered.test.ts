@@ -15,6 +15,7 @@ import { describe, expect, it } from "vitest";
 import type { GameState, MinionState, PermanentInPlay } from "../../src/engine/index.ts";
 import { VtesEngine } from "../../src/engine/index.ts";
 import { cardSpecs } from "../../src/cards/effects/cards.ts";
+import { modeDisciplines } from "../../src/cards/effects/compile.ts";
 import { makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
 function find(state: GameState, id: string): MinionState {
@@ -383,12 +384,15 @@ describe("requiresDisciplines — the enabling query", () => {
     }
   });
 
-  it("pins the recorded deviation: no prevention CREDIT can be Discipline-filtered", () => {
-    // `CombatFrame.preventCredits` is a count, so a credit has forgotten
-    // which card granted it and cannot be filtered. That is only safe
-    // while no credit-granting card requires a Discipline some
-    // `noPreventBy` card names (design doc §3). Obedient Flesh, the one
-    // credit source, requires [dom][pro]; the filters name [for].
+  it("the deviation is CLOSED: a prevention credit remembers its Disciplines", () => {
+    // This used to pin a deviation — `preventCredits` was a bare count, so
+    // a credit had forgotten which card granted it and no `noPreventBy`
+    // could filter it. That was safe only while no credit-granting card
+    // required a Discipline the filters name, and **Unflinching Persistence
+    // [for] broke it** (wave 72). The round pool now stores the granting
+    // mode's Disciplines per point, so the overlap below is allowed to
+    // exist: what this test asserts is that the pool can ANSWER the
+    // question. docs/armour-design.md §4
     const filtered = new Set<string>();
     const creditDisciplines = new Set<string>();
     for (const spec of cardSpecs) {
@@ -416,6 +420,20 @@ describe("requiresDisciplines — the enabling query", () => {
       }
     }
     expect(filtered.size).toBeGreaterThan(0); // the test means something
-    for (const d of creditDisciplines) expect(filtered.has(d)).toBe(false);
+    expect(creditDisciplines.size).toBeGreaterThan(0); // and so does this half
+    // The overlap is now REAL — Unflinching Persistence's credit requires
+    // [for] and the filters name [for] — so the thing to assert is no
+    // longer "no overlap" but that every credit-granting mode names a
+    // Discipline at all. A mode that named none would put an anonymous
+    // point back in the pool and be unfilterable again, silently.
+    for (const spec of cardSpecs) {
+      for (const mode of spec.modes) {
+        if (!mode.effects.some((e) => e.kind === "combatCredits" && e.prevent)) continue;
+        expect(modeDisciplines(mode).length, `${spec.name} grants an anonymous credit`)
+          .toBeGreaterThan(0);
+      }
+    }
+    // The behaviour itself — a filtered credit is not offered — is asserted
+    // against a real board in `tests/cards/armour.test.ts`.
   });
 });
