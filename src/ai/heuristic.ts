@@ -161,12 +161,27 @@ export interface Weights {
    * **30 of 255 block decisions (12%)** on the playtest table, which is
    * the same order as `influenceUnlocks` at 9%.
    *
-   * It is 0 because "live" is not "better". §8 measured this exact
-   * function and found that **two quite different blocking policies
-   * produce statistically identical games**, so a term here starts with a
-   * strong prior of doing nothing, and nothing has been measured that
-   * says otherwise. Kept at 0 with the code in place so the experiment is
-   * one flag away and nobody re-derives it from scratch.
+   * It is 0 because "live" is not "better" — and that is now MEASURED
+   * rather than assumed. Benched against the tuned default on three
+   * mirror decks at two strengths, 240 games each:
+   *
+   * | deck | weight | gap vs default |
+   * | --- | --- | --- |
+   * | Nosferatu | 3 | +0.017 |
+   * | Nosferatu | 8 | +0.017 |
+   * | Gangrel | 6 | −0.029 |
+   * | Brujah | 6 | −0.017 |
+   *
+   * Every one inside its ±0.20 margin, and the four straddle zero. §8 had
+   * already found that **two quite different blocking policies produce
+   * statistically identical games**; this is the same result arriving for
+   * the same function a third time.
+   *
+   * Kept at 0 rather than deleted, on the `influenceUnlocks` criterion:
+   * the project deletes a weight that flips NOTHING (`blockPressure`) and
+   * keeps at zero one that flips decisions but has not earned its place.
+   * This flips 12%. The experiment stays one flag away, and the bench
+   * numbers above are why nobody should expect much from it.
    *
    * Note the asymmetry it encodes, which is the part worth arguing with:
    * on the politics table the same term flips **1 of 290**, so whatever

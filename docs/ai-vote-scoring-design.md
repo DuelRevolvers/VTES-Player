@@ -249,10 +249,38 @@ what a seat controls, so it is not counted. That is the right way round:
 a scorer that under-rates a burn still votes for it, where a wrong sign
 votes backwards.
 
-### The honest limit
+### The honest limit — RE-SIZED 2026-09-19, and it is much smaller than
+### the card count suggests
 
 **Only 9 of the 22 pool-moving political actions name seats in their
-terms.** The other 13 charge the table from the BOARD — Anarch Salon per
+terms.** That is a true count of CARDS and a misleading measure of
+IMPACT, which is worth recording because the original phrasing implied
+half the vote decisions were guesses.
+
+Measured over 40 games across both tables — **200 vote decisions, 183 of
+them priced: 92%.**
+
+| card | vote decisions | priced |
+| --- | --- | --- |
+| Parity Shift | 140 | 140 |
+| Kine Resources Contested | 43 | 43 |
+| (blood hunt) | 12 | n/a — scored by §3(c), not by `perSeat` |
+| Ancilla Empowerment | 5 | 0 |
+
+**The genuinely unpriced case is five decisions in forty games**, because
+the board-priced cards are mostly ones these decks do not play. Blood
+hunts look unpriced to a `perSeat` check and are not — they have their
+own branch.
+
+So pricing the other thirteen means six preview functions over primitives
+(count per minion, per clan, per sect, per seat with more pool) to reach
+**2.5% of vote decisions on the decks we have**. It is real, it is
+bounded, and it is poor value at present. **It becomes worth building the
+day a deck leans on Anarch Salon, Tithings or Diversity** — at which
+point the same six functions serve every card in the family.
+
+The original wording is left below rather than edited away, since it is
+what the design was written against. The other 13 charge the table from the BOARD — Anarch Salon per
 Sabbat vampire, Tithings per seat with more pool than the caller,
 Diversity per distinct clan — and for those `perSeat` is absent and the
 bot falls back to the weak prior in §3(b). Pricing them means walking the

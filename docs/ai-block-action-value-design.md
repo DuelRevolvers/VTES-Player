@@ -174,6 +174,30 @@ The 12% / 0.3% split across two tables is itself a warning: whatever the
 term picks up is deck-shaped rather than general, and anyone turning it
 on should measure both.
 
+### BENCHED 2026-09-19 — no difference, and it stays at zero
+
+The bench gained `--style`/`--weights` runs for exactly this kind of
+question. Three mirror decks, two strengths, 240 games each:
+
+| deck | weight | gap vs default | margin |
+| --- | --- | --- | --- |
+| Nosferatu | 3 | +0.017 | ±0.201 |
+| Nosferatu | 8 | +0.017 | ±0.201 |
+| Gangrel | 6 | −0.029 | ±0.194 |
+| Brujah | 6 | −0.017 | ±0.194 |
+
+All four inside the margin, straddling zero — and Nosferatu at 3 and at 8
+is **identical to three decimals**, which says the extra strength flips
+no further decisions.
+
+So the term is upgraded from "live but unvalidated" to **"live and
+benched neutral"**, and stays at 0. That is the `influenceUnlocks`
+treatment and the criterion is the one this project already uses: delete
+a weight that flips nothing, keep at zero one that flips decisions but
+has not earned its place. This is the third time §8's finding — two very
+different blocking policies give statistically identical games — has been
+reproduced for this function.
+
 ## 6. Tests
 
 - **The headline:** a fixture where a political action is announced and
