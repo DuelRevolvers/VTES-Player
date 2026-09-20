@@ -49,7 +49,7 @@ describe("Mob Rule (101230)", () => {
       ],
     } as Partial<ReferendumFrame>);
     const engine = new VtesEngine(state, testRegistry);
-    const buy = optionIds(engine).find((i) => i === "vote:blood:V1:for");
+    const buy = optionIds(engine).find((i) => i.startsWith("vote:blood:V1:") && i.endsWith(":for"));
     expect(buy).toBeDefined();
     engine.choose(buy!);
     const rf = state.frames.find((f) => f.kind === "referendum")!;
@@ -58,7 +58,7 @@ describe("Mob Rule (101230)", () => {
     expect(find(state, "V1").blood).toBe(1); // started at 2
     // Repeatable: the buy is still on offer, because it spends blood and
     // not a vote SOURCE.
-    expect(optionIds(engine).some((i) => i === "vote:blood:V1:for")).toBe(true);
+    expect(optionIds(engine).some((i) => i.startsWith("vote:blood:V1:") && i.endsWith(":for"))).toBe(true);
   });
 
   it("NEGATIVE SPACE: nothing for a vampire at the capacity floor", () => {

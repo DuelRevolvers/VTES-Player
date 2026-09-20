@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 272 test files, 2792 tests**, with `npm run typecheck`,
+**Green baseline: 283 test files, 2903 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -775,7 +775,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-187 files under `docs/`, one per mechanic that took a decision. **Read the
+198 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -793,13 +793,13 @@ conditional-weapons, basic-combat, first-strike, first-strike-cards,
 strike-effects, strike-sources, ammo, aim, dodge-additional-strikes,
 weapons, weapon-riders, one-shot-weapons, frenzy, actor-riders,
 dawn-operation, outside-combat, round-recurring-combat,
-combat-attachments, round-end, last-combat, positional-combat, armour, thrown-objects.
+combat-attachments, round-end, last-combat, positional-combat, armour, thrown-objects, aggravated-damage, equipment-stripping, undodgeable-strikes, bigger-strikes, dodges, strength-before-range, thaumaturgy-strikes, round-sequencing, after-combat-payoffs.
 
 **Actions and blocking:** lock-as-currency, buying-a-block, rush-actions,
 rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pay-to-unlock, lock-as-price, blood-and-gear, torpor-prey, hand-churn,
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
-minion-target-actions, permanent-target-actions.
+minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

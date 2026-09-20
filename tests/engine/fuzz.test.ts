@@ -753,6 +753,100 @@ function fourSeatGame(seed: number): GameState {
     "Mercury's Arrow",
     "Thrown Sewer Lid",
     "Well-Aimed Car",
+    // Aggravated damage (docs/aggravated-damage-design.md, wave 74). These
+    // change what APPLYING damage does in both directions, so the fuzz's
+    // blood/pool replay is the guard: a converted aggravated hit burns blood
+    // where an unconverted one burns none, and Burst of Sunlight damages its
+    // own striker — a minion removing itself mid-strike is exactly the
+    // "combatant can leave between windows" case.
+    "Burning Wrath",
+    "Song in the Dark",
+    "Bone Spur",
+    "Burst of Sunlight",
+    "Adaptability",
+    // Stripping the gear (docs/equipment-stripping-design.md, wave 75).
+    // These take a card OUT OF PLAY or move it to another minion mid-combat,
+    // which is what the fuzz is for: a strike that destroys the weapon the
+    // other side has already committed to, or moves a card whose bearer dies
+    // in the same round, is the "combatant can leave between windows" case
+    // pointed at equipment instead of at minions.
+    "Fractured Armament",
+    "Shattering Blow",
+    "Canine Horde",
+    "Fast Hands",
+    // Undodgeable strikes (docs/undodgeable-strikes-design.md, wave 76).
+    // Earthshock is the one to watch: a STRENGTH-based strike that reaches,
+    // which the resolution had always treated as close-range-only. The fuzz
+    // plays at both ranges, so it is the guard that the new branch does not
+    // drop a strike or double one.
+    "Scorpion Sting",
+    "Earthshock",
+    "Projectile",
+    // Bigger strikes (docs/bigger-strikes-design.md, wave 77). These reach the
+    // WEAPON-strike path from a card, which this wave rewrote so a weapon's own
+    // damage is folded in. The fuzz deals real weapons, so it is the guard that
+    // the rewrite did not change what a plain weapon strike does.
+    "Undead Strength",
+    "Pushing the Limit",
+    "Brute Force",
+    "Cauldron of Blood",
+    // Dodges (docs/dodges-design.md, wave 78). Two of these END the combat and
+    // two grant an additional strike, so what the fuzz guards is TERMINATION:
+    // an additional strike that re-enters its own sub-round, or a combat-ends
+    // strike that leaves the frame behind, both show up as a game that never
+    // finishes rather than as a wrong table.
+    "Vampiric Speed",
+    "Staredown",
+    "Preternatural Evasion",
+    "Sideslip",
+    "Acrobatics",
+    "Behind You!",
+    // Strength, before range (docs/strength-before-range-design.md, wave 79).
+    // Song of Serenity can drive the OPPONENT's strength negative, which the
+    // fuzz is the guard for: a hand strike computed from a negative strength
+    // must floor at nothing rather than heal anybody, and the blood/pool
+    // replay would catch it if it did.
+    "Fists of Death",
+    "Song of Serenity",
+    "Shadow of the Wolf",
+    // Thaumaturgy ranged strikes (docs/thaumaturgy-strikes-design.md, wave 80).
+    // Drain Essence MOVES blood across the table and Eldritch Glimmer burns it
+    // to buy damage, so the fuzz's blood/pool replay is the guard: a steal that
+    // takes more than is there, or an X charged twice, both show up there.
+    "Drain Essence",
+    "Eldritch Glimmer",
+    "Machine Blitz",
+    // The shape of the round (docs/round-sequencing-design.md, wave 81). Rapid
+    // Thought reorders who is asked for a strike, which is the riskiest thing
+    // in this wave: `nextStriker` drives the choose-strike loop, so an order
+    // that never terminates is a game that never finishes — exactly what the
+    // fuzz's decision cap catches.
+    "Vanish from the Mind's Eye",
+    "Sanguinary Wind",
+    "Rapid Thought",
+    "Relentless Pursuit",
+    // After-combat payoffs (docs/after-combat-payoffs-design.md, wave 82). The
+    // payoffs land AFTER the frame has popped, which is the case the fuzz is
+    // for: the recipient can have been burned during the combat, and a rider
+    // that assumed otherwise would throw rather than misreport.
+    "Flesh Bond",
+    "Mercy for the Weak",
+    "Torrent",
+    // Avoiding the block (docs/avoiding-the-block-design.md, wave 83). Walk
+    // through Arcadia is the pool's first CARD-DRIVEN coin flip, so it is also
+    // the first card that consumes the RNG outside the fuzz's own dealing — and
+    // the fuzz replays its event log to prove conservation, which is exactly the
+    // guard that a card reaching for randomness any other way would break.
+    "Uncontrolled Impulse",
+    "Walk through Arcadia",
+    "Horrific Countenance",
+    // Conditional reactions (docs/conditional-reactions-design.md, wave 84).
+    // Sonar defers its replacement to the END OF THE TURN, which is a new place
+    // for a draw to be owed — and the fuzz plays whole turns, so a debt that is
+    // never paid (or paid twice) shows up in its hand-size and draw invariants.
+    "Steadfastness",
+    "Sonar",
+    "Dread Gaze",
     "Banu Haqim Justicar",
     "Brujah Justicar",
     "Lasombra Justicar",

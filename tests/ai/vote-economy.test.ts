@@ -229,7 +229,7 @@ describe("the policy's use of it", () => {
   const buy = (decided?: "pass" | "fail"): LegalOption[] => [
     { id: "pass", kind: "pass", label: "pass" },
     {
-      id: "vote:blood:V1:against",
+      id: "vote:blood:V1:0:against",
       kind: "castVote",
       label: "buy",
       source: "blood:V1",
@@ -242,7 +242,7 @@ describe("the policy's use of it", () => {
   ];
 
   it("buys a vote that can still change things", () => {
-    expect(decide(state(), buy())).toBe("vote:blood:V1:against");
+    expect(decide(state(), buy())).toBe("vote:blood:V1:0:against");
   });
 
   it("does not buy one that cannot", () => {

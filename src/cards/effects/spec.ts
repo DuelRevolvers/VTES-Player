@@ -619,6 +619,33 @@ export type EffectPrimitive =
        *  (Anticipation) — one option per legal weapon alongside the hand
        *  strike, the choice riding in the option id. §4 */
       orMeleeWeapon?: boolean;
+      /**
+       * "Strike: hand strike at +1 damage OR use a melee weapon strike AT +2
+       * DAMAGE" (Brute Force) — the weapon variant's bonus, when it differs
+       * from the hand one. Omitted means "the same as `bonus`", which is what
+       * every other card in the family prints.
+       *
+       * A separate number rather than making `orMeleeWeapon` carry it: the
+       * boolean says WHETHER the option exists and this says what it is worth,
+       * and the two are independent questions.
+       * docs/bigger-strikes-design.md §2
+       */
+      weaponBonus?: number;
+      /** "Strike: 1R damage OR USE A RANGED WEAPON STRIKE" (Projectile) —
+       *  `orMeleeWeapon`'s sibling. Two fields rather than one with a reach,
+       *  because a card names one or the other and the option list has to
+       *  filter on the same tag the card printed. §3 */
+      orRangedWeapon?: boolean;
+      /** "Strike: STRENGTH RANGED damage" (Earthshock) — the damage is the
+       *  striker's strength, as `bonus: 0` already means, but the blow
+       *  REACHES. Without this the strike is silently dropped at long range,
+       *  because a strength-based strike is a hand strike to every other
+       *  card that prints one. docs/undodgeable-strikes-design.md §2 */
+      ranged?: boolean;
+      /** "NOT USABLE against a minion with flight [FLIGHT]" (Earthshock) — a
+       *  gate on the option. Flight only ever arrives from a card in this
+       *  pool, since no V5 vampire prints it. §4 */
+      notVsFlight?: boolean;
       riders?: {
         maneuver?: number;
         press?: number;
@@ -674,11 +701,27 @@ export type EffectPrimitive =
       /** "Only usable when this vampire is successfully blocked BY A
        *  VAMPIRE OF THE SAME CLAN." */
       requiresSameClanBlocker?: boolean;
+      /** "Unlock the blocking minion" (Horrific Countenance) — read before the
+       *  cancel, while the blocker is still known, like `barBlockerClanThisTurn`
+       *  below. docs/avoiding-the-block-design.md §4 */
+      unlockBlocker?: boolean;
+      /** "…and it is now UNBLOCKABLE" (Horrific Countenance) — the action is
+       *  freed for the rest of its life, not just from this attempt, which is
+       *  what stops a second minion simply blocking it instead. §4 */
+      thenUnblockable?: boolean;
       /** "…and no vampires of that clan may block the acting vampire for
        *  the remainder of the turn." */
       barBlockerClanThisTurn?: boolean;
     }
-  | { kind: "strikeCombatEnds"; unlockSelf: boolean }
+  | {
+      kind: "strikeCombatEnds";
+      unlockSelf: boolean;
+      /** "Strike: this vampire BURNS 1 BLOOD to end combat" (Preternatural
+       *  Evasion superior) — a price on the strike, which gates the option
+       *  and is burned on resolution. The `preventAllThisRound` shape.
+       *  docs/dodges-design.md §2 */
+      bloodCost?: number;
+    }
   /** "Strike: dodge" — no damage, cancels the opposing strike's effects
    *  on this minion (p. 33). `riders` is "…WITH AN OPTIONAL PRESS"
    *  (Backflip): a rider ON the strike, not a second effect in the mode,
@@ -693,11 +736,50 @@ export type EffectPrimitive =
       amount: number;
       ranged: boolean;
       aggravated: boolean;
-      riders?: { maneuver?: number; press?: number; noPreventBy?: string[] };
+      /** "This strike CANNOT BE DODGED" (Projectile) — the same property
+       *  `strikeHandBonus` already carries, on the fixed-damage sibling.
+       *  docs/undodgeable-strikes-design.md §1 */
+      undodgeable?: boolean;
+      /** "…OR use a ranged weapon strike" (Projectile). §3 */
+      orRangedWeapon?: boolean;
+      /** "…and this vampire can BURN X BLOOD to get +X (ranged) damage"
+       *  (Eldritch Glimmer) — one option per affordable X, the choice in the
+       *  option id, the shape `prevent` and `additionalStrike` already use.
+       *  docs/thaumaturgy-strikes-design.md §2 */
+      perBloodX?: boolean;
+      riders?: {
+        maneuver?: number;
+        press?: number;
+        noPreventBy?: string[];
+        /** "This striking vampire ALSO takes N aggravated damage" (Burst of
+         *  Sunlight) — what a weapon spells `selfDamageOnStrike`. The rider
+         *  used to be reachable only from a weapon.
+         *  docs/aggravated-damage-design.md §4 */
+        selfDamage?: { amount: number; aggravated?: boolean };
+      };
     }
   /** "The opposing vampire's strikes with weapons inflict no damage this
    *  round" (Blood Fury, Blood Rage, Soul Burn) — the strike still
    *  happens, it just deals nothing. docs/discipline-filtered-design.md §4 */
+  /**
+   * "Strike: destroy equipment" (Fractured Armament, Shattering Blow,
+   * Canine Horde superior) — one option per equipment the opposing minion
+   * has, the choice in the option id, and with nothing to destroy the card
+   * is not offered at all. docs/equipment-stripping-design.md §2
+   */
+  | {
+      kind: "strikeDestroyEquipment";
+      /** "As above, WITH 1 DAMAGE" (Fractured Armament superior). */
+      damage?: number;
+      /** "…with FIRST STRIKE" (Shattering Blow superior, Canine Horde
+       *  superior) — the gear is gone before the answer lands. */
+      firstStrike?: boolean;
+      ranged?: boolean;
+    }
+  /** "Strike: STEAL weapon" (Fast Hands) — the same choice, except the card
+   *  changes bearer rather than leaving play. Weapons only, where
+   *  `strikeDestroyEquipment` takes any equipment. §3 */
+  | { kind: "strikeStealEquipment"; firstStrike?: boolean }
   | { kind: "nullifyOpposingWeaponDamage" }
   /** "After combat ends, <do X>" — a rider on a "Strike: combat ends"
    *  card (Catatonic Fear, Pass Through Shadow, Form of Mist).
@@ -711,6 +793,9 @@ export type EffectPrimitive =
       /** "…if this vampire was blocked, they can burn N blood to continue
        *  the action as if unblocked, with +M stealth." */
       continueAction?: { bloodCost: number; stealth: number };
+      /** "Opposing vampire gains N blood (even at long range)" (Mercy for the
+       *  Weak). docs/after-combat-payoffs-design.md §2 */
+      gainBloodOpposing?: number;
       /** "…if the range is close, stun the opposing minion" (Kiss of
        *  Cathari). docs/stun-design.md §5 */
       stun?: { closeRangeOnly: boolean };
@@ -911,6 +996,23 @@ export type EffectPrimitive =
   | { kind: "strikeIncapacitate" }
   /** "Strike, ranged: steal N blood" (Theft of Vitae). */
   | { kind: "strikeStealBlood"; amount: number; riders?: { maneuver?: number; press?: number } }
+  /**
+   * "Choose a weapon possessed by the opposing minion. Strike: ranged; X
+   * damage, where X is the amount of damage the chosen weapon would inflict
+   * AS A STRIKE" (Machine Blitz) — `weaponProfile.damage`, which is defined
+   * as exactly that and cites the same ruling [RTR 19980623].
+   *
+   * Three things this is NOT, all from rulings:
+   * - **Not read at resolution.** "The current damage amount is set when
+   *   Machine Blitz is ANNOUNCED" [LSJ 19970224] — unlike
+   *   `strikeWeaponCost`, whose X is a printed cost that cannot change.
+   * - **Not a use of the weapon.** "No restriction nor side-effect applies:
+   *   Bomb is not burned, Sawed-Off Shotgun can be used multiple times"
+   *   [LSJ 20010806-1]. So it never goes through the weapon-strike path.
+   * - **Not aggravated**, whatever the weapon is.
+   * docs/thaumaturgy-strikes-design.md §3
+   */
+  | { kind: "strikeWeaponDamage"; plus?: number }
   /** "THIS ROUND, this vampire can strike, ranged: steal N blood or life"
    *  (Hunger of Marduk) — a GRANTED strike offered later in the round,
    *  not one taken now. docs/last-combat-design.md §3 */
@@ -1069,11 +1171,45 @@ export type EffectPrimitive =
   | { kind: "restrictOpponent"; maneuver?: boolean; press?: boolean; equipment?: boolean }
   /** "Damage from this vampire's hand strikes is aggravated this round"
    *  (Claws of the Dead, Wolf Claws) — before strikes. */
+  /**
+   * "FLIP A COIN. If it is heads, this action is unblockable. If it is tails,
+   * this vampire takes 1 unpreventable environmental damage" (Walk through
+   * Arcadia) — the pool's first coin flip, and it goes through the seeded RNG
+   * like every other random choice (architecture principle 2), so a replay of
+   * the same command log lands the same way.
+   * docs/avoiding-the-block-design.md §3
+   */
+  | { kind: "coinFlipUnblockable"; tailsDamage: number }
   | { kind: "handStrikesAggravated" }
+  /**
+   * "This vampire's strikes may not be dodged this round" (Sanguinary Wind).
+   * `window` is DATA because the card's two modes differ ONLY in when it may
+   * be played — before strikes are chosen, or after — which is a timing
+   * question the effect cannot answer for itself.
+   * docs/round-sequencing-design.md §3
+   */
+  | { kind: "strikesUndodgeableRound"; window: "beforeStrikes" | "chooseStrike" }
+  /** "Instead, the opposing minion chooses his or her strike first" (Rapid
+   *  Thought superior) — offered only to the side that WOULD choose first. §2 */
+  | { kind: "swapStrikeOrder" }
+  /** "…and if another round of combat starts, you get +N hand size for the
+   *  remainder of combat" (Relentless Pursuit superior). §4 */
+  | { kind: "handSizeOnNextRound"; amount: number }
   | { kind: "setStrength"; value: number }
   /** "Gets +N strength this combat" — additive, before range (Form of
    *  the Wolf). */
   | { kind: "addStrength"; amount: number }
+  /**
+   * "The OPPOSING minion gets -1 strength this round / for the remainder of
+   * combat" (Song of Serenity) — the missing quadrant of a 2×2 the pool had
+   * three corners of: `addStrength` is self/combat, `combatCredits.strength`
+   * is self/round, and nothing moved the OPPONENT's strength.
+   *
+   * `scope` rather than two primitives, because this one card prints both and
+   * the only difference is which field the round boundary clears.
+   * docs/strength-before-range-design.md §2
+   */
+  | { kind: "opposingStrength"; amount: number; scope: "round" | "combat" }
   /** "This combat, YOU get +1 hand size" (Rage of Apedemak) — the card's
    *  player, not their vampire. Held on the combat frame, so the bonus
    *  lifts itself however the combat ended and p. 7's discard-down runs
@@ -1219,6 +1355,20 @@ export type EffectPrimitive =
    * docs/armour-design.md §3
    */
   | { kind: "treatAggravatedAsNormal" }
+  /** "This vampire treats all aggravated damage from the opposing minion's
+   *  STRIKE as normal damage" (Adaptability basic) — the same idea as
+   *  `treatAggravatedAsNormal` at one strike's scope instead of the round's,
+   *  so it is marked on the damage ITEMS.
+   *  docs/aggravated-damage-design.md §3 */
+  | { kind: "treatOpposingStrikeAsNormal" }
+  /** "Prevent all AGGRAVATED damage from the opposing minion's strike"
+   *  (Adaptability superior) — `preventAll` narrowed to the aggravated
+   *  items, so normal damage from the same strike still lands. */
+  | { kind: "preventAllAggravated" }
+  /** "For the remainder of this COMBAT, this vampire's hand damage is
+   *  aggravated" (Bone Spur superior) — the combat-long sibling of
+   *  `handStrikesAggravated`, which is a round. §2 */
+  | { kind: "handStrikesAggravatedCombat" }
   /** "Put this card on this vampire / on the opposing vampire" from a
    *  combat card that is NOT a strike (Wall of Filth, Disarm). The window
    *  is DATA rather than a fixed case in `combatWindowFor`, because one
@@ -1304,6 +1454,17 @@ export type EffectPrimitive =
       maneuver?: number;
       press?: number;
       prevent?: number;
+      /**
+       * "This vampire gets an ADDITIONAL STRIKE (limited) with +1 strength
+       * during this round" (Shadow of the Wolf) — the extra strike as a
+       * round credit, granted BEFORE RANGE.
+       *
+       * The standalone `additionalStrike` primitive lives in the
+       * choose-strike window, so a card that grants one before range cannot
+       * use it: `windowFor` would put the whole mode in the wrong window.
+       * docs/strength-before-range-design.md §3
+       */
+      additionalStrike?: { count: number; limited: boolean };
     }
   /** "This combat, this vampire can prevent N damage EACH ROUND" (Bear's
    *  Skin superior, Tranquility Shield) — a rate that refreshes, unlike
@@ -1844,6 +2005,16 @@ export type UsabilityRule =
   | "onlyIfCombatWouldEnd"
   /** "Only usable if both combatants are still ready." */
   | "onlyIfBothCombatantsReady"
+  /** "Not usable if any NON-MANDATORY actions have been performed this turn"
+   *  (Uncontrolled Impulse) — counted on the turn frame. A hunt by a vampire
+   *  with no blood is mandatory (p. 21) and does not count; everything else
+   *  does. docs/avoiding-the-block-design.md §2 */
+  | "onlyIfNoActionsYet"
+  /** "Only usable if this vampire has MORE BLOOD than the opposing vampire"
+   *  (Mercy for the Weak) — strictly more, and only against a vampire: an
+   *  ally's life is not blood for this comparison.
+   *  docs/after-combat-payoffs-design.md §4 */
+  | "onlyIfMoreBloodThanFoe"
   /** "+1 stealth, EVEN IF stealth is not yet needed" (Form of the Cobra)
    *  — overrides the p. 26 "only when needed" gate for this mode. */
   | "evenIfNotNeeded"
@@ -1889,6 +2060,11 @@ export type UsabilityRule =
    *  (Terror Frenzy) — a per-MODE limit, unlike `spec.combatLimit`, which
    *  is per card and would wrongly restrict the basic mode too. */
   | "oncePerCombatAtSuperior"
+  /** "A vampire can play only one <card> at superior each ROUND" (Sideslip)
+   *  — the same per-mode limit one scope shorter. `modeCombatLimit` already
+   *  accepted `"round"`; nothing had asked for it.
+   *  docs/dodges-design.md §3 */
+  | "oncePerRoundAtSuperior"
   /** "A vampire can play only one <card> at superior each ACTION" (Form
    *  of Mist) — the per-action sibling, read off `ActionFrame.played`,
    *  which records the mode for exactly this. */
@@ -3850,6 +4026,11 @@ export interface CardSpec {
    *  docs/hand-churn-design.md §2 */
   delayedReplace?:
     | "unlock"
+    /** "Do not replace until after the CURRENT turn" (Sonar) — a reaction is
+     *  played on somebody else's turn, so it waits on THAT turn ending, not on
+     *  its own player's discard phase, which is a whole round later.
+     *  docs/conditional-reactions-design.md §3 */
+    | "turn"
     | "afterAction"
     | "afterCombat"
     | "discard"

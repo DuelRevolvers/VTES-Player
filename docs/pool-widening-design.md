@@ -1006,6 +1006,360 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 84 — conditional reactions (3 cards), 2026-09-20
+
+Library **805 → 808**. Steadfastness, Sonar, Dread Gaze. Write-up:
+`docs/conditional-reactions-design.md`.
+
+Three reactions conditioned on WHAT is being answered — two on a directed
+action, one on a referendum. Every primitive existed, including the
+`actionDirectedAtYou` gate under that exact name, so the cards were nearly free.
+
+**Five of the nine candidates are INERT** and stayed out: Covincraft needs a
+Kiasyd, Truth in Ink and Watch Commander a Black Hand vampire, Their Master's
+Voice a Gargoyle, Mistaken Identity a Ventrue antitribu — none in the crypt.
+
+New: `delayedReplace: "turn"`. Every existing deferral hangs off a frame the
+player owns or an event, but **a reaction is played on somebody else's turn**, so
+"the current turn" is THAT turn and not the reacting seat's own discard phase
+(which is what `delayedDrawsDiscard` waits for, a whole round later).
+
+**What the fuzz found: two blood-vote offers collide.** Seed 6 went red with a
+duplicate `vote:blood:Ae:for`. The enumerator loops offers and, inside, every
+qualifying minion — and **two cards can each install an offer** (Mob Rule and
+Rant!), so a vampire qualifying under both was enumerated twice under one id.
+Nothing before this wave dealt both to the same table. The offer index now rides
+in the option ID and `source` deliberately stays `blood:<minion>`, because
+`source` is the bookkeeping key `bloodVotesBought` and `maxBloodPerMinion` count
+against.
+
+**Rules question for the owner:** with two offers in play, may a vampire buy
+under both? The fix offers both options (the conservative reading — it does not
+collapse two permissions into one), but the per-minion cap is shared.
+
+Fixtures were most of the cost: intercept is only offered when NEEDED and stealth
+only during a live block attempt, both gated on the same thing, so a directed
+action with stealth on it takes the real back-and-forth. Six of nine assertions
+failed first time from counting impulses; all are walkers now.
+
+### Wave 83 — avoiding the block (3 cards), 2026-09-20
+
+Library **802 → 805**. Uncontrolled Impulse, Walk through Arcadia, Horrific
+Countenance. Write-up: `docs/avoiding-the-block-design.md`.
+
+**First bucket change in nine waves** — Action Modifier rather than Combat.
+Three cards that buy the same thing (not being blocked) at three prices: the
+turn's first action, a coin flip, and 4 blood after the block has happened.
+`restrictBlocking("all")` already meant "unblockable", so two of the three
+needed no new way to say it.
+
+New: a turn-frame count of NON-MANDATORY actions (incremented at announcement,
+the only moment that can tell a mandatory hunt from a chosen one, because the
+blood is still 0 there); and the pool's **first coin flip**, through
+`ops.randomIndex` so replays and the fuzz's log-replay stay honest.
+
+Several nearby cards are INERT and stayed out — Strange Day, Dusk Work,
+Excellent Thirst, Neebi all need a Laibon or Aye, and the pool has neither.
+
+**No engine defect. The cost was entirely in the fixtures**, and that is the
+finding worth keeping: six of nine assertions failed first time, every one an
+assumption about WHERE a modifier is offered. A modifier lives in
+`action.effects`, not `action.announce`; a STEALTH modifier is only offered while
+a block attempt is underway (p. 26), which is one window further again;
+`threeSeatGame` gives Alice one minion; and **a fixed trace between announcement
+and resolution is a guess** — the helper is now a walker, because a trace one
+step short leaves the engine mid-action with nothing to show it.
+
+Mutation-checked per wave 79: turn gate widened, coin forced to heads,
+unblockable dropped — four failures, clean on restore.
+
+### Wave 82 — after-combat payoffs (3 cards), 2026-09-20
+
+Library **799 → 802**. Flesh Bond, Mercy for the Weak, Torrent. Write-up:
+`docs/after-combat-payoffs-design.md`.
+
+Three "combat ends" cards, two carrying a payoff that lands after the combat.
+New: a `gainBlood` after-combat rider ("opposing vampire gains 1 blood, even at
+long range") and an `onlyIfMoreBloodThanFoe` gate — the only card in the pool
+that compares the two combatants' blood, strictly and only against a VAMPIRE,
+since an ally has life in the same field.
+
+**What the wave found: a ruling that cannot yet be modelled, and why.** Both
+cards carry [RTR 20020501] — the payoff does not happen if an effect CONTINUES
+the combat. It was built first (a rider flag discarded at the round boundary),
+and then the test for it failed, which was the useful part: **nothing in the pool
+can continue a combat that a combat-ends strike ended.** A press cannot — the
+strike ends the combat at strike resolution and the press step never arrives —
+and the pool's one continue-the-combat card (Hunting the Quarry superior) is
+gated `onlyIfCombatWouldEnd`, which by definition excludes a PREMATURE ending.
+
+So the machinery was **removed rather than shipped untested**, and the two tests
+were rewritten to pin the PRECONDITION: a press does not continue such a combat,
+so the payoff lands. The cards are whole without it — the cancellation is not
+printed on either one; it is an interaction with cards not in the pool (the
+ruling names Psyche!).
+
+`docs/after-combat-payoffs-design.md` §3 records what to build the day such a
+card is admitted. That is wave 72's deviation-as-a-claim-about-the-pool shape,
+written down deliberately this time rather than discovered later.
+
+### Wave 81 — the shape of the round (4 cards), 2026-09-20
+
+Library **795 → 799**. Vanish from the Mind's Eye, Sanguinary Wind, Rapid
+Thought, Relentless Pursuit. Write-up: `docs/round-sequencing-design.md`.
+
+Four cards that change how the ROUND runs rather than what a strike does. Three
+new round-scoped mechanics, each earned by one card:
+
+- **Who chooses a strike first.** `nextStriker` hard-coded "acting, then
+  opposing" (the p. 30 default); Rapid Thought's superior flips it for the
+  round. The gate is the interesting half — "only if this vampire WOULD choose
+  first" — and because the swap makes the other side first, the card can never
+  be played twice. Asserted, including that it is absent from Alice's list after
+  the swap.
+- **Strikes undodgeable for the round.** A third source folded into the one read
+  in `resolveStrikes`, beside the Strike's own flag and the striker's static —
+  and NOT a gate on the dodge option, because "the dodge just has no effect"
+  [LSJ 20030902-2]. The card's two modes differ only in WINDOW, so the effect
+  carries the window as data.
+- **A grant that depends on what happens next.** "If another round starts, you
+  get +2 hand size" cannot be answered when the card resolves — the press it
+  rides on is what might start the round — so it is owed at play and paid at the
+  round boundary.
+
+Vanish needed nothing new and is the control: its RESTRICTED press is the basic
+and the free one the superior, so a gate applied to the card rather than the mode
+would show there.
+
+Mutation-checked per wave 79: all eleven green first time, so all three
+mechanics were broken in one pass — five failures across the three, clean on
+restore. Note from doing it: the restore of one read did not match by string
+replacement and needed the editing tools. **Shell surgery is fine for making a
+temporary mutation and unreliable for undoing it** — check the restore.
+
+### Wave 80 — thaumaturgy ranged strikes (3 cards), 2026-09-20
+
+Library **792 → 795**. Drain Essence, Eldritch Glimmer, Machine Blitz.
+Write-up: `docs/thaumaturgy-strikes-design.md`.
+
+Three [tha] ranged strikes whose AMOUNT is not a printed constant — one steals
+blood, one buys damage with blood (`perBloodX` on `strikeDamage`, the shape
+`prevent` already used), one reads its number off the opponent's weapon.
+
+**The first wave where the RULINGS did the design work** rather than confirming
+it, and it was cheap because each one pointed at machinery that already existed:
+
+- Machine Blitz's X is `weaponProfile.damage`, whose own doc comment cites the
+  same ruling [RTR 19980623] — it was built for Concealed Weapon's threshold and
+  this card is its second reader.
+- X is captured **at announcement** [LSJ 19970224], the opposite of
+  `strikeWeaponCost` (Up Yours!), which reads at resolution. Both are right: a
+  printed pool cost cannot change between the two moments and a weapon's current
+  damage can.
+- It is **not a use of the weapon** [LSJ 20010806-1] — no burn-after-use, no
+  once-per-combat, not aggravated — so it never touches the weapon-strike path.
+  Asserted by the weapon still being attached afterwards.
+
+One gate deliberately NOT added: "can target a minion with less blood than the
+amount stolen" [RTR 20010711], so Drain Essence is offered against a 1-blood
+victim and takes the 1. Asserted, because that is the kind of gate added for
+tidiness that then makes a card unplayable in the case it was printed for.
+
+Mutation-checked per wave 79's method: all nine green first time, so both new
+amount calculations were broken on purpose — two failures, clean on restore.
+
+### Wave 79 — strength, before range (3 cards), 2026-09-20
+
+Library **789 → 792**. Fists of Death, Song of Serenity, Shadow of the Wolf.
+Write-up: `docs/strength-before-range-design.md`.
+
+Three cards played in the same window that all move STRENGTH, and between them
+they complete a 2×2 the pool had three corners of: own/combat
+(`addStrength`), own/round (`combatCredits.strength`), and now the OPPONENT's
+in both scopes (`opposingStrength`, carrying a `scope` because one card prints
+both).
+
+**No new engine op was needed** — `addRoundStrengthTo` and
+`addCombatStrengthTo` already take a MINION and resolve the side, because they
+were written for in-play abilities with no `CardPlayFrame`. A negative amount on
+the foe is those same ops. The minion-addressed form existing for another
+reason is what made the new quadrant cheap.
+
+`combatCredits` also gained `additionalStrike`: Shadow of the Wolf grants one
+before range, and the standalone primitive lives in the choose-strike window —
+using it would have offered the mode three steps after its own text allows.
+
+**Method note, not a defect:** all ten assertions passed on the first run, which
+waves 77 and 78 had both just been caught by. Instead of reasoning about it, the
+penalty was temporarily flipped from `-1` to `0` and the suite re-run — **two
+tests failed, then passed again on restore.** A mutation check is cheap and
+conclusive where staring at assertions is neither; worth doing whenever a wave's
+test file is green first time.
+
+### Wave 78 — dodges (6 cards), 2026-09-20
+
+Library **783 → 789**. Vampiric Speed, Staredown, Preternatural Evasion,
+Sideslip, Acrobatics, Behind You!. Write-up: `docs/dodges-design.md`.
+
+Six cards built on "Strike: dodge", which already existed — so the wave is
+about what each buys ALONGSIDE the dodge and which window that lives in. Two
+put their two modes in two different windows.
+
+Small additions: a `bloodCost` on `strikeCombatEnds` (Preternatural Evasion
+"burns 1 blood to end combat", the `preventAllThisRound` shape), and
+`oncePerRoundAtSuperior` for Sideslip — which needed **no engine work at all**,
+because `modeCombatLimit` has accepted `"round"` since it was written and
+nothing had ever returned it.
+
+**Behind You! is the card that finally checks wave 73's hoist.** That wave
+found `onlyFirstRound` being read inside `combat.beforeRange` only and hoisted
+it above the window switch, with nothing in the pool exercising it. Behind
+You!'s basic is a MANEUVER, in `combat.range`, and carries the gate — so before
+the hoist it would have stayed playable in round 2 with nothing to show it. Both
+windows now assert it is withheld in round 2. **A hoist is untested until a card
+needs it in the second window.**
+
+**All 14 assertions passed on the first run, and one was passing for the wrong
+reason.** "The second Sideslip is not offered" walked back to the damage window
+— but the first Sideslip prevented the whole 1-point hit, `pendingDamage`
+emptied, the window CLOSED, and the negative held against an empty list. M now
+hits for 3 and the test asserts `pass` is on the table before claiming anything
+is missing. Same lesson as wave 76's dodge that never happened: **a negative
+needs the thing it negates to have been possible.**
+
+### Wave 77 — bigger strikes (4 cards), 2026-09-20
+
+Library **779 → 783**. Undead Strength, Pushing the Limit, Brute Force,
+Cauldron of Blood. Write-up: `docs/bigger-strikes-design.md`.
+
+Four cards that say "swing harder", three of them on a hand strike OR a melee
+weapon strike. It looked like the cheapest wave yet — `strikeHandBonus` and
+`orMeleeWeapon` both existed — and it found the most consequential defect so
+far, in a card already in the pool.
+
+**What it found: "or use a melee weapon strike" threw the weapon away.** The
+card path built `{ damage: null, ranged: false, handBonus: <the card's bonus> }`
+— so the weapon's own strike was discarded and replaced with a bare
+strength-plus-bonus one. Every melee weapon in the pool is `damage: null,
+handBonus: N`, so **Anticipation with a Righteous Blade dealt a point less than
+it prints**, with a passing test asserting the wrong total. The weapon's strike
+shape lived only inside the weapon compiler's closure; the handler exposed only
+`weaponProfile`, a MEASURE for the AI. There is a `weaponStrike` beside it now.
+
+Two things fell out of fixing it: a fixed-damage weapon ignores `handBonus` at
+resolution, so a card bonus on a gun folds into the number instead; and
+`ranged` now comes from the weapon, where it was hard-coded `false` — which
+wave 76's Projectile ("or use a RANGED weapon strike") had just started
+depending on.
+
+Third wave running for the same shape: **a value welded into the site that
+first needed it, invisible until a second caller arrives.**
+
+Also new: `weaponBonus`, for Brute Force's weapon variant being worth more than
+its hand variant (+1 hand / +2 melee). And a ruling the design already honoured
+— Immortal Grapple's gate is per MODE, so the melee option survives it
+[LSJ 20090114], now asserted.
+
+The fixture lesson: the first draft attached an INVENTED weapon, which has no
+registry entry and so no strike. "The weapon variant is bigger" quietly became
+"the same". **What the fixture puts on the table has to be a thing the registry
+knows** — wave 71's duplicate instance id, one level up.
+
+### Wave 76 — undodgeable strikes (3 cards), 2026-09-20
+
+Library **776 → 779**. Scorpion Sting, Earthshock, Projectile. Write-up:
+`docs/undodgeable-strikes-design.md`.
+
+Three cards whose point is that a DODGE does not answer them, which makes the
+dodge the control. The flag sits on a hand strike, on a ranged strength strike
+and on a fixed-damage-or-weapon strike, so one sentence is asserted against
+three kinds of blow.
+
+**Two engine findings, both about siblings that had drifted:**
+
+1. **A strength-based strike was hard-gated to close range.** The
+   fixed-damage branch of strike resolution consults `ranged`; the
+   strength branch hard-coded `cf.range !== "close"`, because every card that
+   had printed a strength strike so far WAS a hand strike. Earthshock's
+   "strength RANGED damage" is the first that is not.
+2. **"Hand damage is aggravated" reached it too.** Bone Spur and Claws of the
+   Dead are applied in that same branch, so they would have promoted a ranged
+   strength strike. Now gated on `!strike.ranged`; nothing pre-existing
+   changes. **A branch that used to identify one kind of strike stops doing so
+   the moment a second kind reaches it.**
+
+Also `orRangedWeapon` as `orMeleeWeapon`'s sibling, and a flight gate for
+Earthshock (flight only ever arrives from a card — no V5 vampire prints it).
+
+**What the wave found in its own test:** the walker asked Bob to dodge and
+**Bob never dodged** — a dodge is not a free option, it comes from a card, so
+`strike:dodge` was always absent and the walker hand-struck instead. Six of
+seven tests passed, including every undodgeable assertion, on a board where
+nothing was ever dodged. It surfaced only because Scorpion Sting's basic is
+*supposed* to be stopped. The walker now reports whether it dodged and the
+helper throws if it asked and did not get one: **a control that can silently
+not happen is not a control.**
+
+### Wave 75 — stripping the gear (4 cards), 2026-09-20
+
+Library **772 → 776**. Fractured Armament, Shattering Blow, Canine Horde, Fast
+Hands. Write-up: `docs/equipment-stripping-design.md`.
+
+Four strikes that take an opponent's equipment away. Most of the machinery
+existed (`Strike.burnEquipment`, from Heroic Might); the wave's work was
+reaching it from a card MODE rather than only from a granted strike, plus a
+`stealEquipment` sibling that moves the card instead of burning it.
+
+**Armor of Vitality is deliberately NOT here** — it is a prevention card, in a
+different window, and it needs a fact nothing records yet: *which weapon dealt
+this damage*. That belongs beside `PendingDamage.fromGun`, stamped at the push
+chokepoint, and is worth a wave with the other cards that read it.
+
+**What it found: "destroy equipment" could not also deal damage.** The
+resolution burned the card and then returned unconditionally, so Fractured
+Armament's "as above, with 1 damage" would have dealt none. The fix is the
+guard its own neighbour four lines up already uses — `attachToVictim`
+distinguishes "the attach IS the strike" from "the attach is a rider on a
+damaging strike" the same way. **The guards around a line are part of what that
+line means.**
+
+Also: the test passed 12 of 12 first time and had **no assertion for
+`firstStrike`**, a flag three of the four superiors print. All-green-first-time
+was the tell. Added as a per-card pair, and it then failed three times before
+passing — the same fixture fact as waves 73 and 74: **a card play's effects
+happen in `resolve`, after the as-played window**, so nothing it does is
+visible immediately after `choose`.
+
+### Wave 74 — aggravated damage (5 cards), 2026-09-20
+
+Library **767 → 772**. Burning Wrath, Song in the Dark, Bone Spur, Burst of
+Sunlight, Adaptability. Write-up: `docs/aggravated-damage-design.md`.
+
+Five cards about the aggravated FLAG in both directions — three put it on, two
+take it off. **Raking Talons stayed out as INERT** (requires a Gargoyle; the
+V5 crypt has none) and **Jua Vema** too (its superior needs an "Aye" nothing
+in the pool produces).
+
+Three small mechanics, each earned by a card: a **combat-long**
+hand-aggravated flag beside the existing round one (Bone Spur's two modes
+differ only in scope, and the round boundary has to clear one and not the
+other); a **per-item** conversion for Adaptability, whose scope is one STRIKE
+where Skin of Night's is the round; and an **aggravated-only** prevention.
+
+**What it found: a strike rider welded to weapons.** Burst of Sunlight's "this
+striking vampire also takes N aggravated damage" is already modelled —
+`Strike.bearerSelfDamage` — but was reachable only from a weapon:
+`chooseCardStrike` could not set it, and `oneShotRiders` opened with
+`if (!strike?.weaponCard) return;`. **What a strike does to its own striker is
+a question about the STRIKE.** Third instance in three waves of the same
+lesson (`spec.weapon` inside `compileEquipment`, then the round gates inside
+one window, now this).
+
+Carried over intact from wave 72: neither conversion clears `aggravated`, so
+Resilience's non-aggravated prevention still cannot touch converted damage
+[LSJ 20040812-2] — asserted as a pair, with the basic mode still offered so
+the gate is shown to narrow the MODE and not the card.
+
 ### Wave 73 — thrown objects (5 cards), 2026-09-19
 
 Library **762 → 767**. Sacrament of Carnage, Thrown Gate, Mercury's Arrow,

@@ -2316,6 +2316,13 @@ export class VtesEngine implements EngineOps {
     // phase, which is the ordering p. 50 spells out for Dreams of the
     // Sphinx. docs/temporary-hand-size-design.md §3
     this.expireHandSizeBonus(tf.handSizeBonus);
+    // "Do not replace until AFTER THE CURRENT TURN" (Sonar) — a reaction is
+    // played on somebody else's turn, so the wait is that turn ending, which
+    // is here, and not the reacting seat's own discard phase (which is what
+    // `delayedDrawsDiscard` waits for and would be a whole round later).
+    // docs/conditional-reactions-design.md §3
+    for (const seatId of tf.drawAfterTurn ?? []) this.drawUpToHandSize(seatId);
+    tf.drawAfterTurn = [];
   }
 
   private settleCombat(cf: CombatFrame): boolean {
@@ -2442,6 +2449,24 @@ export class VtesEngine implements EngineOps {
             cf.handStrikesAggravated = { acting: false, opposing: false };
             // "…for the remainder of THIS ROUND" (Skin of Night).
             cf.aggravatedAsNormalRound = [];
+            // "…may not be dodged THIS ROUND" (Sanguinary Wind), and "instead
+            // the opposing minion chooses first" (Rapid Thought superior) —
+            // both round-scoped (docs/round-sequencing-design.md §2, §3).
+            cf.strikesUndodgeableRound = { acting: false, opposing: false };
+            cf.opposingChoosesFirst = false;
+            // "…IF ANOTHER ROUND of combat starts, you get +2 hand size for
+            // the remainder of combat" (Relentless Pursuit superior). Another
+            // round is starting right here, which is the whole condition. §4
+            for (const owed of cf.handSizeOnNextRound ?? []) {
+              this.addHandSizeBonus({
+                seat: owed.seat,
+                amount: owed.amount,
+                scope: "combat",
+                cardName: "Relentless Pursuit",
+                cardId: `rp-${cf.round}`,
+              });
+            }
+            cf.handSizeOnNextRound = [];
             // "…that minion's INITIAL STRIKE THIS ROUND gets first
             // strike" (Haymaker) — a round-scoped grant, and the
             // half-finished round it belongs to is over either way.
@@ -2931,7 +2956,16 @@ export class VtesEngine implements EngineOps {
     // (Mob Rule, Rant!). Offered to EVERY Methuselah's vampires, not just
     // the card player's — and repeatable, so it does not spend a vote
     // source. docs/referendum-blood-design.md §1
-    for (const offer of rf.bloodVoteOffers ?? []) {
+    // The offer's INDEX rides in the option id. Two cards can each install a
+    // blood-vote offer (Mob Rule and Rant! together), and the same vampire then
+    // qualifies under both — which produced two options with the identical id
+    // `vote:blood:<minion>:for` and broke the unique-id invariant (found by the
+    // fuzz, wave 84). The id is what has to be unique; `source` stays
+    // `blood:<minion>` because it is the BOOKKEEPING key that
+    // `bloodVotesBought` and each offer's `maxBloodPerMinion` are counted
+    // against, and widening it would silently stop those caps matching.
+    // docs/conditional-reactions-design.md §5
+    for (const [offerIndex, offer] of (rf.bloodVoteOffers ?? []).entries()) {
       for (const m of getSeat(this.state, seat).minions) {
         if (!isReady(m) || m.kind !== "vampire" || m.blood < 1) continue;
         if (offer.minCapacity !== undefined && capacityOf(m) <= offer.minCapacity) continue;
@@ -2945,7 +2979,7 @@ export class VtesEngine implements EngineOps {
             : 0);
         for (const inFavor of [true, false]) {
           options.push({
-            id: `vote:blood:${m.id}:${inFavor ? "for" : "against"}`,
+            id: `vote:blood:${m.id}:${offerIndex}:${inFavor ? "for" : "against"}`,
             kind: "castVote",
             label: `${m.name}: burn 1 blood for ${n} vote${n > 1 ? "s" : ""} ${
               inFavor ? "for" : "against"
@@ -3694,6 +3728,16 @@ export class VtesEngine implements EngineOps {
   private applyAfterCombatRiders(cf: CombatFrame): void {
     for (const r of cf.afterCombatEnds) {
       switch (r.kind) {
+        case "gainBlood": {
+          // "Opposing vampire gains 1 blood (EVEN AT LONG RANGE)" (Mercy for
+          // the Weak) — no range condition, unlike the `damage` rider below,
+          // and a total read because the recipient can have left play during
+          // the combat. docs/after-combat-payoffs-design.md §2
+          const who = findMinion(this.state, r.minion);
+          if (!who) break;
+          this.emit({ type: "BloodGained", minion: r.minion, amount: r.amount });
+          break;
+        }
         case "damage": {
           // "…if the range is close" means the range as combat ENDED,
           // which is what the captured frame holds.
@@ -4304,8 +4348,15 @@ export class VtesEngine implements EngineOps {
   /** The next side to choose a strike this sub-round (acting first), or
    *  null when every participant has chosen. */
   private nextStriker(cf: CombatFrame): "acting" | "opposing" | null {
-    if (this.strikeParticipant(cf, "acting") && cf.strikes.acting === null) return "acting";
-    if (this.strikeParticipant(cf, "opposing") && cf.strikes.opposing === null) return "opposing";
+    // The acting minion chooses first (p. 30) unless a card has swapped the
+    // order for this round (Rapid Thought superior).
+    // docs/round-sequencing-design.md §2
+    const order: ("acting" | "opposing")[] = cf.opposingChoosesFirst
+      ? ["opposing", "acting"]
+      : ["acting", "opposing"];
+    for (const side of order) {
+      if (this.strikeParticipant(cf, side) && cf.strikes[side] === null) return side;
+    }
     return null;
   }
 
@@ -4462,9 +4513,13 @@ export class VtesEngine implements EngineOps {
       // stamped onto each Strike: hand, weapon and granted strikes are
       // built at five sites, and a flag every site must remember is one a
       // sixth will forget (docs/library-audit.md §2).
-      const strikerUndodgeable = findMinion(this.state, source)?.attached.some(
-        (p) => p.statics.strikesUndodgeable,
-      );
+      const strikerUndodgeable =
+        findMinion(this.state, source)?.attached.some((p) => p.statics.strikesUndodgeable) ||
+        // "This vampire's strikes may not be dodged THIS ROUND" (Sanguinary
+        // Wind) — the third source, folded in here with the other two rather
+        // than stamped on the Strike, for the reason the comment above gives.
+        // docs/round-sequencing-design.md §3
+        (cf.strikesUndodgeableRound?.[from] ?? false);
       if (victimStrike?.dodge && !strike.undodgeable && !strikerUndodgeable) return;
       // "Strike: put this card on the opposing minion with N counters"
       // (Touch of Oblivion) — close range only, and not damage, so
@@ -4500,7 +4555,29 @@ export class VtesEngine implements EngineOps {
         if (eq) {
           this.emit({ type: "PermanentBurned", cardId: eq.card.id, name: eq.card.name });
         }
-        return;
+        // "As above, WITH 1 DAMAGE" (Fractured Armament superior) — the
+        // destruction is then a RIDER on a damaging strike rather than the
+        // whole strike, exactly the `attachToVictim` split above, whose
+        // guard this copies. It used to return unconditionally, so a card
+        // printing both would have dealt no damage.
+        // docs/equipment-stripping-design.md §2
+        if (!strike.handBonus && strike.damage === null) return;
+      }
+      // "Strike: STEAL weapon" (Fast Hands) — the same choice as burning
+      // one, except the card changes bearer instead of leaving play, so
+      // its counters and lock state travel with it. §3
+      if (strike.stealEquipment) {
+        const v = findMinion(this.state, victim);
+        const eq = v?.attached.find((p) => p.card.id === strike.stealEquipment);
+        if (eq && findMinion(this.state, source)) {
+          this.emit({
+            type: "EquipmentMoved",
+            cardId: eq.card.id,
+            from: victim,
+            to: source,
+          });
+        }
+        if (!strike.handBonus && strike.damage === null) return;
       }
       // "Strike: send the opposing vampire to torpor or burn the opposing
       // ally" (Touch of Oblivion superior).
@@ -4546,13 +4623,29 @@ export class VtesEngine implements EngineOps {
         if (cf.range === "long" && !strike.ranged) return;
         amount = strike.damage;
       } else {
-        if (cf.range !== "close") return;
+        // A strength-based strike is a HAND strike for every card that has
+        // printed one so far, and a hand strike does not reach (p. 29). But
+        // "Strike: STRENGTH RANGED damage" (Earthshock) does, so the gate
+        // consults `ranged` exactly as the fixed-damage branch above does —
+        // the two branches used to answer the same question differently.
+        // docs/undodgeable-strikes-design.md §2
+        if (cf.range !== "close" && !strike.ranged) return;
         amount = strengthOf(from) + strike.handBonus;
         // "…will be strike: HAND STRIKE AT +N DAMAGE" (Haymaker) — the
         // bonus rides the round, not the Strike, because the card forces
         // the strike rather than declaring one.
         if (strike.source === "hand") amount += cf.forcedHandStrike?.[from] ?? 0;
-        if (cf.handStrikesAggravated[from]) aggravated = true;
+        // "This vampire's HAND damage is aggravated" — the round-scoped flag
+        // (Claws of the Dead) or the combat-long one (Bone Spur superior).
+        // `!strike.ranged` because a RANGED strength strike (Earthshock) is
+        // not a hand strike, and this branch is now reached by both. Every
+        // card that existed before wave 76 is close-range here, so the
+        // narrowing changes nothing for them.
+        // docs/aggravated-damage-design.md §2, undodgeable-strikes §2
+        if (!strike.ranged) {
+          if (cf.handStrikesAggravated[from]) aggravated = true;
+          if (cf.handStrikesAggravatedCombat?.[from]) aggravated = true;
+        }
       }
       // AMMO, read here rather than stamped on the Strike when it was
       // loaded: "for the remainder of this combat" reaches strikes that
@@ -4690,7 +4783,13 @@ export class VtesEngine implements EngineOps {
     // both of these land on the striker's own side of the table.
     // docs/one-shot-weapons-design.md §1–§2
     const oneShotRiders = (from: "acting" | "opposing", strike: Strike | null): void => {
-      if (!strike?.weaponCard) return;
+      // NOT gated on `weaponCard` any more. "This striking vampire also
+      // takes N aggravated damage" (Burst of Sunlight) is a question about
+      // the STRIKE, and the rider used to be unreachable for a strike that
+      // came from a card rather than a weapon — the same shape as
+      // `spec.weapon` compiled inside `compileEquipment`.
+      // docs/aggravated-damage-design.md §4
+      if (!strike) return;
       // "If Grenade is used at CLOSE RANGE, the minion with this weapon
       // takes 1 damage." Environmental [LSJ 19970801]: source null, so it
       // is nobody's damage and no "damage from the opposing minion"
@@ -4701,13 +4800,16 @@ export class VtesEngine implements EngineOps {
       // after `resolves()`, and not on `cf.gunUses`, which counts at
       // declaration: a first strike that never resolves would otherwise
       // eat the one use [LSJ 20100310].
+      // The latch keys on the WEAPON card, so it only applies to a weapon's
+      // rider; a card strike's self damage has no card to latch on and no
+      // card that prints `oncePerCombat` without being a weapon.
       const done = cf.bearerSelfDamageDone ?? [];
-      if (
-        self &&
-        (self.anyRange || cf.range === "close") &&
-        !(self.oncePerCombat && done.includes(strike.weaponCard))
-      ) {
-        if (self.oncePerCombat) {
+      const latched =
+        self?.oncePerCombat === true &&
+        strike.weaponCard !== undefined &&
+        done.includes(strike.weaponCard);
+      if (self && (self.anyRange || cf.range === "close") && !latched) {
+        if (self.oncePerCombat && strike.weaponCard !== undefined) {
           cf.bearerSelfDamageDone = [...done, strike.weaponCard];
         }
         const bearer = from === "acting" ? cf.acting : cf.opposing;
@@ -4722,7 +4824,10 @@ export class VtesEngine implements EngineOps {
         }
       }
       // "Burn after use" — last, after every rider that names the card.
-      if (strike.burnWeaponAfterStrike) this.burnPermanent(strike.weaponCard);
+      // This one genuinely needs the weapon card.
+      if (strike.burnWeaponAfterStrike && strike.weaponCard !== undefined) {
+        this.burnPermanent(strike.weaponCard);
+      }
     };
     if (resolves("opposing")) oneShotRiders("opposing", so);
     if (resolves("acting")) oneShotRiders("acting", sa);
@@ -4834,16 +4939,27 @@ export class VtesEngine implements EngineOps {
       const entry = this.findEntry(strike.useWeapon);
       const bearer = findMinion(this.state, play.minion);
       if (entry && bearer?.attached.some((p) => p.card.id === strike.useWeapon)) {
+        // The WEAPON'S OWN strike, plus the card's bonus. This used to be a
+        // bare strength-plus-bonus strike: `damage: null` and `ranged: false`
+        // hard-coded, and the weapon's own handBonus dropped — so a Sword's +1
+        // and a gun's reach both vanished when a card said "or use a weapon
+        // strike". docs/bigger-strikes-design.md §3
+        const ws = this.registry[entry.card.name]?.weaponStrike;
+        const cardBonus = strike.handBonus ?? 0;
+        // A FIXED-damage weapon (a gun) ignores `handBonus` at resolution, so
+        // the card's bonus has to fold into the number; a strength-based one
+        // (every melee weapon in the pool) takes it as a bonus.
+        const fixed = ws?.damage ?? null;
         cf.strikes[side] = {
           source: "weapon",
           name: entry.card.name,
-          handBonus: strike.handBonus ?? 0,
-          damage: null,
-          ranged: false,
+          handBonus: fixed === null ? (ws?.handBonus ?? 0) + cardBonus : 0,
+          damage: fixed === null ? null : fixed + cardBonus,
+          ranged: ws?.ranged ?? false,
           combatEnds: false,
           unlockSelf: false,
           dodge: false,
-          aggravated: strike.aggravated ?? false,
+          aggravated: (ws?.aggravated ?? false) || (strike.aggravated ?? false),
           stealBlood: 0,
           ...(strike.undodgeable ? { undodgeable: true } : {}),
           ...(strike.firstStrike ? { firstStrike: true } : {}),
@@ -4871,6 +4987,22 @@ export class VtesEngine implements EngineOps {
       ...(strike.undodgeable ? { undodgeable: true } : {}),
           ...(strike.firstStrike ? { firstStrike: true } : {}),
           ...(strike.capDamage !== undefined ? { capDamage: strike.capDamage } : {}),
+      // "Strike: destroy equipment" / "steal weapon" — the chosen card
+      // rides in the option id (§2).
+      ...(strike.burnEquipment ? { burnEquipment: strike.burnEquipment } : {}),
+      ...(strike.stealEquipment ? { stealEquipment: strike.stealEquipment } : {}),
+      // "This striking vampire also takes N aggravated damage" (Burst of
+      // Sunlight) — the same field a weapon's `selfDamageOnStrike` fills,
+      // and `anyRange` because the card names no range.
+      ...(strike.selfDamage
+        ? {
+            bearerSelfDamage: {
+              amount: strike.selfDamage.amount,
+              aggravated: strike.selfDamage.aggravated ?? false,
+              anyRange: true,
+            },
+          }
+        : {}),
       ...(strike.attachToSelf
         ? {
             attachToSelf: {
@@ -6798,6 +6930,58 @@ export class VtesEngine implements EngineOps {
     this.setHandStrikesAggravatedFor(play.minion);
   }
 
+  /**
+   * "For the remainder of this COMBAT, this vampire's hand damage is
+   * aggravated" (Bone Spur superior) — the combat-long flag, which the
+   * round boundary does not clear. docs/aggravated-damage-design.md §2
+   */
+  setHandStrikesAggravatedForCombat(play: CardPlayFrame): void {
+    const cf = this.requireCombat();
+    cf.handStrikesAggravatedCombat ??= { acting: false, opposing: false };
+    cf.handStrikesAggravatedCombat[this.sideOf(cf, play.minion)] = true;
+  }
+
+  /**
+   * "This vampire treats all aggravated damage from the opposing minion's
+   * STRIKE as normal damage" (Adaptability basic) — marked on the ITEMS
+   * rather than on the minion, because the scope is one strike. The items
+   * from that strike are the ones pending against this minion whose source
+   * is the opponent; `aggravated` is deliberately left alone, so a
+   * non-aggravated-only prevention still cannot touch them
+   * [LSJ 20040812-2]. docs/aggravated-damage-design.md §3
+   */
+  treatOpposingStrikeAggravatedAsNormal(play: CardPlayFrame): void {
+    const cf = this.requireCombat();
+    if (!play.minion) return;
+    const side = this.sideOf(cf, play.minion);
+    const foe = side === "acting" ? cf.opposing : cf.acting;
+    for (const pd of cf.pendingDamage) {
+      if (pd.minion === play.minion && pd.source === foe && pd.aggravated) {
+        pd.treatAsNormal = true;
+      }
+    }
+  }
+
+  /**
+   * "Prevent all AGGRAVATED damage from the opposing minion's strike"
+   * (Adaptability superior) — `preventAll` narrowed to the aggravated
+   * items, so normal damage from the same strike still lands. Every item is
+   * swept, not just the first: a gun's ammo can put a normal packet and an
+   * aggravated one on the same victim.
+   */
+  preventAllAggravatedFrom(play: CardPlayFrame): void {
+    const cf = this.requireCombat();
+    if (!play.minion) return;
+    const side = this.sideOf(cf, play.minion);
+    const foe = side === "acting" ? cf.opposing : cf.acting;
+    for (const pd of [...cf.pendingDamage]) {
+      if (pd.minion !== play.minion || pd.source !== foe || !pd.aggravated) continue;
+      this.emit({ type: "DamagePrevented", minion: pd.minion, amount: pd.amount });
+      pd.amount = 0;
+    }
+    cf.pendingDamage = cf.pendingDamage.filter((pd) => pd.amount > 0);
+  }
+
   /** The same, keyed on the MINION rather than a card play — an ability of
    *  a card in play has no `CardPlayFrame` (Crossbreaker). The
    *  `addRoundStrengthTo` shape (docs/crypt-wave-3.md §3). */
@@ -7145,6 +7329,29 @@ export class VtesEngine implements EngineOps {
    * only NON-aggravated damage still cannot touch it
    * [LSJ 20040812-2]. docs/armour-design.md §3
    */
+  /** "This vampire's strikes may not be dodged this round" (Sanguinary
+   *  Wind). docs/round-sequencing-design.md §3 */
+  setStrikesUndodgeableRound(play: CardPlayFrame): void {
+    const cf = this.requireCombat();
+    cf.strikesUndodgeableRound ??= { acting: false, opposing: false };
+    cf.strikesUndodgeableRound[this.sideOf(cf, play.minion)] = true;
+  }
+
+  /** "Instead, the opposing minion chooses his or her strike first" (Rapid
+   *  Thought superior) — for this round. §2 */
+  swapStrikeOrder(): void {
+    this.requireCombat().opposingChoosesFirst = true;
+  }
+
+  /** "…and if another round of combat starts, you get +N hand size for the
+   *  remainder of combat" (Relentless Pursuit superior) — owed now, paid at
+   *  the round boundary, because "if another round starts" is not knowable
+   *  yet. §4 */
+  oweHandSizeNextRound(seat: SeatId, amount: number): void {
+    const cf = this.requireCombat();
+    cf.handSizeOnNextRound = [...(cf.handSizeOnNextRound ?? []), { seat, amount }];
+  }
+
   treatAggravatedAsNormal(play: CardPlayFrame): void {
     const cf = this.requireCombat();
     if (!play.minion) return;
@@ -10331,7 +10538,8 @@ export class VtesEngine implements EngineOps {
     // prevention off it [LSJ 20040812-2]. docs/armour-design.md §3
     const cf = this.state.frames.find((f) => f.kind === "combat");
     const asNormal =
-      cf?.kind === "combat" && (cf.aggravatedAsNormalRound ?? []).includes(pd.minion);
+      pd.treatAsNormal ||
+      (cf?.kind === "combat" && (cf.aggravatedAsNormalRound ?? []).includes(pd.minion));
     if (pd.aggravated && !asNormal) {
       // Aggravated cannot be mended (p. 34). An already-wounded (in
       // torpor) vampire burns 1 blood per point to prevent destruction,
@@ -10370,6 +10578,14 @@ export class VtesEngine implements EngineOps {
   ): void {
     const m = getMinion(this.state, minionId);
     const actionId = this.freshId("action-");
+    // "Not usable if any NON-MANDATORY actions have been performed this turn"
+    // (Uncontrolled Impulse). Counted here, before the hunt spends anything,
+    // because a hunt by a vampire with no blood is MANDATORY (p. 21) and a
+    // count taken later could not tell the two apart.
+    // docs/avoiding-the-block-design.md §2
+    if (!(kind === "hunt" && m.blood === 0)) {
+      tf.nonMandatoryActions = (tf.nonMandatoryActions ?? 0) + 1;
+    }
     // "Taking an action locks the acting minion" (p. 19); all details are
     // fixed at announcement (p. 25).
     this.emit({ type: "MinionLocked", minion: m.id });
@@ -10914,6 +11130,12 @@ export class VtesEngine implements EngineOps {
       // first — and if there is no combat at all the card replaces
       // normally, since the clause has nothing to wait for.
       (cfForDraw.drawAfterCombat ??= []).push(seat.id);
+    } else if (handler.delayedReplace === "turn") {
+      // "Do not replace until after the CURRENT turn" (Sonar) — held on the
+      // turn frame that is running, which is whose turn it is now, not the
+      // player's own. §3
+      const tfNow = [...this.state.frames].reverse().find((f) => f.kind === "turn");
+      if (tfNow?.kind === "turn") (tfNow.drawAfterTurn ??= []).push(seat.id);
     } else if (handler.delayedReplace === "unlock") {
       seat.delayedDraws += 1;
     } else if (handler.delayedReplaceUntil) {

@@ -300,8 +300,16 @@ describe("Anticipation (102350)", () => {
     }
     const cf = combat(state)!;
     const side = cf.acting === "V1" ? "acting" : "opposing";
-    // It is a WEAPON strike for every later question.
-    expect(cf.strikes[side]).toMatchObject({ source: "weapon", handBonus: 2 });
+    // It is a WEAPON strike for every later question — and it carries the
+    // WEAPON'S OWN bonus as well as the card's. Righteous Blade is
+    // `damage: null, handBonus: 1`, so "a melee weapon strike at +2" is
+    // strength + 1 + 2.
+    //
+    // This assertion said 2 until wave 77: the weapon's own strike was being
+    // discarded and replaced with a bare strength-plus-card-bonus one, so
+    // Anticipation under-dealt by a point with every melee weapon that carries
+    // a bonus. docs/bigger-strikes-design.md §3
+    expect(cf.strikes[side]).toMatchObject({ source: "weapon", handBonus: 3 });
   });
 
   it("[AUS]: burns 1 blood to cancel the opposing STRIKE card", () => {

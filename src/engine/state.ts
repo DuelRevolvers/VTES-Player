@@ -1979,6 +1979,21 @@ export interface TurnFrame {
   transfersLeft: number;
   /** Master phase actions remaining (default 1, minus out-of-turn debt). */
   masterActionsLeft: number;
+  /** Seats owed a replacement draw once THIS turn is over ("do not replace
+   *  until after the current turn", Sonar). Drained at the turn's end beside
+   *  the hand-size expiry. docs/conditional-reactions-design.md §3 */
+  drawAfterTurn?: SeatId[];
+  /**
+   * How many NON-MANDATORY minion actions have been announced this turn
+   * ("Not usable if any non-mandatory actions have been performed this turn",
+   * Uncontrolled Impulse).
+   *
+   * A hunt by a vampire with no blood is mandatory (p. 21), so it does not
+   * count; every other action does. Counted at ANNOUNCEMENT, which is where
+   * the blood is still the pre-hunt figure that makes it mandatory.
+   * docs/avoiding-the-block-design.md §2
+   */
+  nonMandatoryActions?: number;
   /** Only one master phase action may be gained from trifles per master
    *  phase (p. 10). */
   trifleGained: boolean;
@@ -2403,6 +2418,17 @@ export type AfterCombatRider =
   /** "…if this vampire was blocked, they can burn N blood to continue the
    *  action as if unblocked, with +M stealth" (Form of Mist). */
   | { kind: "continueAction"; minion: MinionId; bloodCost: number; stealth: number }
+  /**
+   * "Opposing vampire gains N blood" after the combat ends (Mercy for the
+   * Weak) — "the blood gain takes place AFTER the end of combat"
+   * [RTR 19970630].
+   *
+   * The companion ruling, "the blood is not gained if an effect CONTINUES the
+   * combat" [RTR 20020501], is **not modelled and cannot currently arise**:
+   * see `docs/after-combat-payoffs-design.md` §3 for why, and for what would
+   * make it reachable.
+   */
+  | { kind: "gainBlood"; minion: MinionId; amount: number }
   /** "…if the range is close, stun the opposing minion" (Kiss of
    *  Cathari). docs/stun-design.md §5 */
   | { kind: "stun"; source: MinionId; closeRangeOnly: boolean }
@@ -2510,6 +2536,18 @@ export interface PendingDamage {
    *  strike"). Read off `strike.source`, so a melee weapon is not one.
    *  docs/first-strike-cards-design.md §2 */
   fromHandStrike?: boolean;
+  /**
+   * "This vampire treats all aggravated damage from the opposing minion's
+   * STRIKE as normal damage" (Adaptability basic) — recorded on the ITEM,
+   * because the card's scope is one strike where Skin of Night's is the
+   * whole round.
+   *
+   * Like the round-scoped version this does NOT clear `aggravated`: a card
+   * that prevents only non-aggravated damage still cannot touch this
+   * [LSJ 20040812-2]. Only `applyResolvedDamage` asks.
+   * docs/aggravated-damage-design.md §3
+   */
+  treatAsNormal?: boolean;
 }
 
 /**
@@ -2646,6 +2684,10 @@ export interface Strike {
    *  equipment card on the opposing minion, chosen at strike time so it
    *  rides in the option id. docs/action-attachments-design.md §4 */
   burnEquipment?: CardInstanceId;
+  /** "Strike: STEAL weapon" (Fast Hands) — the equipment moves to the
+   *  striker instead of leaving play, so it keeps its counters and its lock
+   *  state. docs/equipment-stripping-design.md §3 */
+  stealEquipment?: CardInstanceId;
   /** "Damage from this strike cannot be prevented by cards requiring
    *  Fortitude [for]" — carried onto the PendingDamage this strike
    *  inflicts. docs/discipline-filtered-design.md §3 */
@@ -2836,6 +2878,41 @@ export interface CombatFrame {
    * docs/armour-design.md §3
    */
   aggravatedAsNormalRound?: MinionId[];
+  /**
+   * "This vampire's strikes may not be dodged THIS ROUND" (Sanguinary Wind) —
+   * per side, reset each round. The round-scoped sibling of
+   * `PermanentStatics.strikesUndodgeable` and of `Strike.undodgeable`, and the
+   * third source the one read in `resolveStrikes` now folds together.
+   *
+   * It does NOT stop the opponent choosing a dodge — "the dodge just has no
+   * effect" [LSJ 20030902-2] — which is exactly what the existing read does.
+   * docs/round-sequencing-design.md §3
+   */
+  strikesUndodgeableRound?: { acting: boolean; opposing: boolean };
+  /**
+   * "Instead, the OPPOSING minion chooses his or her strike first" (Rapid
+   * Thought superior) — the acting minion chooses first by default (p. 30),
+   * and this flips it for the round.
+   * docs/round-sequencing-design.md §2
+   */
+  opposingChoosesFirst?: boolean;
+  /**
+   * "…and IF ANOTHER ROUND of combat starts, you get +2 hand size for the
+   * remainder of combat" (Relentless Pursuit superior) — owed to a seat, paid
+   * at the round boundary. The grant itself is the ordinary combat-frame
+   * `handSizeBonus`; what is deferred is only whether it happens.
+   * docs/round-sequencing-design.md §4
+   */
+  handSizeOnNextRound?: { seat: SeatId; amount: number }[];
+  /**
+   * "For the remainder of this COMBAT, this vampire's hand damage is
+   * aggravated" (Bone Spur superior) — the combat-long sibling of
+   * `handStrikesAggravated`, which is reset every round. Two fields rather
+   * than one with a scope, the `firstStrikeRound` / `firstStrikeNextRound`
+   * precedent: the round boundary clears one and not the other.
+   * docs/aggravated-damage-design.md §2
+   */
+  handStrikesAggravatedCombat?: { acting: boolean; opposing: boolean };
   /** "…that minion's initial strike this round gets FIRST STRIKE"
    *  (Haymaker, Forearm Block's next-round clause) — a round-scoped
    *  grant, reset with the rest of the round's riders. The other two

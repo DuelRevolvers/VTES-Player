@@ -169,6 +169,16 @@ function rulesHold(
         if (af.actionKind !== "bleed" || af.resolvedSuccess !== true) return false;
         if (currentBleed(ctx.state, af) < 1) return false;
         break;
+      case "onlyIfNoActionsYet": {
+        // "Not usable if any NON-MANDATORY actions have been performed this
+        // turn" (Uncontrolled Impulse). THIS action is already counted — it has
+        // been announced — so the bar is "more than one".
+        // docs/avoiding-the-block-design.md §2
+        const tf = [...ctx.state.frames].reverse().find((f) => f.kind === "turn");
+        const n = tf?.kind === "turn" ? (tf.nonMandatoryActions ?? 0) : 0;
+        if (n > 1) return false;
+        break;
+      }
       case "byLockedMinion":
       case "alsoByLockedMinion":
       case "oncePerUnlockPhase":
@@ -179,6 +189,7 @@ function rulesHold(
       case "oncePerActionAtSuperior":
       case "onlyAfterFirstRound":
       case "onlyFirstRound":
+      case "onlyIfMoreBloodThanFoe":
       case "afterBlockResolution":
         break; // per-minion / combat rules, checked elsewhere
     }
@@ -2507,6 +2518,9 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       case "strikeDodge":
       case "strikeDamage":
       case "strikeWeaponCost":
+      case "strikeWeaponDamage":
+      case "strikeDestroyEquipment":
+      case "strikeStealEquipment":
       case "strikePreventHandStrike":
       case "strikeStealBlood":
       case "strikeAttachToVictim":
@@ -2533,6 +2547,9 @@ function combatWindowFor(mode: CardMode): WindowId | null {
         return e.when === "endOfRound" ? "combat.endOfRound" : "combat.beforeRange";
       case "setStrength":
       case "addStrength":
+      // "The OPPOSING minion gets -N strength" — same window as its
+      // self-facing siblings (§2).
+      case "opposingStrength":
       // "Only usable before range is determined. This combat, you get +1
       // hand size" (Rage of Apedemak).
       case "handSizeBonus":
@@ -2553,7 +2570,18 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       case "frenzyShield":
       case "combatBloodStore":
         return "combat.beforeRange";
+      // "…and if another round of combat starts" — a press rider, played at
+      // the press step with the press itself (§4).
+      case "handSizeOnNextRound":
+        return "combat.press";
+      // Its window is DATA: the two modes differ only in timing (§3).
+      case "strikesUndodgeableRound":
+        return e.window === "chooseStrike" ? "combat.chooseStrike" : "combat.beforeStrikes";
+      case "swapStrikeOrder":
+        return "combat.chooseStrike";
       case "handStrikesAggravated":
+      // The combat-long sibling, same window (Bone Spur's two modes).
+      case "handStrikesAggravatedCombat":
       // "…strikes with weapons inflict no damage this round" is a rider
       // on a strike card, so it shares that card's window; on its own it
       // belongs beside handStrikesAggravated.
@@ -2602,6 +2630,10 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       // way: "cannot be used if there is no damage to prevent"
       // [LSJ 20001114] is the window's own rule (Skin of Night).
       case "treatAggravatedAsNormal":
+      // Both of Adaptability's modes read the damage being resolved, so
+      // both belong in the same window as prevention.
+      case "treatOpposingStrikeAsNormal":
+      case "preventAllAggravated":
         return "combat.damageResolution";
       default:
         break;
@@ -2815,6 +2847,15 @@ function compileCombatCard(spec: CardSpec): CardHandler {
         ) {
           continue;
         }
+        // "…only one at superior each ROUND" (Sideslip) — the same per-mode
+        // limit one scope shorter. `playedThisRound` is cleared at the round
+        // boundary beside the other "each round" resets.
+        if (
+          mode.usable?.includes("oncePerRoundAtSuperior") &&
+          cf.playedThisRound.includes(`${spec.name}:${mode.level}`)
+        ) {
+          continue;
+        }
         // "…only one at superior each ACTION" (Form of Mist) — the same
         // per-mode limit, scoped to the enclosing action instead.
         if (
@@ -2838,9 +2879,28 @@ function compileCombatCard(spec: CardSpec): CardHandler {
         // window did nothing at all. docs/thrown-objects-design.md §3
         if (mode.usable?.includes("onlyAfterFirstRound") && cf.round <= 1) continue;
         if (mode.usable?.includes("onlyFirstRound") && cf.round > 1) continue;
+        // "Only usable if this vampire has MORE BLOOD than the opposing
+        // vampire" (Mercy for the Weak) — strictly more, and only against a
+        // VAMPIRE: an ally has life, not blood, so the comparison has no
+        // meaning against one. docs/after-combat-payoffs-design.md §4
+        if (mode.usable?.includes("onlyIfMoreBloodThanFoe")) {
+          const foe = findMinion(ctx.state, side === "acting" ? cf.opposing : cf.acting);
+          if (!foe || foe.kind !== "vampire") continue;
+          if (m.blood <= foe.blood) continue;
+        }
         switch (ctx.window) {
           case "combat.chooseStrike": {
             if (cf.strikes[side] !== null) continue;
+            // "…and only if THIS VAMPIRE WOULD CHOOSE HIS OR HER STRIKE
+            // FIRST" (Rapid Thought superior). The acting minion chooses
+            // first by default (p. 30), so this is the side that has not yet
+            // chosen and whose turn it is — and never twice, because the
+            // swap makes the other side first. §2
+            if (mode.effects.some((e) => e.kind === "swapStrikeOrder")) {
+              if (cf.opposingChoosesFirst) continue;
+              if (side !== "acting") continue;
+              if (cf.strikes.opposing !== null) continue;
+            }
             // "Strikes that are NOT HAND STRIKES cannot be used this
             // round (by either combatant)" (Immortal Grapple). A mode
             // that sets a hand strike survives; a weapon strike, a fixed
@@ -2867,6 +2927,11 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // ends" (Dog Pack) — a static on the OPPONENT gates this
             // minion's combat-ends strikes.
             if (mode.effects.some((e) => e.kind === "strikeCombatEnds")) {
+              // "…BURNS 1 BLOOD to end combat" — the strike's own price, on
+              // top of the card's cost, so it gates the option (§2).
+              const ce = mode.effects.find((e) => e.kind === "strikeCombatEnds");
+              const extra = ce?.kind === "strikeCombatEnds" ? (ce.bloodCost ?? 0) : 0;
+              if (extra > 0 && m.blood < costOf(spec, ctx, m, mode).blood + extra) continue;
               const opponent = getMinion(
                 ctx.state,
                 side === "acting" ? cf.opposing : cf.acting,
@@ -2913,17 +2978,78 @@ function compileCombatCard(spec: CardSpec): CardHandler {
                 );
               }
             }
+            // "…OR USE A RANGED WEAPON STRIKE" (Projectile) — the sibling of
+            // the melee clause above, on the fixed-damage primitive. Written
+            // as its own block rather than folded in, because the two filter
+            // on the tag the CARD printed and a card names one or the other.
+            // docs/undodgeable-strikes-design.md §3
+            const sd = mode.effects.find((x) => x.kind === "strikeDamage");
+            if (sd?.kind === "strikeDamage" && sd.orRangedWeapon) {
+              for (const p of m.attached) {
+                if (!p.tags.includes("weapon") || p.tags.includes("melee")) continue;
+                options.push(makeOption(spec, card, m, mode, { weapon: p.card.id }));
+              }
+            }
+            // "NOT USABLE against a minion with FLIGHT" (Earthshock) — a gate
+            // on the option, checked against the minion this strike would
+            // answer. No V5 vampire prints flight, so it only ever arrives
+            // from a card in play. §4
+            if (
+              mode.effects.some((x) => x.kind === "strikeHandBonus" && x.notVsFlight)
+            ) {
+              const foe = findMinion(ctx.state, side === "acting" ? cf.opposing : cf.acting);
+              if (foe?.attached.some((p) => p.tags.includes("flight"))) continue;
+            }
             // "Choose A WEAPON POSSESSED BY THE OPPOSING MINION. Strike:
             // X damage, where X is its pool cost" (Up Yours!, §2). One
             // option per weapon; with none there is nothing to choose and
             // the card is not offered at all.
-            if (mode.effects.some((x) => x.kind === "strikeWeaponCost")) {
+            if (
+              mode.effects.some(
+                (x) => x.kind === "strikeWeaponCost" || x.kind === "strikeWeaponDamage",
+              )
+            ) {
               const foe = findMinion(ctx.state, side === "acting" ? cf.opposing : cf.acting);
               for (const p of foe?.attached ?? []) {
                 if (!p.tags.includes("weapon")) continue;
                 options.push(makeOption(spec, card, m, mode, { weapon: p.card.id }));
               }
               break;
+            }
+            // "…and this vampire can burn X blood to get +X damage" (Eldritch
+            // Glimmer) — one option per affordable X, the `prevent` shape (§2).
+            {
+              const sdx = mode.effects.find((x) => x.kind === "strikeDamage");
+              if (sdx?.kind === "strikeDamage" && sdx.perBloodX) {
+                const maxX = Math.max(0, m.blood - costOf(spec, ctx, m, mode).blood);
+                for (let x = 0; x <= maxX; x++) {
+                  options.push(makeOption(spec, card, m, mode, { x: String(x) }));
+                }
+                break;
+              }
+            }
+            // "Strike: destroy equipment" / "Strike: steal weapon" — one
+            // option per card that can be taken, the same shape as Up
+            // Yours! above. With nothing to take the card is NOT OFFERED,
+            // which is the whole of its "if there is one" clause: an option
+            // that resolved to nothing would be a futile option.
+            // docs/equipment-stripping-design.md §2
+            {
+              const strip = mode.effects.find(
+                (x) =>
+                  x.kind === "strikeDestroyEquipment" || x.kind === "strikeStealEquipment",
+              );
+              if (strip) {
+                const foe = findMinion(ctx.state, side === "acting" ? cf.opposing : cf.acting);
+                // Destroying takes any EQUIPMENT; stealing takes a WEAPON.
+                const wants =
+                  strip.kind === "strikeStealEquipment" ? "weapon" : "equipment";
+                for (const p of foe?.attached ?? []) {
+                  if (!p.tags.includes(wants)) continue;
+                  options.push(makeOption(spec, card, m, mode, { equipment: p.card.id }));
+                }
+                break;
+              }
             }
             options.push(makeOption(spec, card, m, mode, {}));
             break;
@@ -3231,6 +3357,24 @@ function compileCombatCard(spec: CardSpec): CardHandler {
                 if (m.blood < costOf(spec, ctx, m, mode).blood) continue;
                 options.push(makeOption(spec, card, m, mode, {}));
               }
+              // Adaptability, both modes: they act on AGGRAVATED damage from
+              // the OPPOSING minion, so neither is offered against normal
+              // damage or against damage the opponent did not deal (a
+              // retainer's output, or Burst of Sunlight's own recoil, which
+              // is environmental). §3
+              if (
+                mode.effects.some(
+                  (e) =>
+                    e.kind === "treatOpposingStrikeAsNormal" ||
+                    e.kind === "preventAllAggravated",
+                )
+              ) {
+                if (!pd.aggravated) continue;
+                const foe = side === "acting" ? cf.opposing : cf.acting;
+                if (pd.source !== foe) continue;
+                if (m.blood < costOf(spec, ctx, m, mode).blood) continue;
+                options.push(makeOption(spec, card, m, mode, {}));
+              }
               continue;
             }
             // "Prevent N NON-AGGRAVATED damage" (Soak, Wall of Filth
@@ -3264,11 +3408,20 @@ function compileCombatCard(spec: CardSpec): CardHandler {
         switch (e.kind) {
           case "strikeHandBonus":
             ops.chooseCardStrike(play, {
-              handBonus: e.bonus,
+              // "…at +1 damage OR use a melee weapon strike AT +2" (Brute
+              // Force): the weapon variant can be worth more than the hand
+              // one, and the two used to share a single number (§2).
+              handBonus:
+                play.params["weapon"] && e.weaponBonus !== undefined
+                  ? e.weaponBonus
+                  : e.bonus,
               ...(e.aggravated ? { aggravated: true } : {}),
               ...(e.undodgeable ? { undodgeable: true } : {}),
               ...(e.firstStrike ? { firstStrike: true } : {}),
               ...(e.capDamage !== undefined ? { capDamage: e.capDamage } : {}),
+              // "Strike: STRENGTH RANGED damage" (Earthshock) — strength for
+              // the amount, but the blow reaches (§2).
+              ...(e.ranged ? { ranged: true } : {}),
               ...(play.params["weapon"] ? { useWeapon: play.params["weapon"] } : {}),
               ...(e.riders?.noPreventBy ? { noPreventBy: e.riders.noPreventBy } : {}),
             });
@@ -3287,6 +3440,12 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             }
             break;
           case "strikeCombatEnds":
+            // "This vampire BURNS 1 BLOOD to end combat" (Preternatural
+            // Evasion superior) — paid as the strike is declared, the shape
+            // `grantCloseManeuver` and `startNewRound` already use (§2).
+            if (e.bloodCost && play.minion) {
+              ops.emit({ type: "BloodBurned", minion: play.minion, amount: e.bloodCost });
+            }
             ops.chooseCardStrike(play, {
               combatEnds: true,
               unlockSelf: e.unlockSelf,
@@ -3356,6 +3515,26 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           case "setRangeLong":
             ops.setCombatRange("long");
             break;
+          case "strikeDestroyEquipment": {
+            const eq = play.params["equipment"];
+            if (!eq) throw new Error(`${spec.name}: no equipment chosen`);
+            ops.chooseCardStrike(play, {
+              burnEquipment: eq,
+              ...(e.damage !== undefined ? { damage: e.damage } : {}),
+              ...(e.ranged ? { ranged: true } : {}),
+              ...(e.firstStrike ? { firstStrike: true } : {}),
+            });
+            break;
+          }
+          case "strikeStealEquipment": {
+            const eq = play.params["equipment"];
+            if (!eq) throw new Error(`${spec.name}: no weapon chosen`);
+            ops.chooseCardStrike(play, {
+              stealEquipment: eq,
+              ...(e.firstStrike ? { firstStrike: true } : {}),
+            });
+            break;
+          }
           case "nullifyOpposingWeaponDamage":
             ops.nullifyOpposingWeaponDamage(play);
             break;
@@ -3399,6 +3578,20 @@ function compileCombatCard(spec: CardSpec): CardHandler {
                 stealth: e.continueAction.stealth,
               });
             }
+            // "Opposing vampire gains N blood (even at long range)" (Mercy for
+            // the Weak) — the opponent is read from the live frame, since the
+            // rider has to name a minion (§2).
+            if (e.gainBloodOpposing) {
+              const cfNow = ops.state.frames.find((f) => f.kind === "combat");
+              if (cfNow?.kind === "combat") {
+                const foe = cfNow.acting === play.minion ? cfNow.opposing : cfNow.acting;
+                ops.addAfterCombatRider({
+                  kind: "gainBlood",
+                  minion: foe,
+                  amount: e.gainBloodOpposing,
+                });
+              }
+            }
             break;
           }
           case "combatCostModOnOpponent":
@@ -3420,12 +3613,52 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             ops.chooseCardStrike(play, { damage: cost, ranged: false });
             break;
           }
+          case "strikeWeaponDamage": {
+            // X is captured HERE, as the card resolves — "the current damage
+            // amount is set when Machine Blitz is announced"
+            // [LSJ 19970224]. `weaponProfile.damage` is the figure the ruling
+            // defines, and reading it through the registry rather than the
+            // weapon's strike path is what keeps this from counting as USING
+            // the weapon [LSJ 20010806-1]. §3
+            const chosenW = play.params["weapon"];
+            const holder = chosenW
+              ? ops.state.seats
+                  .flatMap((s) => s.minions)
+                  .find((mm) => mm.attached.some((p) => p.card.id === chosenW))
+              : undefined;
+            const wName = holder?.attached.find((p) => p.card.id === chosenW)?.card.name;
+            const base = wName ? (ops.registry[wName]?.weaponProfile?.damage ?? 0) : 0;
+            ops.chooseCardStrike(play, {
+              damage: base + (e.plus ?? 0),
+              ranged: true,
+              aggravated: false,
+            });
+            break;
+          }
           case "strikeDamage":
+            // "…burn X blood to get +X damage" — the blood is burned as the
+            // strike is declared, and X rides in the option id (§2).
+            if (e.perBloodX) {
+              const x = Number(play.params["x"] ?? "0");
+              if (x > 0 && play.minion) {
+                ops.emit({ type: "BloodBurned", minion: play.minion, amount: x });
+              }
+              ops.chooseCardStrike(play, {
+                damage: e.amount + x,
+                ranged: e.ranged,
+                aggravated: e.aggravated,
+                ...(e.undodgeable ? { undodgeable: true } : {}),
+              });
+              break;
+            }
             ops.chooseCardStrike(play, {
               damage: e.amount,
               ranged: e.ranged,
               aggravated: e.aggravated,
+              ...(e.undodgeable ? { undodgeable: true } : {}),
+              ...(play.params["weapon"] ? { useWeapon: play.params["weapon"] } : {}),
               ...(e.riders?.noPreventBy ? { noPreventBy: e.riders.noPreventBy } : {}),
+              ...(e.riders?.selfDamage ? { selfDamage: e.riders.selfDamage } : {}),
             });
             if (e.riders?.maneuver) {
               for (let i = 0; i < e.riders.maneuver; i++) ops.grantManeuverCredit(play);
@@ -3708,13 +3941,49 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // filter names disciplines, and a credit that forgot its own
             // was unfilterable (§4).
             if (e.prevent) ops.grantPreventCredit(play, e.prevent, modeDisciplines(mode));
+            // "…an additional strike (limited) with +1 strength during this
+            // round" (Shadow of the Wolf) — the extra strike as a before-range
+            // credit (§3).
+            if (e.additionalStrike) {
+              ops.grantAdditionalStrike(play, e.additionalStrike.count, e.additionalStrike.limited);
+            }
+            break;
+          }
+          case "opposingStrength": {
+            // "The OPPOSING minion gets -N strength." The minion-addressed
+            // strength ops already resolve the side themselves, so a negative
+            // amount on the foe needs no new op (§2).
+            if (!play.minion) throw new Error(`${spec.name}: no combatant`);
+            const cfNow = ops.state.frames.find((f) => f.kind === "combat");
+            if (cfNow?.kind !== "combat") break;
+            const foe = cfNow.acting === play.minion ? cfNow.opposing : cfNow.acting;
+            if (e.scope === "round") ops.addRoundStrengthTo(foe, e.amount);
+            else ops.addCombatStrengthTo(foe, e.amount);
             break;
           }
           case "preventEachRound":
             ops.grantPreventEachRound(play, e.amount);
             break;
+          case "strikesUndodgeableRound":
+            ops.setStrikesUndodgeableRound(play);
+            break;
+          case "swapStrikeOrder":
+            ops.swapStrikeOrder();
+            break;
+          case "handSizeOnNextRound":
+            ops.oweHandSizeNextRound(play.seat, e.amount);
+            break;
           case "treatAggravatedAsNormal":
             ops.treatAggravatedAsNormal(play);
+            break;
+          case "treatOpposingStrikeAsNormal":
+            ops.treatOpposingStrikeAggravatedAsNormal(play);
+            break;
+          case "preventAllAggravated":
+            ops.preventAllAggravatedFrom(play);
+            break;
+          case "handStrikesAggravatedCombat":
+            ops.setHandStrikesAggravatedForCombat(play);
             break;
           case "roundDamage": {
             // Built field by field, never by spread: an optional field
@@ -4671,7 +4940,18 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             if (e.barBlockerClanThisTurn && blocker?.clan && play.minion) {
               ops.barClanFromBlocking(play.minion, blocker.clan);
             }
+            // "UNLOCK the blocking minion" (Horrific Countenance) — read here
+            // for the same reason as the clause above: after the cancel there
+            // is no combat frame left to ask who was blocking.
+            // docs/avoiding-the-block-design.md §4
+            if (e.unlockBlocker && blocker) {
+              ops.emit({ type: "MinionUnlocked", minion: blocker.id });
+            }
             ops.cancelCombat("continueAction");
+            // "…and it is now unblockable" — AFTER the cancel, because the
+            // action frame is what carries the restriction and the cancel is
+            // what hands the action back. §4
+            if (e.thenUnblockable) ops.restrictBlocking("all");
             break;
           }
           case "modifyBleed":
@@ -4725,6 +5005,21 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
               source: spec.name,
             });
             break;
+          case "coinFlipUnblockable": {
+            // "Flip a coin" — through the seeded RNG, never `Math.random`, so
+            // the same command log replays the same way (principle 2). The
+            // engine's own op is the only channel a card has to randomness.
+            // docs/avoiding-the-block-design.md §3
+            const heads = ops.randomIndex(2) === 0;
+            if (heads) {
+              ops.restrictBlocking("all");
+            } else if (play.minion && e.tailsDamage > 0) {
+              // "Unpreventable ENVIRONMENTAL damage": nobody's damage, so no
+              // prevention window and no reaction reads it.
+              ops.applyEnvironmentalDamage(play.minion, e.tailsDamage, false);
+            }
+            break;
+          }
           case "modifyIntercept": {
             if (!play.minion) throw new Error(`${spec.name}: no playing minion`);
             ops.emit({
@@ -7070,6 +7365,18 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
       aggravated: w.aggravated,
       ranged: w.ranged,
     };
+    // The weapon's STRIKE, as opposed to the measure above. "Strike: hand
+    // strike OR USE A MELEE WEAPON STRIKE at +N damage" (Anticipation, Undead
+    // Strength, Brute Force) has to build that weapon's own strike and add N
+    // — and the engine had no way to see it, so it built a bare
+    // strength-plus-N strike and the weapon's own damage was dropped.
+    // docs/bigger-strikes-design.md §3
+    handler.weaponStrike = {
+      damage: w.damage ?? null,
+      handBonus: w.handBonus ?? 0,
+      ranged: w.ranged,
+      aggravated: w.aggravated,
+    };
     const priorOptions = handler.abilityOptions?.bind(handler);
     const priorUse = handler.useAbility?.bind(handler);
     const priorEnded = handler.onCombatEnded?.bind(handler);
@@ -8715,11 +9022,15 @@ export function compileSpec(spec: CardSpec): CardHandler {
   if (spec.cardType === "reaction" || spec.cardType === "modifierOrReaction") {
     handler.isReactionCard = true;
   }
-  handler.modeCombatLimit = (mode, variant) =>
-    spec.modes.length > 0 &&
-    modeOf(spec, mode, variant).usable?.includes("oncePerCombatAtSuperior")
-      ? "combat"
-      : undefined;
+  handler.modeCombatLimit = (mode, variant) => {
+    if (spec.modes.length === 0) return undefined;
+    const u = modeOf(spec, mode, variant).usable;
+    if (u?.includes("oncePerCombatAtSuperior")) return "combat";
+    // Sideslip's per-ROUND limit. The engine's `"round"` branch has existed
+    // since this field was written and no card had used it (§3).
+    if (u?.includes("oncePerRoundAtSuperior")) return "round";
+    return undefined;
+  };
   // "Unique." and "which printed versions could this minion bring into
   // play" — both asked by a DIFFERENT card ("equip this vampire with a
   // non-unique equipment from your hand"), which has no reference to this

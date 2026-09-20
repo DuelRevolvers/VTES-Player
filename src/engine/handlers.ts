@@ -339,7 +339,22 @@ export interface EngineOps {
   grantPreventCredit(play: CardPlayFrame, amount: number, disciplines?: string[]): void;
   /** "This vampire treats aggravated damage as normal damage for the
    *  remainder of this round" (Skin of Night). */
+  /** "This vampire's strikes may not be dodged this round" (Sanguinary Wind). */
+  setStrikesUndodgeableRound(play: CardPlayFrame): void;
+  /** "Instead, the opposing minion chooses his or her strike first." */
+  swapStrikeOrder(): void;
+  /** "…if another round of combat starts, you get +N hand size." */
+  oweHandSizeNextRound(seat: SeatId, amount: number): void;
   treatAggravatedAsNormal(play: CardPlayFrame): void;
+  /** The same at ONE STRIKE's scope, marked on the damage items
+   *  (Adaptability basic). docs/aggravated-damage-design.md §3 */
+  treatOpposingStrikeAggravatedAsNormal(play: CardPlayFrame): void;
+  /** "Prevent all AGGRAVATED damage from the opposing minion's strike"
+   *  (Adaptability superior) — normal damage from it still lands. */
+  preventAllAggravatedFrom(play: CardPlayFrame): void;
+  /** "…for the remainder of this COMBAT, this vampire's hand damage is
+   *  aggravated" (Bone Spur superior). §2 */
+  setHandStrikesAggravatedForCombat(play: CardPlayFrame): void;
   /** "This combat, this vampire can prevent N damage EACH ROUND" (Bear's
    *  Skin superior, Tranquility Shield) — a rate that refreshes, unlike
    *  the credit above. docs/round-recurring-combat-design.md §2 */
@@ -881,6 +896,16 @@ export interface CardStrikeParams {
    *  equipment" (Molotov Cocktail) — `attachToVictim` pointing the other
    *  way. docs/armed-mid-combat-design.md §2 */
   attachToSelf?: { statics?: PermanentStatics; tags?: string[] };
+  /** "Strike: destroy equipment" / "Strike: steal weapon" — the card was
+   *  chosen in the option id, so these carry its instance.
+   *  docs/equipment-stripping-design.md §2 */
+  burnEquipment?: CardInstanceId;
+  stealEquipment?: CardInstanceId;
+  /** "…This striking vampire ALSO takes N aggravated damage" (Burst of
+   *  Sunlight) — what a weapon spells `selfDamageOnStrike`. Environmental
+   *  (`source: null`), so no "damage from the opposing minion" prevention or
+   *  reaction reads it. docs/aggravated-damage-design.md §4 */
+  selfDamage?: { amount: number; aggravated?: boolean };
   /** "Strike: send the opposing vampire to torpor or burn the ally". */
   incapacitate?: boolean;
   combatEnds?: boolean;
@@ -978,6 +1003,8 @@ export interface CardHandler {
    *  is about to throw away. docs/hand-churn-design.md §2 */
   delayedReplace?:
     | "unlock"
+    /** "…until after the CURRENT turn" (Sonar). */
+    | "turn"
     | "afterAction"
     | "afterCombat"
     | "discard"
@@ -1039,6 +1066,18 @@ export interface CardHandler {
    *  spec, because the asker holds a `CardHandler` and nothing else, and
    *  a card can become a weapon without being an equipment card.
    *  docs/armed-mid-combat-design.md §4 */
+  /**
+   * The weapon's own STRIKE, for a card that says "or use a melee/ranged
+   * weapon strike at +N damage". `damage: null` means strength-based, which is
+   * what every melee weapon in the pool is; a gun carries a number.
+   * docs/bigger-strikes-design.md §3
+   */
+  weaponStrike?: {
+    damage: number | null;
+    handBonus: number;
+    ranged: boolean;
+    aggravated: boolean;
+  };
   weaponProfile?: {
     /** Strength and other bonuses are NOT counted [LSJ 20020821]
      *  [LSJ 20020904], so a strength-based weapon is measured off the

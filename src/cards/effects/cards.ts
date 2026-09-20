@@ -10901,6 +10901,929 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
 
+  // --- Conditional reactions (docs/conditional-reactions-design.md) ---
+  {
+    // "[for] Only usable during an action directed at you (or a card you
+    //  control). +1 intercept. [FOR] Reduce a bleed against you by 1."
+    krcgId: 101864,
+    name: "Steadfastness",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "for",
+        usable: ["actionDirectedAtYou"],
+        effects: [{ kind: "modifyIntercept", amount: 1 }],
+      },
+      {
+        level: "superior",
+        discipline: "for",
+        effects: [{ kind: "modifyBleed", amount: -1, limited: false }],
+      },
+    ],
+  },
+  {
+    // "Do not replace until after the current turn. [pro] +1 intercept, only
+    //  usable during a directed action. [PRO] +1 intercept."
+    krcgId: 101824,
+    name: "Sonar",
+    cardType: "reaction",
+    bloodCost: 0,
+    delayedReplace: "turn",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pro",
+        usable: ["actionDirectedAtYou"],
+        effects: [{ kind: "modifyIntercept", amount: 1 }],
+      },
+      {
+        level: "superior",
+        discipline: "pro",
+        effects: [{ kind: "modifyIntercept", amount: 1 }],
+      },
+    ],
+  },
+  {
+    // "Only usable during a referendum. [pre] This reacting vampire gains 2
+    //  votes. [PRE] This reacting vampire gains 4 votes."
+    krcgId: 100586,
+    name: "Dread Gaze",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pre", effects: [{ kind: "modifyVotes", amount: 2 }] },
+      { level: "superior", discipline: "pre", effects: [{ kind: "modifyVotes", amount: 4 }] },
+    ],
+  },
+
+  // --- Avoiding the block (docs/avoiding-the-block-design.md) ---
+  {
+    // "+2 stealth. Not usable if any non-mandatory actions have been performed
+    //  this turn."
+    krcgId: 102059,
+    name: "Uncontrolled Impulse",
+    cardType: "actionModifier",
+    bloodCost: 1,
+    usable: ["onlyIfNoActionsYet"],
+    modes: [
+      { level: "basic", discipline: null, effects: [{ kind: "modifyStealth", amount: 2 }] },
+    ],
+  },
+  {
+    // "Flip a coin. If it is heads, this action is unblockable. If it is tails,
+    //  this vampire takes 1 unpreventable environmental damage."
+    krcgId: 102140,
+    name: "Walk through Arcadia",
+    cardType: "actionModifier",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "coinFlipUnblockable", tailsDamage: 1 }],
+      },
+    ],
+  },
+  {
+    // "Only usable when this vampire is blocked. [pro] Unlock the blocking
+    //  minion. This action is not blocked, and it is now unblockable."
+    krcgId: 100936,
+    name: "Horrific Countenance",
+    cardType: "actionModifier",
+    bloodCost: 4,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pro",
+        effects: [
+          {
+            kind: "cancelBlockCombat",
+            outcome: "continueAction",
+            unlockBlocker: true,
+            thenUnblockable: true,
+          },
+        ],
+      },
+    ],
+  },
+
+  // --- After-combat payoffs (docs/after-combat-payoffs-design.md) ---
+  {
+    // "[ani] Strike: 2R damage. [ANI] Strike: combat ends."
+    krcgId: 100748,
+    name: "Flesh Bond",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "ani",
+        effects: [{ kind: "strikeDamage", amount: 2, ranged: true, aggravated: false }],
+      },
+      {
+        level: "superior",
+        discipline: "ani",
+        effects: [{ kind: "strikeCombatEnds", unlockSelf: false }],
+      },
+    ],
+  },
+  {
+    // "Strike: combat ends. Only usable if this vampire has more blood than the
+    //  opposing vampire. Opposing vampire gains 1 blood (even at long range)."
+    krcgId: 101204,
+    name: "Mercy for the Weak",
+    cardType: "combat",
+    bloodCost: 2,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        usable: ["onlyIfMoreBloodThanFoe"],
+        effects: [
+          { kind: "strikeCombatEnds", unlockSelf: false },
+          { kind: "afterCombatEnds", gainBloodOpposing: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "[cel] Additional strike (limited). [CEL] Strike: combat ends. If this
+    //  vampire was blocked while performing an action, the action continues as
+    //  if unblocked."
+    krcgId: 101995,
+    name: "Torrent",
+    cardType: "combat",
+    bloodCost: 2,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [{ kind: "additionalStrike", count: 1, limited: true }],
+      },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [
+          { kind: "strikeCombatEnds", unlockSelf: false },
+          { kind: "afterCombatEnds", continueAction: { bloodCost: 0, stealth: 0 } },
+        ],
+      },
+    ],
+  },
+
+  // --- The shape of the round (docs/round-sequencing-design.md) ---
+  {
+    // "[obf] Press, only usable to end combat. [OBF] Press."
+    krcgId: 102090,
+    name: "Vanish from the Mind's Eye",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "obf",
+        effects: [{ kind: "press", continueOnly: false, endOnly: true }],
+      },
+      {
+        level: "superior",
+        discipline: "obf",
+        effects: [{ kind: "press", continueOnly: false }],
+      },
+    ],
+  },
+  {
+    // "[cel] Only usable before strikes are chosen. This vampire's strikes may
+    //  not be dodged this round. [CEL] As above, but usable after strikes have
+    //  been chosen."
+    krcgId: 101678,
+    name: "Sanguinary Wind",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [{ kind: "strikesUndodgeableRound", window: "beforeStrikes" }],
+      },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [{ kind: "strikesUndodgeableRound", window: "chooseStrike" }],
+      },
+    ],
+  },
+  {
+    // "[cel] Maneuver or press. [CEL] Only usable during the choose-strike
+    //  step, and only if this vampire would choose his or her strike first.
+    //  Instead, the opposing minion chooses his or her strike first."
+    krcgId: 101544,
+    name: "Rapid Thought",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "cel", effects: [{ kind: "maneuver" }] },
+      {
+        level: "basic",
+        discipline: "cel",
+        variant: "press",
+        effects: [{ kind: "press", continueOnly: false }],
+      },
+      { level: "superior", discipline: "cel", effects: [{ kind: "swapStrikeOrder" }] },
+    ],
+  },
+  {
+    // "[pot] Press. [POT] Press, and if another round of combat starts, you get
+    //  +2 hand size for the remainder of combat."
+    krcgId: 101594,
+    name: "Relentless Pursuit",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "press", continueOnly: false }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [
+          { kind: "press", continueOnly: false },
+          { kind: "handSizeOnNextRound", amount: 2 },
+        ],
+      },
+    ],
+  },
+
+  // --- Thaumaturgy ranged strikes (docs/thaumaturgy-strikes-design.md) ---
+  {
+    // "Not usable on the first round of combat. [tha] Strike: ranged; steal 2
+    //  blood. [THA] Strike: ranged; steal 4 blood."
+    krcgId: 100582,
+    name: "Drain Essence",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "tha",
+        usable: ["onlyAfterFirstRound"],
+        effects: [{ kind: "strikeStealBlood", amount: 2 }],
+      },
+      {
+        level: "superior",
+        discipline: "tha",
+        usable: ["onlyAfterFirstRound"],
+        effects: [{ kind: "strikeStealBlood", amount: 4 }],
+      },
+    ],
+  },
+  {
+    // "[tha] Strike: 2R damage, and this vampire can burn X blood to get +X
+    //  (ranged) damage. Not usable on the first round of combat. [THA] As
+    //  above, but for 4R + X ranged damage."
+    krcgId: 100624,
+    name: "Eldritch Glimmer",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "tha",
+        usable: ["onlyAfterFirstRound"],
+        effects: [
+          { kind: "strikeDamage", amount: 2, ranged: true, aggravated: false, perBloodX: true },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "tha",
+        usable: ["onlyAfterFirstRound"],
+        effects: [
+          { kind: "strikeDamage", amount: 4, ranged: true, aggravated: false, perBloodX: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "[tha] Choose a weapon possessed by the opposing minion. Strike: ranged;
+    //  X damage, where X is the amount of damage the chosen weapon would
+    //  inflict as a strike. [THA] As above, with +1R damage."
+    krcgId: 101137,
+    name: "Machine Blitz",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "tha", effects: [{ kind: "strikeWeaponDamage" }] },
+      {
+        level: "superior",
+        discipline: "tha",
+        effects: [{ kind: "strikeWeaponDamage", plus: 1 }],
+      },
+    ],
+  },
+
+  // --- Strength, before range (docs/strength-before-range-design.md) ---
+  {
+    // "Only usable before range is chosen. [pot] This vampire gets +1 strength
+    //  for the remainder of the combat. [POT] As above, but with +2 strength."
+    krcgId: 100738,
+    name: "Fists of Death",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pot", effects: [{ kind: "addStrength", amount: 1 }] },
+      { level: "superior", discipline: "pot", effects: [{ kind: "addStrength", amount: 2 }] },
+    ],
+  },
+  {
+    // "Only usable before range is chosen. [ani] The opposing minion gets -1
+    //  strength this round. A vampire may play only one Song of Serenity each
+    //  combat. [ANI] As above, but for the remainder of combat."
+    krcgId: 101827,
+    name: "Song of Serenity",
+    cardType: "combat",
+    bloodCost: 0,
+    combatLimit: "combat",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "ani",
+        effects: [{ kind: "opposingStrength", amount: -1, scope: "round" }],
+      },
+      {
+        level: "superior",
+        discipline: "ani",
+        effects: [{ kind: "opposingStrength", amount: -1, scope: "combat" }],
+      },
+    ],
+  },
+  {
+    // "Only usable before range is chosen. [pro] This vampire gets an
+    //  additional strike (limited) with +1 strength during this round of
+    //  combat. [PRO] As above, with an optional press."
+    krcgId: 101741,
+    name: "Shadow of the Wolf",
+    cardType: "combat",
+    bloodCost: 2,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pro",
+        effects: [
+          {
+            kind: "combatCredits",
+            strength: 1,
+            additionalStrike: { count: 1, limited: true },
+          },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "pro",
+        effects: [
+          {
+            kind: "combatCredits",
+            strength: 1,
+            press: 1,
+            additionalStrike: { count: 1, limited: true },
+          },
+        ],
+      },
+    ],
+  },
+
+  // --- Dodges (docs/dodges-design.md) ---
+  {
+    // "[cel] Strike: dodge. [CEL] Strike: dodge, with an optional press."
+    krcgId: 102089,
+    name: "Vampiric Speed",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "cel", effects: [{ kind: "strikeDodge" }] },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [{ kind: "strikeDodge", riders: { press: 1 } }],
+      },
+    ],
+  },
+  {
+    // "[pre] Strike: dodge. [PRE] Strike: combat ends."
+    krcgId: 101859,
+    name: "Staredown",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pre", effects: [{ kind: "strikeDodge" }] },
+      {
+        level: "superior",
+        discipline: "pre",
+        effects: [{ kind: "strikeCombatEnds", unlockSelf: false }],
+      },
+    ],
+  },
+  {
+    // "[cel] Strike: dodge. [CEL] Strike: this vampire burns 1 blood to end
+    //  combat."
+    krcgId: 101482,
+    name: "Preternatural Evasion",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "cel", effects: [{ kind: "strikeDodge" }] },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [{ kind: "strikeCombatEnds", unlockSelf: false, bloodCost: 1 }],
+      },
+    ],
+  },
+  {
+    // "[cel] Strike: dodge. [CEL] Prevent 1 damage. A vampire can play only one
+    //  Sideslip at superior each round."
+    krcgId: 101779,
+    name: "Sideslip",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "cel", effects: [{ kind: "strikeDodge" }] },
+      {
+        level: "superior",
+        discipline: "cel",
+        usable: ["oncePerRoundAtSuperior"],
+        effects: [{ kind: "prevent", base: 1, perBloodX: false }],
+      },
+    ],
+  },
+  {
+    // "[cel] Additional strike (limited). [CEL] Strike: dodge, with an
+    //  additional strike (limited)."
+    krcgId: 100020,
+    name: "Acrobatics",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [{ kind: "additionalStrike", count: 1, limited: true }],
+      },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [
+          { kind: "strikeDodge" },
+          { kind: "additionalStrike", count: 1, limited: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable on the first round of combat. [obf] Maneuver. [OBF] Strike:
+    //  dodge."
+    krcgId: 100149,
+    name: "Behind You!",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "obf",
+        usable: ["onlyFirstRound"],
+        effects: [{ kind: "maneuver" }],
+      },
+      {
+        level: "superior",
+        discipline: "obf",
+        usable: ["onlyFirstRound"],
+        effects: [{ kind: "strikeDodge" }],
+      },
+    ],
+  },
+
+  // --- Bigger strikes (docs/bigger-strikes-design.md) ---
+  {
+    // "[pot] Strike: hand strike or use a melee weapon strike. This strike is
+    //  at +1 damage. [POT] …at +2 damage."
+    krcgId: 102061,
+    name: "Undead Strength",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "strikeHandBonus", bonus: 1, orMeleeWeapon: true }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [{ kind: "strikeHandBonus", bonus: 2, orMeleeWeapon: true }],
+      },
+    ],
+  },
+  {
+    // "[pot] Strike: hand strike or use a melee weapon strike. This strike is
+    //  at +2 damage. [POT] …at +3 damage."
+    krcgId: 101524,
+    name: "Pushing the Limit",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "strikeHandBonus", bonus: 2, orMeleeWeapon: true }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [{ kind: "strikeHandBonus", bonus: 3, orMeleeWeapon: true }],
+      },
+    ],
+  },
+  {
+    // "Do not replace until after combat. [pot] Strike: hand strike at +1
+    //  damage OR use a melee weapon strike at +2 damage. [POT] …+2 / +3."
+    krcgId: 100264,
+    name: "Brute Force",
+    cardType: "combat",
+    bloodCost: 0,
+    delayedReplace: "afterCombat",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [
+          { kind: "strikeHandBonus", bonus: 1, orMeleeWeapon: true, weaponBonus: 2 },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [
+          { kind: "strikeHandBonus", bonus: 2, orMeleeWeapon: true, weaponBonus: 3 },
+        ],
+      },
+    ],
+  },
+  {
+    // "Not usable on the first round of combat. [tha] Strike: hand strike at +2
+    //  damage. [THA] Strike: hand strike at +4 damage."
+    krcgId: 100309,
+    name: "Cauldron of Blood",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "tha",
+        usable: ["onlyAfterFirstRound"],
+        effects: [{ kind: "strikeHandBonus", bonus: 2 }],
+      },
+      {
+        level: "superior",
+        discipline: "tha",
+        usable: ["onlyAfterFirstRound"],
+        effects: [{ kind: "strikeHandBonus", bonus: 4 }],
+      },
+    ],
+  },
+
+  // --- Undodgeable strikes (docs/undodgeable-strikes-design.md) ---
+  {
+    // "[ani] Strike: hand strike at +1 damage. [ANI] As above, and this strike
+    //  cannot be dodged."
+    krcgId: 101693,
+    name: "Scorpion Sting",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "ani",
+        effects: [{ kind: "strikeHandBonus", bonus: 1 }],
+      },
+      {
+        level: "superior",
+        discipline: "ani",
+        effects: [{ kind: "strikeHandBonus", bonus: 1, undodgeable: true }],
+      },
+    ],
+  },
+  {
+    // "[pot] Strike: strength ranged damage. This strike cannot be dodged. Not
+    //  usable against a minion with flight [FLIGHT]. [POT] As above, but for
+    //  strength+1 ranged damage."
+    krcgId: 100604,
+    name: "Earthshock",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [
+          {
+            kind: "strikeHandBonus",
+            bonus: 0,
+            ranged: true,
+            undodgeable: true,
+            notVsFlight: true,
+          },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [
+          {
+            kind: "strikeHandBonus",
+            bonus: 1,
+            ranged: true,
+            undodgeable: true,
+            notVsFlight: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "[cel] Strike: 1R damage or use a ranged weapon strike. This strike
+    //  cannot be dodged. [CEL] As above, with an additional strike (limited)."
+    krcgId: 101493,
+    name: "Projectile",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [
+          {
+            kind: "strikeDamage",
+            amount: 1,
+            ranged: true,
+            aggravated: false,
+            undodgeable: true,
+            orRangedWeapon: true,
+          },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [
+          {
+            kind: "strikeDamage",
+            amount: 1,
+            ranged: true,
+            aggravated: false,
+            undodgeable: true,
+            orRangedWeapon: true,
+          },
+          { kind: "additionalStrike", count: 1, limited: true },
+        ],
+      },
+    ],
+  },
+
+  // --- Stripping the gear (docs/equipment-stripping-design.md) ---
+  {
+    // "[pot] Strike: destroy equipment. [POT] As above, with 1 damage."
+    krcgId: 100784,
+    name: "Fractured Armament",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "strikeDestroyEquipment" }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [{ kind: "strikeDestroyEquipment", damage: 1 }],
+      },
+    ],
+  },
+  {
+    // "[pot] Strike: destroy equipment. [POT] Strike: destroy equipment with
+    //  first strike."
+    krcgId: 101760,
+    name: "Shattering Blow",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "strikeDestroyEquipment" }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [{ kind: "strikeDestroyEquipment", firstStrike: true }],
+      },
+    ],
+  },
+  {
+    // "[ani] Strike: 1R damage. [ANI] Strike: ranged; destroy equipment with
+    //  first strike."
+    krcgId: 100290,
+    name: "Canine Horde",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "ani",
+        effects: [{ kind: "strikeDamage", amount: 1, ranged: true, aggravated: false }],
+      },
+      {
+        level: "superior",
+        discipline: "ani",
+        effects: [{ kind: "strikeDestroyEquipment", ranged: true, firstStrike: true }],
+      },
+    ],
+  },
+  {
+    // "[cel] Strike: steal weapon. [CEL] Strike: steal weapon with first
+    //  strike."
+    krcgId: 100704,
+    name: "Fast Hands",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "cel", effects: [{ kind: "strikeStealEquipment" }] },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [{ kind: "strikeStealEquipment", firstStrike: true }],
+      },
+    ],
+  },
+
+  // --- Aggravated damage (docs/aggravated-damage-design.md) ---
+  {
+    // "[pot] Strike: hand strike at +1 damage, aggravated. [POT] Strike: hand
+    //  strike at +2 damage, aggravated."
+    krcgId: 100271,
+    name: "Burning Wrath",
+    cardType: "combat",
+    bloodCost: 3,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "strikeHandBonus", bonus: 1, aggravated: true }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [{ kind: "strikeHandBonus", bonus: 2, aggravated: true }],
+      },
+    ],
+  },
+  {
+    // "[ani] Strike: 2 damage. [ANI] Strike: 2 aggravated damage."
+    krcgId: 101825,
+    name: "Song in the Dark",
+    cardType: "combat",
+    bloodCost: 2,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "ani",
+        effects: [{ kind: "strikeDamage", amount: 2, ranged: false, aggravated: false }],
+      },
+      {
+        level: "superior",
+        discipline: "ani",
+        effects: [{ kind: "strikeDamage", amount: 2, ranged: false, aggravated: true }],
+      },
+    ],
+  },
+  {
+    // "[pro] For the remainder of this round, this vampire's hand damage is
+    //  aggravated. [PRO] As above, but for the remainder of this combat."
+    krcgId: 100237,
+    name: "Bone Spur",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pro", effects: [{ kind: "handStrikesAggravated" }] },
+      {
+        level: "superior",
+        discipline: "pro",
+        effects: [{ kind: "handStrikesAggravatedCombat" }],
+      },
+    ],
+  },
+  {
+    // "[tha] Strike: 1R aggravated damage. This striking vampire also takes 1
+    //  aggravated damage. [THA] Strike: 2R aggravated damage. This striking
+    //  vampire also takes 2 aggravated damage."
+    krcgId: 100273,
+    name: "Burst of Sunlight",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "tha",
+        effects: [
+          {
+            kind: "strikeDamage",
+            amount: 1,
+            ranged: true,
+            aggravated: true,
+            riders: { selfDamage: { amount: 1, aggravated: true } },
+          },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "tha",
+        effects: [
+          {
+            kind: "strikeDamage",
+            amount: 2,
+            ranged: true,
+            aggravated: true,
+            riders: { selfDamage: { amount: 2, aggravated: true } },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "[pro] This vampire treats all aggravated damage from the opposing
+    //  minion's strike as normal damage. [PRO] Prevent all aggravated damage
+    //  from the opposing minion's strike."
+    krcgId: 100021,
+    name: "Adaptability",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pro",
+        effects: [{ kind: "treatOpposingStrikeAsNormal" }],
+      },
+      {
+        level: "superior",
+        discipline: "pro",
+        effects: [{ kind: "preventAllAggravated" }],
+      },
+    ],
+  },
+
   // --- Thrown objects (docs/thrown-objects-design.md) ---
   // Five ranged strikes with riders, two of them gated on the range and one
   // also on the round. No new primitive and no new gate: the mode-level

@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-20T04:01:29.034Z",
+ "fetchedAt": "2026-09-20T17:59:05.987Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -147,6 +147,59 @@
      "Keepers of Tradition",
      "First Blood",
      "2021 Promo Pack 3"
+    ]
+   },
+   "supported": true
+  },
+  "100020": {
+   "card": {
+    "kind": "library",
+    "id": 100020,
+    "name": "Acrobatics",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[cel] Additional strike (limited).\n[CEL] Strike: dodge, with an additional strike (limited).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/acrobatics.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Black Hand",
+     "Kindred Most Wanted",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100021": {
+   "card": {
+    "kind": "library",
+    "id": 100021,
+    "name": "Adaptability",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pro] This vampire treats all aggravated damage from the opposing minion's strike as normal damage.\n[PRO] Prevent all aggravated damage from the opposing minion's strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/adaptability.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
     ]
    },
    "supported": true
@@ -1192,6 +1245,35 @@
    },
    "supported": true
   },
+  "100149": {
+   "card": {
+    "kind": "library",
+    "id": 100149,
+    "name": "Behind You!",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "obf"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable on the first round of combat.\n[obf] Maneuver.\n[OBF] Strike: dodge.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/behindyou.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Black Hand",
+     "Kindred Most Wanted",
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100157": {
    "card": {
     "kind": "library",
@@ -1628,6 +1710,30 @@
    },
    "supported": true
   },
+  "100237": {
+   "card": {
+    "kind": "library",
+    "id": 100237,
+    "name": "Bone Spur",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pro] For the remainder of this round, this vampire's hand damage is aggravated.\n[PRO] As above, but for the remainder of this combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bonespur.jpg",
+    "sets": [
+     "Sabbat",
+     "Anarchs"
+    ]
+   },
+   "supported": true
+  },
   "100243": {
    "card": {
     "kind": "library",
@@ -1800,6 +1906,30 @@
    },
    "supported": true
   },
+  "100264": {
+   "card": {
+    "kind": "library",
+    "id": 100264,
+    "name": "Brute Force",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after combat.\n[pot] Strike: hand strike at +1 damage or use a melee weapon strike at +2 damage.\n[POT] Strike: hand strike at +2 damage or use a melee weapon strike at +3 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bruteforce.jpg",
+    "sets": [
+     "Lords of the Night",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100266": {
    "card": {
     "kind": "library",
@@ -1873,6 +2003,63 @@
    },
    "supported": true
   },
+  "100271": {
+   "card": {
+    "kind": "library",
+    "id": 100271,
+    "name": "Burning Wrath",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": 3,
+    "cardText": "[pot] Strike: hand strike at +1 damage, aggravated.\n[POT] Strike: hand strike at +2 damage, aggravated.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/burningwrath.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Legacies of Blood",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100273": {
+   "card": {
+    "kind": "library",
+    "id": 100273,
+    "name": "Burst of Sunlight",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "tha"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[tha] Strike: 1R aggravated damage. This striking vampire also takes 1 aggravated damage.\n[THA] Strike: 2R aggravated damage. This striking vampire also takes 2 aggravated damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/burstofsunlight.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Black Hand",
+     "Kindred Most Wanted",
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100285": {
    "card": {
     "kind": "library",
@@ -1939,6 +2126,36 @@
     "sets": [
      "Lords of the Night",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "100290": {
+   "card": {
+    "kind": "library",
+    "id": 100290,
+    "name": "Canine Horde",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "ani"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[ani] Strike: 1R damage.\n[ANI] Strike: ranged; destroy equipment with first strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/caninehorde.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Legacies of Blood",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -2099,6 +2316,32 @@
      "Fifth Edition (Anarch)",
      "New Blood",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "100309": {
+   "card": {
+    "kind": "library",
+    "id": 100309,
+    "name": "Cauldron of Blood",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "tha"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Not usable on the first round of combat.\n[tha] Strike: hand strike at +2 damage.\n[THA] Strike: hand strike at +4 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/cauldronofblood.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -4006,6 +4249,61 @@
    },
    "supported": true
   },
+  "100582": {
+   "card": {
+    "kind": "library",
+    "id": 100582,
+    "name": "Drain Essence",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "tha"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Not usable on the first round of combat.\n[tha] Strike: ranged; steal 2 blood.\n[THA] Strike: ranged; steal 4 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/drainessence.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100586": {
+   "card": {
+    "kind": "library",
+    "id": 100586,
+    "name": "Dread Gaze",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum.\n[pre] This reacting vampire gains 2 votes.\n[PRE] This reacting vampire gains 4 votes.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/dreadgaze.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
   "100588": {
    "card": {
     "kind": "library",
@@ -4173,6 +4471,30 @@
    },
    "supported": true
   },
+  "100604": {
+   "card": {
+    "kind": "library",
+    "id": 100604,
+    "name": "Earthshock",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pot] Strike: strength ranged damage. This strike cannot be dodged. Not usable against a minion with flight [FLIGHT].\n[POT] As above, but for strength+1 ranged damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/earthshock.jpg",
+    "sets": [
+     "Kindred Most Wanted",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100609": {
    "card": {
     "kind": "library",
@@ -4314,6 +4636,30 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100624": {
+   "card": {
+    "kind": "library",
+    "id": 100624,
+    "name": "Eldritch Glimmer",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "tha"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[tha] Strike: 2R damage, and this vampire can burn X blood to get +X (ranged) damage. Not usable on the first round of combat.\n[THA] As above, but for 4R + X ranged damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/eldritchglimmer.jpg",
+    "sets": [
+     "Sabbat",
+     "Black Hand"
     ]
    },
    "supported": true
@@ -4855,6 +5201,37 @@
    },
    "supported": true
   },
+  "100704": {
+   "card": {
+    "kind": "library",
+    "id": 100704,
+    "name": "Fast Hands",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[cel] Strike: steal weapon.\n[CEL] Strike: steal weapon with first strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fasthands.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs",
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100709": {
    "card": {
     "kind": "library",
@@ -5213,6 +5590,31 @@
    },
    "supported": true
   },
+  "100738": {
+   "card": {
+    "kind": "library",
+    "id": 100738,
+    "name": "Fists of Death",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Only usable before range is chosen.\n[pot] This vampire gets +1 strength for the remainder of the combat.\n[POT] As above, but with +2 strength.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fistsofdeath.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "100742": {
    "card": {
     "kind": "library",
@@ -5297,6 +5699,29 @@
     "image": "https://static.krcg.org/card/fleetness.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "100748": {
+   "card": {
+    "kind": "library",
+    "id": 100748,
+    "name": "Flesh Bond",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "ani"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[ani] Strike: 2R damage.\n[ANI] Strike: combat ends.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fleshbond.jpg",
+    "sets": [
+     "Lords of the Night"
     ]
    },
    "supported": true
@@ -5627,6 +6052,32 @@
     "sets": [
      "New Blood",
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100784": {
+   "card": {
+    "kind": "library",
+    "id": 100784,
+    "name": "Fractured Armament",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pot] Strike: destroy equipment.\n[POT] As above, with 1 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fracturedarmament.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Legacies of Blood"
     ]
    },
    "supported": true
@@ -6462,6 +6913,30 @@
     "sets": [
      "New Blood II",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "100936": {
+   "card": {
+    "kind": "library",
+    "id": 100936,
+    "name": "Horrific Countenance",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": 4,
+    "cardText": "Only usable when this vampire is blocked.\n[pro] Unlock the blocking minion. This action is not blocked, and it is now unblockable.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/horrificcountenance.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Anarchs"
     ]
    },
    "supported": true
@@ -7651,6 +8126,29 @@
    },
    "supported": true
   },
+  "101137": {
+   "card": {
+    "kind": "library",
+    "id": 101137,
+    "name": "Machine Blitz",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "tha"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[tha] Choose a weapon possessed by the opposing minion. Strike: ranged; X damage, where X is the amount of damage the chosen weapon would inflict as a strike.\n[THA] As above, with +1R damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/machineblitz.jpg",
+    "sets": [
+     "Sabbat"
+    ]
+   },
+   "supported": true
+  },
   "101142": {
    "card": {
     "kind": "library",
@@ -8069,6 +8567,27 @@
     "image": "https://static.krcg.org/card/mercurysarrow.jpg",
     "sets": [
      "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
+  "101204": {
+   "card": {
+    "kind": "library",
+    "id": 101204,
+    "name": "Mercy for the Weak",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "Strike: combat ends. Only usable if this vampire has more blood than the opposing vampire. Opposing vampire gains 1 blood (even at long range).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/mercyfortheweak.jpg",
+    "sets": [
+     "Ancient Hearts"
     ]
    },
    "supported": true
@@ -10115,6 +10634,30 @@
    },
    "supported": true
   },
+  "101482": {
+   "card": {
+    "kind": "library",
+    "id": 101482,
+    "name": "Preternatural Evasion",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Strike: dodge.\n[CEL] Strike: this vampire burns 1 blood to end combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/preternaturalevasion.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
   "101483": {
    "card": {
     "kind": "library",
@@ -10199,6 +10742,30 @@
     "cardText": "Ghoul with 1 life. 1 strength, 0 bleed.\nProcurer may move 1 blood from the blood bank to a ready vampire you control as a +2 stealth action.",
     "burnOption": false,
     "image": "https://static.krcg.org/card/procurer.jpg",
+    "sets": [
+     "Kindred Most Wanted",
+     "Legacies of Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101493": {
+   "card": {
+    "kind": "library",
+    "id": 101493,
+    "name": "Projectile",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Strike: 1R damage or use a ranged weapon strike. This strike cannot be dodged.\n[CEL] As above, with an additional strike (limited).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/projectile.jpg",
     "sets": [
      "Kindred Most Wanted",
      "Legacies of Blood"
@@ -10316,6 +10883,35 @@
     "image": "https://static.krcg.org/card/pursuit.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "101524": {
+   "card": {
+    "kind": "library",
+    "id": 101524,
+    "name": "Pushing the Limit",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pot] Strike: hand strike or use a melee weapon strike. This strike is at +2 damage.\n[POT] Strike: hand strike or use a melee weapon strike. This strike is at +3 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/pushingthelimit.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Anarchs",
+     "Kindred Most Wanted",
+     "Legacies of Blood",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -10520,6 +11116,30 @@
     "sets": [
      "New Blood II",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101544": {
+   "card": {
+    "kind": "library",
+    "id": 101544,
+    "name": "Rapid Thought",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Maneuver or press.\n[CEL] Only usable during the choose-strike step, and only if this vampire would choose his or her strike first. Instead, the opposing minion chooses his or her strike first.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/rapidthought.jpg",
+    "sets": [
+     "Sabbat",
+     "Tenth Anniversary"
     ]
    },
    "supported": true
@@ -10842,6 +11462,30 @@
     "sets": [
      "Fifth Edition (Anarch)",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101594": {
+   "card": {
+    "kind": "library",
+    "id": 101594,
+    "name": "Relentless Pursuit",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pot] Press.\n[POT] Press, and if another round of combat starts, you get +2 hand size for the remainder of combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/relentlesspursuit.jpg",
+    "sets": [
+     "Final Nights",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -11291,6 +11935,29 @@
    },
    "supported": true
   },
+  "101678": {
+   "card": {
+    "kind": "library",
+    "id": 101678,
+    "name": "Sanguinary Wind",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Only usable before strikes are chosen. This vampire's strikes may not be dodged this round.\n[CEL] As above, but usable after strikes have been chosen.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sanguinarywind.jpg",
+    "sets": [
+     "Sword of Caine"
+    ]
+   },
+   "supported": true
+  },
   "101682": {
    "card": {
     "kind": "library",
@@ -11409,6 +12076,33 @@
     "image": "https://static.krcg.org/card/scornofadonis.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101693": {
+   "card": {
+    "kind": "library",
+    "id": 101693,
+    "name": "Scorpion Sting",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "ani"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[ani] Strike: hand strike at +1 damage.\n[ANI] As above, and this strike cannot be dodged.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/scorpionsting.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -11598,6 +12292,29 @@
    },
    "supported": true
   },
+  "101741": {
+   "card": {
+    "kind": "library",
+    "id": 101741,
+    "name": "Shadow of the Wolf",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "Only usable before range is chosen.\n[pro] This vampire gets an additional strike (limited) with +1 strength during this round of combat.\n[PRO] As above, with an optional press.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/shadowofthewolf.jpg",
+    "sets": [
+     "Ancient Hearts"
+    ]
+   },
+   "supported": true
+  },
   "101753": {
    "card": {
     "kind": "library",
@@ -11619,6 +12336,31 @@
      "Sabbat",
      "Sabbat War",
      "Black Hand"
+    ]
+   },
+   "supported": true
+  },
+  "101760": {
+   "card": {
+    "kind": "library",
+    "id": 101760,
+    "name": "Shattering Blow",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pot] Strike: destroy equipment.\n[POT] Strike: destroy equipment with first strike.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/shatteringblow.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -11689,6 +12431,36 @@
     "image": "https://static.krcg.org/card/sidestrike.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "101779": {
+   "card": {
+    "kind": "library",
+    "id": 101779,
+    "name": "Sideslip",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Strike: dodge.\n[CEL] Prevent 1 damage. A vampire can play only one Sideslip at superior each round.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sideslip.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Black Hand",
+     "Kindred Most Wanted",
+     "Legacies of Blood"
     ]
    },
    "supported": true
@@ -12118,6 +12890,85 @@
    },
    "supported": true
   },
+  "101824": {
+   "card": {
+    "kind": "library",
+    "id": 101824,
+    "name": "Sonar",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pro"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after the current turn.\n[pro] +1 intercept, only usable during a directed action.\n[PRO] +1 intercept.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sonar.jpg",
+    "sets": [
+     "Kindred Most Wanted",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101825": {
+   "card": {
+    "kind": "library",
+    "id": 101825,
+    "name": "Song in the Dark",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "ani"
+    ],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "[ani] Strike: 2 damage.\n[ANI] Strike: 2 aggravated damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/songinthedark.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
+  "101827": {
+   "card": {
+    "kind": "library",
+    "id": 101827,
+    "name": "Song of Serenity",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "ani"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable before range is chosen.\n[ani] The opposing minion gets -1 strength this round. A vampire may play only one Song of Serenity each combat.\n[ANI] As above, but for the remainder of combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/songofserenity.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Black Hand",
+     "Legacies of Blood",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101829": {
    "card": {
     "kind": "library",
@@ -12277,6 +13128,58 @@
      "Fifth Edition",
      "Fifth Edition (Anarch)",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101859": {
+   "card": {
+    "kind": "library",
+    "id": 101859,
+    "name": "Staredown",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pre] Strike: dodge.\n[PRE] Strike: combat ends.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/staredown.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Legacies of Blood",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101864": {
+   "card": {
+    "kind": "library",
+    "id": 101864,
+    "name": "Steadfastness",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "for"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[for] Only usable during an action directed at you (or a card you control). +1 intercept.\n[FOR] Reduce a bleed against you by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/steadfastness.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "Heirs to the Blood"
     ]
    },
    "supported": true
@@ -13198,6 +14101,30 @@
    },
    "supported": true
   },
+  "101995": {
+   "card": {
+    "kind": "library",
+    "id": 101995,
+    "name": "Torrent",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "[cel] Additional strike (limited).\n[CEL] Strike: combat ends. If this vampire was blocked while performing an action, the action continues as if unblocked.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/torrent.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "102010": {
    "card": {
     "kind": "library",
@@ -13358,6 +14285,60 @@
      "Final Nights",
      "Lords of the Night",
      "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "102059": {
+   "card": {
+    "kind": "library",
+    "id": 102059,
+    "name": "Uncontrolled Impulse",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [
+     "Ishtarri"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+2 stealth. Not usable if any non-mandatory actions have been performed this turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/uncontrolledimpulse.jpg",
+    "sets": [
+     "Legacies of Blood"
+    ]
+   },
+   "supported": true
+  },
+  "102061": {
+   "card": {
+    "kind": "library",
+    "id": 102061,
+    "name": "Undead Strength",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pot] Strike: hand strike or use a melee weapon strike. This strike is at +1 damage.\n[POT] Strike: hand strike or use a melee weapon strike. This strike is at +2 damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/undeadstrength.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Anarchs",
+     "Kindred Most Wanted",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -13616,6 +14597,57 @@
     "image": "https://static.krcg.org/card/vagabondmystic.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "102089": {
+   "card": {
+    "kind": "library",
+    "id": 102089,
+    "name": "Vampiric Speed",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Strike: dodge.\n[CEL] Strike: dodge, with an optional press.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/vampiricspeed.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Legacies of Blood"
+    ]
+   },
+   "supported": true
+  },
+  "102090": {
+   "card": {
+    "kind": "library",
+    "id": 102090,
+    "name": "Vanish from the Mind's Eye",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "obf"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[obf] Press, only usable to end combat.\n[OBF] Press.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/vanishfromthemindseye.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Tenth Anniversary"
     ]
    },
    "supported": true
@@ -13985,6 +15017,31 @@
     "image": "https://static.krcg.org/card/walkofflame.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "102140": {
+   "card": {
+    "kind": "library",
+    "id": 102140,
+    "name": "Walk through Arcadia",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [
+     "Malkavian antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Flip a coin. If it is heads, this action is unblockable. If it is tails, this vampire takes 1 unpreventable environmental damage.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/walkthrougharcadia.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Print on Demand"
     ]
    },
    "supported": true
