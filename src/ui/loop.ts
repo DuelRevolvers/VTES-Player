@@ -25,7 +25,6 @@ import { DEFAULT_CHAT_COLOR } from "./profile.ts";
 import type { FinishedView, ModerationView, SeatFace } from "./render.ts";
 import { DEFAULT_EMOJI_CATEGORY } from "./render.ts";
 import {
-  actionsByTableCard,
   allocationChoices,
   allocKey,
   orderHand,
@@ -162,6 +161,9 @@ export class DebugApp {
   private pointer = { x: 0, y: 0 };
   /** Whose deck list is open, as "<seat>:crypt" / "<seat>:library". */
   private deckOpen: string | null = null;
+  /** The card in play whose SET-ASIDE cards are open. View state: looking
+   *  at cards a card says you may look at is not a move. */
+  private storeOpen: string | null = null;
   /**
    * THE ALLOCATION DIALOG, and the split being assembled in it.
    *
@@ -438,6 +440,7 @@ export class DebugApp {
       localSeat: this.table.localSeat ?? null,
       ashOpen: this.ashOpen,
       deckOpen: this.deckOpen,
+      storeOpen: this.storeOpen,
       allocOpen: this.allocOpen,
       allocDraft: this.allocDraft,
       allocContext: this.allocContext,
@@ -814,13 +817,17 @@ export class DebugApp {
    */
   private wireTable(): void {
     if (this.isThinking()) return;
-    const byCard = actionsByTableCard(this.transport.decision(), this.transport.view());
 
     for (const tile of Array.from(this.root.querySelectorAll<HTMLElement>("[data-tcard]"))) {
       const id = tile.dataset["tcard"];
       if (!id) continue;
-      const opts = byCard.get(id) ?? [];
-      if (opts.length === 0) continue;
+      // WHAT THE RENDERER DREW IS WHAT IS CLICKABLE. This used to
+      // re-derive the option list and ask whether it was empty, which was
+      // a second copy of a question `tableActionMarks` had already
+      // answered — and stopped agreeing with it the moment a card could
+      // be lit for something that is not an option (cards set aside on
+      // it). The class it puts on the tile IS the answer.
+      if (!tile.classList.contains("actionable")) continue;
       tile.addEventListener("click", (ev) => {
         // A click inside the open menu is the menu's business.
         if ((ev.target as HTMLElement).closest(".playmenu")) return;
@@ -1190,6 +1197,30 @@ export class DebugApp {
     });
     on("#ash-scrim", () => {
       this.ashOpen = null;
+      this.paint();
+    });
+
+    // "You can look at the cards at any time" — the menu entry on a card
+    // that is holding cards set aside on it. It carries `data-peek` and
+    // no `data-opt`, so the handler above that submits an option id has
+    // already passed it over.
+    for (const btn of Array.from(
+      this.root.querySelectorAll<HTMLButtonElement>("button[data-peek]"),
+    )) {
+      btn.addEventListener("click", () => {
+        this.storeOpen = btn.dataset["peek"] ?? null;
+        // The card menu closes behind it: the panel IS the answer to the
+        // click, and leaving the menu open under the scrim looks stuck.
+        this.selectedCard = null;
+        this.paint();
+      });
+    }
+    on("#store-close", () => {
+      this.storeOpen = null;
+      this.paint();
+    });
+    on("#store-scrim", () => {
+      this.storeOpen = null;
       this.paint();
     });
 

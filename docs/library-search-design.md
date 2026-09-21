@@ -110,6 +110,23 @@ minion rather than at seat level.
 checked wherever the store shrinks, alongside the existing
 `burnWhenEmpty` for counters.
 
+**Reading the store on the table.** The count is drawn on the card as
+teal pips and, where the viewer may read the names, the card's own menu
+offers "look at the N cards set aside on this"
+(`docs/table-ux-2026-09-20.md` §1). The permission is *not* re-decided
+there — `maskStore` has already masked what may not be read, so the UI
+reads the answer back out rather than writing a second copy of it.
+
+**`addTopInUnlockPhase` is latched (2026-09-20).** "During your unlock
+phase, you can move the top card of your library to this equipment" is
+one card, once — but the unlock window is re-offered until it is empty,
+so with no latch Shilmulo Tarot moved a card every time it was asked and
+a player could empty their library onto it. It now spends
+`PermanentInPlay.usedThisTurn`, the engine's own once-each-turn latch,
+cleared on `TurnBegan`. The other store clauses need no latch because
+each consumes something the enumerator can see — a hand card, a lock, a
+swap. `docs/table-ux-2026-09-20.md` §2.
+
 ## 6. Draw substitution: "you can draw one of those cards instead"
 
 Black Market Cache and Shilmulo Tarot both say:

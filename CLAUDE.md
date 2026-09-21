@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 283 test files, 2903 tests**, with `npm run typecheck`,
+**Green baseline: 286 test files, 2921 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -480,6 +480,12 @@ doc named beside it.
   by hand instead of going through the shared helper.
 - **A new call beside an existing one should copy its GUARDS before its
   shape.** The guards around a line are part of what that line means.
+- **AN ENUMERATOR IN A WINDOW THAT RE-OFFERS NEEDS ITS OWN LATCH.** The
+  unlock and master windows are asked until they are empty, so "you can
+  do X" that consumes nothing observable is offered again the moment it
+  is used — Shilmulo Tarot moved a whole library in one phase
+  (`table-ux-2026-09-20.md` §2). Its siblings self-limit by spending a
+  hand card or locking; that is why only it was wrong.
 
 ### Reads and layers
 
@@ -520,6 +526,11 @@ doc named beside it.
   (`table-ux-2026-09-11.md`).
 - **A feature that cannot be discovered is indistinguishable from one that
   is absent.** Reported twice by the owner about features that worked.
+- **AN OPTION DRAWN ON A CARD IS A CLAIM THAT THE CARD CAN DO IT** — and
+  a rules bug report can be about the CLAIM, not the engine. Indexing a
+  rescue under its torpid victim showed that vampire eight actions p. 34
+  forbids it; probing the option list first is what found that the engine
+  was right (`table-ux-2026-09-20.md` §4).
 
 ---
 
@@ -775,7 +786,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-198 files under `docs/`, one per mechanic that took a decision. **Read the
+199 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -836,7 +847,8 @@ ai-ash-heap-reading, ai-playstyles.
 
 **UI, net and shipping:** debug-ui, shell, saved-games, lobby,
 lobby-rework-2026-09-06, multiplayer, deck-import, fresh-game, game-log,
-futile-options, playtest-2026-09-05, table-ux-2026-09-11, table-ux-2026-09-18, pages,
+futile-options, playtest-2026-09-05, table-ux-2026-09-11, table-ux-2026-09-18,
+table-ux-2026-09-20, pages,
 cockatrice-lessons.
 
 **Archive:** `project-memory-archive-2026-09-07.md`.

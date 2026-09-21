@@ -15,6 +15,8 @@ import type { DeckDef, GameSetup } from "../../src/ui/decks.ts";
 import type { RenderInput } from "../../src/ui/render.ts";
 import { actionsByTableCard, render, stillOffered } from "../../src/ui/render.ts";
 import { LocalTransport } from "../../src/ui/transport.ts";
+import { VtesEngine } from "../../src/engine/index.ts";
+import { makeMinion, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
 const config = playtestDecks as unknown as {
   seed: number;
@@ -100,6 +102,32 @@ describe("indexing options by the card they are about", () => {
     for (const key of actionsByTableCard(dp, state).keys()) {
       expect(drawn.has(key), `indexed under "${key}", which is not on the table`).toBe(true);
     }
+  });
+
+  it("puts a rescue or a diablerie on the ACTOR, never on the victim", () => {
+    // A vampire in torpor "can perform no action except the leave torpor
+    // action" (p. 34), and this used to index a rescue and a diablerie
+    // under their VICTIM as well — so clicking a torpid vampire opened a
+    // menu of eight actions it may not take (owner report, 2026-09-20).
+    // The engine was right the whole time; the table was not.
+    const state = threeSeatGame();
+    state.seats[0]!.minions.push(
+      makeMinion("T1", "Alice", { inTorpor: true, blood: 3 }),
+      makeMinion("V2", "Alice", { blood: 3 }),
+    );
+    const engine = new VtesEngine(state, testRegistry);
+    const dp = engine.decision()!;
+    const by = actionsByTableCard(dp, state);
+
+    // The positive control: the ready vampire is offered both, so the
+    // fixture really does produce the options being asserted about.
+    const actor = (by.get("V2") ?? []).map((o) => o.id);
+    expect(actor).toContain("diablerize:V2:T1");
+    expect(actor.some((id) => id.startsWith("rescue:V2:T1:"))).toBe(true);
+
+    // The torpid vampire's card carries its one legal action and nothing
+    // else — not the rescues and diableries that NAME it.
+    expect((by.get("T1") ?? []).map((o) => o.id)).toEqual(["leave:T1"]);
   });
 
   it("leaves every OTHER option to the action bar", () => {

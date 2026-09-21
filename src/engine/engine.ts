@@ -9943,6 +9943,10 @@ export class VtesEngine implements EngineOps {
       case "chooseTerms": {
         if (top.kind !== "referendum") throw new Error("terms outside referendum");
         top.terms = { ...option.params };
+        // The sentence the caller was shown, kept for the table's vote
+        // bar: the params alone cannot be read back into one safely
+        // (`ReferendumFrame.termsLabel`).
+        top.termsLabel = option.label;
         this.emit({
           type: "TermsChosen",
           actionId: top.actionId,

@@ -9819,10 +9819,20 @@ export function compileSpec(spec: CardSpec): CardHandler {
         if (ctx.seat !== controller) return [];
         const seat = getSeat(ctx.state, controller);
         const out: LegalOption[] = [];
+        // "…you can move THE TOP CARD of your library to this equipment"
+        // — one card, once. The unlock window is re-offered until the seat
+        // passes (`turnDecision`'s unlock case), so an ability with no
+        // latch is offered again the moment it is used: Shilmulo Tarot let
+        // a player shovel their whole library onto it in one phase (owner
+        // report). `usedThisTurn` is the engine's own once-each-turn latch,
+        // cleared for every entry on TurnBegan, and the seat's unlock phase
+        // happens once a turn — so per turn and per unlock phase are the
+        // same latch here.
         if (
           st.addTopInUnlockPhase &&
           ctx.window === "turn.unlock" &&
           ctx.turnSeat === controller &&
+          !entry.usedThisTurn &&
           seat.library.length > 0
         ) {
           out.push({
@@ -9925,6 +9935,9 @@ export function compileSpec(spec: CardSpec): CardHandler {
         const controller = entry.controller ?? owner.seat;
         const act = choice.params["act"];
         if (act === "addTop") {
+          // Spent here rather than at enumeration: the latch means "the
+          // card has been moved", and only this path moves it.
+          entry.usedThisTurn = true;
           ops.storeCard({ holder: entry.card.id, from: "library", faceUp: st.faceUp });
           return;
         }

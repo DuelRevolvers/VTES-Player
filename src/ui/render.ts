@@ -13,6 +13,7 @@
  */
 
 import type {
+  CardInstance,
   Frame,
   GameEvent,
   GameState,
@@ -21,7 +22,7 @@ import type {
   SeatState,
 } from "../engine/index.ts";
 import type { DecisionPoint, LegalOption } from "../engine/index.ts";
-import { isFaceDown } from "../engine/index.ts";
+import { isFaceDown, resolvePerSeat } from "../engine/index.ts";
 import { currentIntercept, currentStealth, predatorOf, preyOf } from "../engine/index.ts";
 // The one reader of the `seat=N,seat=N` allocation format is the one that
 // writes it (`allocToParams` beside it), so the picker below cannot drift
@@ -126,9 +127,47 @@ function cardImage(name: string, cls: string, locked = false): string {
 export interface TableCtx {
   /** Table entity id → the options about it. */
   actions: Map<string, LegalOption[]>;
+  /** Card in play → the cards SET ASIDE on it that this viewer may read
+   *  (`readableStores`). */
+  stores: Map<string, CardInstance[]>;
   /** The card the player has clicked open, if it is on the table. */
   selected: string | null;
   state: GameState;
+}
+
+/**
+ * CARDS HELD ASIDE ON A CARD IN PLAY, for the ones this viewer may look at.
+ *
+ * A card in play can hold cards out of play on it — neither hand, nor
+ * library, nor in play (`PermanentInPlay.stored`, docs/library-search-
+ * design.md §5). Six of them hold theirs FACE DOWN, and every one of the
+ * six lets its owner look: five print it ("you can look at the cards at
+ * any time" — Shilmulo Tarot, Gift of Proteus, Storage Annex, Delivery
+ * Truck, The Erciyes Fragments) and Maabara's card is public anyway, since
+ * "all other players can see which card is selected from the ash heap"
+ * [ANK 20200523].
+ *
+ * WHICH IS WHY THIS ASKS NO QUESTION OF ITS OWN. The permission has
+ * already been decided upstream, by `maskStore` in the redaction: a store
+ * whose cards this viewer may read arrives with their names on, and one
+ * they may not arrives face down. Reading the names back out is therefore
+ * the same answer, and a second rule here would be a second chance to
+ * leak. A partly-readable store cannot happen — the mask is per entry —
+ * but it is tested for rather than assumed, because "some names" would
+ * mean the rule above had changed.
+ */
+export function readableStores(state: GameState): Map<string, CardInstance[]> {
+  const out = new Map<string, CardInstance[]>();
+  const add = (p: PermanentInPlay): void => {
+    const stored = p.stored ?? [];
+    if (stored.length === 0 || stored.some((c) => isFaceDown(c))) return;
+    out.set(p.card.id, stored);
+  };
+  for (const s of state.seats) {
+    for (const p of s.permanents) add(p);
+    for (const m of s.minions) for (const p of m.attached) add(p);
+  }
+  return out;
 }
 
 /** Every id that is DRAWN on the table — the only keys an option may be
@@ -163,10 +202,21 @@ export function actionsByTableCard(
   for (const o of dp?.options ?? []) {
     switch (o.kind) {
       case "takeAction":
+        // THE ACTOR'S CARD ONLY.
+        //
+        // Diablerie and rescue name a victim in somebody's torpor region,
+        // and this used to index them under that victim as well, on the
+        // theory that the victim's card is where a player looks for them.
+        // What that actually drew was a torpor vampire lit up with an
+        // eight-option menu of rescues and diableries — and "a vampire in
+        // torpor can perform no action except the leave torpor action"
+        // (p. 34), so the table was showing the opposite of the rule
+        // (owner report). The engine was right all along: it offers a
+        // torpor vampire nothing but `leave:<id>`.
+        //
+        // They are still reachable, on the READY vampire that would
+        // perform them, which is whose action it is.
         add(o.minion, o);
-        // Diablerie and rescue name a victim in somebody's torpor region;
-        // that card is where a player looks for them.
-        add(o.targetMinion, o);
         break;
       case "declareBlock":
       case "burnForIntercept":
@@ -196,17 +246,41 @@ export function actionsByTableCard(
   return by;
 }
 
-/** The lit-and-badged treatment, for any card on the table. */
+/**
+ * The lit-and-badged treatment, for any card on the table.
+ *
+ * "Look at the cards set aside on this" counts as one of the entries: it
+ * is not an engine option — nothing in the game changes — but it is one of
+ * the things clicking this card can do, and giving it its own gesture
+ * would be a second way to open a card (owner request, 2026-09-20).
+ */
 function tableActionMarks(id: string, ctx: TableCtx | null): { cls: string; body: string } {
   const opts = ctx?.actions.get(id) ?? [];
-  if (opts.length === 0) return { cls: "", body: "" };
+  const stored = ctx?.stores.get(id) ?? [];
+  const count = opts.length + (stored.length > 0 ? 1 : 0);
+  if (count === 0) return { cls: "", body: "" };
   const open = ctx!.selected === id;
   return {
     cls: `actionable${open ? " selected" : ""}`,
     body:
-      `<span class="playdot" title="${opts.length} action(s)">${opts.length}</span>` +
-      (open ? playMenu(opts, ctx!.state, "down") : ""),
+      `<span class="playdot" title="${count} action(s)">${count}</span>` +
+      (open
+        ? playMenu(opts, ctx!.state, "down", stored.length > 0 ? { id, count: stored.length } : null)
+        : ""),
   };
+}
+
+/**
+ * The cards set aside on a card in play, as teal pips over its scan.
+ *
+ * The same treatment counters get, and deliberately the same colour
+ * (owner request): what is on a card that is not blood reads teal at this
+ * table. Bottom RIGHT, because `counterOverlay` holds the bottom left and
+ * one card can carry both.
+ */
+function storeOverlay(n: number): string {
+  if (n <= 0) return "";
+  return `<div class="store-overlay" title="${n} card(s) set aside">${pips(n, "counters")}</div>`;
 }
 
 /** Blood/life as pips, with the number for anything above a handful. */
@@ -268,6 +342,7 @@ function attachedList(m: MinionState, ctx: TableCtx | null): string {
       return `<div class="attached-card ${mark.cls}" data-tcard="${esc(p.card.id)}">
         ${cardImage(p.card.name, "tiny", p.locked)}
         ${counterOverlay(p.counters)}
+        ${storeOverlay((p.stored ?? []).length)}
         ${mark.body}
       </div>`;
     })
@@ -324,6 +399,7 @@ function permanentTile(p: PermanentInPlay, ctx: TableCtx | null): string {
   return `<div class="perm-card ${mark.cls}" data-tcard="${esc(p.card.id)}">
     ${cardImage(p.card.name, "small", p.locked)}
     ${counterOverlay(p.counters)}
+    ${storeOverlay((p.stored ?? []).length)}
     ${mark.body}
   </div>`;
 }
@@ -592,6 +668,42 @@ function actionStrip(state: GameState): string {
  * casts and which is only counted at the tally — it is named instead, so
  * a total that jumps at the end is not a surprise.
  */
+/**
+ * WHAT THE REFERENDUM ACTUALLY SAYS, in words, for the vote bar.
+ *
+ * A player deciding how to vote on Kine Resources Contested needs to
+ * know who the 4 points were allocated to, and the bar used to name only
+ * the card (owner request, 2026-09-20). Two readings, in order:
+ *
+ *  1. THE POOL, BY SEAT, when the card declared a seat map. This is the
+ *     engine's own `resolvePerSeat`, the function the terms decision and
+ *     the AI's vote scorer already use — signed, so "Bob −3" and
+ *     "Alice +1" come out right on cards that move pool in opposite
+ *     directions through the same terms key. A generic parse here would
+ *     get Parity Shift backwards (docs/ai-referendum-view-design.md §5.1).
+ *  2. Otherwise the caller's own chosen sentence (`termsLabel`) — a clan,
+ *     a minion, a title, a location: terms that name no Methuselah.
+ *
+ * Nothing is leaked. Terms are announced before the vote (p. 27); this
+ * is the announcement, written down where everyone is already looking.
+ */
+function termsSummary(rf: Extract<Frame, { kind: "referendum" }>): string {
+  if (rf.step === "terms") return ""; // not chosen yet
+  if (rf.seatMap) {
+    const perSeat = resolvePerSeat(rf.terms, rf.seatMap);
+    const parts = Object.entries(perSeat)
+      .filter(([, n]) => n !== 0)
+      .map(
+        ([seat, n]) =>
+          `<span class="vterm ${n < 0 ? "loses" : "gains"}">${esc(seat)} ${
+            n < 0 ? "−" : "+"
+          }${Math.abs(n)}</span>`,
+      );
+    if (parts.length > 0) return parts.join(`<span class="dim">·</span>`);
+  }
+  return rf.termsLabel ? `<span class="vterm">${esc(rf.termsLabel)}</span>` : "";
+}
+
 function voteStrip(state: GameState): string {
   const rf = state.frames.find((f) => f.kind === "referendum");
   if (!rf || rf.kind !== "referendum") return "";
@@ -619,6 +731,10 @@ function voteStrip(state: GameState): string {
     <div class="votestrip">
       <span class="clabel">VOTE</span>
       <span><b>${esc(what)}</b></span>
+      ${(() => {
+        const terms = termsSummary(rf);
+        return terms ? `<span class="voteterms">${terms}</span>` : "";
+      })()}
       <span class="dim">called by ${esc(rf.caller)}</span>
       <span class="dim">${esc(rf.step)}</span>
       <span class="votetot ${passing ? "passing" : "failing"}">
@@ -1303,6 +1419,50 @@ function ashPanel(state: GameState, seatId: string | null): string {
 }
 
 /**
+ * THE CARDS SET ASIDE ON ONE CARD IN PLAY (owner request, 2026-09-20).
+ *
+ * Shilmulo Tarot holds two cards out of play and says "you can look at
+ * the cards at any time", and until now there was no at-any-time to do
+ * it in: the count was invisible and the names were only ever seen at the
+ * moment the engine offered to draw one of them.
+ *
+ * Same shape as the ash heap panel next door on purpose — scrim, header,
+ * card grid. It opens on a card id rather than a seat, and it renders
+ * ONLY what `readableStores` admits, so a store the viewer may not look
+ * at has no way in: the panel is opened from a menu entry that is not
+ * drawn, and it re-checks here rather than trusting the click.
+ */
+function storePanel(state: GameState, openId: string | null): string {
+  if (!openId) return "";
+  const entry = [...state.seats.flatMap((s) => s.permanents), ...state.seats
+    .flatMap((s) => s.minions)
+    .flatMap((m) => m.attached)].find((p) => p.card.id === openId);
+  const cards = readableStores(state).get(openId);
+  if (!entry || !cards) return "";
+  return `
+    <div class="scrim" id="store-scrim"></div>
+    <div class="settings ashheap" id="storeview" role="dialog" aria-label="Cards set aside">
+      <header>
+        <h3>${esc(entry.card.name)} — ${cards.length} card${cards.length === 1 ? "" : "s"} set aside</h3>
+        <button id="store-close" title="Close">✕</button>
+      </header>
+      <section>
+        <p class="setnote">
+          Held on this card and <b>out of play</b> — not in your hand, not
+          in your library, not in play. Looking at them changes nothing and
+          costs nothing.
+        </p>
+        <div class="cardgrid">${cards
+          .map(
+            (c) => `<div class="gridcard">${cardImage(c.name, "small")}
+              <span class="gcname">${esc(c.name)}</span></div>`,
+          )
+          .join("")}</div>
+      </section>
+    </div>`;
+}
+
+/**
  * YOUR OWN crypt or library, as a list — **alphabetical, with counts**.
  *
  * Alphabetical is not a presentation choice, it is the whole reason this
@@ -1381,8 +1541,20 @@ function playMenu(
   // A hand card sits at the bottom of the screen, so its menu grows UP; a
   // card on the table has room below it.
   grow: "up" | "down" = "up",
+  /** "Look at the cards set aside on this", when there are any to look
+   *  at. It carries `data-peek` and NOT `data-opt`: the one handler that
+   *  submits an id reads `data-opt`, so an entry without one cannot be
+   *  mistaken for a move. */
+  peek: { id: string; count: number } | null = null,
 ): string {
-  return `<div class="playmenu ${grow}">${plays
+  const peekItem = peek
+    ? `<button class="opt peek" data-peek="${esc(peek.id)}"
+               title="Cards set aside on this card, out of play">
+        <span class="pmain">Look at the ${peek.count} card${peek.count === 1 ? "" : "s"} set aside on this</span>
+        <span class="pdetail">Out of play — looking at them changes nothing</span>
+      </button>`
+    : "";
+  return `<div class="playmenu ${grow}">${peekItem}${plays
     .map((o) => {
       const p = describePlay(o, state);
       return `<button class="opt ${o.kind}" data-opt="${esc(o.id)}" title="${esc(o.id)}">
@@ -1753,6 +1925,9 @@ export interface RenderInput {
   /** "<seat>:crypt" or "<seat>:library" while your own deck list is open.
    *  Optional so the existing render tests keep their fixtures. */
   deckOpen?: string | null;
+  /** The card in play whose SET-ASIDE cards are open, if any. View state:
+   *  looking at them is not a move and never reaches the command log. */
+  storeOpen?: string | null;
   /** Whether to offer Leave — false when there is nowhere to go back to. */
   canLeave: boolean;
   /** Whether to show the table chat — false when there is nobody to talk to
@@ -1799,6 +1974,7 @@ export function render(input: RenderInput): string {
     ? null
     : {
         actions: actionsByTableCard(dp, state),
+        stores: readableStores(state),
         selected: input.selectedCard,
         state,
       };
@@ -1946,6 +2122,7 @@ export function render(input: RenderInput): string {
     ${helpPanel(input)}
     ${ashPanel(state, input.ashOpen)}
     ${deckPanel(state, input.deckOpen ?? null)}
+    ${storePanel(state, input.storeOpen ?? null)}
     ${
       // Only ever over a decision this client may actually answer: the
       // same gate the buttons are behind, since the dialog IS a button.

@@ -289,6 +289,20 @@ describe("Shilmulo Tarot (101767)", () => {
     return state;
   }
 
+  /** The fixture starts mid-turn with the unlock window already spent. */
+  function unlockPhase(state: GameState): GameState {
+    const tf = state.frames[0]!;
+    if (tf.kind === "turn") {
+      tf.seat = "Alice";
+      tf.phase = "unlock";
+      tf.unlockDone = true;
+      tf.unlockAbilitiesDone = false;
+    }
+    return state;
+  }
+
+  const ADD_TOP = "ability:Shilmulo Tarot:tarot:addTop";
+
   it("takes the top 2 cards face down when it enters play", () => {
     const state = threeSeatGame();
     Object.assign(find(state, "V1"), { clan: "Ravnos" });
@@ -345,25 +359,50 @@ describe("Shilmulo Tarot (101767)", () => {
   });
 
   it("moves the top library card onto itself during its controller's unlock phase", () => {
-    const state = equipped();
-    const tf = state.frames[0]!;
-    if (tf.kind === "turn") {
-      tf.seat = "Alice";
-      tf.phase = "unlock";
-      tf.unlockDone = true;
-      // The fixture starts mid-turn with the unlock window already spent.
-      tf.unlockAbilitiesDone = false;
-    }
+    const state = unlockPhase(equipped());
     const engine = new VtesEngine(state, testRegistry);
-    const opt = engine
-      .decision()!
-      .options.find((o) => o.id === "ability:Shilmulo Tarot:tarot:addTop");
+    const opt = engine.decision()!.options.find((o) => o.id === ADD_TOP);
     expect(opt).toBeDefined();
     runTrace(engine, [["Alice", opt!.id]]);
 
     const entry = find(state, "V1").attached.find((p) => p.card.id === "tarot");
     expect(entry?.stored?.map((c) => c.id)).toEqual(["l1"]);
     expect(alice(state).library.map((c) => c.id)).toEqual(["l2", "l3"]);
+  });
+
+  it("moves ONE card per unlock phase, not as many as the library holds", () => {
+    const state = unlockPhase(equipped());
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", ADD_TOP]]);
+
+    // THE NEGATIVE SPACE. The unlock window is re-offered until it has
+    // nothing left in it, so an ability with no latch is offered again the
+    // moment it is used: this card let a player shovel their whole library
+    // onto it in one phase (owner report). The offer being gone is now the
+    // only thing in that window, so the turn moves straight on to the
+    // master phase — which is the assertion that it is gone.
+    const after = engine.decision()!;
+    expect(after.options.some((o) => o.id === ADD_TOP)).toBe(false);
+    expect(after.window).toBe("turn.master");
+    const entry = find(state, "V1").attached.find((p) => p.card.id === "tarot");
+    expect(entry?.stored?.map((c) => c.id)).toEqual(["l1"]);
+    expect(alice(state).library.map((c) => c.id)).toEqual(["l2", "l3"]);
+  });
+
+  it("offers the move again on the NEXT turn", () => {
+    const state = unlockPhase(equipped());
+    const entry = find(state, "V1").attached.find((p) => p.card.id === "tarot")!;
+    entry.usedThisTurn = true; // spent earlier this turn
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some((o) => o.id === ADD_TOP)).toBe(false);
+
+    // TurnBegan is what clears the latch, for every entry in play — the
+    // same reset the archetypes' "once each turn" rides on.
+    engine.emit({ type: "TurnBegan", seat: "Alice", turnNumber: 2 });
+    expect(entry.usedThisTurn).toBe(false);
+
+    const next = new VtesEngine(unlockPhase(state), testRegistry);
+    expect(next.decision()!.options.some((o) => o.id === ADD_TOP)).toBe(true);
   });
 });
 

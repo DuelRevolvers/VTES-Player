@@ -3405,6 +3405,23 @@ export interface ReferendumFrame {
   };
   /** The caller's choices (allocations, chosen seats/minions). */
   terms: Record<string, string>;
+  /**
+   * THE TERMS IN WORDS — the label of the option the caller actually
+   * chose, kept so the table can say what was called for.
+   *
+   * Terms are announced publicly (p. 27) and everyone votes on them, but
+   * `terms` is a params bag: "alloc" → "Bob=3,Carol=1" tells a player
+   * nothing about which way the pool moves, and a generic parse of it
+   * gets the SIGN backwards between cards — the same key names the seats
+   * that lose on Kine Resources Contested and the ones that gain on
+   * Parity Shift (docs/ai-referendum-view-design.md §5.1). The engine
+   * already wrote a sentence for this choice when it offered it, so the
+   * sentence is kept rather than reconstructed: one question, one place.
+   *
+   * Absent until the terms step is answered, and for a blood hunt, which
+   * has no terms at all (p. 35).
+   */
+  termsLabel?: string;
   votes: Array<{ seat: SeatId; source: string; count: number; inFavor: boolean }>;
   /** Spent vote sources: minion ids, "edge", "caller", "cardvote:<seat>". */
   usedSources: string[];

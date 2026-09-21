@@ -185,6 +185,17 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 .votetot.failing { border-color: var(--accent); }
 .vfor { color: var(--good); }
 .vagainst { color: var(--accent); }
+/* The TERMS, right beside the card's name: what everyone is voting on.
+   A pool swing is signed and coloured the way the tally is — a seat
+   losing pool reads in the accent, a seat gaining it in the good. */
+.voteterms { display: inline-flex; gap: 5px; align-items: baseline; flex-wrap: wrap; }
+.vterm {
+  font-size: 11px; padding: 1px 7px; border-radius: 10px;
+  background: var(--panel2); border: 1px solid var(--line); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.vterm.loses { color: var(--accent); border-color: var(--accent); }
+.vterm.gains { color: var(--good); border-color: var(--good); }
 .voteseats { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 .vseat {
   font-size: 11px; padding: 2px 7px; border-radius: 10px;
@@ -404,6 +415,17 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 .attached-card .counter-overlay { left: 1px; bottom: 1px; padding: 0 3px; font-size: 10px; }
 .pips.counters { color: var(--counter); }
 
+/* Cards SET ASIDE on a card in play (Shilmulo Tarot) — teal, like
+   counters, because what sits on a card that is not blood reads teal at
+   this table. Bottom RIGHT: one card can carry counters as well, and
+   those hold the bottom left. */
+.store-overlay {
+  position: absolute; right: 3px; bottom: 3px; z-index: 2;
+  background: rgba(10, 8, 12, .82); border: 1px dashed var(--counter);
+  border-radius: 8px; padding: 0 5px; font-size: 12px; line-height: 1.5;
+}
+.attached-card .store-overlay { right: 1px; bottom: 1px; padding: 0 3px; font-size: 10px; }
+
 .perm-card, .attached-card { position: relative; display: inline-block; }
 .attached-cards { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
 
@@ -571,6 +593,13 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 .pmain { font-weight: 600; }
 .pdetail { color: var(--dim); font-size: 11px; }
 .playmenu .opt:hover .pdetail { color: var(--ink); }
+/* "Look at the cards set aside on this" is not a move — it answers no
+   decision and costs nothing — so it does not look like one. */
+.playmenu .opt.peek {
+  border-color: var(--counter);
+  border-bottom-width: 2px;
+}
+.playmenu .opt.peek .pmain { color: var(--counter); }
 
 /* Drag and drop: only legal targets light up. */
 .dragging .minion, .dragging .mat { transition: box-shadow .1s ease; }
