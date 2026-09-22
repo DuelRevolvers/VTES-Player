@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 294 test files, 3085 tests**, with `npm run typecheck`,
+**Green baseline: 294 test files, 3091 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -140,8 +140,9 @@ each one was playing** (`botPlaystyles`, added 2026-09-19).
 
 **The DECK BUILDER** landed 0.11.07 (`docs/deck-builder-design.md`): a
 fourth menu item that now owns the deck library and the importer (moved
-off Profile, which keeps a pointer), a **reserved empty panel** for the
-builder proper, and a **search over all 4,149 cards** badged Playable /
+off Profile, which keeps a pointer), the **deck builder** (0.11.09; the
+panel was a reserved placeholder until then), and a **search over all
+4,149 cards** badged Playable /
 Partly implemented / Not in the player. `src/cards/catalog.json` is a
 SECOND GENERATED FILE beside the registry — all cards, browsing data only,
 built by `scripts/build-catalog.mts`, which `npm run cards:registry` now
@@ -159,7 +160,11 @@ exists to warn about. **Three deck-construction rules it refuses to
 invent** (p. 14, read from the PDF): no per-card copy limit, no crypt
 maximum, and a duplicated unique is the rulebook's own "CAUTION" rather
 than illegal. **"Banned" appears nowhere in the rulebook** — it is a VEKN
-tournament restriction and is labelled as one.
+tournament restriction and is labelled as one. **0.11.10 lets you BUILD
+a half deck** (§10): the declaration lives in the deck TEXT (`Half deck:
+yes`, read by the one `findHalfDeck`), because `halfDeckSeats` matched
+only `kind: "precon"` — so waiving the minimums in the builder alone
+would have made half decks buildable and unseatable.
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 

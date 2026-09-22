@@ -1709,3 +1709,18 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 }
 /* Already in the deck — visible at a glance while scanning results. */
 .cscell.indeck > .cscard, .cscell.indeck > .csrow { border-color: var(--gold); }
+
+/* --- half decks -------------------------------------------------------- */
+
+/* A CONTROL, not a badge: being half a deck is something you declare,
+   because a starter and an unfinished deck look identical from outside. */
+.dbhalf {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin: 10px 0 0; font-size: 12px; cursor: pointer;
+}
+.dbhalf > span:nth-of-type(1) { color: var(--ink); }
+.dbhalf.on > span:nth-of-type(1) { color: var(--gold); font-weight: 600; }
+.dbhalf .note { flex: 1 0 100%; margin: 0; }
+.shell .dbhalf input { width: auto; }
+/* Six of twelve is not a shortfall when six is the point. */
+.dbmeter.half b { color: var(--gold); }

@@ -1,4 +1,4 @@
-# The Deck Builder (0.11.07–0.11.09, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.10, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
@@ -431,3 +431,82 @@ deck; editing it makes something new rather than changing what came in
 the box. A precon's decklist is one entry per copy, so it is **tallied**
 into counts — assigning would leave every card at one copy and silently
 halve the deck.
+
+---
+
+## §10 — Half decks (0.11.10)
+
+> *"Allow half-decks to be built in the builder, there just needs to be a
+> label for it somewhere."* — owner, 2026-09-22
+
+### What was already there, and what was missing
+
+The platform could always **deal** a half deck: the New Blood starters
+print six crypt cards and about fifty library cards, and
+`validateDecks(decks, halfDeckSeats)` waives p. 14's two minimums for the
+seats playing one. What it could not do was let you **build** one, and
+the reason is worth recording because it would have shipped as a
+half-finished feature in the most literal sense:
+
+**`halfDeckSeats` matched on `kind === "precon"`.** A deck built in the
+builder saves as `kind: "paste"`. So waiving the minimums inside
+`reviewDraft` alone would have produced a builder that let you make a
+half deck, saved it happily — and then could not seat it, because
+`importDeck` returns `deck: null` whenever `illegal` is non-empty.
+Buildable and unusable.
+
+### The declaration travels in the deck's own text
+
+`Half deck: yes`, written next to `Deck Name:`. That is the only place it
+can live and survive everything a deck goes through: saved as text,
+re-read as text, handed to the lobby as text, pasted into a forum post
+and back again. A flag on the saved-deck record would be lost the first
+time somebody copied the list out.
+
+`findHalfDeck` in `deckimport.ts` is the ONE reader. `importDeck` uses
+it, `halfDeckSeats` uses it, and `parseDraft` calls it on the single line
+rather than carrying a second regex that agrees with it today.
+
+### It is a DECLARATION, not a deduction
+
+A deck that is short because it is a starter and a deck that is short
+because it is unfinished **look identical from the counts**. Guessing
+would silently excuse the second, which is exactly the failure the
+minimums exist to prevent. So the builder asks — a checkbox, which is
+also the label the owner asked for — and a New Blood precon opens with it
+already ticked, because for a precon the answer is known
+(`supportedPrecons().halfDeck` has always computed it).
+
+### Exempt from the two minimums and from nothing else
+
+The library **maximum**, the crypt **group rule** and **every playability
+check** still apply. That is not a new rule: it is the exemption
+`decks.ts` already states for a half-deck seat, restated in a second
+dialect, and `tests/ui/deckbuild.test.ts` pins all three.
+
+### Where the label appears
+
+| Place | Says |
+|---|---|
+| The editor | a ticked **Half deck** box, with what it exempts |
+| The verdict badge | "Half deck — playable here" |
+| Both meters | gold with "half deck" instead of red with "need 12+" |
+| My decks / the lobby's deck panel | "6 crypt, 30 library **· half deck**" |
+
+The meters matter more than they look: drawing **6/12 in red** on a deck
+that is *meant* to be six would be the screen arguing with the rule it
+had just applied.
+
+### The tests that would catch a regression
+
+Two of them are negative controls, and they are the point:
+
+- The **same deck declared and undeclared**. Without the undeclared half,
+  a builder that had quietly stopped applying the minimums at all would
+  pass just as happily.
+- **A table of undeclared half decks is refused.** Without it, a
+  `halfDeckSeats` that returned every seat would pass the seating test.
+
+And the seating test itself runs a built half deck through **`buildTable`**
+— the thing the lobby really calls — rather than asserting the plumbing
+in a comment.

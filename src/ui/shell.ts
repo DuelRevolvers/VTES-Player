@@ -812,6 +812,20 @@ export class Shell {
             <button id="db-save" class="primary">Save</button>
             <button id="db-close">Close</button>
           </div>
+          <!--
+            THE LABEL THE OWNER ASKED FOR, and it is a control rather than
+            a badge because being half a deck is a DECLARATION, not
+            something the counts can reveal: a starter and an unfinished
+            deck look identical from the outside.
+          -->
+          <label class="dbhalf${draft.halfDeck ? " on" : ""}">
+            <input id="db-half" type="checkbox"${draft.halfDeck ? " checked" : ""} />
+            <span>Half deck</span>
+            <span class="note dim">
+              a New Blood–style starter: exempt from the 12-crypt and
+              60-card minimums, and from nothing else
+            </span>
+          </label>
           ${this.draftError ? `<p class="err">${esc(this.draftError)}</p>` : ""}
           ${this.legalityPanel(review)}
           ${this.deckListMarkup(draft, byId)}
@@ -849,9 +863,13 @@ export class Shell {
     const c = review.counts;
     const cryptOk = c.crypt >= MIN_CRYPT;
     const libOk = c.library >= MIN_LIBRARY && c.library <= MAX_LIBRARY;
+    // A HALF DECK'S METERS ARE NOT "SHORT" — nothing is wrong with them.
+    // Drawing 6/12 in red on a deck that is meant to be six would be the
+    // screen arguing with the rule it just applied.
     const meter = (label: string, n: number, ok: boolean, target: string): string =>
-      `<span class="dbmeter ${ok ? "ok" : "short"}">
-         <b>${n}</b> ${esc(label)} <span class="dim">${esc(target)}</span>
+      `<span class="dbmeter ${review.halfDeck ? "half" : ok ? "ok" : "short"}">
+         <b>${n}</b> ${esc(label)}
+         <span class="dim">${esc(review.halfDeck ? "half deck" : target)}</span>
        </span>`;
     return `
       <div class="dblegal">
@@ -862,7 +880,9 @@ export class Shell {
             review.dealable ? "ok" : review.legal ? "warn" : "short"
           }">${
             review.dealable
-              ? "Legal, and playable here"
+              ? review.halfDeck
+                ? "Half deck — playable here"
+                : "Legal, and playable here"
               : review.legal
                 ? "Legal — but not all of it plays here"
                 : "Not a legal deck yet"
@@ -1917,6 +1937,24 @@ export class Shell {
       if (this.draft) this.draft = { ...this.draft, name: name.value };
     });
 
+    // Ticking it repaints, because it changes the verdict and both
+    // meters at once — the one control on this panel whose effect is
+    // entirely in what the panel says.
+    const half = find<HTMLInputElement>("#db-half");
+    half?.addEventListener("change", () => {
+      if (!this.draft) return;
+      // The half-typed name would be thrown away by the repaint, so it
+      // is taken off the box first — the same reason `keepProfileDraft`
+      // exists on the Profile screen.
+      const typed = find<HTMLInputElement>("#db-name")?.value;
+      this.draft = {
+        ...this.draft,
+        halfDeck: half.checked,
+        name: typed ?? this.draft.name,
+      };
+      this.paint();
+    });
+
     this.on(".dbless", (el) => this.bumpCard(el, -1));
     this.on(".dbmore", (el) => this.bumpCard(el, +1));
     this.on(".dbcard", (el) => {
@@ -1947,7 +1985,15 @@ export class Shell {
     // A PRECON IS A DECKLIST, ONE ENTRY PER COPY — the builder counts
     // copies, so it is tallied rather than assigned. Assigning would
     // leave every card at one copy and quietly halve the deck.
-    let draft = emptyDraft(`${name} (copy)`);
+    // A NEW BLOOD STARTER OPENS WITH THE BOX ALREADY TICKED. The answer
+    // is known for a precon — `supportedPrecons` has always computed it
+    // — so making somebody tick it themselves would be asking a question
+    // the screen can already answer, and the deck would read as illegal
+    // until they did.
+    const isHalf = supportedPrecons().some(
+      (p) => p.set === set && p.name === name && p.halfDeck,
+    );
+    let draft = emptyDraft(`${name} (copy)`, isHalf);
     for (const v of deck.crypt) draft = withCard(draft, v.id, 1);
     for (const cardName of deck.library) {
       const card = byName.get(cardName.toLowerCase());

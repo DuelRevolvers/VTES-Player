@@ -214,6 +214,13 @@ export interface ImportReport {
   inertAbilities: string[];
   /** Deck-construction problems (rulebook p. 4 and p. 14). FATAL. */
   illegal: string[];
+  /**
+   * This list DECLARED itself half a deck, so p. 14's two minimums were
+   * not applied. Reported so the screen can say so — a deck that is
+   * short by design and a deck that is short by accident look identical
+   * once the exemption has been granted.
+   */
+  halfDeck: boolean;
   /** The crypt groups the deck uses, in order. */
   groups: Array<number | "ANY">;
 }
@@ -243,6 +250,34 @@ function findDeckName(lines: string[]): string | null {
     if (m && m[1]) return m[1];
   }
   return null;
+}
+
+/**
+ * Does this list DECLARE itself half a deck? (owner request, 2026-09-22)
+ *
+ * A New Blood starter is half-size on purpose, and until now the only way
+ * to be one was to BE a precon — `halfDeckSeats` matched on
+ * `kind === "precon"`, so a half deck built in the builder saved fine and
+ * then could not be seated, because `importDeck` nulls a deck whose crypt
+ * is under twelve.
+ *
+ * So the declaration travels IN THE TEXT, next to the name. That is the
+ * only place it can live and still survive everything a deck goes
+ * through: it is saved as text, re-read as text, and handed to the lobby
+ * as text. A flag on the saved-deck record would be lost the moment
+ * somebody copied the list out and pasted it back.
+ *
+ * It exempts the two MINIMUMS and nothing else — the library maximum, the
+ * group rule and "every card is implemented" are still checked, exactly
+ * as `validateDecks` treats a half-deck seat. This is the same exemption
+ * stated in a second dialect, not a second rule.
+ */
+export function findHalfDeck(lines: string[]): boolean {
+  for (const raw of lines) {
+    const m = /^\s*half[\s-]*deck\s*[:=]\s*(.+?)\s*$/i.exec(raw);
+    if (m && m[1]) return /^(yes|true|y|1)$/i.test(m[1].trim());
+  }
+  return false;
 }
 
 /**
@@ -348,11 +383,15 @@ export function importDeck(text: string, seat: string): { deck: DeckList | null;
   const cryptCount = crypt.reduce((n, c) => n + c.copies, 0);
   const libraryCount = library.reduce((n, c) => n + c.copies, 0);
 
+  // A declared half deck is exempt from the two MINIMUMS and from nothing
+  // else — the same exemption, and the same list of what it does NOT
+  // cover, that `validateDecks` gives a half-deck seat (decks.ts).
+  const halfDeck = findHalfDeck(lines);
   const illegal: string[] = [];
-  if (cryptCount < MIN_CRYPT) {
+  if (cryptCount < MIN_CRYPT && !halfDeck) {
     illegal.push(`crypt has ${cryptCount} cards; at least ${MIN_CRYPT} are needed (p. 14)`);
   }
-  if (libraryCount < MIN_LIBRARY || libraryCount > MAX_LIBRARY) {
+  if (libraryCount > MAX_LIBRARY || (libraryCount < MIN_LIBRARY && !halfDeck)) {
     illegal.push(
       `library has ${libraryCount} cards; it must hold between ${MIN_LIBRARY} and ${MAX_LIBRARY} (p. 14)`,
     );
@@ -371,6 +410,7 @@ export function importDeck(text: string, seat: string): { deck: DeckList | null;
     unsupported,
     inertAbilities: [...inert].sort(),
     illegal,
+    halfDeck,
     groups,
   };
 

@@ -26,6 +26,7 @@ import catalog from "../../src/cards/catalog.json";
 import type { CatalogCard, CatalogFile } from "../../src/cards/catalog.ts";
 import { MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "../../src/ui/decks.ts";
 import { importDeck } from "../../src/ui/deckimport.ts";
+import { buildTable, defaultTable } from "../../src/ui/newgame.ts";
 import {
   countsOf,
   draftCards,
@@ -355,5 +356,117 @@ describe("how the list is ordered", () => {
       .map((l) => byName.get(l.replace(/^\d+x /, "").trim().toLowerCase())!.capacity ?? 0);
     expect(crypt.length).toBeGreaterThan(1);
     for (let i = 1; i < crypt.length; i++) expect(crypt[i - 1]!).toBeGreaterThanOrEqual(crypt[i]!);
+  });
+});
+
+describe("half decks", () => {
+  /** The same legal deck, cut to starter size and declared as one. */
+  function halfDeck(): ReturnType<typeof emptyDraft> {
+    let d = legalDeck();
+    for (const r of draftCards(d, byId)) {
+      d = setCount(d, r.card.id, r.card.kind === "crypt" ? 1 : 5);
+    }
+    return { ...d, halfDeck: true };
+  }
+
+  it("waives the two minimums, and says it did", () => {
+    const short = { ...halfDeck(), halfDeck: false };
+    // The SAME deck, declared and undeclared. Without the pair, a test
+    // that only checked the declared one would pass just as happily
+    // against a builder that had stopped applying the minimums at all.
+    const declined = reviewDraft(short, byId);
+    expect(declined.counts.crypt).toBeLessThan(MIN_CRYPT);
+    expect(declined.counts.library).toBeLessThan(MIN_LIBRARY);
+    expect(declined.illegal.length).toBe(2);
+    expect(declined.legal).toBe(false);
+
+    const review = reviewDraft(halfDeck(), byId);
+    expect(review.counts).toEqual(declined.counts);
+    expect(review.illegal).toEqual([]);
+    expect(review.legal).toBe(true);
+    expect(review.dealable).toBe(true);
+    // Carried out, so the screen never has to infer why it passed.
+    expect(review.halfDeck).toBe(true);
+  });
+
+  it("is exempt from the minimums and from NOTHING else", () => {
+    // The exemption `validateDecks` grants a half-deck seat, restated:
+    // the library MAXIMUM, the group rule and playability all still bite.
+    const g = (n: string): CatalogCard[] =>
+      file.cards.filter((c) => c.kind === "crypt" && c.group === n && c.status === "playable");
+
+    const lib = draftCards(halfDeck(), byId).find((r) => r.card.kind === "library")!.card;
+    const fat = setCount(halfDeck(), lib.id, MAX_LIBRARY + 1);
+    expect(reviewDraft(fat, byId).illegal.join(" ")).toContain(`at most ${MAX_LIBRARY}`);
+
+    let gapped = halfDeck();
+    for (const r of draftCards(gapped, byId)) {
+      if (r.card.kind === "crypt") gapped = setCount(gapped, r.card.id, 0);
+    }
+    gapped = setCount(setCount(gapped, g("5")[0]!.id, 2), g("7")[0]!.id, 2);
+    expect(reviewDraft(gapped, byId).illegal.join(" ")).toContain("group");
+
+    const absent = file.cards.find((c) => c.kind === "library" && c.status === "absent")!;
+    const unplayable = setCount(halfDeck(), absent.id, 1);
+    expect(reviewDraft(unplayable, byId).dealable).toBe(false);
+  });
+
+  it("writes the declaration into the deck text and reads it back", () => {
+    const text = draftToText(halfDeck(), byId);
+    expect(text).toMatch(/^Half deck: yes$/m);
+    const { draft: reopened } = parseDraft(text, byName);
+    expect(reopened.halfDeck).toBe(true);
+    expect(reopened.counts).toEqual(halfDeck().counts);
+    // And a normal deck says nothing, rather than "Half deck: no" — an
+    // absent declaration is the default, so the text stays clean.
+    expect(draftToText(legalDeck(), byId)).not.toMatch(/half deck/i);
+    expect(parseDraft(draftToText(legalDeck(), byId), byName).draft.halfDeck).toBe(false);
+  });
+
+  it("is accepted by the REAL importer, which used to null the deck", () => {
+    // THE BUG THIS FEATURE WOULD HAVE SHIPPED WITH. `importDeck` returns
+    // `deck: null` whenever `illegal` is non-empty, so before the
+    // declaration existed a half deck built here saved perfectly and
+    // then could not be dealt — buildable and unusable.
+    const text = draftToText(halfDeck(), byId);
+    const { deck, report } = importDeck(text, "You");
+    expect(report.halfDeck).toBe(true);
+    expect(report.illegal).toEqual([]);
+    expect(report.ok).toBe(true);
+    expect(deck).not.toBeNull();
+    expect(deck!.crypt.length).toBeLessThan(MIN_CRYPT);
+
+    // The same list without the declaration is refused, which is what
+    // makes the line above a test of the declaration rather than of a
+    // minimum that quietly stopped being enforced.
+    const undeclared = text.replace(/^Half deck: yes$/m, "");
+    const plain = importDeck(undeclared, "You");
+    expect(plain.report.halfDeck).toBe(false);
+    expect(plain.report.illegal.length).toBeGreaterThan(0);
+    expect(plain.deck).toBeNull();
+  });
+
+  it("can actually be SEATED at a table", () => {
+    // End to end, through the thing the lobby really runs: a built half
+    // deck, saved as pasted text, has to survive `buildTable` — which is
+    // where `halfDeckSeats` decides whether to waive the minimums, and
+    // which only understood PRECONS before 0.11.10.
+    const text = draftToText(halfDeck(), byId);
+    const table = defaultTable("You", (i) => `Bot ${i}`);
+    for (const seat of table.seats) seat.deck = { kind: "paste", text };
+    const built = buildTable(table);
+    expect(built.problems).toEqual([]);
+    expect(built.setup).not.toBeNull();
+    expect(built.setup!.decks[0]!.crypt.length).toBeLessThan(MIN_CRYPT);
+  });
+
+  it("refuses the same table when the decks do not declare it", () => {
+    // The negative control for the test above. Without it, a
+    // `halfDeckSeats` that returned every seat would pass just as well.
+    const text = draftToText(halfDeck(), byId).replace(/^Half deck: yes$/m, "");
+    const table = defaultTable("You", (i) => `Bot ${i}`);
+    for (const seat of table.seats) seat.deck = { kind: "paste", text };
+    expect(buildTable(table).setup).toBeNull();
+    expect(buildTable(table).problems.length).toBeGreaterThan(0);
   });
 });

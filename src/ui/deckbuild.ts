@@ -17,6 +17,7 @@
 
 import type { CatalogCard, CatalogFile } from "../cards/catalog.ts";
 import { cryptGroupProblem, MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
+import { findHalfDeck } from "./deckimport.ts";
 
 /**
  * A deck being edited.
@@ -29,6 +30,22 @@ export interface DeckDraft {
   name: string;
   counts: Record<number, number>;
   /**
+   * Half a deck ON PURPOSE (owner request, 2026-09-22).
+   *
+   * A New Blood starter prints six crypt cards and about fifty library
+   * cards, and the platform has always been able to DEAL one. What it
+   * could not do was let you BUILD one: the exemption was matched on
+   * `kind === "precon"`, so anything you made yourself was measured
+   * against p. 14's minimums whatever you meant by it.
+   *
+   * It is a DECLARATION, not a deduction. A deck that is short because
+   * it is a starter and a deck that is short because it is unfinished
+   * look exactly the same from the counts, and guessing would silently
+   * excuse the second. So the builder asks, the answer is written into
+   * the deck's own text, and the screen labels it everywhere.
+   */
+  halfDeck: boolean;
+  /**
    * The saved deck this was opened from, so Save overwrites it instead of
    * leaving a second copy behind. Null for a deck that has never been
    * saved — including one started from a precon, because a precon is a
@@ -38,8 +55,8 @@ export interface DeckDraft {
   savedAs: string | null;
 }
 
-export function emptyDraft(name = ""): DeckDraft {
-  return { name, counts: {}, savedAs: null };
+export function emptyDraft(name = "", halfDeck = false): DeckDraft {
+  return { name, counts: {}, halfDeck, savedAs: null };
 }
 
 /** Total copies in the draft, crypt and library kept apart. */
@@ -151,6 +168,13 @@ export interface DraftReview {
   unplayable: Array<{ card: CatalogCard; copies: number }>;
   /** Vampires whose printed ability is not implemented. Never fatal. */
   inert: string[];
+  /**
+   * The two minimums were waived because this deck declares itself half
+   * a deck. Carried on the review so the screen can SAY so — "legal"
+   * with the minimums silently skipped would be the one reading nobody
+   * should have to guess at.
+   */
+  halfDeck: boolean;
   /** Legal by the rules of the game. */
   legal: boolean;
   /** …and this platform can actually deal every card in it. */
@@ -179,13 +203,18 @@ export function reviewDraft(draft: DeckDraft, byId: Map<number, CatalogCard>): D
   // p. 14. There is deliberately NO upper bound on the crypt: "There is
   // no maximum limit on the number of cards Methuselahs can have in
   // their crypt."
-  if (counts.crypt < MIN_CRYPT) {
+  //
+  // A HALF DECK IS EXEMPT FROM THE TWO MINIMUMS AND NOTHING ELSE. The
+  // maximum below, the group rule and every playability check still
+  // apply — the same list of what the exemption does not cover that
+  // `validateDecks` states for a half-deck seat (decks.ts).
+  if (counts.crypt < MIN_CRYPT && !draft.halfDeck) {
     illegal.push(
       `The crypt has ${counts.crypt} card${counts.crypt === 1 ? "" : "s"}; ` +
         `at least ${MIN_CRYPT} are needed (p. 14).`,
     );
   }
-  if (counts.library < MIN_LIBRARY) {
+  if (counts.library < MIN_LIBRARY && !draft.halfDeck) {
     illegal.push(
       `The library has ${counts.library} cards; at least ${MIN_LIBRARY} are needed (p. 14).`,
     );
@@ -233,6 +262,7 @@ export function reviewDraft(draft: DeckDraft, byId: Map<number, CatalogCard>): D
     cautions,
     unplayable,
     inert,
+    halfDeck: draft.halfDeck,
     legal: illegal.length === 0,
     dealable: illegal.length === 0 && unplayable.length === 0,
   };
@@ -257,7 +287,14 @@ export function draftToText(draft: DeckDraft, byId: Map<number, CatalogCard>): s
   const rows = draftCards(draft, byId);
   const counts = countsOf(rows);
   const lines: string[] = [];
-  if (draft.name.trim() !== "") lines.push(`Deck Name: ${draft.name.trim()}`, "");
+  if (draft.name.trim() !== "") lines.push(`Deck Name: ${draft.name.trim()}`);
+  // THE DECLARATION TRAVELS WITH THE DECK. It is written next to the
+  // name because that is the only place it survives everything a deck
+  // goes through — saved as text, re-read as text, handed to the lobby
+  // as text, pasted into a forum post and back. `findHalfDeck` in
+  // deckimport.ts is what reads it at the other end.
+  if (draft.halfDeck) lines.push(`Half deck: yes`);
+  if (lines.length > 0) lines.push("");
 
   const crypt = rows
     .filter((r) => r.card.kind === "crypt")
@@ -307,6 +344,13 @@ export function parseDraft(
     const named = /^Deck Name:\s*(.+)$/i.exec(line);
     if (named) {
       draft.name = named[1]!.trim();
+      continue;
+    }
+    // Read through the SAME function the importer uses, on this one
+    // line, rather than a second regex that agrees with it today. The
+    // two must never disagree about what declares a half deck.
+    if (/^half[\s-]*deck\s*[:=]/i.test(line)) {
+      draft.halfDeck = findHalfDeck([line]);
       continue;
     }
     // The same shapes the importer accepts: "2 Name", "2x Name",
