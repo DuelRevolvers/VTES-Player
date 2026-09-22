@@ -2323,6 +2323,14 @@ export class VtesEngine implements EngineOps {
     // docs/conditional-reactions-design.md §3
     for (const seatId of tf.drawAfterTurn ?? []) this.drawUpToHandSize(seatId);
     tf.drawAfterTurn = [];
+    // "Unlock this vampire AT THE END OF THE TURN" (Zephyr basic). A total
+    // read: the vampire can have been burned since the card was played.
+    // docs/reading-the-outcome-design.md §4
+    for (const id of tf.unlockAfterTurn ?? []) {
+      const m = findMinion(this.state, id);
+      if (m?.locked) this.emit({ type: "MinionUnlocked", minion: id });
+    }
+    tf.unlockAfterTurn = [];
   }
 
   private settleCombat(cf: CombatFrame): boolean {
@@ -3202,9 +3210,12 @@ export class VtesEngine implements EngineOps {
       target = preyOf(this.state, seat);
       directed = true;
     }
-    if (params.targetMinion) {
+    if (params.targetMinion && !params.targetNotDirecting) {
       // Rush: directed iff the target minion belongs to another
-      // Methuselah (p. 25; Warrens ruling p. 52).
+      // Methuselah (p. 25; Warrens ruling p. 52) — unless the card names a
+      // minion while printing no Ⓓ, which is the one case where the
+      // target's controller does not direct the action
+      // (docs/choosing-a-minion-design.md §5).
       const controller = getMinion(this.state, params.targetMinion).controller;
       if (controller !== seat) {
         target = controller;
@@ -5734,6 +5745,25 @@ export class VtesEngine implements EngineOps {
     }
     if (pool > 0) this.emit({ type: "PoolBurned", seat: seat.id, amount: pool });
 
+    // "…requirements and cost apply as normal" — and so does p. 7's
+    // replacement, because this IS a card played from the hand. It goes
+    // BEFORE the card enters play: a permanent that grants hand size
+    // reconciles the hand on entry, and a hand still short its replacement
+    // would have that gap filled as a plain draw-up instead, which no
+    // counter sink intercepts (docs/counter-sinks-design.md §2).
+    // A search or a store play pulled from no hand and owes nothing.
+    this.scheduleReplacement({
+      seat: seat.id,
+      cardId: card.id,
+      handler,
+      fromHand: zone === "hand",
+      delayedByAction:
+        !!this.action() &&
+        (handler.costTypes?.(args.mode, undefined) ?? []).some((t) =>
+          this.action()!.delayReplaceTypes.includes(t),
+        ),
+    });
+
     this.enterPermanent({
       card,
       handler,
@@ -7329,6 +7359,34 @@ export class VtesEngine implements EngineOps {
    * only NON-aggravated damage still cannot touch it
    * [LSJ 20040812-2]. docs/armour-design.md §3
    */
+  /** "Unlock this vampire AT THE END OF THE TURN" (Zephyr basic) — owed on the
+   *  running turn frame and paid when it ends.
+   *  docs/reading-the-outcome-design.md §4 */
+  oweUnlockAtEndOfTurn(minion: MinionId): void {
+    const tf = [...this.state.frames].reverse().find((f) => f.kind === "turn");
+    if (tf?.kind === "turn") (tf.unlockAfterTurn ??= []).push(minion);
+  }
+
+  /**
+   * "Remove the top card of that Methuselah's CRYPT from the game"
+   * (Innocent Bystander). The crypt is face down, so the card is named in the
+   * event for the log but nothing puts it on the table; "removed from the game"
+   * has no zone by design (p. 16).
+   * docs/reading-the-outcome-design.md §3
+   */
+  removeTopOfCryptFromGame(seatId: SeatId): void {
+    const seat = getSeat(this.state, seatId);
+    const top = seat.crypt[0];
+    if (!top) return;
+    this.emit({
+      type: "CardRemovedFromGame",
+      seat: seatId,
+      cardId: top.id,
+      name: top.name,
+    });
+    seat.crypt = seat.crypt.slice(1);
+  }
+
   /** "This vampire's strikes may not be dodged this round" (Sanguinary
    *  Wind). docs/round-sequencing-design.md §3 */
   setStrikesUndodgeableRound(play: CardPlayFrame): void {
@@ -10865,6 +10923,80 @@ export class VtesEngine implements EngineOps {
     }
   }
 
+  /**
+   * WHEN the replacement for a played card is drawn. Every branch here is
+   * a question about timing, which is why the "was there a hand to refill
+   * at all" guard sits around all of them rather than inside each.
+   *
+   * One helper because there are TWO ways a card leaves a hand and enters
+   * play: the ordinary play path, and `playCardFromHand` for the cards
+   * that put one there with no action wrapped around it (Pack Alpha,
+   * Piper, Angel's Gift, Contraband, Concealed Weapon, Biothaumaturgic
+   * Experiment). The second was written beside this chain without copying
+   * it and so replaced nothing at all — a hand silently one card light for
+   * the rest of the game (docs/play-from-hand-design.md §13).
+   */
+  private scheduleReplacement(args: {
+    seat: SeatId;
+    cardId: CardInstanceId;
+    handler: CardHandler;
+    /** False when the card never left a HAND: replacement refills a hand
+     *  ("draw a replacement card", p. 8), and a store or library play has
+     *  nothing to refill. */
+    fromHand: boolean;
+    /** "Those cards are not replaced until the end of the action" (Consign
+     *  to Oblivion superior) — read off the ACTION rather than the card,
+     *  so the caller that knows the cost types decides it. */
+    delayedByAction?: boolean;
+  }): void {
+    const seat = getSeat(this.state, args.seat);
+    const handler = args.handler;
+    const afForDraw = this.action();
+    const cfForDraw = this.combatFrame();
+    if (!args.fromHand) {
+      // nothing to replace
+    } else if (handler.delayedReplace === "afterResolve") {
+      // Drawn in `resolveCardPlay` instead, once this card's own effect is
+      // done (docs/hand-churn-design.md §2).
+    } else if (handler.delayedReplace === "afterCombat" && cfForDraw) {
+      // "Do not replace until AFTER COMBAT" (Dodge, Fake Out, Boxed In).
+      // Held on the combat frame, not the action's, because combat ends
+      // first — and if there is no combat at all the card replaces
+      // normally, since the clause has nothing to wait for.
+      (cfForDraw.drawAfterCombat ??= []).push(seat.id);
+    } else if (handler.delayedReplace === "turn") {
+      // "Do not replace until after the CURRENT turn" (Sonar) — held on the
+      // turn frame that is running, which is whose turn it is now, not the
+      // player's own. §3
+      const tfNow = [...this.state.frames].reverse().find((f) => f.kind === "turn");
+      if (tfNow?.kind === "turn") (tfNow.drawAfterTurn ??= []).push(seat.id);
+    } else if (handler.delayedReplace === "unlock") {
+      seat.delayedDraws += 1;
+    } else if (handler.delayedReplaceUntil) {
+      // "Do not replace until a vampire commits diablerie" and its
+      // siblings. Held on the GAME, because "it is not replaced until the
+      // condition is met, EVEN IF IT IS BURNED" [LSJ 20080805].
+      (this.state.drawWhenCondition ??= []).push({
+        seat: seat.id,
+        until: handler.delayedReplaceUntil,
+      });
+    } else if (handler.delayedReplace === "whileInPlay") {
+      // "Do not replace AS LONG AS THIS CARD IS IN PLAY" (Dragonbound).
+      // The wait has no phase and no action to hang off, so it is keyed
+      // by the card and released wherever a permanent leaves play.
+      (this.state.drawWhenLeavesPlay ??= []).push({ seat: seat.id, cardId: args.cardId });
+    } else if (handler.delayedReplace === "discard") {
+      // "Do not replace until your next DISCARD phase" (Mirror Walk).
+      seat.delayedDrawsDiscard = (seat.delayedDrawsDiscard ?? 0) + 1;
+    } else if (args.delayedByAction && afForDraw) {
+      afForDraw.drawAfter.push(seat.id);
+    } else if (handler.delayedReplace === "afterAction" && afForDraw) {
+      afForDraw.drawAfter.push(seat.id);
+    } else {
+      this.drawToReplace(seat.id);
+    }
+  }
+
   /** "Whenever you play a card from your hand, you draw another from your
    *  library to replace it" (p. 7); an empty library just stops drawing.
    *  `kind` separates a real replacement from a plain draw-up (a hand-size
@@ -11118,53 +11250,15 @@ export class VtesEngine implements EngineOps {
       (handler.costTypes?.(option.mode, option.params["variant"]) ?? []).some((t) =>
         afForDraw.delayReplaceTypes.includes(t),
       );
-    const cfForDraw = this.combatFrame();
     // A card played out of a store is NOT replaced: replacement refills a
     // HAND ("draw a replacement card", p. 8), and this card never left one.
-    // Every branch below is a question about WHEN the replacement comes, so
-    // the guard belongs around all of them rather than in each.
-    if (store !== null) {
-      // nothing to replace
-    } else if (handler.delayedReplace === "afterResolve") {
-      // Drawn in `resolveCardPlay` instead, once this card's own effect is
-      // done (docs/hand-churn-design.md §2).
-    } else if (handler.delayedReplace === "afterCombat" && cfForDraw) {
-      // "Do not replace until AFTER COMBAT" (Dodge, Fake Out, Boxed In).
-      // Held on the combat frame, not the action's, because combat ends
-      // first — and if there is no combat at all the card replaces
-      // normally, since the clause has nothing to wait for.
-      (cfForDraw.drawAfterCombat ??= []).push(seat.id);
-    } else if (handler.delayedReplace === "turn") {
-      // "Do not replace until after the CURRENT turn" (Sonar) — held on the
-      // turn frame that is running, which is whose turn it is now, not the
-      // player's own. §3
-      const tfNow = [...this.state.frames].reverse().find((f) => f.kind === "turn");
-      if (tfNow?.kind === "turn") (tfNow.drawAfterTurn ??= []).push(seat.id);
-    } else if (handler.delayedReplace === "unlock") {
-      seat.delayedDraws += 1;
-    } else if (handler.delayedReplaceUntil) {
-      // "Do not replace until a vampire commits diablerie" and its
-      // siblings. Held on the GAME, because "it is not replaced until the
-      // condition is met, EVEN IF IT IS BURNED" [LSJ 20080805].
-      (this.state.drawWhenCondition ??= []).push({
-        seat: seat.id,
-        until: handler.delayedReplaceUntil,
-      });
-    } else if (handler.delayedReplace === "whileInPlay") {
-      // "Do not replace AS LONG AS THIS CARD IS IN PLAY" (Dragonbound).
-      // The wait has no phase and no action to hang off, so it is keyed
-      // by the card and released wherever a permanent leaves play.
-      (this.state.drawWhenLeavesPlay ??= []).push({ seat: seat.id, cardId: card.id });
-    } else if (handler.delayedReplace === "discard") {
-      // "Do not replace until your next DISCARD phase" (Mirror Walk).
-      seat.delayedDrawsDiscard = (seat.delayedDrawsDiscard ?? 0) + 1;
-    } else if (delayedByAction && afForDraw) {
-      afForDraw.drawAfter.push(seat.id);
-    } else if (handler.delayedReplace === "afterAction" && afForDraw) {
-      afForDraw.drawAfter.push(seat.id);
-    } else {
-      this.drawToReplace(seat.id);
-    }
+    this.scheduleReplacement({
+      seat: seat.id,
+      cardId: card.id,
+      handler,
+      fromHand: store === null,
+      delayedByAction,
+    });
     // The as-played window: only cancel-as-played and wake effects may be
     // used inside it (p. 7); normal sequencing order applies — outside an
     // action, the impulse still starts with the turn's Methuselah (p. 8),

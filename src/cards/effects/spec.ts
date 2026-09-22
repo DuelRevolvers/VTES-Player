@@ -873,6 +873,30 @@ export type EffectPrimitive =
   | { kind: "lockFailedBlockers" }
   /** "Unlock this vampire" in the after-resolution window (Freak Drive). */
   | { kind: "unlockActor" }
+  /**
+   * "Unlock this vampire AT THE END OF THE TURN" (Zephyr basic) — the same
+   * payoff as `unlockActor` one clock later, so the vampire is still locked
+   * for the rest of this turn and cannot act or block again.
+   * docs/reading-the-outcome-design.md §4
+   */
+  | { kind: "unlockActorAtEndOfTurn" }
+  /**
+   * "Remove the top card of that Methuselah's CRYPT from the game"
+   * (Innocent Bystander) — the target of the bleed that just succeeded, not
+   * the card's own player.
+   *
+   * "Cannot be played when the target crypt is EMPTY" [RTR 20000501], which
+   * is a gate on the option rather than a no-op at resolution. §3
+   */
+  | { kind: "removeTopOfTargetCrypt" }
+  /**
+   * "Your predator burns N pool" (Burnt Offerings superior) — the ACTING seat
+   * of the bleed being answered, which the card's own `predatorBleedingYou`
+   * gate has already established IS the predator. Read off the action frame
+   * rather than re-deriving the ring, so the two cannot disagree.
+   * docs/reading-the-outcome-design.md §2
+   */
+  | { kind: "burnActingSeatPool"; amount: number }
   /** "Reduce the acting minion's stealth to 0. (The acting minion can
    *  still increase their stealth.)" (Night Terrors) — an ordinary
    *  `StealthModified` of minus the current total, because
@@ -1840,6 +1864,64 @@ export type EffectPrimitive =
   // Riders.
   | { kind: "burnIfNotBlocking"; amount: number }
   | { kind: "poolGainOnBleedSuccess"; amount: number }
+  /**
+   * "If the bleed is successful, DRAW N CARDS (discard afterward)"
+   * (Flurry of Action basic) — the sibling of `poolGainOnBleedSuccess` paid in
+   * cards. "(Discard afterward)" is p. 7's discard-down, so the net gain is
+   * nothing unless a hand-size grant is in force; the draw is what the card
+   * buys, and the parenthetical DESCRIBES the existing rule rather than asking
+   * for anything (the sixth instance of that shape).
+   * docs/bleed-payoffs-design.md §3
+   */
+  | { kind: "drawOnBleedSuccess"; count: number }
+  /**
+   * "If the bleed is successful, THIS VAMPIRE UNLOCKS" (Flurry of Action
+   * superior) — the third of the on-success riders, beside the pool one and the
+   * card one.
+   *
+   * NOT `unlockAfterResolution`: that primitive is applied in the card-PLAY
+   * resolve switch and reads a `CardPlayFrame`, which an action card's own
+   * effects do not have — so it silently did nothing here. And it is not
+   * optional: the card says "unlocks", not "may unlock".
+   * docs/bleed-payoffs-design.md §3
+   */
+  | { kind: "unlockOnBleedSuccess" }
+  /**
+   * "Unlock a younger vampire or an ally" / "Unlock a vampire"
+   * (Precognizant Mobility) — one option per legal target, the choice fixed at
+   * announcement (p. 25) like every other action target.
+   *
+   * The two modes differ ONLY in the filter, which is what makes this family's
+   * negative space the interesting part.
+   *
+   * `directed` is the card's Ⓓ, and it is REQUIRED on every kind in this
+   * family: naming another Methuselah's minion does not by itself make an
+   * action directed (p. 25), and Precognizant Mobility prints no Ⓓ while its
+   * two siblings do. A default here would be a wrong answer for half the
+   * family. docs/choosing-a-minion-design.md §2, §5
+   */
+  | {
+      kind: "actionUnlockMinion";
+      scope: "youngerOrAlly" | "anyVampire";
+      directed: boolean;
+    }
+  /** "Ⓓ Lock a minion controlled by your predator or prey" (Distraction
+   *  superior) — the mirror, with a RELATION filter rather than an age one. §3 */
+  | { kind: "actionLockMinion"; scope: "predatorOrPrey"; directed: boolean }
+  /** "Ⓓ Inflict N unpreventable damage on a READY minion" (Horseshoes) —
+   *  environmental damage, so there is no prevention window to open and no
+   *  combat. §4 */
+  | { kind: "actionDamageMinion"; amount: number; directed: boolean }
+  /** "Draw N cards. Discard down to your hand size afterward" (Distraction
+   *  basic) — a draw with no target, kept beside the family because it is the
+   *  other half of one of its cards. §3 */
+  | { kind: "actionDrawThenDiscard"; count: number }
+  /**
+   * "Each of your UNLOCKED vampires gains N blood from the blood bank"
+   * (Media Influence superior) — every unlocked vampire the seat controls, not
+   * the actor, and not an ally. §4
+   */
+  | { kind: "eachUnlockedVampireGainsBlood"; amount: number }
   /** "Ⓓ Steal N pool from another Methuselah" (Line Brawl) — the target
    *  burns it and the acting Methuselah gains it, on success.
    *  docs/bleed-riders-sweep.md */
@@ -1945,6 +2027,18 @@ export type UsabilityRule =
    *  (Instinctive Reaction) — the plain form of the rule below. */
   | "predatorIsActing"
   | "predatorBleedingYou"
+  /** "…and three or more Methuselahs remain" — SPLIT OUT of
+   *  `predatorBleedingYou`, which had it welded in for My Enemy's Enemy's
+   *  sake. Burnt Offerings prints the predator clause and not the count, so
+   *  the two had to stop being one rule (the "a rule welded to a card is not
+   *  shared, it is merely nearby" lesson).
+   *  docs/reading-the-outcome-design.md §2 */
+  | "threeMethuselahsRemain"
+  /** "Only usable after resolution of an UNSUCCESSFUL action" (Zephyr) — the
+   *  mirror of `ifBleedSucceeded`, read off `resolvedSuccess`. A "fizzle"
+   *  resolves unblocked and so counts as successful, which is exactly what
+   *  [ANK 20220218] requires. §4 */
+  | "ifActionFailed"
   /** "Only usable by a locked vampire who has blocked, after block
    *  resolution" (Cats' Guidance, Forced Vigilance) — offered in the first
    *  window of the resulting combat, to the blocker (the `opposing`
@@ -2028,6 +2122,13 @@ export type UsabilityRule =
    *  "even if the vampire is in torpor".
    *  docs/after-resolution-design.md §4 */
   | "afterResolutionByActor"
+  /** The same window for the seat the action was aimed AT, not the actor
+   *  (Burnt Offerings superior: "if a minion controlled by your predator
+   *  successfully bleeds you, your predator burns 1 pool"). The after-
+   *  resolution window used to be reachable only by the acting seat, because
+   *  `afterResolutionByActor` was the only rule that opened it.
+   *  docs/reading-the-outcome-design.md §2 */
+  | "afterResolutionByTarget"
   /** "Only usable after resolution of a political action whose
    *  referendum PASSED" (Voter Captivation, Amici Noctis, Magnetic
    *  Authority) — played in the after-referendum impulse.

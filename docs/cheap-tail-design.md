@@ -37,12 +37,66 @@ three were built by the ash-heap wave. So this is `permanent.ashExchange`
 and `permanent.combatEndGrant`, two small clauses on the master
 compiler's existing ability plumbing.
 
-**The exchange is enumerated as one option per (hand card, ash-heap
+**The exchange was enumerated as one option per (hand card, ash-heap
 card) pair**, with both ids in the option id — the shape the play-cost
 wave's `paymentSplits` and the pool-drain wave's `combinations()` already
-use. It is a single decision in the card's own text ("exchange **one**
-card **for one** card"), so splitting it into two ChoiceFrames would
-invent a sequencing the card does not have.
+use. The reasoning written here was that it is a single decision in the
+card's own text ("exchange **one** card **for one** card"), so splitting
+it into two ChoiceFrames would invent a sequencing the card does not have.
+
+### That was replaced with two pickers on 2026-09-21 (owner request)
+
+The pair enumeration is a true reading of the card and an unreadable
+menu. A seven-card hand and four Anarch-requiring cards in the heap put
+**twenty-eight** lines of "swap X for Y" on one card, all alike, all
+differing in two names buried mid-sentence — and the player's actual
+question ("what can I get back?") is not asked anywhere in it. **It is now
+one option on the card — "exchange a card with your ash heap" — followed
+by two card pickers: the ash heap first, then the hand.**
+
+- **The sequencing it "invents" is unobservable**, which is why the
+  original objection does not survive contact. A ChoiceFrame has no
+  impulse cycle, asks nobody else anything, and is answered before
+  anything else moves (`choice-frames-design.md` §3). Between activating
+  the museum and naming both cards, no other seat has a decision and no
+  zone can change. The decision is still atomic *in the game*; only the
+  question is asked in two parts.
+- **The pickers are free.** The engine backfills `answerChoice.card` from
+  any param naming a card, and the table draws a grid of card images for
+  any decision whose answers name cards (`render.ts`, the `picks` branch).
+  So the ash heap is *read* rather than skimmed as prose, which is the one
+  thing a physical table never makes you do.
+- **The take rides on the FRAME, not on the give option.** The backfill
+  takes the first param that resolves to a card, so an option carrying
+  both ids would picture the wrong card — the second picker would show the
+  first picker's answer. Each option's params name only the card that
+  option picks. Asserted in the test.
+- **The cost is paid on ACTIVATION and neither picker can be declined.**
+  "You can lock this location and burn 1 pool **to** exchange…" makes the
+  lock and the pool the price of asking. That moves a futile-options
+  burden onto the gate: the option is offered only when the hand is
+  non-empty **and** something in the heap qualifies, or a player could
+  burn a pool for nothing. Both are asserted as negative space.
+- **`ashExchangeTargets` is the one filter**, read by the gate and by the
+  picker. Two copies would drift the day the sect list gained an entry,
+  and the failure would be an empty picker after a paid cost.
+- **The granted-action twin keeps the pair list, and must.** Lenelle,
+  Mambo of Birmingham (201721) grants the same exchange **as an action**,
+  and an action's params are fixed at announcement (p. 25) — before the
+  impulse cycle her opponents get. Her menu cannot become a choice frame
+  without changing when the cards are named, so the ugly shape is the
+  correct one there. Her list is the bigger one, too: she filters the heap
+  by nothing at all.
+
+**One thing measured and left alone.** The AI's `scoreChoice` has a branch
+for "any choice that names one of my cards: shed the most redundant one"
+(`ai-answer-choice-design.md`). The give picker lands in it and is scored
+correctly for free. The take picker lands in it as well, where "the card I
+built the most copies of" is an unvalidated proxy for "the card I want
+back" — the same term, a different question. It was not changed, because
+the alternative is an unmeasured policy edit to a function four rounds of
+measurement deep; it is a candidate for the next AI pass, not a fix to
+smuggle into a UX change.
 
 **Which cards qualify is `CardHandler.requiresSects`**, added centrally in
 `compileSpec` during the ash-heap wave for exactly this card and unused

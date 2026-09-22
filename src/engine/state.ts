@@ -1983,6 +1983,11 @@ export interface TurnFrame {
    *  until after the current turn", Sonar). Drained at the turn's end beside
    *  the hand-size expiry. docs/conditional-reactions-design.md §3 */
   drawAfterTurn?: SeatId[];
+  /** Minions owed an unlock once THIS turn is over ("unlock this vampire at
+   *  the end of the turn", Zephyr basic) — so they stay locked for the rest of
+   *  the turn and cannot act or block again.
+   *  docs/reading-the-outcome-design.md §4 */
+  unlockAfterTurn?: MinionId[];
   /**
    * How many NON-MANDATORY minion actions have been announced this turn
    * ("Not usable if any non-mandatory actions have been performed this turn",

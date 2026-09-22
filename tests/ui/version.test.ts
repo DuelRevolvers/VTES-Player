@@ -20,6 +20,15 @@ describe("the platform version", () => {
     expect(PLATFORM_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
+  it("pads the patch field to TWO digits, which is what lets it roll over", () => {
+    // Owner rule 2026-09-21: the patch digit is a zero-padded pair and rolls
+    // into the minor at 99 — 0.10.99 is followed by 0.11.00, not 0.10.100.
+    // Pinned here because a padding convention that only lives in prose gets
+    // dropped the first time somebody types the next number by hand: "0.11.0"
+    // still passes the regex above and still reads like a version.
+    expect(PLATFORM_VERSION.split(".")[2]).toMatch(/^\d{2}$/);
+  });
+
   it("is written on screen as 'platform vX.Y.Z'", () => {
     expect(PLATFORM_VERSION_LABEL).toBe(`platform v${PLATFORM_VERSION}`);
     expect(PLATFORM_VERSION_LABEL).toMatch(/^platform v\d+\.\d+\.\d+$/);

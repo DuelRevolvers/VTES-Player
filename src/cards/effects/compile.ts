@@ -103,11 +103,25 @@ function rulesHold(
         if (af.actingSeat !== predatorOf(ctx.state, ctx.seat)) return false;
         break;
       case "predatorBleedingYou": {
+        // The predator clause ONLY. "…and three or more Methuselahs remain"
+        // used to live here, welded in for My Enemy's Enemy — and Burnt
+        // Offerings prints this clause without that one, so the count moved to
+        // its own rule and My Enemy's Enemy now names both.
+        // docs/reading-the-outcome-design.md §2
         if (af.actionKind !== "bleed" || af.target !== ctx.seat) return false;
         if (af.actingSeat !== predatorOf(ctx.state, ctx.seat)) return false;
-        if (ctx.state.seats.filter((s) => !s.ousted).length < 3) return false;
         break;
       }
+      case "threeMethuselahsRemain":
+        if (ctx.state.seats.filter((s) => !s.ousted).length < 3) return false;
+        break;
+      case "ifActionFailed":
+        // "Only usable after resolution of an UNSUCCESSFUL action" (Zephyr).
+        // `resolvedSuccess` is only false for an action that did not resolve —
+        // a FIZZLE resolves unblocked and is recorded as successful, which is
+        // what keeps this off a fizzle [ANK 20220218]. §4
+        if (af.resolvedSuccess !== false) return false;
+        break;
       case "afterBlocksDeclined":
         if (!af.declinedBlocks.includes(ctx.seat)) return false;
         break;
@@ -140,6 +154,12 @@ function rulesHold(
         // The window gate itself is structural (the option enumerator);
         // this only asserts we are actually in it.
         if (af.step !== "afterResolution") return false;
+        break;
+      case "afterResolutionByTarget":
+        // The same window, for the seat the action was aimed AT.
+        // docs/reading-the-outcome-design.md §2
+        if (af.step !== "afterResolution") return false;
+        if (af.target !== ctx.seat) return false;
         break;
       case "ifActionSucceeded":
         if (af.resolvedSuccess !== true) return false;
@@ -1127,6 +1147,11 @@ function targetRider(mode: CardMode): EffectPrimitive | null {
       e.kind === "actionStealBlood" ||
       e.kind === "actionDiablerize" ||
       e.kind === "actionSteal" ||
+      // Wave 87's family — each picks a minion at announcement.
+      // docs/choosing-a-minion-design.md §2
+      e.kind === "actionUnlockMinion" ||
+      e.kind === "actionLockMinion" ||
+      e.kind === "actionDamageMinion" ||
       e.kind === "attachToOpponent"
     ) {
       return e;
@@ -1295,6 +1320,47 @@ function enumerateActionTargets(
   // gains nothing: the excess drains to the blood bank the moment it
   // enters play (p. 6). The same rule the influence phase now applies
   // (docs/futile-options-design.md).
+  // Wave 87: three filters, one enumerator. Each is written as the card words
+  // it, and each excludes what the card does not name — an unlock that offered
+  // an already-unlocked minion, or a lock that offered your own, would be a
+  // futile option. docs/choosing-a-minion-design.md §2
+  if (e.kind === "actionUnlockMinion") {
+    for (const s of state.seats) {
+      for (const m of s.minions) {
+        if (!isReady(m) || !m.locked) continue; // nothing to unlock
+        if (e.scope === "anyVampire") {
+          if (m.kind !== "vampire") continue;
+        } else if (!(m.kind === "ally" || younger(capacityOf(m), true))) {
+          continue;
+        }
+        targets.push(m.id);
+      }
+    }
+    return targets;
+  }
+  if (e.kind === "actionLockMinion") {
+    // "…controlled by your PREDATOR or PREY" — not your own, and not a
+    // grand-prey's in a bigger game.
+    const near = [predatorOf(state, seatId), preyOf(state, seatId)];
+    for (const s of state.seats) {
+      if (!near.includes(s.id)) continue;
+      for (const m of s.minions) {
+        if (!isReady(m) || m.locked) continue; // already locked
+        targets.push(m.id);
+      }
+    }
+    return targets;
+  }
+  if (e.kind === "actionDamageMinion") {
+    // "…on a READY minion" — any seat's, including the actor's own side.
+    for (const s of state.seats) {
+      for (const m of s.minions) {
+        if (!isReady(m)) continue;
+        targets.push(m.id);
+      }
+    }
+    return targets;
+  }
   if (e.kind === "bankBloodSplit") {
     // One option per (split × set of recipients). The recipients ride in
     // the target param joined by `|`, which is what lets a two-recipient
@@ -1758,6 +1824,27 @@ function compileActionCard(spec: CardSpec): CardHandler {
           params.targetMinion = target;
           params.noCombat = true;
         }
+        if (
+          e.kind === "actionUnlockMinion" ||
+          e.kind === "actionLockMinion" ||
+          e.kind === "actionDamageMinion"
+        ) {
+          // Wave 87's find: `targetRider` OFFERING a target is not the same as
+          // the target REACHING the frame. The option list and this params
+          // switch are two lists answering one question, and these three
+          // primitives were in the first only — so every option enumerated
+          // correctly and every payoff silently did nothing.
+          // docs/choosing-a-minion-design.md §5
+          const target = play.params["target"];
+          if (!target) throw new Error(`${spec.name}: no target minion`);
+          params.targetMinion = target;
+          // Named to be AFFECTED, never to be fought (the Mind Numb shape).
+          params.noCombat = true;
+          // And the Ⓓ is the card's, not the target's: Precognizant Mobility
+          // unlocks another Methuselah's vampire without being directed at
+          // them (p. 25).
+          if (!e.directed) params.targetNotDirecting = true;
+        }
         if (e.kind === "actionStealPool") {
           const seat = play.params["seat"];
           if (!seat) throw new Error(`${spec.name}: no target Methuselah`);
@@ -2053,6 +2140,69 @@ function compileActionCard(spec: CardSpec): CardHandler {
               ops.emit({ type: "PoolGained", seat: af.actingSeat, amount: e.amount });
             }
             break;
+          case "drawOnBleedSuccess":
+            // The same condition paid in CARDS. "(Discard afterward)" is p. 7's
+            // discard-down, which `drawUpToHandSize` already enforces on the way
+            // back — so the draw is written, not the discard.
+            // docs/bleed-payoffs-design.md §3
+            if (bleedOk) {
+              ops.drawCards(af.actingSeat, e.count);
+              // DISCARD down, not draw up. `drawUpToHandSize` refills a short
+              // hand, which is the opposite of what "(discard afterward)" asks
+              // for: a hand under size should be left alone, and the two ops
+              // are only interchangeable when the hand is already full.
+              ops.discardDownToHandSize(af.actingSeat, spec.name, af.card?.instance.id ?? "");
+            }
+            break;
+          case "actionUnlockMinion": {
+            // The target was chosen at announcement and rides on the frame. A
+            // TOTAL read: it can have left play since (§2).
+            const who = af.targetMinion;
+            const m2 = who ? findMinion(ops.state, who) : null;
+            if (m2?.locked) ops.emit({ type: "MinionUnlocked", minion: m2.id });
+            break;
+          }
+          case "actionLockMinion": {
+            const who = af.targetMinion;
+            const m2 = who ? findMinion(ops.state, who) : null;
+            if (m2 && !m2.locked) ops.emit({ type: "MinionLocked", minion: m2.id });
+            break;
+          }
+          case "actionDamageMinion": {
+            const who = af.targetMinion;
+            if (!who || !findMinion(ops.state, who)) break;
+            // Environmental: nobody's damage, so no prevention window opens and
+            // no reaction reads it (§4).
+            ops.applyEnvironmentalDamage(who, e.amount, false);
+            break;
+          }
+          case "actionDrawThenDiscard":
+            ops.drawCards(af.actingSeat, e.count);
+            ops.discardDownToHandSize(
+              af.actingSeat,
+              spec.name,
+              af.card?.instance.id ?? "",
+            );
+            break;
+          case "unlockOnBleedSuccess": {
+            // The third on-success rider, in the same switch as the other two
+            // so it actually runs for an ACTION card (§3).
+            if (!bleedOk) break;
+            const actor = findMinion(ops.state, af.acting);
+            if (actor?.locked) ops.emit({ type: "MinionUnlocked", minion: actor.id });
+            break;
+          }
+          case "eachUnlockedVampireGainsBlood": {
+            // "Each of your UNLOCKED vampires gains N blood from the blood
+            // bank" — vampires only, so an unlocked ally is not one, and the
+            // actor is locked by its own announcement and so is excluded by the
+            // card's own wording. §4
+            for (const mm of getSeat(ops.state, af.actingSeat).minions) {
+              if (mm.kind !== "vampire" || mm.locked || mm.inTorpor) continue;
+              ops.emit({ type: "BloodGained", minion: mm.id, amount: e.amount });
+            }
+            break;
+          }
           case "actionOnPermanent": {
             const id = af.targetPermanent;
             if (!id) break;
@@ -4065,6 +4215,15 @@ function effectsLegal(
         }
         break;
       }
+      case "removeTopOfTargetCrypt": {
+        // "Cannot be played when the target crypt is EMPTY" [RTR 20000501] — a
+        // gate on the OPTION rather than a no-op at resolution, and it needs
+        // the action to have had a target at all.
+        // docs/reading-the-outcome-design.md §3
+        if (!af.target) return false;
+        if (getSeat(ctx.state, af.target).crypt.length === 0) return false;
+        break;
+      }
       case "modifyIntercept": {
         // Intercept only "when needed", and only by the blocking minion
         // itself (p. 26).
@@ -4428,7 +4587,11 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       // from the ordinary effect windows and vice versa.
       const wantsAfter = (r: UsabilityRule): boolean =>
         spec.usable.includes(r) || spec.modes.some((mo) => mo.usable?.includes(r) ?? false);
-      const afterOnly = wantsAfter("afterResolutionByActor");
+      // Either after-resolution rule opens that window. It used to be only the
+      // actor's, so a reaction the VICTIM plays after resolution could not be
+      // offered at all (docs/reading-the-outcome-design.md §2).
+      const afterOnly =
+        wantsAfter("afterResolutionByActor") || wantsAfter("afterResolutionByTarget");
       if (ctx.window === "action.afterResolution") {
         if (!afterOnly) return [];
       } else {
@@ -5266,6 +5429,33 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             const af2 = ops.action();
             const actor = af2 ? findMinion(ops.state, af2.acting) : null;
             if (actor?.locked) ops.emit({ type: "MinionUnlocked", minion: actor.id });
+            break;
+          }
+          case "unlockActorAtEndOfTurn": {
+            // "Unlock this vampire AT THE END OF THE TURN" (Zephyr basic) — the
+            // same payoff one clock later, so the vampire stays locked for the
+            // rest of this turn. Owed on the turn frame and paid at its end.
+            // docs/reading-the-outcome-design.md §4
+            const afZ = ops.action();
+            if (afZ) ops.oweUnlockAtEndOfTurn(afZ.acting);
+            break;
+          }
+          case "burnActingSeatPool": {
+            // "Your predator burns N pool" — the acting seat of the bleed being
+            // answered. The card's `predatorBleedingYou` gate has already
+            // established that seat IS the predator, so reading it off the
+            // frame cannot disagree with a second ring walk. §2
+            const afP = ops.action();
+            if (afP) ops.emit({ type: "PoolBurned", seat: afP.actingSeat, amount: e.amount });
+            break;
+          }
+          case "removeTopOfTargetCrypt": {
+            // "Remove the top card of THAT METHUSELAH's crypt from the game" —
+            // the seat the bleed was aimed at, not the card's own player. The
+            // option is gated on that crypt being non-empty
+            // [RTR 20000501], so there is nothing to check here. §3
+            const afC = ops.action();
+            if (afC?.target) ops.removeTopOfCryptFromGame(afC.target);
             break;
           }
           case "afterResolutionAttach": {
@@ -14946,6 +15136,36 @@ function addAttachedCardBehaviour(spec: CardSpec, handler: CardHandler): void {
 }
 
 /**
+ * "…one card in your ash heap requiring an Anarch" — which cards those are
+ * (Garibaldi-Meucci Museum; docs/cheap-tail-design.md §1).
+ *
+ * ONE helper, because the question is now asked in two places that must
+ * agree: the unlock-phase gate ("is there anything to retrieve?", which
+ * decides whether the pool is worth burning) and the picker the frame
+ * offers once it has been. Two copies of this filter would drift the day
+ * the sect list gained a second entry, and the failure mode is an empty
+ * picker after a paid cost — the shape CLAUDE.md's "one question asked in
+ * two places" lesson names.
+ */
+function ashExchangeTargets(
+  state: GameState,
+  seat: SeatId,
+  exchange: { poolCost: number; requiresSect?: Sect[] },
+  registry: HandlerRegistry,
+): CardInstance[] {
+  const want: string[] = exchange.requiresSect ?? [];
+  return (getSeat(state, seat).ashHeap ?? []).filter((c) => {
+    // "one CARD in your ash heap" reads as a library card: a burnt vampire
+    // does not require a sect, it HAS one. Excluded explicitly rather than
+    // by the accident that crypt cards have no handler — that is what the
+    // granted-action sibling (Lenelle) does, and the two should agree.
+    if (c.crypt) return false;
+    const sects = registry[c.name]?.requiresSects?.() ?? [];
+    return want.length === 0 || sects.some((s) => want.includes(s));
+  });
+}
+
+/**
  * The two location abilities that fire in windows no other `lockGrant`
  * uses — Cappadocian Crypt's post-action blood and Meditative Grove's
  * frenzy cancel (docs/blood-locations-design.md §5–§6).
@@ -15470,30 +15690,36 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     }
     // "Lock this location and burn N pool during your unlock phase to
     // exchange one card from your hand for one card in your ash heap
-    // requiring an Anarch" — one option per PAIR: the card's own text
-    // makes it a single decision (docs/cheap-tail-design.md §1).
+    // requiring an Anarch" — ONE option, then two card pickers
+    // (docs/cheap-tail-design.md §1, rewritten 2026-09-21).
+    //
+    // It used to be one option per (hand card, ash-heap card) PAIR, which
+    // is a true reading of "a single decision" and an unreadable menu: a
+    // seven-card hand and four Anarch cards in the heap drew
+    // twenty-eight lines of "swap X for Y" onto the card, all alike.
+    // The pair is now assembled from two choice frames — take first, then
+    // pay — so each half is asked as a grid of card images, which is what
+    // the ash heap needs to be readable at all (owner request).
     if (
       exchange &&
       ctx.window === "turn.unlock" &&
       ctx.turnSeat === controller &&
       !entry.locked &&
-      getSeat(ctx.state, controller).pool >= exchange.poolCost
+      getSeat(ctx.state, controller).pool >= exchange.poolCost &&
+      // BOTH halves must be payable before the cost is. The cost is paid
+      // on activation and the pickers cannot be declined, so an offer with
+      // an empty hand or an empty heap would be a pool burned for nothing
+      // (docs/futile-options-design.md).
+      getSeat(ctx.state, controller).hand.length > 0 &&
+      ashExchangeTargets(ctx.state, controller, exchange, ctx.registry).length > 0
     ) {
-      const seat = getSeat(ctx.state, controller);
-      for (const back of seat.ashHeap ?? []) {
-        const sects = ctx.registry[back.name]?.requiresSects?.() ?? [];
-        const want: string[] = exchange.requiresSect ?? [];
-        if (want.length > 0 && !sects.some((s) => want.includes(s))) continue;
-        for (const out2 of seat.hand) {
-          out.push({
-            id: `ability:${spec.name}:${entry.card.id}:exchange:${out2.id}:${back.id}`,
-            kind: "useAbility",
-            label: `${spec.name}: swap ${out2.name} for ${back.name}`,
-            source: entry.card.id,
-            params: { act: "ashExchange", give: out2.id, take: back.id },
-          });
-        }
-      }
+      out.push({
+        id: `ability:${spec.name}:${entry.card.id}:exchange`,
+        kind: "useAbility",
+        label: `${spec.name}: exchange a card with your ash heap`,
+        source: entry.card.id,
+        params: { act: "ashExchange" },
+      });
     }
     // "Lock this location before range is determined to end a combat
     // involving an <X> you control and ANOTHER <X>" — both combatants
@@ -15908,23 +16134,95 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     };
   }
   if (exchange) {
-    extraUse["ashExchange"] = (entry, owner, choice, ops) => {
+    extraUse["ashExchange"] = (entry, owner, _choice, ops) => {
       const controller = entry.controller ?? owner.seat;
+      // THE COST IS PAID ON ACTIVATION, and the two pickers that follow
+      // cannot be declined: "you can lock this location and burn 1 pool
+      // TO exchange…" makes the lock and the pool the price of asking, not
+      // of the answer. Which is why the option is only offered when both
+      // halves have something to pick (the gate in `abilityOptions`).
       ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
       ops.emit({ type: "PoolBurned", seat: controller, amount: exchange.poolCost });
-      // The hand card goes to the ash heap and the ash-heap card comes
-      // back: an EXCHANGE, so no replacement draw either way.
-      //
-      // Guarded like the granted-action path above, and for the same
-      // reason: `raiseChoice` QUEUES while an action resolves and flushes
-      // afterwards, so even a choice frame has a gap in which the named
-      // card can leave the hand. A guard on one path and not on its twin
-      // is how these two would drift apart.
-      const give = choice.params["give"];
-      if (!give || !getSeat(ops.state, controller).hand.some((c) => c.id === give)) return;
-      ops.discardFromHand(controller, give, false);
-      const take = choice.params["take"];
-      if (take) ops.takeFromAshHeap(controller, take);
+      // TAKE FIRST, THEN PAY (owner request, 2026-09-21): the retrieval is
+      // what the player is deciding — which card to give up only makes
+      // sense once they know what they are getting. Nothing can move
+      // between the two: a choice frame has no impulse cycle and nobody
+      // else is asked anything (docs/choice-frames-design.md §3).
+      ops.raiseChoice({
+        seat: controller,
+        cardName: spec.name,
+        cardId: entry.card.id,
+        key: "ashExchangeTake",
+        optional: false,
+      });
+    };
+    // The two pickers, grafted onto whatever choice handling the type
+    // compiler already produced — the reason this whole function is
+    // written that way, and this card is a MASTER, so `compileMasterCard`
+    // has already installed its own dispatcher.
+    //
+    // Both are answered as a GRID OF CARD IMAGES with no work here: the
+    // engine backfills `answerChoice.card` from any param that names a
+    // card, and the table draws a picker whenever an answer names one
+    // (`withPickedCardName`, render.ts §picks). So the picked card — and
+    // only the picked card — must be the card named in the option's own
+    // params; the take id rides on the FRAME instead of on the give
+    // option, or the second picker would show the first picker's answer.
+    const priorExchangeOptions = handler.choiceOptions?.bind(handler);
+    const priorExchangeApply = handler.applyChoice?.bind(handler);
+    handler.choiceOptions = (frame, state, registry) => {
+      if (frame.key === "ashExchangeTake") {
+        return ashExchangeTargets(state, frame.seat, exchange, registry).map((c) => ({
+          id: `choice:${spec.name}:${frame.cardId}:ashExchangeTake:${c.id}`,
+          kind: "answerChoice" as const,
+          label: `Take ${c.name} from your ash heap`,
+          params: { take: c.id },
+        }));
+      }
+      if (frame.key === "ashExchangeGive") {
+        return getSeat(state, frame.seat).hand.map((c) => ({
+          id: `choice:${spec.name}:${frame.cardId}:ashExchangeGive:${c.id}`,
+          kind: "answerChoice" as const,
+          label: `Give up ${c.name}`,
+          params: { give: c.id },
+        }));
+      }
+      return priorExchangeOptions ? priorExchangeOptions(frame, state, registry) : [];
+    };
+    handler.applyChoice = (frame, choice, ops) => {
+      if (frame.key === "ashExchangeTake") {
+        const take = choice.params["take"];
+        if (!take) return;
+        ops.raiseChoice({
+          seat: frame.seat,
+          cardName: spec.name,
+          cardId: frame.cardId,
+          key: "ashExchangeGive",
+          params: { take },
+          optional: false,
+        });
+        return;
+      }
+      if (frame.key === "ashExchangeGive") {
+        // The hand card goes to the ash heap and the ash-heap card comes
+        // back: an EXCHANGE, so no replacement draw either way.
+        //
+        // Guarded although the give was picked out of the hand a moment
+        // ago and nothing was asked in between: a derived read must be
+        // TOTAL, and the granted-action twin (Lenelle, who fixes both
+        // cards at announcement) needs the guard for real. A guard on one
+        // path and not on its twin is how these two would drift apart.
+        const give = choice.params["give"];
+        if (!give || !getSeat(ops.state, frame.seat).hand.some((c) => c.id === give)) return;
+        ops.discardFromHand(frame.seat, give, false);
+        // Give first, then take: two moves in the same ash heap, and the
+        // card arriving is not the card leaving, so the order is only
+        // about what the log reads like.
+        const take = frame.params["take"];
+        if (take) ops.takeFromAshHeap(frame.seat, take);
+        return;
+      }
+      priorExchangeApply?.(frame, choice, ops);
     };
   }
   if (rescue) {

@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-20T17:59:05.987Z",
+ "fetchedAt": "2026-09-21T23:49:10.852Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -2031,6 +2031,29 @@
    },
    "supported": true
   },
+  "100272": {
+   "card": {
+    "kind": "library",
+    "id": 100272,
+    "name": "Burnt Offerings",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "aus"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[aus] This reacting vampire gets +1 intercept.\n[AUS] Only usable if a minion controlled by your predator successfully bleeds you. Your predator burns 1 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/burntofferings.jpg",
+    "sets": [
+     "Ancient Hearts"
+    ]
+   },
+   "supported": true
+  },
   "100273": {
    "card": {
     "kind": "library",
@@ -4017,6 +4040,32 @@
    },
    "supported": true
   },
+  "100560": {
+   "card": {
+    "kind": "library",
+    "id": 100560,
+    "name": "Distraction",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+1 stealth action.\n[cel] Draw 5 cards. Discard down to your hand size afterward.\n[CEL] Ⓓ Lock a minion controlled by your predator or prey.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/distraction.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "100563": {
    "card": {
     "kind": "library",
@@ -5749,6 +5798,33 @@
    },
    "supported": true
   },
+  "100752": {
+   "card": {
+    "kind": "library",
+    "id": 100752,
+    "name": "Flurry of Action",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Ⓓ Bleed. If the bleed is successful, draw two cards (discard afterward).\n[CEL] Ⓓ Bleed. If the bleed is successful, this vampire unlocks.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/flurryofaction.jpg",
+    "sets": [
+     "Gehenna",
+     "Kindred Most Wanted",
+     "Third Edition",
+     "Lords of the Night",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100753": {
    "card": {
     "kind": "library",
@@ -6941,6 +7017,31 @@
    },
    "supported": true
   },
+  "100937": {
+   "card": {
+    "kind": "library",
+    "id": 100937,
+    "name": "Horseshoes",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pot"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[pot] Ⓓ Inflict 1 unpreventable damage on a ready minion.\n[POT] Ⓓ Inflict 2 unpreventable damage on a ready minion.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/horseshoes.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "Heirs to the Blood"
+    ]
+   },
+   "supported": true
+  },
   "100944": {
    "card": {
     "kind": "library",
@@ -7072,6 +7173,29 @@
     "image": "https://static.krcg.org/card/informationhighway.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100987": {
+   "card": {
+    "kind": "library",
+    "id": 100987,
+    "name": "Innocent Bystander",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [
+     "Ventrue antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable when this acting vampire successfully bleeds a Methuselah.\nRemove the top card of that Methuselah's crypt from the game.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/innocentbystander.jpg",
+    "sets": [
+     "Sabbat"
     ]
    },
    "supported": true
@@ -7777,6 +7901,36 @@
     "image": "https://static.krcg.org/card/leatheryhide.jpg",
     "sets": [
      "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
+  "101089": {
+   "card": {
+    "kind": "library",
+    "id": 101089,
+    "name": "Legal Manipulations",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pre] Ⓓ Bleed with +2 bleed.\n[PRE] As above, and gain 1 pool if the bleed is successful (for 1 or more).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/legalmanipulations.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Black Hand",
+     "Kindred Most Wanted",
+     "Legacies of Blood",
+     "First Blood"
     ]
    },
    "supported": true
@@ -8521,6 +8675,32 @@
      "Sabbat War",
      "Camarilla Edition",
      "Black Hand"
+    ]
+   },
+   "supported": true
+  },
+  "101193": {
+   "card": {
+    "kind": "library",
+    "id": 101193,
+    "name": "Media Influence",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[pre] Ⓓ Bleed with +2 bleed.\n[PRE] Each of your unlocked vampires gains 1 blood from the blood bank.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/mediainfluence.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Kindred Most Wanted",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -10602,6 +10782,30 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101476": {
+   "card": {
+    "kind": "library",
+    "id": 101476,
+    "name": "Precognizant Mobility",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "aus"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+1 stealth action.\n[aus] Unlock a younger vampire or an ally.\n[AUS] Unlock a vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/precognizantmobility.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -15537,6 +15741,30 @@
     "sets": [
      "Lords of the Night",
      "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "102205": {
+   "card": {
+    "kind": "library",
+    "id": 102205,
+    "name": "Zephyr",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable after resolution of an unsuccessful action.\n[cel] Unlock this vampire at the end of the turn.\n[CEL] Unlock this vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/zephyr.jpg",
+    "sets": [
+     "The Unaligned",
+     "Anthology"
     ]
    },
    "supported": true

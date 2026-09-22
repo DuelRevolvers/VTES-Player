@@ -106,18 +106,93 @@ describe("Garibaldi-Meucci Museum (100809)", () => {
       { id: "a2", name: "Govern the Unaligned" }, // requires nothing
     ];
     const engine = atUnlockAbilities(state, "Alice");
-    const ids = optionIds(engine).filter((o) => o.includes(":exchange:"));
-    expect(ids).toEqual(["ability:Garibaldi-Meucci Museum:gm:exchange:h1:a1"]);
+    // ONE option on the card, not one per (hand, heap) pair.
+    expect(optionIds(engine).filter((o) => o.includes(":exchange"))).toEqual([
+      "ability:Garibaldi-Meucci Museum:gm:exchange",
+    ]);
 
-    runTrace(engine, [["Alice", ids[0]!]]);
+    runTrace(engine, [["Alice", "ability:Garibaldi-Meucci Museum:gm:exchange"]]);
+    // The cost is paid on ACTIVATION, before either card is named.
     expect(seatOf(state, "Alice").pool).toBe(9);
+    expect(seatOf(state, "Alice").permanents[0]!.locked).toBe(true);
+
+    // Picker 1: the ash heap, filtered to "requiring an Anarch". Non-
+    // optional, so no decline — and the card being picked is the one the
+    // table draws an image of.
+    const take = engine.decision()!;
+    expect(take.seat).toBe("Alice");
+    expect(take.options.map((o) => o.id)).toEqual([
+      "choice:Garibaldi-Meucci Museum:gm:ashExchangeTake:a1",
+    ]);
+    expect(take.options[0]!.kind === "answerChoice" && take.options[0]!.card).toBe(
+      "Protection Racket",
+    );
+
+    runTrace(engine, [["Alice", "choice:Garibaldi-Meucci Museum:gm:ashExchangeTake:a1"]]);
+
+    // Picker 2: the hand, every card in it, named after the take.
+    const give = engine.decision()!;
+    expect(give.options.map((o) => o.id)).toEqual([
+      "choice:Garibaldi-Meucci Museum:gm:ashExchangeGive:h1",
+    ]);
+    // The SECOND picker must picture the card it is choosing, not the one
+    // the first picker already chose — the take rides on the frame for
+    // exactly this reason.
+    expect(give.options[0]!.kind === "answerChoice" && give.options[0]!.card).toBe("Conditioning");
+
+    runTrace(engine, [["Alice", "choice:Garibaldi-Meucci Museum:gm:ashExchangeGive:h1"]]);
     expect(seatOf(state, "Alice").hand.map((c) => c.name)).toEqual(["Protection Racket"]);
     // An EXCHANGE: the hand card goes to the heap, no replacement drawn.
     expect((seatOf(state, "Alice").ashHeap ?? []).map((c) => c.name).sort()).toEqual([
       "Conditioning",
       "Govern the Unaligned",
     ]);
-    expect(seatOf(state, "Alice").permanents[0]!.locked).toBe(true);
+    expect(seatOf(state, "Alice").pool).toBe(9);
+  });
+
+  it("offers ONE activation for a whole hand, and every hand card at the give step", () => {
+    const state = threeSeatGame();
+    seatOf(state, "Alice").permanents.push(entry("gm", "Garibaldi-Meucci Museum"));
+    seatOf(state, "Alice").hand = [
+      { id: "h1", name: "Conditioning" },
+      { id: "h2", name: "Govern the Unaligned" },
+      { id: "h3", name: "Deflection" },
+    ];
+    seatOf(state, "Alice").ashHeap = [
+      { id: "a1", name: "Protection Racket" },
+      { id: "a2", name: "Dust Up" },
+      { id: "v1", name: "Some Vampire", crypt: true },
+    ];
+    const engine = atUnlockAbilities(state, "Alice");
+    // The old shape drew 3 × 2 = six "swap X for Y" lines onto the card.
+    expect(optionIds(engine).filter((o) => o.includes(":exchange")).length).toBe(1);
+
+    runTrace(engine, [["Alice", "ability:Garibaldi-Meucci Museum:gm:exchange"]]);
+    // A burnt VAMPIRE in the heap is not "a card requiring an Anarch".
+    expect(engine.decision()!.options.map((o) => o.id)).toEqual([
+      "choice:Garibaldi-Meucci Museum:gm:ashExchangeTake:a1",
+      "choice:Garibaldi-Meucci Museum:gm:ashExchangeTake:a2",
+    ]);
+
+    runTrace(engine, [["Alice", "choice:Garibaldi-Meucci Museum:gm:ashExchangeTake:a2"]]);
+    // Every card in hand, and NO decline: the pool is already spent.
+    expect(engine.decision()!.options.map((o) => o.id)).toEqual([
+      "choice:Garibaldi-Meucci Museum:gm:ashExchangeGive:h1",
+      "choice:Garibaldi-Meucci Museum:gm:ashExchangeGive:h2",
+      "choice:Garibaldi-Meucci Museum:gm:ashExchangeGive:h3",
+    ]);
+
+    runTrace(engine, [["Alice", "choice:Garibaldi-Meucci Museum:gm:ashExchangeGive:h2"]]);
+    expect(seatOf(state, "Alice").hand.map((c) => c.name).sort()).toEqual([
+      "Conditioning",
+      "Deflection",
+      "Dust Up",
+    ]);
+    expect((seatOf(state, "Alice").ashHeap ?? []).map((c) => c.id).sort()).toEqual([
+      "a1",
+      "h2",
+      "v1",
+    ]);
   });
 
   it("NEGATIVE SPACE: not offered with no pool, and not on another seat's turn", () => {
@@ -135,7 +210,34 @@ describe("Garibaldi-Meucci Museum (100809)", () => {
     seatOf(other, "Alice").permanents.push(entry("gm", "Garibaldi-Meucci Museum"));
     seatOf(other, "Alice").hand = [{ id: "h1", name: "Conditioning" }];
     seatOf(other, "Alice").ashHeap = [{ id: "a1", name: "Protection Racket" }];
-    expect(optionIds(atUnlockAbilities(other, "Bob")).some((o) => o.includes(":exchange:"))).toBe(
+    expect(optionIds(atUnlockAbilities(other, "Bob")).some((o) => o.includes(":exchange"))).toBe(
+      false,
+    );
+  });
+
+  it("NEGATIVE SPACE: not offered when either half of the swap is empty", () => {
+    // The cost is paid on activation and neither picker can be declined,
+    // so an offer with nothing to give — or nothing to take — would burn a
+    // pool for nothing.
+    const noHand = threeSeatGame();
+    seatOf(noHand, "Alice").permanents.push(entry("gm", "Garibaldi-Meucci Museum"));
+    seatOf(noHand, "Alice").hand = [];
+    seatOf(noHand, "Alice").ashHeap = [{ id: "a1", name: "Protection Racket" }];
+    expect(optionIds(atUnlockAbilities(noHand, "Alice")).some((o) => o.includes(":exchange"))).toBe(
+      false,
+    );
+
+    // A heap with cards in it, none of which requires an Anarch. Empty for
+    // the RIGHT reason: the same heap with an Anarch card does offer it,
+    // which the positive test above asserts.
+    const noTake = threeSeatGame();
+    seatOf(noTake, "Alice").permanents.push(entry("gm", "Garibaldi-Meucci Museum"));
+    seatOf(noTake, "Alice").hand = [{ id: "h1", name: "Conditioning" }];
+    seatOf(noTake, "Alice").ashHeap = [
+      { id: "a1", name: "Govern the Unaligned" },
+      { id: "v1", name: "Some Vampire", crypt: true },
+    ];
+    expect(optionIds(atUnlockAbilities(noTake, "Alice")).some((o) => o.includes(":exchange"))).toBe(
       false,
     );
   });

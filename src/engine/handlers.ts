@@ -339,6 +339,11 @@ export interface EngineOps {
   grantPreventCredit(play: CardPlayFrame, amount: number, disciplines?: string[]): void;
   /** "This vampire treats aggravated damage as normal damage for the
    *  remainder of this round" (Skin of Night). */
+  /** "Unlock this vampire at the end of the turn" (Zephyr basic). */
+  oweUnlockAtEndOfTurn(minion: MinionId): void;
+  /** "Remove the top card of that Methuselah's crypt from the game"
+   *  (Innocent Bystander). */
+  removeTopOfCryptFromGame(seat: SeatId): void;
   /** "This vampire's strikes may not be dodged this round" (Sanguinary Wind). */
   setStrikesUndodgeableRound(play: CardPlayFrame): void;
   /** "Instead, the opposing minion chooses his or her strike first." */
@@ -985,6 +990,13 @@ export interface CardActionParams {
   lockTarget?: boolean;
   /** "…with a LOCKED minion" — re-checked at resolution (Ambush). */
   requiresLockedTarget?: boolean;
+  /** "Unlock a vampire" (Precognizant Mobility) — this action names a minion
+   *  but prints NO Ⓓ, so naming another Methuselah's vampire must not make it
+   *  directed at them (p. 25: the Ⓓ is what directs an action, not the
+   *  target's controller). The sibling of `noCombat`: both say "I named this
+   *  minion for a narrower reason than the rush shape assumes".
+   *  docs/choosing-a-minion-design.md §5 */
+  targetNotDirecting?: boolean;
 }
 
 export interface CardHandler {

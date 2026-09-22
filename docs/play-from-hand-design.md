@@ -229,3 +229,78 @@ card that already uses `combatLimit`.
   ally enters unable to act this turn.
 - p. 27 — an action card's cost is paid at resolution (the rule that does
   **not** apply here, §4).
+
+## 13. The replacement this wave forgot (owner report, 2026-09-21)
+
+**Report:** *"Why was my hand size reduced to 6?"* — with a saved game
+attached.
+
+The hand size was never reduced; it was 7 throughout. A card had left the
+hand and **was never replaced**, and the seat played the rest of the game
+one card light with 67 cards still in its library. Replaying the log
+found the exact move: **Pack Alpha `[ani]`**, employing a Feral Hound out
+of hand mid-combat. Pack Alpha itself replaced correctly. The Feral Hound
+did not.
+
+> p. 7: "Whenever you play a card from your hand, you draw another from
+> your library to replace it."
+
+`playCardFromHand` (§4) already emits `CardPlayed` with the comment *"It
+IS played (p. 9)"* — so the rule applies by the engine's own reading of
+what this family does. It simply never drew.
+
+### What went wrong, and it is the standing lesson verbatim
+
+**A new call beside an existing one should copy its GUARDS before its
+shape.** The ordinary play path ends in a twelve-branch chain that decides
+*when* the replacement comes: `afterResolve`, `afterCombat`, `turn`,
+`unlock`, `delayedReplaceUntil`, `whileInPlay`, `discard`, `afterAction`,
+the per-action `delayReplaceTypes` deferral, and the store guard around
+all of them. §4 of this doc reproduced the *shape* of a card play — splice
+it out of the pile, emit `CardPlayed`, charge the price, enter play — and
+none of the guards. The word "draw" appears nowhere in §1–§12.
+
+**The fix is a shared helper, not a `drawToReplace` call.** A bare draw at
+the end of `playCardFromHand` would have fixed the reported hand and
+quietly broken Dragonbound, Sonar, Mirror Walk, Visit from the Capuchin
+and Shilmulo Tarot for this family. `VtesEngine.scheduleReplacement({seat,
+cardId, handler, fromHand, delayedByAction})` now holds the chain and both
+callers go through it, so the two cannot drift again.
+
+`fromHand` is the old store guard generalised. `playCardFromHand` serves
+**three** piles (§4): the hand, the LIBRARY for a search (Magic of the
+Smith, Vast Wealth) and a STORE (Fleshforge Chamber). Only the hand is
+owed anything — replacement refills a hand, and the other two never
+emptied one.
+
+### Six cards, not one
+
+Every card compiled from the `playFromHand` primitive (§5) was affected:
+**Pack Alpha** `[ani]`, **Angel's Gift**, **Contraband** `[obf]`,
+**Piper**, **Concealed Weapon**, **Biothaumaturgic Experiment** `[tha]`.
+
+### Why every existing test passed
+
+`threeSeatGame`'s library is `[]`. With nothing to draw, *"drew nothing"*
+and *"owed nothing"* are the same observation — the **empty-for-the-wrong-
+reason** failure, in a fixture rather than a filter. Twelve tests
+exercised this family for two waves without one of them being able to see
+the defect.
+
+The new `describe` block stocks the library with distinguishable cards
+first and asserts **which** ids arrived, not just how many. Verified by
+neutering the fix and re-running: the three positive cases fail, and fail
+on the right assertion (`['L1']` where `['L1','L2']` is due). The negative
+case calls `playCardFromHand` directly with `from: {zone: "library"}` and
+pins that the hand does **not** grow — the assertion that would have
+caught a fix that simply always drew.
+
+### Not fixed, on the owner's word
+
+The same saved game showed **340 of 504 decisions (67.5%) offering nothing
+but `pass`** — 91 of the reporter's own 130. That is the two rules windows
+a bleed opens (`action.announce`, p. 25, then `action.effects`) plus
+`card.asPlayed` (p. 7) polling every seat. The engine is right; Settings →
+Auto-pass already answers those and is off by default per the owner's
+"never auto-skip a player" rule. Left as-is on the owner's instruction,
+2026-09-21.

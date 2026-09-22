@@ -1006,6 +1006,113 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 87 — choosing a minion (3 cards), 2026-09-21
+
+Library **814 → 817**. Precognizant Mobility, Distraction, Horseshoes.
+Write-up: `docs/choosing-a-minion-design.md`.
+
+Second wave in the ACTION bucket. Three actions that each name a minion at
+announcement and then unlock it, lock it, or damage it — one mechanism, three
+different **filters**, which is the part worth asserting: age-or-kind
+("a younger vampire or an ally"), relation ("controlled by your predator or
+prey") and readiness ("a ready minion", which includes a LOCKED minion and
+excludes a torpid one).
+
+**What it found: offering a target is not the same as the target reaching the
+frame.** Every filter test passed on the first run and every payoff test failed.
+`targetRider` — the list of kinds that makes the enumerator emit one option per
+target — had been taught the three new kinds; the params switch that turns
+`play.params["target"]` into `params.targetMinion` had not, and it is a second
+hand-written list of the same kinds. `af.targetMinion` was `null` on all three
+cards, the applies read it, found nothing and returned quietly. Nothing threw.
+A wave that asserted only its option lists would have admitted three inert cards.
+
+**And the fix surfaced the rules question underneath it: the Ⓓ belongs to the
+CARD.** `announceCardAction` derives directedness from the named minion's
+controller (p. 25, the rush shape) — right for Distraction and Horseshoes, which
+print Ⓓ, and wrong for Precognizant Mobility, which prints none and is a +1
+stealth *undirected* action that any seat may block. So
+`CardActionParams.targetNotDirecting` is the new sibling of `noCombat` (one says
+"do not fight it", the other "do not aim at its controller"), and `directed` is a
+**required** field on all three primitives: the family is split 2–1, so either
+default would be silently wrong for at least one card.
+
+Also: `actionDrawThenDiscard` uses `discardDownToHandSize`, the wave-86 trap
+applied before it bit.
+
+Mutation-checked: dropping `targetNotDirecting` fails exactly the undirected
+assertion and nothing else; clean on restore.
+
+### Wave 86 — bleed payoffs (3 cards), 2026-09-21
+
+Library **811 → 814**. Legal Manipulations, Media Influence, Flurry of Action.
+Write-up: `docs/bleed-payoffs-design.md`.
+
+**First wave in the ACTION bucket**, the second largest left. Three directed
+bleed actions whose superior changes what the bleed buys — pool, cards, or an
+unlock — so the wave completes a set: `poolGainOnBleedSuccess` existed, and
+`drawOnBleedSuccess` and `unlockOnBleedSuccess` now sit beside it in the same
+switch reading the same `bleedOk`.
+
+**What it found: `unlockAfterResolution` silently did nothing.** It looked like
+the right primitive for "if the bleed is successful, this vampire unlocks", but
+it is applied in the card-PLAY resolve switch and reads a `CardPlayFrame` —
+which an action card's own effects do not have. The case was never reached: the
+bleed landed and the vampire stayed locked with nothing to show why. The tell was
+that every other case in that switch reads a variable this caller has no access
+to. (It is also not optional — "unlocks", not "may unlock".)
+
+**Second trap: `drawUpToHandSize` is not "discard afterward".** It REFILLS a
+short hand, so a fixture with a small hand ended up holding seven cards.
+"(Discard afterward)" is p. 7's discard-DOWN, which leaves a short hand alone.
+The two ops are interchangeable only when the hand is already full — the case a
+test is least likely to set up.
+
+Legal Manipulations and Media Influence print the IDENTICAL basic, which is the
+control for the bonus; and the draw rider needed its own control, because three
+cards leave the library and one of them is the played card's own replacement.
+
+Mutation-checked: draw dropped, unlock dropped, `locked` filter removed — three
+failures, clean on restore.
+
+### Wave 85 — reading the outcome (3 cards), 2026-09-21
+
+Library **808 → 811**. Innocent Bystander, Burnt Offerings, Zephyr. Write-up:
+`docs/reading-the-outcome-design.md`.
+
+Three cards played after an action resolves, gating on how it went — a bleed
+that succeeded (from BOTH sides of the table) and an action that failed.
+
+**Two rules were welded to one card each, and this wave needed half of each:**
+
+- **The after-resolution window could only be opened by the ACTING seat.**
+  `afterResolutionByActor` was the only rule that opened it and the enumerator
+  gated on exactly that rule, so a reaction the VICTIM plays after resolution
+  could not be offered at all. Burnt Offerings is the first, and needed
+  `afterResolutionByTarget`.
+- **`predatorBleedingYou` had "and three or more Methuselahs remain" inside
+  it**, because My Enemy's Enemy prints both clauses. Burnt Offerings prints the
+  predator clause and not the count, so the count became
+  `threeMethuselahsRemain` and My Enemy's Enemy names both. Asserted: Burnt
+  Offerings still works with a seat ousted.
+
+**A rule welded to a card is not shared, it is merely nearby** — twice in one
+wave. Neither was wrong while one card used it.
+
+Also new: the pool's first effect to touch a CRYPT (removing its top card from
+the game, gated on the crypt being non-empty [RTR 20000501]), and an
+end-of-turn unlock beside wave 84's deferred draw. Zephyr's "unsuccessful"
+excludes a FIZZLE for free, because a fizzle resolves and is recorded as
+successful [ANK 20220218].
+
+**The mutation check earned its keep.** Nine green first time; three of four
+mutations failed and one did not — deleting the end-of-turn unlock debt changed
+nothing, because the test walked 60 steps and sailed into Alice's NEXT turn,
+whose unlock phase unlocks her vampires for free. The walker is now bounded to
+her turn, with a control showing V1 still locked there without the card.
+**"Empty for the wrong reason" applies to a walker's DISTANCE, not just to an
+option list.**
+
 ### Wave 84 — conditional reactions (3 cards), 2026-09-20
 
 Library **805 → 808**. Steadfastness, Sonar, Dread Gaze. Write-up:

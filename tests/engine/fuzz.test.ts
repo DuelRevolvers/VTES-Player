@@ -847,6 +847,30 @@ function fourSeatGame(seed: number): GameState {
     "Steadfastness",
     "Sonar",
     "Dread Gaze",
+    // Reading the outcome (docs/reading-the-outcome-design.md, wave 85).
+    // Innocent Bystander removes a card from the CRYPT, which no card had done
+    // before — the fuzz is the guard that a shrinking crypt does not break
+    // influencing or the end-of-game check, and that removing from an empty one
+    // is impossible rather than merely unlikely.
+    "Innocent Bystander",
+    "Burnt Offerings",
+    "Zephyr",
+    // Bleed payoffs (docs/bleed-payoffs-design.md, wave 86). All three are
+    // DIRECTED bleed actions with an on-success rider, so the fuzz guards the
+    // thing a scenario test cannot: that the rider fires on exactly the bleeds
+    // that succeed across whole games, and that a draw rider against a thin
+    // library does not throw.
+    "Legal Manipulations",
+    "Media Influence",
+    "Flurry of Action",
+    // Choosing a minion (docs/choosing-a-minion-design.md, wave 87). Each picks
+    // a minion at announcement, and the fuzz is what walks the gap between the
+    // choice and the resolution: the named minion can be burned, torpored or
+    // stolen in between, and one of the three is UNDIRECTED while the other two
+    // are not, so the block window differs by card on the same option shape.
+    "Precognizant Mobility",
+    "Distraction",
+    "Horseshoes",
     "Banu Haqim Justicar",
     "Brujah Justicar",
     "Lasombra Justicar",

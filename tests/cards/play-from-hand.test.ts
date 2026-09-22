@@ -415,3 +415,145 @@ describe("Biothaumaturgic Experiment (100162)", () => {
     expect(cf.maneuverCredits.acting).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+
+/**
+ * "Whenever you play a card from your hand, you draw another from your
+ * library to replace it" (p. 7) — owner report, saved game 2026-09-21.
+ *
+ * This whole family splices its card out of the hand through
+ * `playCardFromHand`, which was written BESIDE the ordinary play path's
+ * replacement chain without copying it, so it drew nothing. The reporter's
+ * hand sat at 6 for the rest of a real game with 67 cards still in their
+ * library.
+ *
+ * Every test above passed throughout, because `threeSeatGame`'s library is
+ * EMPTY: "drew nothing" and "owed nothing" are the same observation when
+ * there is nothing to draw. So each case here STOCKS the library first —
+ * the fixture a test needs, the test builds (docs/play-from-hand-design.md
+ * §13).
+ */
+describe("p. 7 replacement for a card played from hand", () => {
+  /** Distinguishable draws: it matters WHICH cards arrived, not just how
+   *  many, or a test passes on a hand that never changed. */
+  function stock(state: GameState, n: number): void {
+    for (let i = 1; i <= n; i++) {
+      state.seats[0]!.library.push({ id: `L${i}`, name: "Conditioning" });
+    }
+  }
+
+  const drawn = (state: GameState): string[] =>
+    state.seats[0]!.hand.filter((c) => c.id.startsWith("L")).map((c) => c.id);
+
+  it("Pack Alpha replaces BOTH itself and the retainer it pulled out of hand", () => {
+    const { state, engine } = intoCombat(
+      [
+        { id: "pa", name: "Pack Alpha" },
+        { id: "rs", name: "Raven Spy" }, // animal, 1 blood
+      ],
+      { disciplines: { ani: "basic" } },
+    );
+    stock(state, 2);
+    const handBefore = state.seats[0]!.hand.length;
+
+    runTrace(engine, [
+      ["Alice", "play:Pack Alpha:basic:V1:rs:basic:pa"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+
+    expect(find(state, "V1").attached.some((p) => p.card.name === "Raven Spy")).toBe(true);
+    // Two cards left the hand — the combat card and the retainer — so two
+    // came back. Before the fix only the combat card was replaced.
+    expect(drawn(state)).toEqual(["L1", "L2"]);
+    expect(state.seats[0]!.hand).toHaveLength(handBefore);
+    expect(state.seats[0]!.library).toHaveLength(0);
+  });
+
+  it("Angel's Gift replaces the weapon it equipped from hand", () => {
+    const { state, engine } = intoCombat(
+      [
+        { id: "ag", name: "Angel's Gift" },
+        { id: "kf", name: "Sengir Dagger" }, // melee, 2 pool
+      ],
+      { clan: "Salubri" },
+    );
+    stock(state, 2);
+    const handBefore = state.seats[0]!.hand.length;
+
+    runTrace(engine, [
+      ["Alice", "play:Angel's Gift:basic:V1:equip:kf:basic:ag"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+
+    expect(find(state, "V1").attached.some((p) => p.card.name === "Sengir Dagger")).toBe(true);
+    expect(drawn(state)).toEqual(["L1", "L2"]);
+    expect(state.seats[0]!.hand).toHaveLength(handBefore);
+  });
+
+  it("Piper replaces the ally it put into play", () => {
+    const state = masterPhase(threeSeatGame());
+    Object.assign(find(state, "V1"), { sect: "anarch", clan: "Ventrue" });
+    state.seats[0]!.hand.push(
+      { id: "pi", name: "Piper" },
+      { id: "pal", name: "Political Ally" }, // 2 pool
+    );
+    stock(state, 2);
+    const handBefore = state.seats[0]!.hand.length;
+    const engine = new VtesEngine(state, testRegistry);
+
+    runTrace(engine, [
+      ["Alice", "play:Piper:-:pal:basic:V1:pi"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as played
+    ]);
+
+    expect(state.seats[0]!.minions.some((m) => m.id === "pal")).toBe(true);
+    expect(drawn(state)).toEqual(["L1", "L2"]);
+    expect(state.seats[0]!.hand).toHaveLength(handBefore);
+  });
+
+  it("an empty library simply draws nothing, and nothing throws", () => {
+    const { state, engine } = intoCombat(
+      [
+        { id: "pa", name: "Pack Alpha" },
+        { id: "rs", name: "Raven Spy" },
+      ],
+      { disciplines: { ani: "basic" } },
+    );
+    expect(state.seats[0]!.library).toHaveLength(0);
+    const handBefore = state.seats[0]!.hand.length;
+
+    runTrace(engine, [
+      ["Alice", "play:Pack Alpha:basic:V1:rs:basic:pa"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+
+    expect(find(state, "V1").attached.some((p) => p.card.name === "Raven Spy")).toBe(true);
+    expect(state.seats[0]!.hand).toHaveLength(handBefore - 2);
+  });
+
+  // THE NEGATIVE SPACE. `playCardFromHand` serves three piles, and only the
+  // hand is owed a replacement: a search pulls from the LIBRARY (Magic of
+  // the Smith, Vast Wealth) and Fleshforge Chamber plays out of a STORE.
+  // Neither emptied a hand, so neither refills one — and a fix that simply
+  // drew on every call would hand the searcher a free card.
+  it("does NOT replace a card the same path pulled from the LIBRARY", () => {
+    const { state, engine } = intoCombat([], { disciplines: { ani: "basic" } });
+    state.seats[0]!.library.push({ id: "rs", name: "Raven Spy" });
+    stock(state, 1);
+    const handBefore = state.seats[0]!.hand.length;
+
+    engine.playCardFromHand({
+      cardId: "rs",
+      seat: "Alice",
+      minion: "V1",
+      mode: "basic",
+      from: { zone: "library" },
+    });
+
+    expect(find(state, "V1").attached.some((p) => p.card.name === "Raven Spy")).toBe(true);
+    expect(state.seats[0]!.hand).toHaveLength(handBefore);
+    expect(drawn(state)).toEqual([]);
+    expect(state.seats[0]!.library.map((c) => c.id)).toEqual(["L1"]);
+  });
+});

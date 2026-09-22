@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 286 test files, 2921 tests**, with `npm run typecheck`,
+**Green baseline: 289 test files, 2962 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -421,9 +421,11 @@ doc named beside it.
   option list; only negative-space assertions catch it.
 - **A GUARD CLAUSE IN A TEST IS A SILENT SKIP.** A fixture a test needs,
   the test BUILDS; what it cannot build, it asserts is there.
-  (`threeSeatGame`'s uncontrolled region is empty and its
-  `masterActionsLeft` is 0 — both have passed a test for the wrong
-  reason.)
+  (`threeSeatGame`'s uncontrolled region is empty, its
+  `masterActionsLeft` is 0, and its LIBRARY is empty — so "drew nothing"
+  and "owed nothing" look identical, which hid a whole card family
+  replacing nothing for two waves. All three have passed a test for the
+  wrong reason.)
 - **WHEN EVERY CASE IN A TEST IS A NEGATIVE, the test is telling you about
   the FIXTURE, not the card.** A test with no passing positive has not
   tested anything.
@@ -450,6 +452,11 @@ doc named beside it.
 - **One question asked in two places will drift.** Funnel through one
   helper. And when you add a RICHER record, re-point the readers of the
   poorer one.
+- **A TARGET OFFERED IS NOT A TARGET DELIVERED.** `targetRider` builds the
+  options; a separate hand-written switch turns the chosen param into
+  `params.targetMinion`. Teach only the first and every option enumerates
+  perfectly while every payoff silently does nothing
+  (`choosing-a-minion-design.md` §5).
 - **When you add a hook to a FAMILY, re-read the SIBLINGS** — they were
   written at different times and they do not agree. Same for option
   enumerators (`meetsRequirements` has been forgotten four times), for
@@ -526,6 +533,11 @@ doc named beside it.
   (`table-ux-2026-09-11.md`).
 - **A feature that cannot be discovered is indistinguishable from one that
   is absent.** Reported twice by the owner about features that worked.
+- **A CROSS-PRODUCT MENU BECOMES SEQUENTIAL PICKERS FOR FREE, and the
+  sequencing is unobservable** — choice frames ask nobody else anything,
+  so nothing moves between the steps. A pair list is rules-pure and
+  unreadable at 28 rows (`cheap-tail-design.md` §1). It does NOT work
+  where the params are fixed at announcement (p. 25).
 - **AN OPTION DRAWN ON A CARD IS A CLAIM THAT THE CARD CAN DO IT** — and
   a rules bug report can be about the CLAIM, not the engine. Indexing a
   rescue under its torpid victim showed that vampire eight actions p. 34
@@ -545,6 +557,10 @@ The platform version shows in small text at the foot of the main menu.
   fix, a UI tweak each earn exactly one. This is a build counter people
   can quote in a bug report, not semver: do not reserve the patch digit
   for "small" changes or save several up for one bump.
+- **THE PATCH DIGIT IS TWO DIGITS AND ROLLS OVER AT 99** (owner rule,
+  2026-09-21). After `0.10.99` comes **`0.11.00`**, not `0.10.100` — the
+  patch field is a zero-padded pair, so `0.11.00` → `0.11.01` → … →
+  `0.11.99` → `0.12.00`. Write the padding: `0.11.00`, never `0.11.0`.
 - Bump it in the same pass that edits the code, so a build and its number
   cannot disagree.
 - **Read the current version from the file**, never from a doc.
@@ -786,7 +802,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-199 files under `docs/`, one per mechanic that took a decision. **Read the
+202 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -810,7 +826,8 @@ combat-attachments, round-end, last-combat, positional-combat, armour, thrown-ob
 rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pay-to-unlock, lock-as-price, blood-and-gear, torpor-prey, hand-churn,
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
-minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions.
+minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
+choosing-a-minion.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

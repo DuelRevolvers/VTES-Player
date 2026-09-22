@@ -8356,7 +8356,10 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "superior",
         discipline: "aus",
-        usable: ["predatorBleedingYou", "afterBlocksDeclined"],
+        // "…and three or more Methuselahs remain" is now its own rule; it used
+        // to be folded inside `predatorBleedingYou`
+        // (docs/reading-the-outcome-design.md §2).
+        usable: ["predatorBleedingYou", "threeMethuselahsRemain", "afterBlocksDeclined"],
         effects: [{ kind: "redirectBleed", lockSelf: true, toPredatorsPredator: true }],
       },
     ],
@@ -10898,6 +10901,250 @@ export const cardSpecs: CardSpec[] = [
           { kind: "prevent", base: 1, perBloodX: false },
         ],
       },
+    ],
+  },
+
+  // --- Choosing a minion (docs/choosing-a-minion-design.md) ---
+  // Three directed actions that each pick a minion at announcement. The payoffs
+  // differ (unlock, lock, damage) but so do the FILTERS, and the filter is the
+  // part worth asserting: younger-or-ally, predator-or-prey, and ready.
+  {
+    // "+1 stealth action. [aus] Unlock a younger vampire or an ally. [AUS]
+    //  Unlock a vampire."
+    krcgId: 101476,
+    name: "Precognizant Mobility",
+    cardType: "action",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "aus",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          // No Ⓓ on this card: unlocking someone else's vampire does not aim
+          // the action at them (§5).
+          { kind: "actionUnlockMinion", scope: "youngerOrAlly", directed: false },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "aus",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "actionUnlockMinion", scope: "anyVampire", directed: false },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. [cel] Draw 5 cards. Discard down to your hand size
+    //  afterward. [CEL] Ⓓ Lock a minion controlled by your predator or prey."
+    //
+    // The two modes have nothing in common but the card: one refills a hand,
+    // the other is the family's mirror image — a LOCK rather than an unlock (§3).
+    krcgId: 100560,
+    name: "Distraction",
+    cardType: "action",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "actionDrawThenDiscard", count: 5 },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          // Ⓓ — directed at the named minion's controller, who alone may block.
+          { kind: "actionLockMinion", scope: "predatorOrPrey", directed: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "[pot] Ⓓ Inflict 1 unpreventable damage on a ready minion. [POT] Ⓓ
+    //  Inflict 2 unpreventable damage on a ready minion."
+    //
+    // No stealth bonus, and the only difference between the modes is the
+    // number — so this is the family's control for the TARGETING itself (§4).
+    krcgId: 100937,
+    name: "Horseshoes",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pot",
+        effects: [{ kind: "actionDamageMinion", amount: 1, directed: true }],
+      },
+      {
+        level: "superior",
+        discipline: "pot",
+        effects: [{ kind: "actionDamageMinion", amount: 2, directed: true }],
+      },
+    ],
+  },
+
+  // --- Bleed payoffs (docs/bleed-payoffs-design.md) ---
+  // Three directed BLEED actions whose superior changes what the bleed buys:
+  // pool, cards, or an unlock. Two of them have the identical basic, which is
+  // the control that makes a wrong bonus visible.
+  {
+    // "[pre] Ⓓ Bleed with +2 bleed. [PRE] As above, and gain 1 pool if the
+    //  bleed is successful (for 1 or more)."
+    krcgId: 101089,
+    name: "Legal Manipulations",
+    cardType: "action",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pre",
+        effects: [{ kind: "actionBleed", bonus: 2 }],
+      },
+      {
+        level: "superior",
+        discipline: "pre",
+        effects: [
+          { kind: "actionBleed", bonus: 2 },
+          { kind: "poolGainOnBleedSuccess", amount: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "[pre] Ⓓ Bleed with +2 bleed. [PRE] Each of your unlocked vampires gains
+    //  1 blood from the blood bank."
+    //
+    // The pair with Legal Manipulations: the SAME basic, and a superior that is
+    // not a bleed at all — so the two superiors are worth asserting against
+    // each other as well as against their own basics (§4).
+    krcgId: 101193,
+    name: "Media Influence",
+    cardType: "action",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pre",
+        effects: [{ kind: "actionBleed", bonus: 2 }],
+      },
+      {
+        level: "superior",
+        discipline: "pre",
+        effects: [{ kind: "eachUnlockedVampireGainsBlood", amount: 1 }],
+      },
+    ],
+  },
+  {
+    // "[cel] Ⓓ Bleed. If the bleed is successful, draw two cards (discard
+    //  afterward). [CEL] Ⓓ Bleed. If the bleed is successful, this vampire
+    //  unlocks."
+    //
+    // A plain bleed both ways — no bonus — so what the modes differ in is only
+    // the payoff. The superior reuses the existing `ifSuccessful` unlock (§3).
+    krcgId: 100752,
+    name: "Flurry of Action",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [
+          { kind: "actionBleed", bonus: 0 },
+          { kind: "drawOnBleedSuccess", count: 2 },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "cel",
+        effects: [
+          { kind: "actionBleed", bonus: 0 },
+          { kind: "unlockOnBleedSuccess" },
+        ],
+      },
+    ],
+  },
+
+  // --- Reading the outcome (docs/reading-the-outcome-design.md) ---
+  // Three cards played AFTER an action resolves, each gating on how it went:
+  // a bleed that succeeded (from both sides of the table) and an action that
+  // failed. The window exists; what each card adds is the condition.
+  {
+    // "Only usable when this acting vampire successfully bleeds a Methuselah.
+    //  Remove the top card of that Methuselah's crypt from the game."
+    krcgId: 100987,
+    name: "Innocent Bystander",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: ["afterResolutionByActor", "ifBleedSucceeded"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "removeTopOfTargetCrypt" }],
+      },
+    ],
+  },
+  {
+    // "[aus] This reacting vampire gets +1 intercept. [AUS] Only usable if a
+    //  minion controlled by your predator successfully bleeds you. Your
+    //  predator burns 1 pool."
+    //
+    // The mirror of Innocent Bystander: the same successful bleed, read from
+    // the VICTIM's side. Its superior does NOT print "three or more
+    // Methuselahs remain", which is what forced that clause out of
+    // `predatorBleedingYou` into its own rule (§2).
+    krcgId: 100272,
+    name: "Burnt Offerings",
+    cardType: "reaction",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "aus",
+        effects: [{ kind: "modifyIntercept", amount: 1 }],
+      },
+      {
+        level: "superior",
+        discipline: "aus",
+        usable: ["afterResolutionByTarget", "predatorBleedingYou", "ifBleedSucceeded"],
+        effects: [{ kind: "burnActingSeatPool", amount: 1 }],
+      },
+    ],
+  },
+  {
+    // "Only usable after resolution of an unsuccessful action. [cel] Unlock
+    //  this vampire at the end of the turn. [CEL] Unlock this vampire."
+    //
+    // The two modes are the same payoff on two clocks. "Unsuccessful" excludes
+    // a FIZZLE, which resolves unblocked [ANK 20220218] — and that falls out of
+    // the engine's own `resolvedSuccess` rather than needing a second flag (§4).
+    krcgId: 102205,
+    name: "Zephyr",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: ["afterResolutionByActor", "ifActionFailed"],
+    modes: [
+      {
+        level: "basic",
+        discipline: "cel",
+        effects: [{ kind: "unlockActorAtEndOfTurn" }],
+      },
+      { level: "superior", discipline: "cel", effects: [{ kind: "unlockActor" }] },
     ],
   },
 
