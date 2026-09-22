@@ -53,6 +53,16 @@ export function isPlaystyle(value: unknown): value is Playstyle {
  * is deliberate is the SHAPE of each — which lever each style leans on,
  * and which it leaves alone. Every style leaves `selfOustGuard` untouched:
  * nothing outranks not being ousted, whatever your temperament.
+ *
+ * SURVIVAL IS THE ONE THING EVERY STYLE NOW STATES (2026-09-22, owner
+ * request: bots were spending themselves to death to play a card). Each
+ * one sets all three of `poolFloor`, `lowPoolThreshold` and
+ * `lowPoolCaution`, and they are the only weights the whole set agrees to
+ * have an opinion about — because "how close to death will you go for a
+ * card" is a question of temperament in a way that `blockHunt` is not,
+ * and because a style that left them out would read as *not caring*
+ * rather than as *taking the default*
+ * (docs/ai-pool-preservation-design.md §4).
  */
 export const PLAYSTYLES: Record<Playstyle, Partial<Weights>> = {
   /** The tuned defaults. The control, and the reason this ships inert. */
@@ -77,6 +87,13 @@ export const PLAYSTYLES: Record<Playstyle, Partial<Weights>> = {
     pressWhenLosing: -2,
     strikeDamage: 4,
     hunt: 0,
+    // It is in a RACE, and pool held back is tempo it never spends. The
+    // lowest threshold of any style and the default floor: it will go
+    // right down to the last safe point for a card, but it still will not
+    // walk into an oust.
+    poolFloor: 2,
+    lowPoolThreshold: 6,
+    lowPoolCaution: 0.5,
   },
 
   /**
@@ -96,6 +113,13 @@ export const PLAYSTYLES: Record<Playstyle, Partial<Weights>> = {
     pressWhenLosing: -7,
     hunt: 3,
     huntWhenEmpty: 10,
+    // THE STYLE THIS FEATURE IS FOR. It starts counting its pool while it
+    // still has 14 of it, keeps five in hand come what may, and is the
+    // only style that will stop influencing to stay alive — a Turtle at 6
+    // pool with a board would rather sit on it than buy another body.
+    poolFloor: 5,
+    lowPoolThreshold: 14,
+    lowPoolCaution: 1.8,
   },
 
   /**
@@ -115,6 +139,13 @@ export const PLAYSTYLES: Record<Playstyle, Partial<Weights>> = {
     blockPolitical: 10,
     voteTollCost: 1,
     bleedPrey: 10,
+    // A referendum can take four pool off the table in one resolution, so
+    // this one wants a buffer for a reason no other style has: the swing
+    // it is about to be on the wrong end of is one it can SEE coming and
+    // cannot always outvote.
+    poolFloor: 3,
+    lowPoolThreshold: 10,
+    lowPoolCaution: 1.2,
   },
 
   /**
@@ -143,6 +174,12 @@ export const PLAYSTYLES: Record<Playstyle, Partial<Weights>> = {
     pressWhenLosing: -8,
     pressToFinish: 2,
     strikeDamage: 1,
+    // Close to the default. A stealth bleeder wins on the clock, so it
+    // spends fairly freely — but its cards are cheap and its vampires do
+    // the work, so there is rarely a reason to go to the last point.
+    poolFloor: 2,
+    lowPoolThreshold: 7,
+    lowPoolCaution: 0.7,
   },
 
   /**
@@ -171,5 +208,14 @@ export const PLAYSTYLES: Record<Playstyle, Partial<Weights>> = {
     // Feeding the board is real work for this style, not a wasted phase.
     hunt: 3,
     huntWhenEmpty: 10,
+    // THE AWKWARD ONE, and the reason `lowPoolCaution` is a separate
+    // weight from the threshold. A Builder spends pool by design — it is
+    // the style that pays for permanents — so it starts watching EARLY
+    // (11) and then charges itself LIGHTLY (0.8) for what it spends. High
+    // threshold, low caution: keep a cushion, but do not stop building
+    // once you are inside it.
+    poolFloor: 3,
+    lowPoolThreshold: 11,
+    lowPoolCaution: 0.8,
   },
 };

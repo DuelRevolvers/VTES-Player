@@ -12482,6 +12482,12 @@ function addCryptAbilities(
       if (!af || af.acting !== owner.minion) return out;
       const bearer = findMinion(ctx.state, owner.minion);
       if (!bearer) return out;
+      // ONCE per action. The revealed card STAYS on top of the library,
+      // so an unlatched reveal is the same gamble answered over and over
+      // — the Shilmulo Tarot lesson: an enumerator in a window that
+      // re-offers needs its own latch, and this one consumes nothing
+      // observable. Action-scoped, so the next action offers it again.
+      if (af.usedInPlayAbilities.includes(entry.card.id)) return out;
       const top = getSeat(ctx.state, controller).library[0];
       // Nothing to reveal, and the gamble cannot be taken. Note the
       // OPTION deliberately does not say what the card is: knowing would
@@ -12510,6 +12516,7 @@ function addCryptAbilities(
       const top = getSeat(ops.state, controller).library[0];
       const af = ops.action();
       if (!top || !af || owner.minion === null) return;
+      ops.markInPlayAbilityUsed(entry.card.id);
       const types = ops.registry[top.name]?.costTypes?.(null) ?? [];
       const hit = types.some((t) => reveal.ifTypes.includes(t));
       // REVEALED, so the card is named to the whole table — unlike a

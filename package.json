@@ -1,7 +1,7 @@
 {
   "name": "vtes-platform",
   "private": true,
-  "version": "0.11.04",
+  "version": "0.11.07",
   "type": "module",
   "description": "VTES online platform with AI players (V5 card pool). Non-commercial Dark Pack fan project.",
   "scripts": {
@@ -14,10 +14,11 @@
     "test:watch": "vitest",
     "cards:fetch": "tsx scripts/fetch-cards.mts",
     "cards:sets": "tsx scripts/list-sets.mts",
-    "cards:registry": "tsx scripts/build-registry.mts",
+    "cards:registry": "tsx scripts/build-registry.mts && tsx scripts/build-catalog.mts",
     "simulate": "tsx scripts/simulate.mts",
     "simulate:politics": "tsx scripts/simulate.mts --decks config/playtest-decks-politics.json",
-    "bench": "tsx scripts/aibench.mts"
+    "bench": "tsx scripts/aibench.mts",
+    "cards:catalog": "tsx scripts/build-catalog.mts"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

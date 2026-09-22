@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 291 test files, 2997 tests**, with `npm run typecheck`,
+**Green baseline: 293 test files, 3050 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -137,6 +137,16 @@ fewer, something regressed.
 table rewrites every turn, loadable from there or from a `.json` file. A
 save records **which seats were bots** (`SavedGame.botSeats`) **and how
 each one was playing** (`botPlaystyles`, added 2026-09-19).
+
+**The DECK BUILDER** landed 0.11.07 (`docs/deck-builder-design.md`): a
+fourth menu item that now owns the deck library and the importer (moved
+off Profile, which keeps a pointer), a **reserved empty panel** for the
+builder proper, and a **search over all 4,149 cards** badged Playable /
+Partly implemented / Not in the player. `src/cards/catalog.json` is a
+SECOND GENERATED FILE beside the registry — all cards, browsing data only,
+built by `scripts/build-catalog.mts`, which `npm run cards:registry` now
+chains so the two cannot drift. It is **lazily imported** (3.2MB, its own
+chunk) and the engine must never import it.
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 
@@ -370,6 +380,20 @@ each one was playing** (`botPlaystyles`, added 2026-09-19).
    BEHAVIOUR measurably; they do not change strength. Treat them as a
    feel feature, not a strength feature.
 
+   **THE BOTS NOW WANT TO SURVIVE (0.11.06, owner request 2026-09-22):**
+   `poolFloor` / `lowPoolThreshold` / `lowPoolCaution`, and **every
+   playstyle states all three** (`ai-pool-preservation-design.md`). The
+   policy had ONE brake — a cliff at 2 pool, on the PLAY path only — so a
+   transfer, which is a pool spend the influence scorer knew nothing
+   about, walked a seat on 4 pool down to 0 every turn. Now: a cliff on
+   plays *and* transfers, a gradient above it (`lowPoolCaution=0` turns it
+   off), taking counters BACK when at the floor, and two exemptions so
+   thrift is not paralysis — a card that pays for itself, and a seat with
+   nothing in play. Turtle floor 5 / threshold 14; Builder is the reason
+   caution is a separate weight (watch early at 11, charge lightly at
+   0.8). **No strength claim**: gradient-off vs on is −0.063 VP inside
+   ±0.252. `SearchAgent` still prices pool linearly and is the follow-up.
+
 ---
 
 ## The lessons that keep paying (read these)
@@ -492,7 +516,9 @@ doc named beside it.
   do X" that consumes nothing observable is offered again the moment it
   is used — Shilmulo Tarot moved a whole library in one phase
   (`table-ux-2026-09-20.md` §2). Its siblings self-limit by spending a
-  hand card or locking; that is why only it was wrong.
+  hand card or locking; that is why only it was wrong. **Gathii's reveal
+  was the same bug** — unbounded stealth off one top card, since
+  revealing does not move it (`crypt-wave-7.md` §4, fixed 0.11.05).
 
 ### Reads and layers
 
@@ -591,7 +617,10 @@ of it, not the common case, not "that clause is rare".
 ## Card registry rules
 
 - `src/cards/registry.json` is **generated** (cards AND the 32 precon
-  decks) — never hand-edit. Rebuild with `npm run cards:registry`.
+  decks) — never hand-edit. Rebuild with `npm run cards:registry`, which
+  also rebuilds `src/cards/catalog.json` (all 4,149 cards, for the Deck
+  Builder's search; reads the registry for its badge, so the order
+  matters and the one script runs both).
 - `config/supported.json` (card id → true) is hand-maintained. A card may
   be flipped to supported **only** when it has (a) an effects
   implementation and (b) a passing scenario test. The pipeline reads it,
@@ -807,7 +836,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-204 files under `docs/`, one per mechanic that took a decision. **Read the
+205 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -865,9 +894,9 @@ ledger-closeout, partial-support, card-status-by-set.
 ai-politics-bench, ai-referendum-view, ai-seat-relationships,
 ai-vote-scoring, ai-referendum-terms, ai-vote-economy, ai-combat-range,
 ai-block-action-value, ai-answer-choice, ai-vote-search-horizon,
-ai-ash-heap-reading, ai-playstyles.
+ai-ash-heap-reading, ai-playstyles, ai-pool-preservation.
 
-**UI, net and shipping:** debug-ui, shell, saved-games, lobby,
+**UI, net and shipping:** deck-builder, debug-ui, shell, saved-games, lobby,
 lobby-rework-2026-09-06, multiplayer, deck-import, fresh-game, game-log,
 futile-options, playtest-2026-09-05, table-ux-2026-09-11, table-ux-2026-09-18,
 table-ux-2026-09-20, pass-timeout, play-menu-steps, pages,

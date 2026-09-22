@@ -394,6 +394,21 @@ describe("Gathii", () => {
     expect(opt?.label).not.toContain("Blood Doll");
   });
 
+  it("is offered ONCE per action — the revealed card stays on top", () => {
+    // Unlatched, the same gamble could be answered over and over for
+    // unbounded stealth, because revealing does not move the card.
+    const { engine } = gathiiBleed("Cats' Guidance");
+    runTrace(engine, [["Alice", optionIds(engine).find((o) => o.includes(":reveal"))!]]);
+    expect(optionIds(engine).some((o) => o.includes(":reveal"))).toBe(false);
+  });
+
+  it("is still offered once after a MASTER burnt his blood", () => {
+    // The penalty half latches too — and he must still be able to pay.
+    const { engine } = gathiiBleed("Blood Doll");
+    runTrace(engine, [["Alice", optionIds(engine).find((o) => o.includes(":reveal"))!]]);
+    expect(optionIds(engine).some((o) => o.includes(":reveal"))).toBe(false);
+  });
+
   it("is not offered with an empty library", () => {
     const state = threeSeatGame();
     asVampire(find(state, "V1"), "Gathii (G7)");

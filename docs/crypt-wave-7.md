@@ -95,6 +95,16 @@ carries no name because a reorder shows nobody anything.
 He must be able to pay the penalty for the option to be offered: a card
 that could lose is still a card that must be able to settle up.
 
+**Once per action (bug fix, 0.11.05 — owner report).** The reveal shipped
+with no latch, and the action window re-offers until it is empty, so the
+same gamble could be answered over and over: the revealed card STAYS on
+top of the library, so every repeat was the identical roll, and a
+non-master gave unbounded stealth. The latch is `af.usedInPlayAbilities`
+(the Under Siege machinery) — action-scoped, so it clears with the frame
+and the next action offers the gamble again. Exactly the Shilmulo Tarot
+lesson: his siblings self-limit by spending a hand card or locking, and
+this one consumes nothing observable.
+
 ---
 
 ## 5. Looking at a hand you may not read

@@ -197,6 +197,39 @@ export interface Weights {
   playCard: number;
   poolCost: number;
   /**
+   * SURVIVAL (docs/ai-pool-preservation-design.md).
+   *
+   * Pool is life (p. 4) and the bots did not act like it. `poolCost` is a
+   * flat price per point, so a card was worth the same at 30 pool and at
+   * 4 — and the only brake was a single hard cliff in `scorePlay` that
+   * refused to spend below 2. Between "comfortable" and "one point from
+   * dead" there was nothing at all, which is how a bot at 5 pool pays 3
+   * for a master and hands its predator the game.
+   *
+   * Three weights rather than one, because the three answer different
+   * questions and the playstyles want to answer them differently:
+   *
+   *  - **`poolFloor`** — the pool this seat will not spend below,
+   *    whatever the card promises. A cliff, priced at `selfOustGuard`.
+   *    Defaults to 2, which is exactly the number that was hard-coded,
+   *    so `balanced` keeps its measured behaviour at the cliff.
+   *  - **`lowPoolThreshold`** — where thrift STARTS. Above it a point of
+   *    pool costs `poolCost` and nothing more; from there down to the
+   *    floor the price rises smoothly. The owner's number (2026-09-22).
+   *  - **`lowPoolCaution`** — how steep that rise is. **At 0 the whole
+   *    layer is off**, so the claim is falsifiable with
+   *    `--weights lowPoolCaution=0` rather than by editing code.
+   *
+   * The gradient is applied only where it can change an argmax. Pool is
+   * the same for every option in a decision, so by the §8 law a flat
+   * discount on a decision whose options all cost the same flips nothing
+   * — it is the *differences* in cost, and the comparison against `pass`,
+   * that this moves (docs/richer-options-design.md §8).
+   */
+  poolFloor: number;
+  lowPoolThreshold: number;
+  lowPoolCaution: number;
+  /**
    * What the card DOES, per family, per point
    * (docs/richer-options-design.md §5).
    *
@@ -459,6 +492,11 @@ export const DEFAULT_WEIGHTS: Weights = {
   blockOutmatched: -6,
   playCard: 2,
   poolCost: -2,
+  // The cliff that was hard-coded in `scorePlay`, now a weight.
+  poolFloor: 2,
+  // The owner's number: "low health, maybe like 8 or so".
+  lowPoolThreshold: 8,
+  lowPoolCaution: 1,
   /**
    * MEASURED, and the result was not the one I expected.
    *
@@ -577,6 +615,20 @@ function poolAfter(view: PlayerView, seat: SeatId, cost: number): number {
   return (seatOf(view, seat)?.pool ?? 0) - cost;
 }
 
+/**
+ * What a play PAYS BACK in pool, so a card that costs 1 and returns 3 is
+ * not read as a spend at all.
+ *
+ * Without this the survival layer would refuse exactly the cards a seat
+ * on 4 pool most needs — the blood-to-pool masters whose entire purpose
+ * is to undo the position that triggers the refusal.
+ */
+function poolGainOf(effects: PlayEffect[] | undefined): number {
+  let gain = 0;
+  for (const e of effects ?? []) if (e.tag === "poolGain") gain += e.amount ?? 1;
+  return gain;
+}
+
 export interface HeuristicOptions {
   weights?: Partial<Weights>;
   /** Seed for tie-breaking. Two agents with the same seed and the same
@@ -677,7 +729,17 @@ export class HeuristicAgent implements Agent {
       case "cryptDraw":
         return w.cryptDraw;
       case "transferToPool":
-        // Pulling counters back off a vampire undoes your own influence.
+        // Pulling counters back off a vampire undoes your own influence —
+        // and is precisely what a seat about to be ousted should do with
+        // them. Counters sitting in the uncontrolled region buy nothing
+        // until the vampire arrives, and a seat that is ousted first never
+        // gets there.
+        //
+        // The condition is the FLOOR rather than the gradient, so it is
+        // self-limiting: each counter taken back raises the pool, and the
+        // moment the pool clears the floor this goes back to being the
+        // worst option on the list. No unbounded stripping of the region.
+        if ((seatOf(view, me)?.pool ?? 0) <= w.poolFloor) return w.influenceTransfer;
         return -w.influenceTransfer;
 
       case "diablerizeOffer":
@@ -706,8 +768,12 @@ export class HeuristicAgent implements Agent {
         return w.playCard;
 
       case "payToCancel":
-        // Only worth it if the pool is genuinely spare.
-        return poolAfter(view, me, o.pool) >= 4 ? w.playCard : w.selfOustGuard;
+        // Only worth it if the pool is genuinely spare — two clear of the
+        // floor, which was a hard-coded 4 and is now whatever this style
+        // calls safe.
+        return poolAfter(view, me, o.pool) >= w.poolFloor + 2
+          ? w.playCard
+          : w.selfOustGuard;
 
       case "cancelBlock":
         // Withdrawing is rarely right for a policy this simple.
@@ -725,6 +791,59 @@ export class HeuristicAgent implements Agent {
         return this.scoreChoice(o, view, me);
 
     }
+  }
+
+  /**
+   * HOW PRESSED THIS SEAT IS FOR POOL: 0 when comfortable, rising to 1 at
+   * the floor (docs/ai-pool-preservation-design.md).
+   *
+   * Linear between the two, and deliberately so: the only claim being
+   * made is that the price of a point of pool goes UP as the pool goes
+   * down, and a curve would be a second claim nobody has measured.
+   *
+   * Total over silly weights — a style that set its threshold below its
+   * floor would otherwise divide by a negative span and get a policy that
+   * spends harder the closer it is to death.
+   */
+  private poolPressure(view: PlayerView, me: SeatId): number {
+    const w = this.w;
+    const pool = seatOf(view, me)?.pool ?? 0;
+    if (pool >= w.lowPoolThreshold) return 0;
+    const span = w.lowPoolThreshold - w.poolFloor;
+    if (span <= 0) return pool <= w.poolFloor ? 1 : 0;
+    return Math.min(1, Math.max(0, (w.lowPoolThreshold - pool) / span));
+  }
+
+  /**
+   * HOW MUCH THIS SEAT CARES, 0…1 — the position scaled by temperament
+   * and clamped, so `lowPoolCaution` cannot push a style past certainty.
+   *
+   * ONE helper, read by every site that spends pool, because one question
+   * asked in two places will drift — and a bot that refuses a 3-pool
+   * master while cheerfully paying the same 3 as a card's toll has not
+   * learned anything. Each site scales this by its OWN local price (a
+   * per-point cost, a currency fork); what none of them re-derives is how
+   * pressed the seat is.
+   */
+  private poolUrgency(view: PlayerView, me: SeatId): number {
+    return Math.min(1, this.poolPressure(view, me) * this.w.lowPoolCaution);
+  }
+
+  /** The multiplier on a point of pool: 1 when comfortable, 3 at full
+   *  urgency — so a `poolCost` of −2 becomes −6. */
+  private poolBite(view: PlayerView, me: SeatId): number {
+    return 1 + 2 * this.poolUrgency(view, me);
+  }
+
+  /**
+   * "Unless it is absolutely necessary" — the one exemption.
+   *
+   * A seat with NO minion in play is not saving itself by hoarding: it
+   * has no way to bleed, block or hunt, and pool it never spends is pool
+   * its predator takes anyway. Boardless seats influence at full price.
+   */
+  private boardless(view: PlayerView, me: SeatId): boolean {
+    return (seatOf(view, me)?.minions.length ?? 0) === 0;
   }
 
   /**
@@ -762,7 +881,20 @@ export class HeuristicAgent implements Agent {
     // A COST, with a choice of currency. Pool is life (p. 4); blood is
     // fuel — so blood, unless the vampire cannot spare it.
     const pay = o.params["pay"];
-    if (pay === "pool") return base;
+    // Priced off the same urgency as every other pool spend, so the
+    // currency fork moves with the pool instead of being settled once at
+    // design time.
+    //
+    // At a comfortable pool this is `base` exactly, as it was — which
+    // matters more than it looks: `base` is what keeps an OPTIONAL frame
+    // above `pass`, and the note above records what happened the last
+    // time this fell to 0. At full urgency it lands just below
+    // `choicePayBloodEmpty`, which is the claim in one line: a pressed
+    // seat would rather send a vampire out to hunt (p. 21) than pay with
+    // its life, and it declines an optional frame that only takes pool.
+    if (pay === "pool") {
+      return base + (w.choicePayBloodEmpty - 1) * this.poolUrgency(view, me);
+    }
     if (pay === "blood") {
       const payer = o.params["pick"] ? findMinion(view, o.params["pick"]) : null;
       // A derived read must be TOTAL: the named vampire can have left
@@ -837,6 +969,25 @@ export class HeuristicAgent implements Agent {
   ): number {
     const w = this.w;
     const seat = seatOf(view, me);
+    // A TRANSFER IS A POOL SPEND, and this scorer had no idea: every
+    // transfer scored 6 or more against a `pass` of 0.5, so a bot on 4
+    // pool moved four of them onto a 7-capacity vampire it would never
+    // finish and handed its predator a one-bleed oust. This is the worst
+    // of the three sites, because it is the one the bot reaches every
+    // single turn.
+    //
+    // A CLIFF, not a gradient, and by the §8 law rather than by taste:
+    // the pool is identical for every candidate in an influence decision,
+    // so a smooth discount cannot choose between them, and it cannot beat
+    // `pass` either without being large enough to stop the bot building a
+    // board at all. What the floor does is stop the phase.
+    //
+    // The exemption is the one that matters: a seat with nothing in play
+    // influences at full price, because hoarding pool behind an empty
+    // table is a slower way of losing, not a way of surviving.
+    if (!this.boardless(view, me) && poolAfter(view, me, 1) <= w.poolFloor) {
+      return w.selfOustGuard;
+    }
     const entry = seat?.uncontrolled.find((u) => u.card?.id === o.minion);
     // A vampire the view will not show us (it cannot be one of ours) —
     // score it as an ordinary transfer rather than guessing.
@@ -1331,7 +1482,13 @@ export class HeuristicAgent implements Agent {
 
     // Pool is life. Never spend down to a position an ordinary bleed
     // would oust you from, whatever the card promises.
-    if (cost.pool > 0 && pool - cost.pool <= 2) return w.selfOustGuard;
+    //
+    // NET of what the play pays back: the cliff used to read the gross
+    // cost, so a seat on 4 pool refused the blood-to-pool master that
+    // would have put it back on 7 — it refused the cure because it had
+    // the disease (docs/ai-pool-preservation-design.md §3).
+    const netPool = cost.pool - poolGainOf(o.effects);
+    if (netPool > 0 && pool - netPool <= w.poolFloor) return w.selfOustGuard;
 
     // A blood cost is real but recoverable — a vampire can hunt. Charge
     // it lightly, and refuse a play that would empty the payer, since a
@@ -1365,7 +1522,20 @@ export class HeuristicAgent implements Agent {
       }
     }
 
-    let score = w.playCard + cost.pool * w.poolCost - cost.blood * 0.5;
+    // THE GRADIENT, above the cliff. A point of pool is dearer the less
+    // of it there is, so a seat under the threshold stops preferring the
+    // expensive card in hand and — when the price outweighs what the card
+    // does — stops playing it at all, because `pass` is still 0.5.
+    //
+    // Charged on the GROSS cost, at a multiplier that is 1 unless the
+    // seat is under the threshold — so at a comfortable pool this is
+    // arithmetically the line it replaced, and every measurement behind
+    // `poolCost` and `effectValue` still describes the policy. A play
+    // that pays for itself keeps the ordinary price: the bite is a brake
+    // on SPENDING pool, and a card that returns more than it takes is not
+    // spending it.
+    const bite = netPool > 0 ? this.poolBite(view, me) : 1;
+    let score = w.playCard + cost.pool * w.poolCost * bite - cost.blood * 0.5;
     // What the card actually does. Before this, everything a card did was
     // invisible here and only its price was not — so the policy reliably
     // preferred the cheapest card in hand, which is the opposite of how

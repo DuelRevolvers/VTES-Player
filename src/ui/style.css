@@ -1458,3 +1458,114 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
    the app until OK is pressed — a repaint would tear the native colour
    popover off its anchor and close it (see chatSettings in render.ts). */
 .chatsettings .setbuttons { margin-top: 6px; justify-content: flex-end; gap: 6px; }
+
+/* --- the deck builder and its card search ------------------------------ */
+
+/* WIDER THAN EVERY OTHER SHELL SCREEN, because it is the only one that
+   draws a grid of card scans. 520px is right for a form and wrong for a
+   contact sheet. */
+.shell .card.deckbuilder { width: min(1180px, 96vw); }
+.dbhead { margin-top: 0; align-items: baseline; justify-content: space-between; }
+.dbhead h1 { margin: 0; }
+
+/* The reserved panel. It is disabled rather than absent so the shape of
+   the finished screen is visible now (docs/deck-builder-design.md §5). */
+.dbbuild .dbsoon { opacity: .5; }
+.dbbuild .row { align-items: center; }
+
+/* A pointer left where a feature used to be. Reads as a link, behaves as
+   the button it is. */
+.shell button.linkish {
+  background: none; border: none; padding: 0;
+  color: var(--gold); text-decoration: underline; font: inherit;
+}
+.shell button.linkish:hover { background: none; color: var(--ink); }
+
+.csbar { align-items: center; }
+.csq { flex: 1; min-width: 220px; }
+.shell button.csview.on { background: var(--panel2); border-color: var(--gold); color: var(--gold); }
+.csadvrow { margin-top: 8px; }
+.shell button.csadv.open { border-color: var(--gold); color: var(--gold); }
+
+/* The filter wall. Auto-fit rather than a fixed column count: the panel
+   is used at 1180px and at 96vw on a smaller screen, and a fixed grid
+   would leave one of the two wrong. */
+.csfilters {
+  display: grid; gap: 10px; margin: 12px 0 4px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.csfield { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.csfield > span:first-child { color: var(--dim); }
+.csfield.wide { grid-column: span 2; }
+.csfield select[multiple] { min-height: 108px; }
+/* How many are chosen, beside the label — a collapsed multi-select
+   otherwise hides the filter that is making the results look wrong. */
+.csn {
+  background: var(--accent); color: var(--ink); border-radius: 8px;
+  padding: 0 6px; font-size: 10px; margin-left: 4px;
+}
+.csrange { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.csrange .cslabel { color: var(--dim); }
+.csnum { display: flex; align-items: center; gap: 6px; }
+.csnum span { color: var(--dim); width: 32px; }
+.csnum input { width: 64px; }
+
+.csmore, .csempty { margin: 12px 0 8px; }
+
+/* --- results ----------------------------------------------------------- */
+
+.csresults.grid {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.shell .csresults.grid .cscard {
+  display: flex; flex-direction: column; gap: 4px; align-items: stretch;
+  padding: 6px; text-align: left; background: var(--panel2);
+}
+.csresults.grid .cscard img {
+  width: 100%; aspect-ratio: 5 / 7; object-fit: cover;
+  border-radius: 4px; background: var(--bg);
+}
+.csresults.grid .csname { font-size: 11px; line-height: 1.3; }
+
+.csresults.list { display: flex; flex-direction: column; gap: 4px; }
+.shell .csresults.list .csrow {
+  display: flex; align-items: baseline; gap: 10px; text-align: left;
+  padding: 6px 10px; background: var(--panel2);
+}
+.csresults.list .csname { flex: 0 0 240px; font-weight: 600; }
+.csresults.list .cstraits { flex: 1; color: var(--dim); font-size: 11px; }
+
+.shell .cscard.selected, .shell .csrow.selected { border-color: var(--gold); }
+
+/* THE BADGE IS THE POINT OF THE PANEL: "can this platform play it?" is
+   the question a deck builder asks first. Green for yes, dim for not
+   added, blood for the state that should never occur — a card that is
+   dealt but not whole (src/cards/catalog.ts). */
+.cstat {
+  font-size: 10px; border-radius: 3px; padding: 1px 6px;
+  border: 1px solid var(--line); color: var(--dim); white-space: nowrap;
+}
+.cstat.playable { color: var(--good); border-color: var(--good); }
+.cstat.pool { color: var(--blood); border-color: var(--blood); }
+
+/* --- one card, in full ------------------------------------------------- */
+
+.csdetail {
+  margin: 14px 0; padding: 12px 14px;
+  background: var(--panel2); border: 1px solid var(--gold); border-radius: 6px;
+}
+.csdetailhead { display: flex; align-items: center; gap: 10px; }
+.csdetailhead h2 { margin: 0; font-size: 16px; color: var(--gold); font-weight: 600; flex: 1; }
+.shell .csclose { margin-left: auto; padding: 2px 10px; }
+.csdetailbody { display: flex; gap: 16px; margin-top: 10px; flex-wrap: wrap; }
+.csbig { width: 220px; border-radius: 6px; background: var(--bg); }
+.csfacts { flex: 1; min-width: 260px; }
+.csfacttable { border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
+.csfacttable th {
+  text-align: left; color: var(--dim); font-weight: 400;
+  padding: 2px 12px 2px 0; vertical-align: top; white-space: nowrap;
+}
+.csfacttable td { padding: 2px 0; vertical-align: top; }
+.cstext { font-size: 13px; line-height: 1.6; white-space: normal; }
+.csflavor { font-size: 12px; color: var(--dim); font-style: italic; margin: 10px 0 0; }

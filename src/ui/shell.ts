@@ -16,6 +16,17 @@
 
 import { PLAYSTYLES_LIST, PLAYSTYLE_LABELS } from "../ai/playstyles.ts";
 import { botAgentFor, playstyleOf } from "./botagent.ts";
+import type { CatalogCard, CatalogFile } from "../cards/catalog.ts";
+import { loadCatalog } from "../cards/catalog.ts";
+import type { CardQuery, CardView, Facets, SearchScope, SortKey } from "./cardsearch.ts";
+import {
+  cardDetailMarkup,
+  emptyQuery,
+  facetsOf,
+  resultsMarkup,
+  searchCards,
+  searchPanelMarkup,
+} from "./cardsearch.ts";
 import { LobbyHost, LobbyPeer } from "../net/lobby.ts";
 import type { HostSession } from "../net/host.ts";
 import { PeerTransport } from "../net/peer.ts";
@@ -99,7 +110,15 @@ import { LocalTransport } from "./transport.ts";
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 
-type Screen = "profile" | "menu" | "newgame" | "lobby" | "join" | "leaderboard" | "table";
+type Screen =
+  | "profile"
+  | "menu"
+  | "deckbuilder"
+  | "newgame"
+  | "lobby"
+  | "join"
+  | "leaderboard"
+  | "table";
 
 /**
  * "2 minutes ago", for a saved game's row.
@@ -136,6 +155,26 @@ export class Shell {
   private botNameError = "";
   /** Which seat's deck panel is open on the new-game screen. */
   private editingDeck: number | null = null;
+
+  // --- the deck builder -----------------------------------------------------
+  /**
+   * The card catalogue, once it has arrived.
+   *
+   * Null means "not asked for yet or still coming", which is the honest
+   * state: it is a 3MB lazily-imported chunk (src/cards/catalog.ts) and
+   * the shell is drawn synchronously, so the screen shows that it is
+   * loading and repaints when the promise settles. The facets are cached
+   * beside it because deriving them walks all 4,149 cards and the answer
+   * cannot change without the catalogue changing.
+   */
+  private catalog: CatalogFile | null = null;
+  private catalogFacets: Facets | null = null;
+  private catalogError = "";
+  private cardQuery: CardQuery = emptyQuery();
+  private cardView: CardView = "grid";
+  private advancedOpen = false;
+  /** The card whose detail panel is open, by KRCG id. */
+  private selectedCardId: number | null = null;
 
   // --- online ---------------------------------------------------------------
   /** Hosting: the room on the broker, and the lobby it feeds. */
@@ -189,6 +228,11 @@ export class Shell {
     // from the live form, so this has to come first.
     if (screen !== "profile") this.profileDraft = null;
     this.screen = screen;
+    // The catalogue is 3MB and nothing else on any screen wants it, so it
+    // is asked for HERE — on the way in, once — rather than from the
+    // render, which runs on every keystroke and must stay a pure function
+    // of state.
+    if (screen === "deckbuilder") this.ensureCatalog();
     this.error = "";
     // A deliberate move somewhere else acknowledges the "you were removed"
     // banner. `leaveTable` does NOT go through here, which is what leaves
@@ -222,6 +266,8 @@ export class Shell {
         return this.profileScreen();
       case "menu":
         return this.menuScreen();
+      case "deckbuilder":
+        return this.deckBuilderScreen();
       // One screen, both cases. Building a table and waiting in a lobby
       // show the same thing, so opening a seat adds a room code rather
       // than throwing the host to a second page.
@@ -359,7 +405,23 @@ export class Shell {
           ${p ? `<button id="pback">Back</button>` : ""}
           ${p ? `<button id="pclear" class="danger">Delete profile</button>` : ""}
         </div>
-        ${p ? this.deckLibrary() : ""}
+        <!--
+          YOUR DECKS USED TO BE HERE (owner request, 2026-09-22): they and
+          the importer moved to the Deck Builder, which is where deck
+          things now live. A feature that moved without a sign is
+          indistinguishable from one that was deleted — the same report
+          this project has had twice about features that worked — so the
+          old place says where the new one is, and the button goes there.
+        -->
+        ${
+          p
+            ? `<p class="note dim">
+                 Your saved decks and the deck importer are in the
+                 <b>Deck Builder</b> now.
+                 <button id="p-decks" class="linkish">Open it</button>
+               </p>`
+            : ""
+        }
         ${p ? this.savedGamesPanel() : ""}
         ${p ? this.botNamesPanel() : ""}
       </div>`;
@@ -484,10 +546,12 @@ export class Shell {
   }
 
   /**
-   * Your saved decks. Shown on the Profile screen because that is where
-   * "things that are yours" live — but they are CHOSEN from the deck
-   * panel, which serves the new-game screen and the lobby through one code
-   * path, so a deck saved here is available everywhere a deck is picked.
+   * Your saved decks. On the DECK BUILDER since 2026-09-22 (owner
+   * request) — it was on the Profile screen, which was where "things that
+   * are yours" lived before there was a screen about decks. They are
+   * still CHOSEN from the deck panel, which serves the new-game screen and
+   * the lobby through one code path, so a deck saved here is available
+   * everywhere a deck is picked.
    */
   private deckLibrary(): string {
     const decks = loadDecks();
@@ -550,6 +614,151 @@ export class Shell {
       </div>`;
   }
 
+  // --- deck builder --------------------------------------------------------
+
+  /**
+   * THE DECK BUILDER (docs/deck-builder-design.md).
+   *
+   * One home for everything to do with decks, rather than three: your
+   * saved decks and the importer moved here off the Profile screen, the
+   * card search is new, and the building half has a section reserved for
+   * it and nothing in it yet.
+   *
+   * THE RESERVED SECTION IS DELIBERATE AND IT IS NOT A STUB. It says what
+   * will be there and what you can do instead today. A panel that says
+   * "coming soon" and nothing else is worse than no panel; a panel that
+   * points you at the importer is a working answer to the question that
+   * brought you here.
+   */
+  private deckBuilderScreen(): string {
+    return `
+      <div class="card deckbuilder">
+        <div class="row dbhead">
+          <h1>Deck Builder</h1>
+          <button id="db-back">Back</button>
+        </div>
+        ${this.deckLibrary()}
+        ${this.buildPanel()}
+        ${this.cardSearchPanel()}
+      </div>`;
+  }
+
+  /**
+   * Where the deck builder proper will go.
+   *
+   * Empty on purpose (owner, 2026-09-22: "don't build the actual deck
+   * builder part yet, but build a section for it"). It is a real panel in
+   * the real place, so the screen it eventually fills is the screen
+   * people already know — and until then it says what a deck needs,
+   * which is the part of building one that the rules decide rather than
+   * the tool (p. 14: 12 crypt cards minimum, 60 library minimum).
+   */
+  private buildPanel(): string {
+    return `
+      <div class="supported dbbuild">
+        <div class="sethead">Build a deck</div>
+        <p class="note">
+          Building a deck card by card is not here yet. For now, put a list
+          together elsewhere and paste it above — the importer checks it
+          against the pool and tells you exactly which cards this platform
+          cannot play, rather than dropping them.
+        </p>
+        <p class="note dim">
+          A legal deck is <b>at least 12 crypt cards</b> and
+          <b>at least 60 library cards</b> (rulebook p. 14). The New Blood
+          starters are half decks by design and are exempt.
+        </p>
+        <div class="row">
+          <button class="dbsoon" disabled>Start a new deck</button>
+          <span class="note dim">planned</span>
+        </div>
+      </div>`;
+  }
+
+  /**
+   * Every card in the game, searchable (docs/deck-builder-design.md §3).
+   *
+   * The catalogue is not the registry: it is all 4,149 KRCG cards, and
+   * each one is badged with what this platform can actually do with it.
+   * That badge is the reason the panel exists at all — "is this card in
+   * the player?" is the question a deck builder asks first, and until now
+   * the only way to answer it was to paste a list and read the errors.
+   */
+  private cardSearchPanel(): string {
+    if (this.catalogError) {
+      return `<div class="supported cardsearch">
+        <div class="sethead">Card search</div>
+        <p class="err">${esc(this.catalogError)}</p>
+      </div>`;
+    }
+    const file = this.catalog;
+    const facets = this.catalogFacets;
+    if (!file || !facets) {
+      return `<div class="supported cardsearch">
+        <div class="sethead">Card search</div>
+        <p class="note dim">Loading the card list…</p>
+      </div>`;
+    }
+    const selected = this.selectedCard();
+    return `
+      <div class="supported cardsearch">
+        <div class="sethead">Card search</div>
+        <p class="note">
+          All ${file.cards.length} cards in the game. Each one says whether this
+          platform plays it — ${file.cards.filter((c) => c.status === "playable").length}
+          of them do, and the rest are here so you can see what a list of
+          yours would be missing.
+        </p>
+        ${searchPanelMarkup(this.cardQuery, facets, this.advancedOpen, this.cardView)}
+        ${selected ? cardDetailMarkup(selected) : ""}
+        <div id="cs-results">${this.cardResultsMarkup()}</div>
+      </div>`;
+  }
+
+  /** The card whose detail is open, or null — re-derived, never stored. */
+  private selectedCard(): CatalogCard | null {
+    if (this.selectedCardId === null) return null;
+    return this.catalog?.cards.find((c) => c.id === this.selectedCardId) ?? null;
+  }
+
+  /**
+   * The results block, and the ONE place it is built.
+   *
+   * Typing replaces only this block, so the search box keeps its cursor
+   * (the alternative is a full repaint that throws the caret away on
+   * every keystroke); everything else repaints the whole screen. Both
+   * paths call this, so the two cannot disagree about what a result looks
+   * like — "one question asked in two places will drift".
+   */
+  private cardResultsMarkup(): string {
+    const file = this.catalog;
+    if (!file) return "";
+    const results = searchCards(file.cards, this.cardQuery);
+    return resultsMarkup(results, this.cardView, this.selectedCardId, file.cards.length);
+  }
+
+  /**
+   * Fetch the catalogue, once, and repaint when it lands.
+   *
+   * Called on the way IN to the screen rather than from the render, so a
+   * repaint cannot start a second download and a render stays a pure
+   * function of state. The promise is cached in `loadCatalog` too, which
+   * is the belt to this braces.
+   */
+  private ensureCatalog(): void {
+    if (this.catalog || this.catalogError) return;
+    void loadCatalog()
+      .then((file) => {
+        this.catalog = file;
+        this.catalogFacets = facetsOf(file);
+        if (this.screen === "deckbuilder") this.paint();
+      })
+      .catch((err: unknown) => {
+        this.catalogError = `could not load the card list: ${(err as Error).message}`;
+        if (this.screen === "deckbuilder") this.paint();
+      });
+  }
+
   // --- menu ----------------------------------------------------------------
 
   private menuScreen(): string {
@@ -572,6 +781,7 @@ export class Shell {
         <div class="menubuttons">
           <button id="m-host" class="primary">Host a game</button>
           <button id="m-join">Join a game</button>
+          <button id="m-decks">Deck Builder</button>
           <button id="m-profile">Profile</button>
           <button id="m-leaderboard">Leaderboard</button>
           <button id="m-exit">Exit</button>
@@ -1236,9 +1446,14 @@ export class Shell {
       this.go("newgame");
     });
     this.on("#m-join", () => this.go("join"));
+    // TWO WAYS IN, ONE PATH: the menu button and the pointer left behind
+    // on the Profile screen where the decks used to be. Both have to
+    // start the catalogue loading, so neither may be the one that knows
+    // to do it — `go` does, for this screen.
+    this.on("#m-decks, #p-decks", () => this.go("deckbuilder"));
     this.on("#m-profile", () => this.go("profile"));
     this.on("#m-leaderboard", () => this.go("leaderboard"));
-    this.on("#lb-back, #pback, #join-back", () => this.go("menu"));
+    this.on("#lb-back, #pback, #join-back, #db-back", () => this.go("menu"));
     // Leaving the table screen has to hang up as well as navigate: an
     // online table has a room on the broker and, possibly, people in it.
     this.on("#ng-back", () => {
@@ -1282,9 +1497,130 @@ export class Shell {
     });
 
     this.wireProfile();
+    this.wireCardSearch();
     this.wireNewGame();
     this.wireLobby();
     this.wireJoin();
+  }
+
+  /**
+   * The card search's controls.
+   *
+   * Two kinds of handler, and the split is the whole design. A control
+   * that CHANGES THE SHAPE of the screen (view toggle, opening a card,
+   * opening the advanced panel) repaints it whole, the way every other
+   * screen in the shell works. TYPING does not: a repaint would destroy
+   * the input the person is still using, so the search box updates only
+   * the results block. Both render through `cardResultsMarkup`, so there
+   * is one answer to "what does a result look like" and it cannot drift.
+   */
+  private wireCardSearch(): void {
+    if (this.screen !== "deckbuilder") return;
+    const find = <T extends HTMLElement>(sel: string): T | null =>
+      this.root.querySelector<T>(sel);
+
+    // Typing: results only, so the caret survives. The results are
+    // rewired afterwards because they are new nodes.
+    const box = find<HTMLInputElement>("#cs-q");
+    box?.addEventListener("input", () => {
+      this.cardQuery = { ...this.cardQuery, text: box.value };
+      const slot = find<HTMLElement>("#cs-results");
+      if (!slot) return;
+      slot.innerHTML = this.cardResultsMarkup();
+      this.wireCardResults();
+    });
+
+    // A multi-select hands back its chosen options; a single one hands
+    // back a value. Both repaint, because a filter change can empty the
+    // list and the counts beside each label have to move with it.
+    const multi = (sel: string, key: keyof CardQuery): void => {
+      const el = find<HTMLSelectElement>(sel);
+      el?.addEventListener("change", () => {
+        const chosen = Array.from(el.selectedOptions).map((o) => o.value);
+        this.cardQuery = { ...this.cardQuery, [key]: chosen };
+        this.paint();
+      });
+    };
+    const single = (sel: string, apply: (v: string) => Partial<CardQuery>): void => {
+      const el = find<HTMLSelectElement>(sel);
+      el?.addEventListener("change", () => {
+        this.cardQuery = { ...this.cardQuery, ...apply(el.value) };
+        this.paint();
+      });
+    };
+    const bound = (sel: string, key: "capacityMin" | "capacityMax" | "costMin" | "costMax"): void => {
+      const el = find<HTMLInputElement>(sel);
+      el?.addEventListener("change", () => {
+        // AN EMPTY BOX IS "NO BOUND", NOT ZERO. `Number("")` is 0, which
+        // would silently turn a cleared "cost from" into "cost at least
+        // 0" — true of every card, so it would look like it worked while
+        // meaning something else the day a card costs nothing.
+        const raw = el.value.trim();
+        const value = raw === "" || !Number.isFinite(Number(raw)) ? null : Number(raw);
+        this.cardQuery = { ...this.cardQuery, [key]: value };
+        this.paint();
+      });
+    };
+
+    multi("#cs-types", "types");
+    multi("#cs-clans", "clans");
+    multi("#cs-disc", "disciplines");
+    multi("#cs-sects", "sects");
+    multi("#cs-titles", "titles");
+    multi("#cs-groups", "groups");
+    multi("#cs-sets", "sets");
+    single("#cs-pile", (v) => ({ pile: v as CardQuery["pile"] }));
+    single("#cs-scope", (v) => ({ scope: v as SearchScope }));
+    single("#cs-status", (v) => ({ status: v as CardQuery["status"] }));
+    single("#cs-sort", (v) => ({ sort: v as SortKey }));
+    single("#cs-discmode", (v) => ({ disciplineMode: v as CardQuery["disciplineMode"] }));
+    bound("#cs-capmin", "capacityMin");
+    bound("#cs-capmax", "capacityMax");
+    bound("#cs-costmin", "costMin");
+    bound("#cs-costmax", "costMax");
+
+    this.on("#cs-adv", () => {
+      this.advancedOpen = !this.advancedOpen;
+      this.paint();
+    });
+    this.on("#cs-reset", () => {
+      // The TEXT survives a filter reset: the button says "clear
+      // filters", and throwing away what somebody typed as well would be
+      // doing more than it says.
+      //
+      // READ FROM `this`, NOT FROM A SNAPSHOT TAKEN WHEN THE HANDLER WAS
+      // BOUND. Typing replaces `this.cardQuery` with a new object and
+      // does NOT repaint, so a `const q` captured at wiring time holds
+      // the text as it was before the person typed — and "clear filters"
+      // would quietly put the old search back.
+      this.cardQuery = { ...emptyQuery(), text: this.cardQuery.text };
+      this.paint();
+    });
+    this.on("#cs-grid", () => {
+      this.cardView = "grid";
+      this.paint();
+    });
+    this.on("#cs-list", () => {
+      this.cardView = "list";
+      this.paint();
+    });
+    this.on("#cs-close", () => {
+      this.selectedCardId = null;
+      this.paint();
+    });
+    this.wireCardResults();
+  }
+
+  /** Clicking a result opens it. Re-run whenever the results are redrawn. */
+  private wireCardResults(): void {
+    this.on(".cscard, .csrow", (el) => {
+      const id = Number(el.dataset["card"]);
+      if (!Number.isFinite(id)) return;
+      // Clicking the open card closes it — the same toggle the seat deck
+      // panel uses, so the two behave alike.
+      this.selectedCardId = this.selectedCardId === id ? null : id;
+      this.paint();
+    });
   }
 
   private wireLobby(): void {

@@ -155,9 +155,15 @@ describe("NOTHING LABELS A DECK WITH ITS STYLE", () => {
 
   it("mentions the style words only where the dropdown is built", async () => {
     const { readFile } = await import("node:fs/promises");
-    const shell = await readFile("src/ui/shell.ts", "utf-8");
-    // The style words are supplied by PLAYSTYLE_LABELS; none should be
-    // spelled out in the shell itself.
+    const raw = await readFile("src/ui/shell.ts", "utf-8");
+    // A NAME COLLISION, NOT A WEAKENING (2026-09-22). The screen the
+    // owner asked for is called the "Deck Builder", and "Builder" is
+    // also a playstyle — so a substring search now hits a screen title,
+    // a route name and a method name that have nothing to do with
+    // playstyles. The deck-builder's own names are removed BEFORE the
+    // search rather than the assertion being softened: a stray
+    // "Builder" written anywhere else in the shell still fails this.
+    const shell = raw.replace(/deck[ -]?builder/gi, "«the decks screen»");
     for (const word of Object.values(PLAYSTYLE_LABELS)) {
       if (word === "Balanced") continue;
       expect(shell, `${word} should come from PLAYSTYLE_LABELS`).not.toContain(word);
