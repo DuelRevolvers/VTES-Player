@@ -19,6 +19,20 @@ import { botAgentFor, playstyleOf } from "./botagent.ts";
 import type { CatalogCard, CatalogFile } from "../cards/catalog.ts";
 import { loadCatalog } from "../cards/catalog.ts";
 import type { CardQuery, CardView, Facets, SearchScope, SortKey } from "./cardsearch.ts";
+import type { DeckDraft } from "./deckbuild.ts";
+import {
+  countsOf,
+  draftCards,
+  draftToText,
+  emptyDraft,
+  indexCatalog,
+  LIBRARY_TYPE_ORDER,
+  parseDraft,
+  reviewDraft,
+  sectionOf,
+  setCount,
+  withCard,
+} from "./deckbuild.ts";
 import {
   cardDetailMarkup,
   DEFAULT_PAGE_SIZE,
@@ -28,7 +42,10 @@ import {
   resultsMarkup,
   searchCards,
   searchPanelMarkup,
+  statusBadge,
+  traitLine,
 } from "./cardsearch.ts";
+import { MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
 
 /**
  * The Deck Builder's three tabs, in the order the owner asked for them:
@@ -50,7 +67,7 @@ import type { LobbySeat, PeerChannel } from "../net/protocol.ts";
 import { addChat, chatLines, chatProblem, clearChat, MAX_CHAT_TEXT, onChat } from "./chat.ts";
 import { codeFromLink, isRoomCode, joinLink, newRoomCode, normaliseRoomCode } from "../net/room.ts";
 import type { PreconSummary } from "./deckimport.ts";
-import { preconStyle, supportedPrecons, supportedSets } from "./deckimport.ts";
+import { preconDeck, preconStyle, supportedPrecons, supportedSets } from "./deckimport.ts";
 import {
   deckSummary,
   deleteDeck,
@@ -201,6 +218,15 @@ export class Shell {
    */
   private cardPage = 1;
   private cardPageSize = DEFAULT_PAGE_SIZE;
+  /**
+   * The deck being built, or null when the Build tab is showing its
+   * start screen. It is a bag of counts, not a `DeckList` — see
+   * `deckbuild.ts` for why that is the whole design.
+   */
+  private draft: DeckDraft | null = null;
+  private draftError = "";
+  /** Lines of a reopened deck that named no card. Shown, never dropped. */
+  private draftUnreadable: string[] = [];
 
   // --- online ---------------------------------------------------------------
   /** Hosting: the room on the broker, and the lobby it feeds. */
@@ -686,35 +712,253 @@ export class Shell {
   }
 
   /**
-   * Where the deck builder proper will go.
+   * The Build tab: either the start screen or the editor.
    *
-   * Empty on purpose (owner, 2026-09-22: "don't build the actual deck
-   * builder part yet, but build a section for it"). It is a real panel in
-   * the real place, so the screen it eventually fills is the screen
-   * people already know — and until then it says what a deck needs,
-   * which is the part of building one that the rules decide rather than
-   * the tool (p. 14: 12 crypt cards minimum, 60 library minimum).
+   * The catalogue gates BOTH, because a draft is a bag of card ids and
+   * every one of them has to be resolved before it can be drawn or
+   * reviewed. Opening a precon before the cards have arrived would give
+   * a deck with the right count of nothing.
    */
   private buildPanel(): string {
+    if (!this.catalog) {
+      return `<div class="supported dbbuild">
+        <p class="note dim">Loading the card list…</p>
+      </div>`;
+    }
+    return this.draft ? this.deckEditor(this.draft) : this.deckStart();
+  }
+
+  /**
+   * Nothing open yet: the three ways in.
+   *
+   * A precon and a saved deck are the same act — open something that
+   * exists and change it — so they sit together, above the empty one.
+   * Starting from scratch is listed last on purpose: it is the option
+   * that needs the most from you, and the owner asked for both.
+   */
+  private deckStart(): string {
+    const precons = supportedPrecons().filter((p) => p.playable || p.halfDeck);
+    const saved = loadDecks();
     return `
       <div class="supported dbbuild">
-        <div class="sethead">Build a deck</div>
+        <div class="sethead">Start a deck</div>
+        ${this.draftError ? `<p class="err">${esc(this.draftError)}</p>` : ""}
         <p class="note">
-          Building a deck card by card is not here yet. For now, put a list
-          together elsewhere and paste it into <b>My decks</b> — the
-          importer checks it against the pool and tells you exactly which
-          cards this platform cannot play, rather than dropping them. Use
-          <b>Card search</b> to see what is in the pool before you do.
-        </p>
-        <p class="note dim">
           A legal deck is <b>at least 12 crypt cards</b> and
-          <b>at least 60 library cards</b> (rulebook p. 14). The New Blood
-          starters are half decks by design and are exempt.
+          <b>between 60 and 90 library cards</b> (p. 14). Your crypt may use
+          one group or two consecutive ones (p. 4). There is
+          <b>no limit on copies</b> of any one card.
         </p>
-        <div class="row">
-          <button class="dbsoon" disabled>Start a new deck</button>
-          <span class="note dim">planned</span>
+
+        <div class="dbstartrow">
+          <label class="field">
+            <span>Start from a preconstructed deck</span>
+            <select id="db-precon">
+              <option value="">Choose a precon…</option>
+              ${precons
+                .map(
+                  (p) =>
+                    `<option value="${esc(`${p.set}|${p.name}`)}">${esc(p.name)} — ${esc(
+                      p.set,
+                    )}${p.halfDeck ? " (half deck)" : ""}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <button id="db-openprecon" class="primary">Open it</button>
         </div>
+
+        <div class="dbstartrow">
+          <label class="field">
+            <span>Or edit one of your saved decks</span>
+            <select id="db-saved"${saved.length === 0 ? " disabled" : ""}>
+              <option value="">${
+                saved.length === 0 ? "You have no saved decks yet" : "Choose a deck…"
+              }</option>
+              ${saved.map((d) => `<option value="${esc(d.name)}">${esc(d.name)}</option>`).join("")}
+            </select>
+          </label>
+          <button id="db-opensaved"${saved.length === 0 ? " disabled" : ""}>Open it</button>
+        </div>
+
+        <div class="row">
+          <button id="db-scratch">Start from scratch</button>
+          <span class="note dim">an empty deck, built from the card search</span>
+        </div>
+      </div>`;
+  }
+
+  /**
+   * The editor: the deck on the left, the card search on the right.
+   *
+   * The right-hand side is the SAME search the Card search tab draws —
+   * one `searchPanelMarkup`, one `resultsMarkup`, one set of handlers —
+   * with `counts` passed, which is the single thing that turns the add
+   * controls on. Two searches would be two things to keep in step, and
+   * the one that was not being looked at would be the one that rotted.
+   */
+  private deckEditor(draft: DeckDraft): string {
+    const file = this.catalog!;
+    const { byId } = indexCatalog(file);
+    const review = reviewDraft(draft, byId);
+    const facets = this.catalogFacets;
+    const results = searchCards(file.cards, this.cardQuery);
+    return `
+      <div class="dbeditor">
+        <div class="dbdeck">
+          <div class="row dbdeckhead">
+            <input id="db-name" class="dbname" maxlength="${MAX_DECK_NAME}"
+                   value="${esc(draft.name)}" placeholder="Name this deck" />
+            <button id="db-save" class="primary">Save</button>
+            <button id="db-close">Close</button>
+          </div>
+          ${this.draftError ? `<p class="err">${esc(this.draftError)}</p>` : ""}
+          ${this.legalityPanel(review)}
+          ${this.deckListMarkup(draft, byId)}
+        </div>
+        <div class="dbsearch">
+          ${
+            facets
+              ? searchPanelMarkup(this.cardQuery, facets, this.advancedOpen, this.cardView)
+              : ""
+          }
+          ${this.selectedCard() ? cardDetailMarkup(this.selectedCard()!) : ""}
+          <div id="cs-results">${resultsMarkup(results, {
+            view: this.cardView,
+            selectedId: this.selectedCardId,
+            total: file.cards.length,
+            page: this.cardPage,
+            pageSize: this.cardPageSize,
+            counts: draft.counts,
+          })}</div>
+        </div>
+      </div>`;
+  }
+
+  /**
+   * THE THREE QUESTIONS, kept apart because they have different answers.
+   *
+   * Is it legal (p. 14, p. 4)? Is there anything the rulebook cautions
+   * about? And can THIS PLATFORM deal it? A builder that merged them
+   * would tell you a deck with a duplicated unique vampire is broken —
+   * it is not, the rulebook's own word is "CAUTION" — or that a banned
+   * card makes a deck illegal, when "banned" appears nowhere in the
+   * rulebook and is a tournament restriction.
+   */
+  private legalityPanel(review: ReturnType<typeof reviewDraft>): string {
+    const c = review.counts;
+    const cryptOk = c.crypt >= MIN_CRYPT;
+    const libOk = c.library >= MIN_LIBRARY && c.library <= MAX_LIBRARY;
+    const meter = (label: string, n: number, ok: boolean, target: string): string =>
+      `<span class="dbmeter ${ok ? "ok" : "short"}">
+         <b>${n}</b> ${esc(label)} <span class="dim">${esc(target)}</span>
+       </span>`;
+    return `
+      <div class="dblegal">
+        <div class="dbmeters">
+          ${meter("crypt", c.crypt, cryptOk, `need ${MIN_CRYPT}+`)}
+          ${meter("library", c.library, libOk, `need ${MIN_LIBRARY}–${MAX_LIBRARY}`)}
+          <span class="dbverdict ${
+            review.dealable ? "ok" : review.legal ? "warn" : "short"
+          }">${
+            review.dealable
+              ? "Legal, and playable here"
+              : review.legal
+                ? "Legal — but not all of it plays here"
+                : "Not a legal deck yet"
+          }</span>
+        </div>
+        ${review.illegal
+          .map((p) => `<p class="err dbissue">${esc(p)}</p>`)
+          .join("")}
+        ${
+          review.unplayable.length > 0
+            ? `<div class="dbunplayable">
+                 <p class="err">
+                   ${review.unplayable.reduce((n, u) => n + u.copies, 0)} card${
+                     review.unplayable.reduce((n, u) => n + u.copies, 0) === 1 ? "" : "s"
+                   } in this deck ${
+                     review.unplayable.length === 1 ? "is" : "are"
+                   } not implemented here, so it cannot be dealt at a table
+                   in this player yet:
+                 </p>
+                 <p class="note">${review.unplayable
+                   .map((u) => `${esc(u.card.name)} ×${u.copies}`)
+                   .join(" · ")}</p>
+                 <button id="db-onlyplayable">Search only what plays here</button>
+                 <button id="db-stripunplayable" class="danger">Remove them</button>
+               </div>`
+            : ""
+        }
+        ${review.cautions.map((p) => `<p class="note dbcaution">${esc(p)}</p>`).join("")}
+        ${
+          review.inert.length > 0
+            ? `<p class="note dim">Printed ability not implemented, so it will do
+                 nothing: ${esc(review.inert.join(", "))}.</p>`
+            : ""
+        }
+        ${
+          this.draftUnreadable.length > 0
+            ? `<p class="note dim">${this.draftUnreadable.length} line${
+                this.draftUnreadable.length === 1 ? "" : "s"
+              } of that deck named no card and ${
+                this.draftUnreadable.length === 1 ? "was" : "were"
+              } left out: ${esc(this.draftUnreadable.slice(0, 5).join("; "))}</p>`
+            : ""
+        }
+      </div>`;
+  }
+
+  /** The deck itself: crypt by capacity, library by the conventional order. */
+  private deckListMarkup(draft: DeckDraft, byId: Map<number, CatalogCard>): string {
+    const rows = draftCards(draft, byId);
+    const counts = countsOf(rows);
+    if (rows.length === 0) {
+      return `<p class="note dim dbempty">
+        Nothing in this deck yet. Search on the right and press
+        <b>+</b> to add cards.
+      </p>`;
+    }
+    const line = (card: CatalogCard, copies: number): string => `
+      <div class="dbrow ${card.status}">
+        <button class="dbless" data-card="${card.id}" aria-label="One fewer">−</button>
+        <span class="dbcount">${copies}</span>
+        <button class="dbmore" data-card="${card.id}" aria-label="One more">+</button>
+        <button class="dbcard" data-card="${card.id}">${esc(card.name)}</button>
+        <span class="dbtraits">${esc(traitLine(card))}</span>
+        ${card.status === "playable" ? "" : statusBadge(card)}
+      </div>`;
+
+    const crypt = rows
+      .filter((r) => r.card.kind === "crypt")
+      .sort(
+        (a, b) =>
+          (b.card.capacity ?? 0) - (a.card.capacity ?? 0) ||
+          a.card.name.localeCompare(b.card.name, "en"),
+      );
+    const library = rows.filter((r) => r.card.kind === "library");
+
+    const sections = LIBRARY_TYPE_ORDER.map((type) => {
+      const inType = library
+        .filter((r) => sectionOf(r.card) === type)
+        .sort((a, b) => a.card.name.localeCompare(b.card.name, "en"));
+      if (inType.length === 0) return "";
+      const n = inType.reduce((acc, r) => acc + r.copies, 0);
+      return `
+        <div class="dbsection">${esc(type)} <span class="dim">(${n})</span></div>
+        ${inType.map((r) => line(r.card, r.copies)).join("")}`;
+    }).join("");
+
+    return `
+      <div class="dblist">
+        <div class="dbsection big">Crypt <span class="dim">(${counts.crypt})</span></div>
+        ${
+          crypt.length === 0
+            ? `<p class="note dim">No vampires yet.</p>`
+            : crypt.map((r) => line(r.card, r.copies)).join("")
+        }
+        <div class="dbsection big">Library <span class="dim">(${counts.library})</span></div>
+        ${library.length === 0 ? `<p class="note dim">No library cards yet.</p>` : sections}
       </div>`;
   }
 
@@ -777,14 +1021,17 @@ export class Shell {
     const file = this.catalog;
     if (!file) return "";
     const results = searchCards(file.cards, this.cardQuery);
-    return resultsMarkup(
-      results,
-      this.cardView,
-      this.selectedCardId,
-      file.cards.length,
-      this.cardPage,
-      this.cardPageSize,
-    );
+    return resultsMarkup(results, {
+      view: this.cardView,
+      selectedId: this.selectedCardId,
+      total: file.cards.length,
+      page: this.cardPage,
+      pageSize: this.cardPageSize,
+      // NULL, not `{}`, when no deck is open: `{}` means "an empty deck
+      // is being edited" and would draw a + on every card in the
+      // standalone Card search tab.
+      counts: this.deckTab === "build" ? (this.draft?.counts ?? null) : null,
+    });
   }
 
   /**
@@ -1557,6 +1804,7 @@ export class Shell {
     });
 
     this.wireProfile();
+    this.wireDeckBuild();
     this.wireCardSearch();
     this.wireNewGame();
     this.wireLobby();
@@ -1588,6 +1836,199 @@ export class Shell {
   private setCardQuery(q: CardQuery): void {
     this.cardQuery = q;
     this.cardPage = 1;
+  }
+
+  /**
+   * The builder's controls.
+   *
+   * Only the ones the BUILD tab owns. The + and − on a search result are
+   * wired in `wireCardResults` with the rest of the results block,
+   * because that block is replaced on every keystroke and a handler
+   * bound here would be lost the moment somebody typed.
+   */
+  private wireDeckBuild(): void {
+    if (this.screen !== "deckbuilder" || this.deckTab !== "build") return;
+    const find = <T extends HTMLElement>(sel: string): T | null =>
+      this.root.querySelector<T>(sel);
+
+    // --- starting a deck ---
+    this.on("#db-openprecon", () => {
+      const pick = find<HTMLSelectElement>("#db-precon")?.value ?? "";
+      const [set, name] = pick.split("|");
+      if (!set || !name) {
+        this.draftError = "choose a precon first";
+        this.paint();
+        return;
+      }
+      this.openPreconDraft(set, name);
+    });
+    this.on("#db-opensaved", () => {
+      const name = find<HTMLSelectElement>("#db-saved")?.value ?? "";
+      const deck = name ? findDeck(name) : null;
+      if (!deck) {
+        this.draftError = "choose one of your decks first";
+        this.paint();
+        return;
+      }
+      this.openSavedDraft(deck.name, deck.source);
+    });
+    this.on("#db-scratch", () => {
+      this.draft = emptyDraft("");
+      this.draftUnreadable = [];
+      this.draftError = "";
+      this.paint();
+    });
+
+    // --- editing one ---
+    this.on("#db-close", () => {
+      // NO CONFIRM, because nothing is lost that was not already saved
+      // and re-openable — and a confirm on every close is the kind of
+      // friction that stops people trying things.
+      this.draft = null;
+      this.draftUnreadable = [];
+      this.draftError = "";
+      this.paint();
+    });
+    this.on("#db-save", () => this.saveDraft());
+    this.on("#db-onlyplayable", () => {
+      // The search filter the warning is about, applied for you. It is a
+      // normal query change, so it goes through the one setter and
+      // resets the page like any other.
+      this.setCardQuery({ ...this.cardQuery, status: "playable" });
+      this.paint();
+    });
+    this.on("#db-stripunplayable", () => {
+      const draft = this.draft;
+      if (!draft || !this.catalog) return;
+      const { byId } = indexCatalog(this.catalog);
+      const doomed = reviewDraft(draft, byId).unplayable;
+      if (doomed.length === 0) return;
+      if (!confirm(`Remove ${doomed.length} card(s) this player cannot deal?`)) return;
+      let next = draft;
+      for (const u of doomed) next = setCount(next, u.card.id, 0);
+      this.draft = next;
+      this.paint();
+    });
+
+    // The name box is not a repaint: typing in it would lose the caret,
+    // exactly as the search box would. It is read at save time instead.
+    const name = find<HTMLInputElement>("#db-name");
+    name?.addEventListener("input", () => {
+      if (this.draft) this.draft = { ...this.draft, name: name.value };
+    });
+
+    this.on(".dbless", (el) => this.bumpCard(el, -1));
+    this.on(".dbmore", (el) => this.bumpCard(el, +1));
+    this.on(".dbcard", (el) => {
+      const id = Number(el.dataset["card"]);
+      if (!Number.isFinite(id)) return;
+      this.selectedCardId = this.selectedCardId === id ? null : id;
+      this.paint();
+    });
+  }
+
+  /** One card, one step, from any of the four +/− controls. */
+  private bumpCard(el: HTMLElement, delta: number): void {
+    const id = Number(el.dataset["card"]);
+    if (!Number.isFinite(id) || !this.draft) return;
+    this.draft = withCard(this.draft, id, delta);
+    this.draftError = "";
+    this.paint();
+  }
+
+  private openPreconDraft(set: string, name: string): void {
+    const deck = preconDeck(set, name, "You");
+    if (!deck || !this.catalog) {
+      this.draftError = "that precon could not be read";
+      this.paint();
+      return;
+    }
+    const { byName } = indexCatalog(this.catalog);
+    // A PRECON IS A DECKLIST, ONE ENTRY PER COPY — the builder counts
+    // copies, so it is tallied rather than assigned. Assigning would
+    // leave every card at one copy and quietly halve the deck.
+    let draft = emptyDraft(`${name} (copy)`);
+    for (const v of deck.crypt) draft = withCard(draft, v.id, 1);
+    for (const cardName of deck.library) {
+      const card = byName.get(cardName.toLowerCase());
+      if (card) draft = withCard(draft, card.id, 1);
+    }
+    this.draft = draft;
+    this.draftUnreadable = [];
+    // A precon opens as a NEW deck, never bound to the printed one:
+    // `savedAs` stays null, so Save writes a new entry rather than
+    // overwriting something that came in a box.
+    this.draftError = "";
+    this.paint();
+  }
+
+  private openSavedDraft(name: string, source: DeckSource): void {
+    if (!this.catalog) return;
+    const { byName } = indexCatalog(this.catalog);
+    // A saved deck is either pasted text or a named precon. Both end up
+    // as text, so there is one path through the parser.
+    let text: string;
+    if (source.kind === "paste") {
+      text = source.text;
+    } else {
+      const deck = preconDeck(source.set, source.name, "You");
+      if (!deck) {
+        this.draftError = "that deck could not be read";
+        this.paint();
+        return;
+      }
+      this.openPreconDraft(source.set, source.name);
+      return;
+    }
+    const { draft, unreadable } = parseDraft(text, byName);
+    this.draft = { ...draft, name: draft.name.trim() === "" ? name : draft.name, savedAs: name };
+    this.draftUnreadable = unreadable;
+    this.draftError = "";
+    this.paint();
+  }
+
+  /**
+   * Save the draft into the SAME store every other deck lives in.
+   *
+   * It is written as the deck-list text `importDeck` reads, which is why
+   * a deck built here needs no new plumbing: it appears in My decks, in
+   * every seat's deck panel and in the lobby, indistinguishable from one
+   * that was pasted in.
+   *
+   * An ILLEGAL DECK STILL SAVES. A draft is work in progress, and a
+   * builder that refused to keep a 40-card deck would be a builder you
+   * could not use to build. The legality panel says what is wrong the
+   * whole time, and `deckSummary` says it again wherever the deck is
+   * picked, so nothing can be taken to a table by mistake.
+   */
+  private saveDraft(): void {
+    const draft = this.draft;
+    if (!draft || !this.catalog) return;
+    const box = this.root.querySelector<HTMLInputElement>("#db-name");
+    const name = (box?.value ?? draft.name).trim();
+    if (name === "") {
+      this.draftError = "give this deck a name before saving it";
+      this.paint();
+      return;
+    }
+    const { byId } = indexCatalog(this.catalog);
+    if (Object.keys(draft.counts).length === 0) {
+      this.draftError = "there is nothing in this deck to save";
+      this.paint();
+      return;
+    }
+    // Renaming an already-saved deck moves it rather than leaving the
+    // old name behind as a stale copy.
+    if (draft.savedAs && draft.savedAs !== name) deleteDeck(draft.savedAs);
+    const failed = saveDeck(name, { kind: "paste", text: draftToText({ ...draft, name }, byId) });
+    if (failed) {
+      this.draftError = failed;
+      this.paint();
+      return;
+    }
+    this.draft = { ...draft, name, savedAs: name };
+    this.draftError = "";
+    this.paint();
   }
 
   private wireCardSearch(): void {
@@ -1717,6 +2158,12 @@ export class Shell {
       this.cardPage = 1;
       this.paint();
     });
+
+    // The add controls on a search result. Bound HERE rather than in
+    // `wireDeckBuild` because they live in the block that typing
+    // replaces — the whole point of the split.
+    this.on(".csmore", (el) => this.bumpCard(el, +1));
+    this.on(".csless", (el) => this.bumpCard(el, -1));
 
     this.on(".cscard, .csrow", (el) => {
       const id = Number(el.dataset["card"]);

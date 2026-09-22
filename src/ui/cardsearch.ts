@@ -432,22 +432,53 @@ export function traitLine(c: CatalogCard): string {
   return bits.join(" · ");
 }
 
-function cardCell(c: CatalogCard, view: CardView, selected: boolean): string {
+/**
+ * The add control, when a deck is open.
+ *
+ * It sits OUTSIDE the card button rather than inside it: a `<button>`
+ * inside a `<button>` is invalid HTML and browsers unnest it, which in
+ * practice means the inner one stops receiving clicks. So the cell
+ * becomes a wrapper holding the card button and the adder side by side.
+ */
+function adder(c: CatalogCard, copies: number): string {
+  return `
+    <span class="csadd">
+      ${copies > 0 ? `<button class="csless" data-card="${c.id}" aria-label="One fewer">−</button>` : ""}
+      ${copies > 0 ? `<span class="cscount">${copies}</span>` : ""}
+      <button class="csmore" data-card="${c.id}" aria-label="Add ${esc(c.name)}">+</button>
+    </span>`;
+}
+
+function cardCell(
+  c: CatalogCard,
+  view: CardView,
+  selected: boolean,
+  counts: Record<number, number> | null,
+): string {
   const sel = selected ? " selected" : "";
+  const copies = counts?.[c.id] ?? 0;
+  const inDeck = copies > 0 ? " indeck" : "";
+  const add = counts ? adder(c, copies) : "";
   if (view === "grid") {
     return `
-      <button class="cscard ${c.status}${sel}" data-card="${c.id}" title="${esc(c.name)}">
-        <img loading="lazy" src="${esc(c.image)}" alt="${esc(c.name)}" />
-        <span class="csname">${esc(c.name)}</span>
-        ${statusBadge(c)}
-      </button>`;
+      <span class="cscell${inDeck}">
+        <button class="cscard ${c.status}${sel}" data-card="${c.id}" title="${esc(c.name)}">
+          <img loading="lazy" src="${esc(c.image)}" alt="${esc(c.name)}" />
+          <span class="csname">${esc(c.name)}</span>
+          ${statusBadge(c)}
+        </button>
+        ${add}
+      </span>`;
   }
   return `
-    <button class="csrow ${c.status}${sel}" data-card="${c.id}">
-      <span class="csname">${esc(c.name)}</span>
-      <span class="cstraits">${esc(traitLine(c))}</span>
-      ${statusBadge(c)}
-    </button>`;
+    <span class="cscell${inDeck}">
+      <button class="csrow ${c.status}${sel}" data-card="${c.id}">
+        <span class="csname">${esc(c.name)}</span>
+        <span class="cstraits">${esc(traitLine(c))}</span>
+        ${statusBadge(c)}
+      </button>
+      ${add}
+    </span>`;
 }
 
 /**
@@ -458,14 +489,26 @@ function cardCell(c: CatalogCard, view: CardView, selected: boolean): string {
  * renderers would drift (CLAUDE.md, "One question asked in two places");
  * one function called twice cannot.
  */
-export function resultsMarkup(
-  results: CatalogCard[],
-  view: CardView,
-  selectedId: number | null,
-  total: number,
-  page: number,
-  pageSize: number,
-): string {
+export interface ResultsOptions {
+  view: CardView;
+  selectedId: number | null;
+  /** How many cards were searched, for "…out of 4,149 cards". */
+  total: number;
+  page: number;
+  pageSize: number;
+  /**
+   * The open draft's counts, or null when no deck is being edited.
+   *
+   * Null is what turns the add controls OFF, so "is a deck open" is one
+   * question asked in one place. Passing `{}` would mean "a deck is open
+   * and empty", which is a different thing and draws a + on every card.
+   */
+  counts?: Record<number, number> | null;
+}
+
+export function resultsMarkup(results: CatalogCard[], o: ResultsOptions): string {
+  const { view, selectedId, total, page, pageSize } = o;
+  const counts = o.counts ?? null;
   if (results.length === 0) {
     return `<p class="note dim csempty">
       No card matches that. ${total} cards were searched.
@@ -487,7 +530,7 @@ export function resultsMarkup(
         </select></label>
     </div>
     <div class="csresults ${view}">
-      ${p.cards.map((c) => cardCell(c, view, c.id === selectedId)).join("")}
+      ${p.cards.map((c) => cardCell(c, view, c.id === selectedId, counts)).join("")}
     </div>
     ${pagerMarkup(p)}`;
 }

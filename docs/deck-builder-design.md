@@ -1,15 +1,19 @@
-# The Deck Builder (0.11.07, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.09, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
 > **Card search**. The search shows **30 results a page** by default,
 > changeable to 50 / 75 / 100, with a windowed pager. See §8.
 
+> **0.11.09 — THE BUILDER ITSELF.** The reserved panel is now a real
+> editor: start from a precon or from scratch, add cards from the search
+> beside it, and be told what the rulebook forbids, what it merely
+> cautions about, and what this platform cannot yet deal. See §9.
+
 A fourth item on the main menu, and one home for everything to do with
-decks. It ships with three of its four parts built: your saved decks, the
-importer, and a search over **every card in the game**. The fourth — the
-deck builder proper — has a reserved section and nothing in it, which is
-what the owner asked for.
+decks: your saved decks, the importer, a search over **every card in the
+game**, and the deck builder. §§1–8 are the first two rounds (the search,
+then tabs and paging); **§9 is the builder.**
 
 > *"Add Deck Builder button to the main menu. Move the profile's deck list
 > and deck importer to this menu. For now, don't build the actual deck
@@ -30,7 +34,7 @@ call, both below.
 | Deck Builder button on the main menu | **Built** |
 | Deck list moved off Profile | **Built** — moved, not copied |
 | Deck importer moved off Profile | **Built** — moved, not copied |
-| A reserved section for the builder | **Built** — a real panel, empty on purpose |
+| A reserved section for the builder | **Built** — and filled in 0.11.09 (§9) |
 | A search over every card in the game | **Built** — all 4,149 |
 | Labelled by whether the player supports it | **Built** — three states, not two |
 | Basic search (a bar) | **Built** |
@@ -40,6 +44,8 @@ call, both below.
 | List view, text only | **Built** |
 | Three tabs: decks, builder, search | **Built** (0.11.08) |
 | 30 a page, with pages, sizeable to 50/75/100 | **Built** (0.11.08) |
+| Build a deck: from a precon, or from scratch | **Built** (0.11.09) |
+| Legality, cautions and playability while you build | **Built** (0.11.09) |
 
 **The qualification: "supported" is a three-state question, not a
 boolean.** See §4 — reading `config/supported.json` directly would have
@@ -178,7 +184,7 @@ is the binding rule restated where a player would see it break.
 
 ---
 
-## §5 — The reserved section
+## §5 — The reserved section (superseded by §9)
 
 `Shell.buildPanel()` is a real panel in the real place, disabled. It is
 **not a stub**: a panel that says "coming soon" and nothing else is worse
@@ -300,3 +306,128 @@ report.
 of 30 results out of 50 would otherwise tick "30" and the control would
 quietly disagree with the paging it describes. `paginate` returns the
 normalised `size` so there is one answer to that question.
+
+---
+
+## §9 — The builder proper (0.11.09)
+
+The reserved panel of §5 is now the builder. Three owner decisions
+settled its shape (2026-09-22):
+
+1. **Deck on the left, card search on the right.**
+2. **Cards this platform cannot deal are SHOWN, can be ADDED, and are
+   warned about loudly** — so you can build your real paper deck and be
+   told exactly what is missing here.
+3. **No "play this deck" button.** It saves to My decks; you start a game
+   the normal way.
+
+### The rules it applies — and the three it refuses to invent
+
+Read out of the rulebook rather than recalled, because **an invented rule
+looks exactly like a rule** and no test you would think to write catches
+one. Verbatim, p. 14:
+
+> *"Each Methuselah must have at least 12 cards in their crypt and between
+> 60 and 90 cards in their library. **There is no maximum limit on the
+> number of cards Methuselahs can have in their crypt.** A Methuselah can
+> include **any number of copies of a given card** in either their library
+> or crypt within the limits indicated above."*
+
+So:
+
+| Rule | Where | Applied |
+|---|---|---|
+| Crypt ≥ 12 | p. 14 | yes |
+| Crypt maximum | — | **there isn't one** |
+| Library 60–90 | p. 14 | yes |
+| Copies of one card | — | **no limit whatsoever** |
+| One group, or two **consecutive** | p. 4 | yes |
+
+The three a deck builder is most likely to get wrong are each pinned by a
+test that would fail if this one drifted into the common mistake: no copy
+cap, no crypt cap, and **duplicated unique cards are legal**. On that
+last one the rulebook's own word is a caution, not a prohibition:
+
+> *"**CAUTION**: Be careful about putting duplicates of the same unique
+> cards in your deck. You cannot control more than one of the same unique
+> card at a time…"*
+
+Every vampire is unique (five cards in the whole game print
+"Non-unique"), so a builder that called a duplicated unique illegal would
+reject essentially every real deck ever built. It is a caution, drawn in
+gold, worded "that is legal, but…".
+
+**And one that is not a rule of the game at all: "banned".** The word
+appears **nowhere in the V5 rulebook**. It is a VEKN *tournament*
+restriction covering 20 cards, so a deck holding one is legal, plays
+here, and gets a caution that says which kind of restriction it is.
+
+### Three questions, kept apart
+
+The legality panel answers them separately because they have different
+answers and different consequences:
+
+- **Is it legal?** p. 14 and p. 4. Red. Nobody can play this deck.
+- **Anything to be careful about?** Duplicate uniques, tournament bans.
+  Gold. The deck is fine.
+- **Can *this platform* deal it?** The catalogue's badge. Red, but a
+  different sentence — the deck is legal, the software is behind.
+
+Merging any two would produce a lie: either "your legal deck is broken"
+or "the rulebook forbids this", and both are worse than the gap they
+would paper over.
+
+### A draft is a bag of counts
+
+`DeckDraft` is `{ name, counts: Record<id, copies>, savedAs }` and
+nothing else. It is **not** a fourth model of a deck beside `DeckList`,
+`SnapshotDeck` and the precons: it **serialises to the very text
+`importDeck` already reads**, so a deck built here is written by the same
+`saveDeck`, into the same store, and picked in the lobby exactly like one
+that was pasted in. No new plumbing anywhere.
+
+`tests/ui/deckbuild.test.ts` tests that claim rather than asserting it in
+a comment: it runs the builder's output through the **real** `importDeck`
+and checks the counts, the name and an empty problem list. Nothing else
+in the suite would notice if the two formats drifted apart.
+
+`counts` never holds a zero — removing the last copy deletes the key — so
+"is this card in the deck" is one question rather than two.
+
+### Reopening a saved deck does NOT use `importDeck`
+
+`parseDraft` reads the text against the **catalogue**, not the registry.
+`importDeck` resolves against the registry and reports anything
+unimplemented as an unknown line — so reopening a saved deck through it
+would **silently delete exactly the cards the builder exists to warn you
+about**. Lines that name nothing at all are returned and shown, never
+dropped.
+
+### One search, not two
+
+The editor's right-hand column is the same `searchPanelMarkup` and
+`resultsMarkup` the Card search tab draws. The only difference is that
+`counts` is passed, and that is the single thing that turns the add
+controls on — which is why it is `null` rather than `{}` when no deck is
+open. `{}` would mean "an empty deck is being edited" and would draw a
+**+** on every card in the standalone tab.
+
+The **+**/**−** on a result are bound in `wireCardResults`, with the rest
+of the results block, because that block is replaced on every keystroke
+(§8). A handler bound anywhere else would stop working the moment
+somebody typed.
+
+### An illegal deck still saves
+
+A draft is work in progress, and a builder that refused to keep a 40-card
+deck is a builder you cannot build with. The legality panel says what is
+wrong the whole time, and `deckSummary` says it again wherever the deck
+is picked, so nothing reaches a table by mistake.
+
+### Opening a precon makes a copy
+
+`savedAs` stays null, so Save writes a new entry. A precon is a *printed*
+deck; editing it makes something new rather than changing what came in
+the box. A precon's decklist is one entry per copy, so it is **tallied**
+into counts — assigning would leave every card at one copy and silently
+halve the deck.

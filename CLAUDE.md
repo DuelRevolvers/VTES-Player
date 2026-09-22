@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 293 test files, 3061 tests**, with `npm run typecheck`,
+**Green baseline: 294 test files, 3085 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -149,6 +149,17 @@ chains so the two cannot drift. It is **lazily imported** (3.2MB, its own
 chunk) and the engine must never import it. **0.11.08** made the screen
 three tabs (My decks / Build a deck / Card search — one body DRAWN, not
 three hidden) and paged the search at 30, 50, 75 or 100 a page.
+**0.11.09 built the BUILDER** (§9): start from a precon or from scratch,
+deck left and the same search right. A draft is a **bag of counts** that
+serialises to the text `importDeck` already reads, so a built deck needs
+no new plumbing — tested through the real importer, not asserted.
+Reopening one uses `parseDraft` against the CATALOGUE, never
+`importDeck`, which would delete the unimplemented cards the builder
+exists to warn about. **Three deck-construction rules it refuses to
+invent** (p. 14, read from the PDF): no per-card copy limit, no crypt
+maximum, and a duplicated unique is the rulebook's own "CAUTION" rather
+than illegal. **"Banned" appears nowhere in the rulebook** — it is a VEKN
+tournament restriction and is labelled as one.
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 

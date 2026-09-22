@@ -1607,3 +1607,105 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 }
 .shell button.cspage.off { opacity: .35; }
 .csgap { color: var(--dim); padding: 0 2px; }
+
+/* --- the deck builder proper ------------------------------------------- */
+
+.dbstartrow { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 10px; }
+.dbstartrow .field { flex: 1; margin-bottom: 0; }
+
+/* DECK LEFT, SEARCH RIGHT (owner's choice, 2026-09-22). The deck column
+   is fixed so the counts never move as results reflow beside them; the
+   search takes what is left. */
+.dbeditor {
+  display: grid; gap: 18px; margin-top: 14px;
+  grid-template-columns: minmax(340px, 420px) 1fr;
+  align-items: start;
+}
+/* One column when there is not room for two — the deck first, because
+   the deck is the thing being built. */
+@media (max-width: 900px) { .dbeditor { grid-template-columns: 1fr; } }
+
+.dbdeck { position: sticky; top: 0; }
+.dbdeckhead { margin-top: 0; align-items: center; }
+.dbname { flex: 1; min-width: 120px; }
+
+/* --- is it legal? ------------------------------------------------------ */
+
+.dblegal {
+  background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 6px; padding: 10px 12px; margin: 10px 0;
+}
+.dbmeters { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; }
+.dbmeter { font-size: 12px; color: var(--dim); }
+.dbmeter b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.dbmeter.ok b { color: var(--good); }
+.dbmeter.short b { color: var(--blood); }
+.dbverdict {
+  margin-left: auto; font-size: 11px; padding: 2px 8px;
+  border: 1px solid var(--line); border-radius: 3px; color: var(--dim);
+}
+.dbverdict.ok { color: var(--good); border-color: var(--good); }
+.dbverdict.warn { color: var(--gold); border-color: var(--gold); }
+.dbverdict.short { color: var(--blood); border-color: var(--blood); }
+.dbissue { margin: 8px 0 0; }
+/* A CAUTION IS NOT AN ERROR. The rulebook's own word for a duplicated
+   unique is "CAUTION", and a tournament ban is not a rule of the game at
+   all — so neither is drawn in the colour that means "broken". */
+.dbcaution {
+  margin: 8px 0 0; color: var(--gold);
+  border-left: 2px solid var(--gold); padding-left: 8px;
+}
+.dbunplayable { margin-top: 8px; }
+.dbunplayable .note { margin: 4px 0 8px; }
+.dbunplayable button { margin-right: 6px; }
+
+/* --- the deck list ----------------------------------------------------- */
+
+.dblist { max-height: 60vh; overflow-y: auto; padding-right: 4px; }
+.dbempty { margin-top: 14px; }
+.dbsection {
+  font-size: 11px; color: var(--gold); text-transform: uppercase;
+  letter-spacing: .06em; margin: 12px 0 4px;
+  border-bottom: 1px solid var(--line); padding-bottom: 3px;
+}
+.dbsection.big { font-size: 12px; color: var(--ink); }
+.dbrow {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 3px 0; font-size: 12px;
+}
+.shell .dbrow button.dbless, .shell .dbrow button.dbmore {
+  padding: 0 6px; min-width: 22px; line-height: 1.5;
+}
+.dbrow .dbcount {
+  min-width: 18px; text-align: center; font-variant-numeric: tabular-nums;
+  color: var(--gold);
+}
+.shell .dbrow button.dbcard {
+  background: none; border: none; padding: 0; text-align: left;
+  color: var(--ink); flex: 0 1 auto;
+}
+.shell .dbrow button.dbcard:hover { background: none; color: var(--gold); }
+.dbrow .dbtraits {
+  flex: 1; color: var(--dim); font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* A card the player cannot deal is marked in the deck itself, not only
+   in the summary — the summary is a list of names, and this is where you
+   are actually looking. */
+.dbrow.absent .dbcard, .dbrow.pool .dbcard { color: var(--blood); }
+
+/* --- adding from the search ------------------------------------------- */
+
+.cscell { display: flex; position: relative; }
+.csresults.list .cscell { align-items: stretch; gap: 6px; }
+.csresults.grid .cscell { flex-direction: column; gap: 4px; }
+.csresults.list .cscell > .csrow { flex: 1; }
+.csadd { display: flex; align-items: center; gap: 4px; }
+.csresults.grid .csadd { justify-content: center; }
+.shell .csadd button { padding: 2px 9px; line-height: 1.4; }
+.csadd .cscount {
+  font-size: 12px; color: var(--gold); min-width: 16px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+/* Already in the deck — visible at a glance while scanning results. */
+.cscell.indeck > .cscard, .cscell.indeck > .csrow { border-color: var(--gold); }

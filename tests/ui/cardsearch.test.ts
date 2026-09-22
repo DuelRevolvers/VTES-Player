@@ -380,13 +380,13 @@ describe("what the screen says about a card", () => {
     // 4,149 card scans requested at once is what clearing the search box
     // would otherwise do.
     const all = searchCards(cards, emptyQuery());
-    const html = resultsMarkup(all, "grid", null, cards.length, 1, DEFAULT_PAGE_SIZE);
+    const html = resultsMarkup(all, { view: "grid", selectedId: null, total: cards.length, page: 1, pageSize: DEFAULT_PAGE_SIZE });
     expect((html.match(/class="cscard/g) ?? []).length).toBe(DEFAULT_PAGE_SIZE);
     expect(html).toContain(`Showing 1–${DEFAULT_PAGE_SIZE} of ${all.length}`);
   });
 
   it("says how many were searched when nothing matched", () => {
-    const html = resultsMarkup([], "list", null, cards.length, 1, DEFAULT_PAGE_SIZE);
+    const html = resultsMarkup([], { view: "list", selectedId: null, total: cards.length, page: 1, pageSize: DEFAULT_PAGE_SIZE });
     expect(html).toContain("No card matches");
     expect(html).toContain(String(cards.length));
   });
@@ -396,7 +396,7 @@ describe("what the screen says about a card", () => {
     // dropdown would silently disagree with the paging it describes.
     const all = searchCards(cards, emptyQuery());
     const last = Math.ceil(all.length / 50);
-    const html = resultsMarkup(all, "list", null, cards.length, last, 50);
+    const html = resultsMarkup(all, { view: "list", selectedId: null, total: cards.length, page: last, pageSize: 50 });
     expect(html).toContain(`<option value="50" selected>`);
     expect(html).not.toContain(`<option value="30" selected>`);
   });
@@ -507,9 +507,13 @@ describe("the deck builder screen", () => {
     expect(profile).toContain(`id="p-decks"`);
   });
 
-  it("reserves a section for the builder proper", () => {
+  it("offers both ways to start a deck (owner request)", () => {
+    // From a precon, and from nothing. The panel that used to be a
+    // reserved placeholder is the real builder as of 0.11.09.
     expect(shell).toContain("private buildPanel");
     expect(shell).toContain("Build a deck");
+    expect(shell).toContain(`id="db-precon"`);
+    expect(shell).toContain(`id="db-scratch"`);
   });
 
   it("has three tabs, in the order the owner asked for", () => {
@@ -531,7 +535,7 @@ describe("the deck builder screen", () => {
       "utf8",
     );
     expect(css).not.toMatch(/\.dbtab[^{]*\{[^}]*display:\s*none/);
-    const screen = section(shell, "private deckBuilderScreen", "Where the deck builder proper");
+    const screen = section(shell, "private deckBuilderScreen", "private buildPanel");
     expect(screen).toContain("this.deckTab ===");
   });
 
