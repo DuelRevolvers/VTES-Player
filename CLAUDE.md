@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 294 test files, 3109 tests**, with `npm run typecheck`,
+**Green baseline: 295 test files, 3120 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -169,7 +169,11 @@ discipline SCOPE to the builder search (off the vampires, never their
 clans; an empty crypt switches it off), names deck cards no vampire can
 play, gives capacity/cost asc-desc, and fixes the page jumping to the top
 on every add — `paint()` rebuilds `.shell`, which IS the scroller, so it
-now saves and restores scroll (`SCROLL_KEEPERS`).
+now saves and restores scroll (`SCROLL_KEEPERS`). **0.11.12** lets Save
+overwrite (`replaceDeck`, which keeps the deck-s place and created date
+where delete-then-save would not): re-saving a deck you had opened FAILED
+outright before, because `saveDeck` refuses any name in use. It asks
+first, except when saving the deck you opened under its own name.
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 

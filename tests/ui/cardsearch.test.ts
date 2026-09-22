@@ -508,6 +508,18 @@ describe("the deck builder screen", () => {
     expect(profile).toContain(`id="p-decks"`);
   });
 
+  it("asks before overwriting a deck, but not when saving the one it opened", () => {
+    // Source-level, like the rest of the screen checks. BOTH halves: a
+    // builder that always asked would nag on every Save of the deck you
+    // are already editing, which is the commonest press of that button.
+    const save = section(shell, "private saveDraft", "private wireCardSearch");
+    expect(save).toMatch(/confirm\([^)]*Overwrite/);
+    expect(save).toContain("const isSelf");
+    expect(save).toContain("if (clash && !isSelf)");
+    // Cancelling is not a failure, so it must not leave an error behind.
+    expect(save).toMatch(/Overwrite[\s\S]{0,400}return;/);
+  });
+
   it("offers both ways to start a deck (owner request)", () => {
     // From a precon, and from nothing. The panel that used to be a
     // reserved placeholder is the real builder as of 0.11.09.

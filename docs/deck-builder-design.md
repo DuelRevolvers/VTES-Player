@@ -1,4 +1,4 @@
-# The Deck Builder (0.11.07–0.11.11, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.12, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
@@ -596,3 +596,70 @@ assignment reads the new empty element and restores 0, which is exactly
 the bug. A second test holds the list and the stylesheet together, so a
 panel made scrollable later and left out of it cannot quietly start
 jumping again.
+
+---
+
+## §12 — Saving over a deck (0.11.12)
+
+> *"It should allow you to save over a deck with the same name, it just
+> needs to ask if you want to overwrite."* — owner, 2026-09-22
+
+### What was actually wrong
+
+Worse than the request implied. `saveDeck` refuses any name already in
+use — correct for **adding** a deck, and wrong for **saving the one you
+are editing** — and `saveDraft` only deleted the old entry when you had
+*renamed*. So pressing **Save** on a deck you had opened under its own
+name failed outright with "you already have a deck called…". Re-saving
+your own deck did not work at all.
+
+### The four cases
+
+| Opened from | Name lands on | What happens |
+|---|---|---|
+| nothing | nothing | added |
+| nothing | an existing deck | **asks**, then overwrites it |
+| a saved deck | nothing (renamed) | renamed **in place** |
+| a saved deck | itself | saved, **no question** |
+| a saved deck | a *different* existing deck | **asks**, overwrites it, removes the original |
+
+**Saving the deck you opened, under the name you opened it with, is not a
+collision and does not earn a question.** It is the commonest press of
+that button, and a builder that asked every time would be nagging.
+
+### `replaceDeck`, not delete-then-save
+
+Delete-then-save would have worked and would have lost two things nobody
+asked to lose:
+
+- **the deck's place in the list** — it would leap to the top every time
+  you pressed Save, a list reordering itself for no visible reason;
+- **its `created` date** — which is when you first made the deck, not
+  when you last touched it.
+
+It also skips `MAX_DECKS`. An overwrite adds nothing, so at 60 decks
+`saveDeck` would have refused for a reason that has nothing to do with
+what was being asked.
+
+It falls back to **adding** when the target has gone — a second tab may
+have deleted it between opening and saving, and pressing Save must never
+silently lose the deck.
+
+### Matched without case
+
+`deckNameProblem` collides case-insensitively, so the lookup that decides
+whether to ask must too. Otherwise "MALKAVIAN" would ask "overwrite
+Malkavian?", be told yes, and then fail the duplicate check anyway.
+
+### The first test in `tests/ui/` with a `localStorage`
+
+The deck store is the one part of the UI that is not a pure function, and
+the shell has no jsdom — which is why every other test here tests markup
+and maths. A dozen lines of in-memory shim buys a test of the thing that
+was actually reported: save, edit, save again, and find **one** deck
+rather than two or an error. The shim throws on a quota, so "reports a
+storage failure rather than pretending it saved" is testable too.
+
+`saveDeck` keeping its refusal is asserted as well: **adding** a deck
+from the My decks box is a different act from **saving** in the builder,
+and it should still stop you making two decks alike.

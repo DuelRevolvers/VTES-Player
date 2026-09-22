@@ -81,9 +81,11 @@ import {
   deckSummary,
   deleteDeck,
   findDeck,
+  findDeckLoosely,
   loadDecks,
   MAX_DECK_NAME,
   renameDeck,
+  replaceDeck,
   saveDeck,
 } from "./decklibrary.ts";
 import { DevServerSink, GameLog } from "./gamelog.ts";
@@ -2210,10 +2212,38 @@ export class Shell {
       this.paint();
       return;
     }
-    // Renaming an already-saved deck moves it rather than leaving the
-    // old name behind as a stale copy.
-    if (draft.savedAs && draft.savedAs !== name) deleteDeck(draft.savedAs);
-    const failed = saveDeck(name, { kind: "paste", text: draftToText({ ...draft, name }, byId) });
+    // WHICH DECK, IF ANY, IS THIS ABOUT TO LAND ON? Matched without case,
+    // the same way `deckNameProblem` decides two names collide — so the
+    // question asked here and the rule enforced underneath cannot give
+    // different answers.
+    const clash = findDeckLoosely(name);
+    // Saving the deck you opened, under the name you opened it with, is
+    // not a collision and is not worth a question. Anything else that
+    // lands on an existing deck is.
+    const isSelf = clash !== null && draft.savedAs !== null && clash.name === draft.savedAs;
+    if (clash && !isSelf) {
+      if (!confirm(`You already have a deck called "${clash.name}". Overwrite it?`)) {
+        // Answering no leaves the draft exactly as it was, still open and
+        // still unsaved — it is a cancelled save, not a failed one, so it
+        // does not set `draftError`.
+        return;
+      }
+    }
+    const source: DeckSource = { kind: "paste", text: draftToText({ ...draft, name }, byId) };
+    // ONLY ONE CASE NEEDS A DELETE: renaming this deck ONTO a different
+    // one that already exists. Then two entries would survive — the
+    // overwritten target and the abandoned original — so the original
+    // goes. A plain rename must NOT delete, because `replaceDeck` renames
+    // the entry in place and keeps its position and its created date.
+    const failed = (() => {
+      if (clash && draft.savedAs && clash.name !== draft.savedAs) {
+        deleteDeck(draft.savedAs);
+        return replaceDeck(clash.name, name, source);
+      }
+      if (clash) return replaceDeck(clash.name, name, source);
+      if (draft.savedAs) return replaceDeck(draft.savedAs, name, source);
+      return saveDeck(name, source);
+    })();
     if (failed) {
       this.draftError = failed;
       this.paint();
