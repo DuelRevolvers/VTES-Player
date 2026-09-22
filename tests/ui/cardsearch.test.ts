@@ -522,7 +522,9 @@ describe("the deck builder screen", () => {
     expect(save).toMatch(/Overwrite your saved deck/);
     expect(save).toMatch(/You already have a deck called[^?]*Overwrite it\?/);
     // Cancelling is not a failure, so it must not leave an error behind.
-    expect(save).toMatch(/if \(!confirm\(question\)\) \{[\s\S]{0,300}return;/);
+    // (`return false`: a cancelled save reports that it did not save, so
+    // the close dialog's Save leaves the deck open.)
+    expect(save).toMatch(/if \(!confirm\(question\)\) \{[\s\S]{0,300}return false;/);
   });
 
   it("does NOT ask when a brand-new deck lands on nothing", () => {
@@ -1000,5 +1002,125 @@ describe("renaming and deleting from the deck view (owner request)", () => {
     expect(shell).toMatch(
       /this\.viewingDeck === from && this\.deckError === ""[\s\S]{0,120}this\.viewingDeck = to\.trim\(\)/,
     );
+  });
+});
+
+describe("the status sentences are gone (owner request, 2026-09-22)", () => {
+  it("draws the badge as its label only, with no explanatory tooltip", () => {
+    for (const status of ["playable", "absent"] as const) {
+      const c = cards.find((x) => x.status === status)!;
+      const badge = statusBadge(c);
+      expect(badge).not.toContain("title=");
+      // The label itself stays — that is the part that was asked to keep.
+      expect(badge).toMatch(status === "playable" ? /Playable/ : /Not in the player/);
+    }
+  });
+
+  it("leaves the sentences off every card's detail panel", () => {
+    for (const status of ["playable", "absent"] as const) {
+      const html = cardDetailMarkup(cards.find((x) => x.status === status)!);
+      expect(html).not.toContain("does everything it prints");
+      expect(html).not.toContain("not yet added to this platform");
+    }
+  });
+});
+
+describe("the hover preview on every Deck Builder tab (owner request)", () => {
+  const shell = readShell();
+
+  it("marks every card cell a preview can be read from, in both views", () => {
+    // Search results — the Card search tab AND the builder's right column.
+    const all = searchCards(cards, emptyQuery());
+    for (const view of ["grid", "list"] as const) {
+      const html = resultsMarkup(all, {
+        view,
+        selectedId: null,
+        total: cards.length,
+        page: 1,
+        pageSize: DEFAULT_PAGE_SIZE,
+      });
+      expect((html.match(/data-zoomid="/g) ?? []).length).toBe(DEFAULT_PAGE_SIZE);
+    }
+    // A deck's own cards — the builder's left column and the deck viewer,
+    // which is the My decks tab. One renderer, so both views are covered.
+    const render = section(shell, "private deckCardsMarkup", "private deckViewToggle");
+    expect((render.match(/data-zoomid=/g) ?? []).length).toBe(2);
+  });
+
+  it("does not leave a native tooltip on a card to sit over the preview", () => {
+    // The table dropped the browser's own tooltip for the same reason: it
+    // lingers over the card while the preview is up.
+    const html = resultsMarkup(searchCards(cards, emptyQuery()), {
+      view: "grid",
+      selectedId: null,
+      total: cards.length,
+      page: 1,
+      pageSize: DEFAULT_PAGE_SIZE,
+    });
+    expect(html).not.toMatch(/class="cscard[^>]*title=/);
+  });
+
+  it("binds its listeners ONCE, not on every paint", () => {
+    // They sit on the ROOT, which survives every paint; `wire()` runs on
+    // every paint, so binding them there would stack a copy per repaint.
+    expect((shell.match(/this\.wireZoom\(\);/g) ?? []).length).toBe(1);
+    const ctor = section(shell, "constructor(private readonly root", "private newTable");
+    expect(ctor).toContain("this.wireZoom();");
+    const wire = section(shell, "  private wire(): void {", "private wireDeckBuild");
+    expect(wire).not.toContain("wireZoom");
+  });
+
+  it("reads the card from the CATALOGUE, and never touches the table's preview", () => {
+    const zoom = section(shell, "private wireZoom", "Fetch the catalogue, once");
+    // Most cards here are not in the registry, which is what the table's
+    // own preview reads — so it goes by catalogue id instead.
+    expect(zoom).toContain("this.catalogIndex!.byId.get(");
+    // The table renders into the same root with its own #zoom once a game
+    // starts; every handler has to stand down off this screen.
+    expect(zoom).toContain('this.screen === "deckbuilder"');
+    expect((zoom.match(/if \(!active\(\)\) return;/g) ?? []).length).toBe(4);
+    // And the panel is drawn on the Deck Builder screen for it to fill.
+    const screenMarkup = section(shell, "private deckBuilderScreen", "private buildPanel");
+    expect(screenMarkup).toContain(`id="zoom"`);
+  });
+});
+
+describe("asking to save before closing a deck (owner request)", () => {
+  const shell = readShell();
+
+  it("asks only when there is something to lose", () => {
+    const close = section(shell, `this.on("#db-close", () => {`, `this.on("#db-close-save"`);
+    expect(close).toContain("if (this.isDraftDirty())");
+    expect(close).toContain("this.closeAsk = true;");
+    // Clean: straight out, no question.
+    expect(close).toContain("this.closeDraft();");
+  });
+
+  it("offers exactly the two answers asked for — Save and Close", () => {
+    const dialog = section(shell, "private closeDialog", "One card, one step");
+    expect(dialog).toContain(`id="db-close-save"`);
+    expect(dialog).toContain(`>Save</button>`);
+    expect(dialog).toContain(`id="db-close-discard"`);
+    expect(dialog).toContain(`>Close</button>`);
+  });
+
+  it("closes after Save only if the save went through", () => {
+    // A refused save (no name) or a cancelled overwrite must leave the
+    // deck OPEN with the reason on screen — closing anyway would lose the
+    // very work the dialog exists to protect.
+    expect(shell).toMatch(/if \(this\.saveDraft\(\)\) this\.closeDraft\(\);\s*else this\.paint\(\);/);
+    expect(shell).toContain("private saveDraft(): boolean");
+  });
+
+  it("measures 'unsaved' against the deck as it was last opened or saved", () => {
+    // Every way a draft is born or saved sets the baseline; one that did
+    // not would ask about a deck nobody touched, or fail to ask about one
+    // somebody did.
+    const marks = (shell.match(/this\.markDraftClean\(\);/g) ?? []).length;
+    expect(marks).toBe(4); // scratch, precon, saved deck, successful save
+    // Compared as serialised deck TEXT, so adding a card and taking it
+    // away again is correctly clean.
+    const dirty = section(shell, "private isDraftDirty", "private closeDraft");
+    expect(dirty).toContain("this.draftSnapshot()");
   });
 });

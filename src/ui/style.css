@@ -1804,3 +1804,21 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 /* A card the player cannot deal, marked in the grid as well as the list. */
 .dkcell.absent .dkpic, .dkcell.pool .dkpic { border-color: var(--blood); }
 
+
+/* --- "save before closing?" -------------------------------------------- */
+
+/* Covers the whole screen, tabs included, so nothing else can be pressed
+   while the question is up; clicking it backs out and keeps editing. */
+.dbscrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0, 0, 0, .6);
+}
+.dbclosecard {
+  position: fixed; z-index: 91; left: 50%; top: 30%;
+  transform: translate(-50%, -30%);
+  width: min(440px, 92vw);
+  background: var(--panel); border: 1px solid var(--gold); border-radius: 6px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .8); padding: 18px 20px;
+}
+.dbclosecard h2 { margin: 0 0 10px; font-size: 16px; color: var(--gold); font-weight: 600; }
+.dbclosecard .row { justify-content: flex-end; }

@@ -212,6 +212,11 @@ export class Shell {
    * cannot change without the catalogue changing.
    */
   private catalog: CatalogFile | null = null;
+  /** Built once with the catalogue, for the hover preview: a hover must not
+   *  rebuild a 4,149-entry index every time the pointer crosses a card. */
+  private catalogIndex: ReturnType<typeof indexCatalog> | null = null;
+  /** Where the pointer is, for placing the preview beside it. */
+  private pointer = { x: 0, y: 0 };
   private catalogFacets: Facets | null = null;
   private catalogError = "";
   private cardQuery: CardQuery = emptyQuery();
@@ -289,6 +294,10 @@ export class Shell {
     const invited = codeFromLink(location.href);
     if (invited) this.joinCode = invited;
     this.screen = !this.profile ? "profile" : invited ? "join" : "menu";
+    // ONCE, here, and never in `wire()`: `wire()` runs on every paint, and
+    // these listeners sit on the ROOT, which survives every paint — so
+    // binding them there would stack another copy per repaint.
+    this.wireZoom();
     // A chat line can arrive at any moment from the network, and the
     // screen is a pure function of state, so it only has to be told.
     onChat(() => {
@@ -791,6 +800,17 @@ export class Shell {
           ).join("")}
         </div>
         <div class="dbbody">${body}</div>
+      </div>
+      <!--
+        THE SAME HOVER PREVIEW THE TABLE HAS (owner request, 2026-09-22) —
+        same markup and same stylesheet, so a card looks the same wherever
+        you hover it. Outside the card on purpose: it is position: fixed,
+        and it must not be clipped by a scrolling column.
+      -->
+      <div id="zoom" class="zoom" hidden
+           style="--cardtext:${loadSettings().cardTextPx}px">
+        <div class="zoomname"></div>
+        <img alt="" /><div class="zoomtext"></div>
       </div>`;
   }
 
@@ -891,6 +911,7 @@ export class Shell {
     const query = this.builderQuery(review.cryptScope);
     const results = searchCards(file.cards, query);
     return `
+      ${this.closeAsk ? this.closeDialog(draft) : ""}
       <div class="dbeditor">
         <div class="dbdeck">
           <div class="row dbdeckhead">
@@ -1147,7 +1168,7 @@ export class Shell {
         // copies of a card should read as one entry with a 4 on it.
         return `
           <span class="dkcell ${card.status}">
-            <button class="dbcard dkpic" data-card="${card.id}" title="${esc(card.name)}">
+            <button class="dbcard dkpic" data-card="${card.id}" data-zoomid="${card.id}">
               <img loading="lazy" src="${esc(card.image)}" alt="${esc(card.name)}" />
               <span class="dkcopies">${copies}</span>
             </button>
@@ -1175,7 +1196,7 @@ export class Shell {
               ? `<button class="dbmore" data-card="${card.id}" aria-label="One more">+</button>`
               : ""
           }
-          <button class="dbcard" data-card="${card.id}">${esc(card.name)}</button>
+          <button class="dbcard" data-card="${card.id}" data-zoomid="${card.id}">${esc(card.name)}</button>
           <span class="dbtraits">${esc(traitLine(card))}</span>
           ${card.status === "playable" ? "" : statusBadge(card)}
         </div>`;
@@ -1346,6 +1367,81 @@ export class Shell {
   }
 
   /**
+   * The hover preview for every tab of the Deck Builder.
+   *
+   * The table has its own (`wireZoom` in loop.ts), and this matches it —
+   * same panel, same fading name, same placement — with one difference
+   * that is the reason it is not simply shared: the table looks a card's
+   * text up in the REGISTRY, and most cards here are not in it. So the
+   * hover names a card by catalogue id (`data-zoomid`) and reads the
+   * scan and the text from the CATALOGUE, which knows all 4,149.
+   *
+   * Every handler checks `this.screen` first. The table renders into the
+   * same root once a game starts, and it has its own `#zoom`; these must
+   * not start moving that one around.
+   */
+  private wireZoom(): void {
+    const active = (): boolean => this.screen === "deckbuilder" && this.catalogIndex !== null;
+    const panel = (): HTMLDivElement | null => this.root.querySelector<HTMLDivElement>("#zoom");
+    const place = (p: HTMLDivElement): void => {
+      // The table's own arithmetic: beside the pointer, never off screen.
+      const pad = 16;
+      const w = p.offsetWidth || 300;
+      const h = p.offsetHeight || 460;
+      const x = Math.min(this.pointer.x + pad, window.innerWidth - w - pad);
+      const y = Math.min(Math.max(pad, this.pointer.y - h / 2), window.innerHeight - h - pad);
+      p.style.left = `${Math.max(pad, x)}px`;
+      p.style.top = `${Math.max(pad, y)}px`;
+    };
+
+    this.root.addEventListener("mouseover", (ev) => {
+      if (!active()) return;
+      const target = (ev.target as HTMLElement).closest<HTMLElement>("[data-zoomid]");
+      const p = panel();
+      if (!target || !p) return;
+      const card = this.catalogIndex!.byId.get(Number(target.dataset["zoomid"]));
+      const img = p.querySelector("img");
+      const text = p.querySelector<HTMLDivElement>(".zoomtext");
+      const name = p.querySelector<HTMLDivElement>(".zoomname");
+      if (!card || !img || !text || !name) return;
+      img.src = card.image;
+      text.textContent = card.text;
+      // The name fades, as on the table; restarting the animation is what
+      // makes it fade again for the NEXT card, not only the first.
+      if (name.textContent !== card.name) {
+        name.textContent = card.name;
+        name.classList.remove("fading");
+        void name.offsetWidth;
+        name.classList.add("fading");
+      }
+      p.hidden = false;
+      place(p);
+    });
+    this.root.addEventListener("mouseout", (ev) => {
+      if (!active()) return;
+      if (!(ev.target as HTMLElement).closest("[data-zoomid]")) return;
+      const p = panel();
+      if (!p) return;
+      p.hidden = true;
+      const name = p.querySelector<HTMLDivElement>(".zoomname");
+      if (name) name.textContent = "";
+    });
+    this.root.addEventListener("mousemove", (ev) => {
+      this.pointer = { x: ev.clientX, y: ev.clientY };
+      if (!active()) return;
+      const p = panel();
+      if (p && !p.hidden) place(p);
+    });
+    // A press is about to repaint (every +, every click on a card), and the
+    // preview would otherwise sit over the very thing being pressed.
+    this.root.addEventListener("mousedown", () => {
+      if (!active()) return;
+      const p = panel();
+      if (p) p.hidden = true;
+    });
+  }
+
+  /**
    * Fetch the catalogue, once, and repaint when it lands.
    *
    * Called on the way IN to the screen rather than from the render, so a
@@ -1359,6 +1455,7 @@ export class Shell {
       .then((file) => {
         this.catalog = file;
         this.catalogFacets = facetsOf(file);
+        this.catalogIndex = indexCatalog(file);
         if (this.screen === "deckbuilder") this.paint();
       })
       .catch((err: unknown) => {
@@ -2244,17 +2341,41 @@ export class Shell {
       this.draft = emptyDraft("");
       this.draftUnreadable = [];
       this.draftError = "";
+      this.markDraftClean();
       this.paint();
     });
 
     // --- editing one ---
+    // CLOSING ASKS WHEN THERE IS SOMETHING TO LOSE (owner request,
+    // 2026-09-22). This replaces an earlier "no confirm" on the reasoning
+    // that nothing unsaved mattered — it did. Only a DIRTY draft asks: a
+    // deck opened and closed untouched has nothing to save, and a
+    // question there would be friction for nothing.
     this.on("#db-close", () => {
-      // NO CONFIRM, because nothing is lost that was not already saved
-      // and re-openable — and a confirm on every close is the kind of
-      // friction that stops people trying things.
-      this.draft = null;
-      this.draftUnreadable = [];
-      this.draftError = "";
+      if (this.isDraftDirty()) {
+        this.closeAsk = true;
+        this.paint();
+        return;
+      }
+      this.closeDraft();
+    });
+    // The dialog's two answers. "Close" is the second press of Close and
+    // closes for real; "Save" saves and THEN closes — but only if the save
+    // went through. A refused save (no name) or a cancelled overwrite
+    // leaves the deck open with the reason on screen.
+    this.on("#db-close-save", () => {
+      this.closeAsk = false;
+      if (this.saveDraft()) this.closeDraft();
+      else this.paint();
+    });
+    this.on("#db-close-discard", () => {
+      this.closeAsk = false;
+      this.closeDraft();
+    });
+    // Clicking outside the dialog backs out of it and keeps editing — the
+    // way out that is neither answer.
+    this.on("#db-close-scrim", () => {
+      this.closeAsk = false;
       this.paint();
     });
     this.on("#db-save", () => this.saveDraft());
@@ -2324,6 +2445,66 @@ export class Shell {
     // exactly like a button that does nothing.
   }
 
+  /**
+   * The draft as it was last opened or saved, as deck text — what "unsaved
+   * changes" is measured against.
+   *
+   * TEXT, not a flag set by each edit. A flag has to be remembered at every
+   * place a draft changes (four +/− controls, the name box, the half-deck
+   * box, "remove unplayable"…) and the one that forgets it is a close that
+   * silently loses work. Comparing the serialised deck asks the question
+   * directly, and adding a card and removing it again is correctly clean.
+   */
+  private draftBaseline: string | null = null;
+  /** The "save before closing?" dialog is up. */
+  private closeAsk = false;
+
+  private draftSnapshot(): string | null {
+    if (!this.draft || !this.catalogIndex) return null;
+    return draftToText(this.draft, this.catalogIndex.byId);
+  }
+
+  private markDraftClean(): void {
+    this.draftBaseline = this.draftSnapshot();
+  }
+
+  private isDraftDirty(): boolean {
+    const now = this.draftSnapshot();
+    return now !== null && now !== this.draftBaseline;
+  }
+
+  private closeDraft(): void {
+    this.draft = null;
+    this.draftUnreadable = [];
+    this.draftError = "";
+    this.draftBaseline = null;
+    this.closeAsk = false;
+    this.paint();
+  }
+
+  /**
+   * "Save this deck before closing?" — an in-page dialog rather than the
+   * browser's `confirm`, because the answer has two NAMED buttons the
+   * owner asked for, Save and Close, and `confirm` only offers OK and
+   * Cancel, which would have to be mapped onto them and read wrongly.
+   */
+  private closeDialog(draft: DeckDraft): string {
+    const name = draft.name.trim() || "this deck";
+    return `
+      <div class="dbscrim" id="db-close-scrim"></div>
+      <div class="dbclosecard" role="dialog" aria-label="Save before closing">
+        <h2>Save ${esc(name)} before closing?</h2>
+        <p class="note">
+          It has changes that are not saved. <b>Close</b> again to close it
+          without saving them.
+        </p>
+        <div class="row">
+          <button id="db-close-save" class="primary">Save</button>
+          <button id="db-close-discard" class="danger">Close</button>
+        </div>
+      </div>`;
+  }
+
   /** One card, one step, from any of the four +/− controls. */
   private bumpCard(el: HTMLElement, delta: number): void {
     const id = Number(el.dataset["card"]);
@@ -2376,6 +2557,7 @@ export class Shell {
     // still the printed deck and should be called by its name.
     this.draft = { ...built, name: `${name} (copy)` };
     this.draftUnreadable = [];
+    this.markDraftClean();
     // A precon opens as a NEW deck, never bound to the printed one:
     // `savedAs` stays null, so Save writes a new entry rather than
     // overwriting something that came in a box.
@@ -2404,6 +2586,7 @@ export class Shell {
     const { draft, unreadable } = parseDraft(text, byName);
     this.draft = { ...draft, name: draft.name.trim() === "" ? name : draft.name, savedAs: name };
     this.draftUnreadable = unreadable;
+    this.markDraftClean();
     this.draftError = "";
     this.paint();
   }
@@ -2422,21 +2605,26 @@ export class Shell {
    * whole time, and `deckSummary` says it again wherever the deck is
    * picked, so nothing can be taken to a table by mistake.
    */
-  private saveDraft(): void {
+  /**
+   * Save the draft. Returns whether it was SAVED — the close dialog needs
+   * to know, because "Save" there means "save, and then close", and a
+   * save that was refused or cancelled must leave the deck open.
+   */
+  private saveDraft(): boolean {
     const draft = this.draft;
-    if (!draft || !this.catalog) return;
+    if (!draft || !this.catalog) return false;
     const box = this.root.querySelector<HTMLInputElement>("#db-name");
     const name = (box?.value ?? draft.name).trim();
     if (name === "") {
       this.draftError = "give this deck a name before saving it";
       this.paint();
-      return;
+      return false;
     }
     const { byId } = indexCatalog(this.catalog);
     if (Object.keys(draft.counts).length === 0) {
       this.draftError = "there is nothing in this deck to save";
       this.paint();
-      return;
+      return false;
     }
     // WHICH DECK, IF ANY, IS THIS ABOUT TO LAND ON? Matched without case,
     // the same way `deckNameProblem` decides two names collide — so the
@@ -2462,7 +2650,7 @@ export class Shell {
         // Answering no leaves the draft exactly as it was, still open and
         // still unsaved — it is a cancelled save, not a failed one, so it
         // does not set `draftError`.
-        return;
+        return false;
       }
     }
     const source: DeckSource = { kind: "paste", text: draftToText({ ...draft, name }, byId) };
@@ -2483,11 +2671,15 @@ export class Shell {
     if (failed) {
       this.draftError = failed;
       this.paint();
-      return;
+      return false;
     }
     this.draft = { ...draft, name, savedAs: name };
     this.draftError = "";
+    // What is on disk now matches what is on screen, so closing after this
+    // has nothing to ask about.
+    this.markDraftClean();
     this.paint();
+    return true;
   }
 
   private wireCardSearch(): void {

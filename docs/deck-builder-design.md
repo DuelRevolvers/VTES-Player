@@ -1,4 +1,4 @@
-# The Deck Builder (0.11.07–0.11.16, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.17, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
@@ -876,3 +876,60 @@ paint rebuilds them, and a column left out would jump to the top on every
 The scroll-keeper test had to learn to find a rule that *starts* with the
 selector: `.dbeditor .dblist {` contains `.dblist {`, and `indexOf` found
 the override before the rule it overrides.
+
+---
+
+## §16 — Save before closing; no status sentences; hover preview (0.11.17)
+
+### Closing a deck with unsaved changes asks
+
+**Reverses §9's "no confirm on close"** (owner request, 2026-09-22). Close
+on a deck with unsaved changes opens an in-page dialog with the two
+buttons asked for: **Save** and **Close**. Close is the second press of
+Close and closes for real. Save saves and *then* closes — but only if the
+save went through: a refused save (no name) or a cancelled overwrite
+leaves the deck open with the reason on screen, since closing anyway
+would lose the work the dialog exists to protect. `saveDraft` now returns
+whether it saved, for exactly that. Clicking outside the dialog backs out
+and keeps editing.
+
+It is an in-page dialog rather than `confirm`, because `confirm` offers
+OK and Cancel, and mapping those onto Save and Close would be read wrong.
+
+**"Unsaved" is measured, not tracked.** `draftBaseline` holds the deck as
+TEXT as it was last opened or saved, and dirty means the current text
+differs. A flag set by each edit would have to be remembered at every
+place a draft changes — four +/− controls, the name box, the half-deck
+box, "remove unplayable" — and the one that forgot would be a close that
+silently loses work. The baseline is set in exactly four places (scratch,
+precon, saved deck, successful save), counted by a test. Adding a card and
+removing it again is correctly clean.
+
+### The status sentences are gone
+
+"This card does everything it prints, at a table, today." and "A real
+card, not yet added to this platform." were on every card twice — as the
+badge's tooltip and as a line under the detail panel. Both are removed,
+along with the never-seen third sentence for the empty "partly
+implemented" state. The badge is its label.
+
+### The hover preview, on every tab
+
+The same preview the table has — same `#zoom` markup and stylesheet, same
+fading name, same placement arithmetic — on search results (Card search
+tab and the builder's right column) and on a deck's own cards (the
+builder's left column and the My decks viewer), in grid and list view.
+
+It is not simply the table's code shared, for one reason: **the table
+reads a card's text from the REGISTRY, and most cards here are not in
+it.** So a cell carries `data-zoomid` (a catalogue id) and the preview
+reads scan and text from the catalogue, through an index built once when
+the catalogue lands rather than per hover.
+
+**Two traps, both tested.** The listeners sit on the ROOT, which survives
+every paint, and the shell's `wire()` runs on every paint — so they are
+bound ONCE, in the constructor, or they would stack a copy per repaint.
+And the table renders into the same root with its own `#zoom` once a game
+starts, so every handler stands down unless the screen is the Deck
+Builder. The browser's native tooltip was removed from card cells too, as
+the table did, because it lingers over the card under the preview.

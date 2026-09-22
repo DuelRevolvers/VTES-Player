@@ -509,16 +509,15 @@ const STATUS_LABEL: Record<CatalogStatus, string> = {
   absent: "Not in the player",
 };
 
-const STATUS_TITLE: Record<CatalogStatus, string> = {
-  playable: "This card does everything it prints, at a table, today.",
-  pool: "This card is dealt, but something it prints is not implemented.",
-  absent: "A real card, not yet added to this platform.",
-};
-
+/**
+ * The badge is the label and nothing else (owner request, 2026-09-22).
+ *
+ * It used to carry an explanatory sentence — as a tooltip on every badge
+ * and as a line under every card's detail — and the owner asked for both
+ * gone. The label already says it: "Playable", "Not in the player".
+ */
 export function statusBadge(c: CatalogCard): string {
-  return `<span class="cstat ${c.status}" title="${esc(STATUS_TITLE[c.status])}">${esc(
-    STATUS_LABEL[c.status],
-  )}</span>`;
+  return `<span class="cstat ${c.status}">${esc(STATUS_LABEL[c.status])}</span>`;
 }
 
 /** "Dominate, Obfuscate" — or, on a vampire, with the superior marked. */
@@ -592,7 +591,7 @@ function cardCell(
   if (view === "grid") {
     return `
       <span class="cscell${inDeck}">
-        <button class="cscard ${c.status}${sel}" data-card="${c.id}" title="${esc(c.name)}">
+        <button class="cscard ${c.status}${sel}" data-card="${c.id}" data-zoomid="${c.id}">
           <img loading="lazy" src="${esc(c.image)}" alt="${esc(c.name)}" />
           <span class="csname">${esc(c.name)}</span>
           ${statusBadge(c)}
@@ -602,7 +601,7 @@ function cardCell(
   }
   return `
     <span class="cscell${inDeck}">
-      <button class="csrow ${c.status}${sel}" data-card="${c.id}">
+      <button class="csrow ${c.status}${sel}" data-card="${c.id}" data-zoomid="${c.id}">
         <span class="csname">${esc(c.name)}</span>
         <span class="cstraits">${esc(traitLine(c))}</span>
         ${statusBadge(c)}
@@ -734,7 +733,6 @@ export function cardDetailMarkup(c: CatalogCard): string {
           </table>
           <div class="cstext">${esc(c.text).replace(/\n/g, "<br />")}</div>
           ${c.flavor ? `<p class="csflavor">${esc(c.flavor).replace(/\n/g, "<br />")}</p>` : ""}
-          <p class="note dim">${esc(STATUS_TITLE[c.status])}</p>
         </div>
       </div>
     </div>`;
