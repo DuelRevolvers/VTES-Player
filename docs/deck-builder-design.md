@@ -813,3 +813,27 @@ the failure to catch is one handler writing the other's state.
 
 Leaving the My decks tab closes the open deck, so coming back lands on
 the list rather than on a deck you have since stopped thinking about.
+
+### Rename and Delete in the viewer (0.11.15)
+
+Both buttons are the **same two handlers** the My decks rows use — same
+classes, same `data-deck` — rather than a second pair that would have to
+be kept in step. A test counts the bindings: one each.
+
+**The viewer is keyed by NAME, so both handlers had to learn to follow
+what they had just done.** Without it:
+
+- deleting the deck you are looking at leaves the screen saying *"that
+  deck is no longer there"* about something you deleted on purpose;
+- renaming it reads as gone, because the viewer is still asking for the
+  old name.
+
+The rename follows **only on success**. A refused rename (the name is
+taken, or empty) leaves the old name in place, and the viewer has to stay
+on it — following unconditionally would point the screen at a deck that
+was never created.
+
+`.cardhead h1` also took `flex: 1`, so a header with five controls groups
+them on the right instead of spreading them across the row. The Deck
+Builder and Profile headers get the same treatment, which is what they
+already wanted.

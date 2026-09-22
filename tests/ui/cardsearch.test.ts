@@ -948,3 +948,34 @@ describe("looking at a saved deck (owner request, 2026-09-22)", () => {
     expect(shell).toMatch(/#cs-grid"[\s\S]{0,120}this\.cardView = "grid"/);
   });
 });
+
+describe("renaming and deleting from the deck view (owner request)", () => {
+  const shell = readShell();
+
+  it("reuses the My decks handlers rather than adding a second pair", () => {
+    const viewer = section(shell, "private deckViewer", "private preconDraft");
+    expect(viewer).toContain("deckrename");
+    expect(viewer).toContain("deckdelete");
+    // ONE binding each, wired in `wire()` and serving both screens.
+    expect((shell.match(/this\.on\("\.deckrename"/g) ?? []).length).toBe(1);
+    expect((shell.match(/this\.on\("\.deckdelete"/g) ?? []).length).toBe(1);
+  });
+
+  it("stops viewing a deck it has just deleted", () => {
+    // The viewer is keyed by NAME, so without this it would sit there
+    // saying "that deck is no longer there" about something the person
+    // deleted on purpose.
+    expect(shell).toMatch(
+      /deleteDeck\(name\);[\s\S]{0,400}if \(this\.viewingDeck === name\) this\.viewingDeck = null;/,
+    );
+  });
+
+  it("follows a rename, but only when it succeeded", () => {
+    // A refused rename leaves the old name in place, so the viewer has
+    // to stay on it — following unconditionally would point the screen
+    // at a deck that was never created.
+    expect(shell).toMatch(
+      /this\.viewingDeck === from && this\.deckError === ""[\s\S]{0,120}this\.viewingDeck = to\.trim\(\)/,
+    );
+  });
+});

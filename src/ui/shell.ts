@@ -1255,6 +1255,14 @@ export class Shell {
           <h1>${esc(saved.name)}</h1>
           ${this.deckViewToggle()}
           <button id="dv-edit" class="primary">Edit</button>
+          <!--
+            THE SAME CLASSES the My decks rows use, so these are the same
+            two handlers rather than a second pair that would have to be
+            kept in step. They read data-deck, which is the deck's own
+            name either way.
+          -->
+          <button class="deckrename" data-deck="${esc(saved.name)}">Rename</button>
+          <button class="deckdelete danger" data-deck="${esc(saved.name)}">Delete</button>
           <button id="dv-back">Back</button>
         </div>
         ${this.legalityPanel(review)}
@@ -2131,6 +2139,11 @@ export class Shell {
       const name = el.dataset["deck"] ?? "";
       if (!confirm(`Delete the deck "${name}"?`)) return;
       deleteDeck(name);
+      // THE VIEWER IS KEYED BY NAME, so deleting the deck you are looking
+      // at leaves it pointing at nothing. Go back to the list rather than
+      // showing "that deck is no longer there" about something the person
+      // has just deleted on purpose.
+      if (this.viewingDeck === name) this.viewingDeck = null;
       this.deckError = "";
       this.paint();
     });
@@ -2140,6 +2153,13 @@ export class Shell {
       // Cancelled, or unchanged — not an error, and not a rename.
       if (to === null || to.trim() === from) return;
       this.deckError = renameDeck(from, to) ?? "";
+      // FOLLOW THE RENAME, for the same reason: the viewer is keyed by
+      // name, so without this the deck you have just renamed reads as
+      // gone. Only on success — a refused rename leaves the old name in
+      // place, and the viewer must stay on it.
+      if (this.viewingDeck === from && this.deckError === "") {
+        this.viewingDeck = to.trim();
+      }
       this.paint();
     });
     this.on("#m-exit", () => {

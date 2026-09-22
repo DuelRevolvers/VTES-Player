@@ -1469,7 +1469,7 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
    it. Shared by the Deck Builder and the Profile screen, whose Back
    button moved up here (owner request, 2026-09-22). */
 .cardhead { margin-top: 0; align-items: baseline; justify-content: space-between; }
-.cardhead h1 { margin: 0; }
+.cardhead h1 { margin: 0; flex: 1; }
 
 /* The reserved panel. It is disabled rather than absent so the shape of
    the finished screen is visible now (docs/deck-builder-design.md §5). */
