@@ -1749,3 +1749,49 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 }
 .dboffdisc .dbcaution { border: none; padding-left: 0; margin: 0 0 4px; }
 .dboffdisc .note { margin: 0 0 8px; }
+
+/* --- a deck's own cards, as scans ------------------------------------- */
+
+/* A deck name in My decks opens the deck. It reads as a link because it
+   is one, and it is the widest thing in the row so it is easy to hit. */
+.shell button.lname.deckopen {
+  background: none; border: none; padding: 0; text-align: left;
+  color: var(--ink); font: inherit; flex: 1;
+}
+.shell button.lname.deckopen:hover { background: none; color: var(--gold); }
+
+.dbdecktools { margin: 10px 0 0; justify-content: flex-end; }
+.dktoggle { display: flex; gap: 4px; }
+
+/* Smaller cells than the search grid: this is your own sixty cards, and
+   the point is to take the deck in at a glance. */
+.dkgrid {
+  display: grid; gap: 8px; margin: 4px 0 10px;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+}
+.dkcell { display: flex; flex-direction: column; gap: 3px; }
+.shell .dkcell button.dkpic {
+  position: relative; padding: 0; border: 1px solid var(--line);
+  border-radius: 4px; overflow: hidden; background: var(--bg);
+  display: block; line-height: 0;
+}
+.shell .dkcell button.dkpic:hover { border-color: var(--gold); background: var(--bg); }
+.dkcell .dkpic img { width: 100%; aspect-ratio: 5 / 7; object-fit: cover; display: block; }
+/* The count sits ON the scan: four copies should read as one entry with
+   a 4 on it, not as four pictures. */
+.dkcell .dkcopies {
+  position: absolute; top: 3px; left: 3px;
+  background: rgba(0, 0, 0, .78); color: var(--gold);
+  border-radius: 3px; padding: 0 5px;
+  font-size: 12px; font-weight: 700; line-height: 1.5;
+}
+.dkcell .dkname {
+  font-size: 10px; line-height: 1.3; color: var(--dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dkadd { display: flex; gap: 3px; justify-content: center; }
+.shell .dkadd button { padding: 0 8px; line-height: 1.5; }
+/* A card the player cannot deal, marked in the grid as well as the list. */
+.dkcell.absent .dkpic, .dkcell.pool .dkpic { border-color: var(--blood); }
+/* In grid view the deck column needs the room the pictures want. */
+.dbeditor .dblist.grid { max-height: none; }

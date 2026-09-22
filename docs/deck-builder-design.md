@@ -1,4 +1,4 @@
-# The Deck Builder (0.11.07–0.11.13, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.14, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
@@ -746,3 +746,70 @@ leave.
 Builder's header, rather than a second class doing the same job. On a
 profile that does not exist yet the header is just the title: there is
 nowhere to go back to.
+
+---
+
+## §14 — Reading a saved deck, and grid view for a deck (0.11.14)
+
+> *"In My Decks, add the ability to look at the cards in your decks… grid
+> and list toggle and an Edit button which takes you to the deck builder
+> with the deck. Also add a grid & list toggle for the cards in the deck
+> currently being constructed."* — owner, 2026-09-22
+
+### One renderer, two screens
+
+`deckCardsMarkup(rows, view, editable)` draws a deck's cards, and the
+builder and the viewer differ only in those two parameters. The
+crypt/library/section walk — biggest capacity first, then the
+conventional type order — is the part that would drift if it were copied,
+so it is written once. The test counts the definitions (**1**) and the
+call sites (**2**).
+
+`editable` is what removes the **−/+** controls from a deck being read,
+in both views. `view` chooses rows or scans.
+
+### The count sits ON the scan
+
+In grid view a card's copies are drawn over the top-left of its picture
+rather than beside it. Four copies should read as **one entry with a 4 on
+it**, not as four pictures — the deck is sixty cards and the point of the
+grid is to take it in at a glance. The cells are also smaller than the
+search grid's, for the same reason.
+
+### The viewer runs the builder's own review
+
+It parses the saved deck with `parseDraft` and reviews it with
+`reviewDraft`, so the legality panel, the half-deck label, the
+"cannot be dealt here" list and the "no vampire can play this" warning
+all appear on the viewer for free — and **cannot say anything different
+from what the editor would say about the same deck**.
+
+A saved PRECON has no deck text of its own, so `preconDraft` was pulled
+out of `openPreconDraft` and both expand one the same way. Two expansions
+would be two chances to tally copies differently. The `"(copy)"` suffix
+stayed behind in `openPreconDraft`: a precon opened to be **edited** is a
+new deck, but one opened to be **read** is still the printed deck and
+should be called by its name.
+
+**Edit** goes through `openSavedDraft`, the same path the Build tab's
+"open one of your decks" takes — so a deck opened from the viewer is
+bound to its saved name and Save overwrites it (§12) rather than leaving
+a duplicate.
+
+### Two hazards worth naming
+
+**`.dbcard` must be bound EXACTLY ONCE.** It exists in the builder's deck
+list and in the viewer's. Bound in both places the toggle fires twice —
+opening the card and immediately closing it — which on screen looks
+precisely like a button that does nothing. It moved out of
+`wireDeckBuild`'s build-tab guard into `wire()`, and a test counts the
+bindings.
+
+**The deck view is a separate setting from the search view.** Wanting
+pictures while browsing 4,149 cards and rows while checking your own
+sixty is an ordinary pair of preferences, and one field for both would
+force them to agree. The test asserts each toggle writes its own field —
+the failure to catch is one handler writing the other's state.
+
+Leaving the My decks tab closes the open deck, so coming back lands on
+the list rather than on a deck you have since stopped thinking about.

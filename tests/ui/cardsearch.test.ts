@@ -878,3 +878,73 @@ describe("the page does not jump to the top when you add a card", () => {
     }
   });
 });
+
+describe("looking at a saved deck (owner request, 2026-09-22)", () => {
+  const shell = readShell();
+
+  it("makes each deck in My decks open it", () => {
+    const lib = section(shell, "private deckLibrary", "private deckImporter");
+    expect(lib).toContain("deckopen");
+    expect(lib).toContain("data-deck=");
+    // The row keeps its other actions rather than the name swallowing them.
+    expect(lib).toContain("deckrename");
+    expect(lib).toContain("deckdelete");
+  });
+
+  it("gives the viewer an Edit button that goes through the builder's own path", () => {
+    const viewer = section(shell, "private deckViewer", "private preconDraft");
+    expect(viewer).toContain("dv-edit");
+    expect(viewer).toContain("dv-back");
+    // Same review the editor runs, so the two cannot disagree about the
+    // same deck's legality.
+    expect(viewer).toContain("reviewDraft(draft, byId)");
+    expect(viewer).toContain("this.legalityPanel(review)");
+    // And Edit reuses `openSavedDraft`, so the deck is bound to its saved
+    // name and Save overwrites instead of duplicating.
+    expect(shell).toMatch(/#dv-edit[\s\S]{0,600}this\.openSavedDraft\(/);
+  });
+
+  it("draws a deck's cards through ONE renderer, in both views", () => {
+    // The builder and the viewer differ only in `editable` and `view`.
+    // A second copy of the crypt/library/section walk is the thing that
+    // would drift.
+    expect((shell.match(/private deckCardsMarkup/g) ?? []).length).toBe(1);
+    expect((shell.match(/this\.deckCardsMarkup\(/g) ?? []).length).toBe(2);
+    const render = section(shell, "private deckCardsMarkup", "private deckViewToggle");
+    expect(render).toContain('view === "grid"');
+    expect(render).toContain("editable");
+  });
+
+  it("hides the +/- controls when the deck is only being read", () => {
+    const render = section(shell, "private deckCardsMarkup", "private deckViewToggle");
+    // Both the grid and the list ask, so a read-only deck cannot be
+    // edited from either one.
+    expect((render.match(/editable\s*$/gm) ?? []).length + (render.match(/editable\s*\?/g) ?? []).length)
+      .toBeGreaterThanOrEqual(3);
+  });
+
+  it("binds a card click EXACTLY once, so the toggle is not cancelled", () => {
+    // `.dbcard` exists in the builder and in the viewer. Bound in both
+    // places it would fire twice — open then immediately close — which
+    // looks precisely like a button that does nothing.
+    expect((shell.match(/this\.on\("\.dbcard"/g) ?? []).length).toBe(1);
+  });
+
+  it("closes the open deck when you leave the My decks tab", () => {
+    // Otherwise coming back lands on a deck you stopped thinking about.
+    expect(shell).toMatch(/if \(tab !== "decks"\) this\.viewingDeck = null;/);
+  });
+
+  it("keeps the deck view separate from the SEARCH view", () => {
+    // Pictures while browsing 4,149 cards and rows while checking your
+    // own sixty is an ordinary pair of preferences; one field for both
+    // would force them to agree.
+    expect(shell).toContain("private deckCardView");
+    expect(shell).toContain("private cardView");
+    // Two toggles, and each sets its OWN field — the failure to catch is
+    // one handler writing the other's state, which would silently tie the
+    // two together.
+    expect(shell).toMatch(/#dk-grid"[\s\S]{0,120}this\.deckCardView = "grid"/);
+    expect(shell).toMatch(/#cs-grid"[\s\S]{0,120}this\.cardView = "grid"/);
+  });
+});

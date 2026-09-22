@@ -247,6 +247,18 @@ export class Shell {
    * most of the game is worse than one they have to find.
    */
   private scopeToCrypt = false;
+  /** The saved deck being READ on the My decks tab, by name. */
+  private viewingDeck: string | null = null;
+  /**
+   * How a DECK's own cards are drawn — scans or rows.
+   *
+   * One setting for the viewer and the builder, because it is one
+   * question: how do I want to look at a deck? Deliberately NOT the same
+   * field as `cardView`, which is about the SEARCH — wanting pictures
+   * while browsing 4,149 cards and rows while checking your own sixty is
+   * a perfectly ordinary pair of preferences.
+   */
+  private deckCardView: CardView = "list";
   /** Lines of a reopened deck that named no card. Shown, never dropped. */
   private draftUnreadable: string[] = [];
 
@@ -692,7 +704,8 @@ export class Shell {
                   // today can stop being legal tomorrow as the pool moves.
                   const s = deckSummary(d.source);
                   return `<div class="lobbyrow">
-                    <span class="lname">${esc(d.name)}</span>
+                    <button class="lname deckopen" data-deck="${esc(d.name)}"
+                            title="Look at the cards in this deck">${esc(d.name)}</button>
                     <span class="ldeck ${s.ok ? "ready" : ""}">${esc(s.detail)}</span>
                     ${s.hash ? `<span class="dhash" title="deck fingerprint">${esc(s.hash)}</span>` : ""}
                     <button class="deckrename" data-deck="${esc(d.name)}">Rename</button>
@@ -757,7 +770,7 @@ export class Shell {
     // show somebody their deck list.
     const body =
       this.deckTab === "decks"
-        ? this.deckLibrary()
+        ? (this.viewingDeck ? this.deckViewer(this.viewingDeck) : this.deckLibrary())
         : this.deckTab === "build"
           ? this.buildPanel()
           : this.cardSearchPanel();
@@ -900,7 +913,8 @@ export class Shell {
           </label>
           ${this.draftError ? `<p class="err">${esc(this.draftError)}</p>` : ""}
           ${this.legalityPanel(review)}
-          ${this.deckListMarkup(draft, byId)}
+          <div class="row dbdecktools">${this.deckViewToggle()}</div>
+          ${this.deckCardsMarkup(draftCards(draft, byId), this.deckCardView, true)}
         </div>
         <div class="dbsearch">
           ${this.scopePanel(review)}
@@ -1101,24 +1115,71 @@ export class Shell {
   }
 
   /** The deck itself: crypt by capacity, library by the conventional order. */
-  private deckListMarkup(draft: DeckDraft, byId: Map<number, CatalogCard>): string {
-    const rows = draftCards(draft, byId);
+  /**
+   * A deck's cards, in whichever way they are being looked at.
+   *
+   * ONE RENDERER for two screens: the deck being built and a saved deck
+   * being read (owner request, 2026-09-22). The only differences are
+   * whether the −/+ controls are there and whether cards are drawn as
+   * scans or as rows, so both are parameters rather than a second copy
+   * of the crypt/library/section walk — which is the part that would
+   * drift.
+   */
+  private deckCardsMarkup(
+    rows: Array<{ card: CatalogCard; copies: number }>,
+    view: CardView,
+    editable: boolean,
+  ): string {
     const counts = countsOf(rows);
     if (rows.length === 0) {
-      return `<p class="note dim dbempty">
-        Nothing in this deck yet. Search on the right and press
-        <b>+</b> to add cards.
-      </p>`;
+      return `<p class="note dim dbempty">${
+        editable
+          ? `Nothing in this deck yet. Search on the right and press <b>+</b> to add cards.`
+          : `This deck has no cards in it.`
+      }</p>`;
     }
-    const line = (card: CatalogCard, copies: number): string => `
-      <div class="dbrow ${card.status}">
-        <button class="dbless" data-card="${card.id}" aria-label="One fewer">−</button>
-        <span class="dbcount">${copies}</span>
-        <button class="dbmore" data-card="${card.id}" aria-label="One more">+</button>
-        <button class="dbcard" data-card="${card.id}">${esc(card.name)}</button>
-        <span class="dbtraits">${esc(traitLine(card))}</span>
-        ${card.status === "playable" ? "" : statusBadge(card)}
-      </div>`;
+    const line = (card: CatalogCard, copies: number): string => {
+      if (view === "grid") {
+        // The COUNT is drawn over the scan rather than beside it: at this
+        // size the picture is the thing you are scanning for, and four
+        // copies of a card should read as one entry with a 4 on it.
+        return `
+          <span class="dkcell ${card.status}">
+            <button class="dbcard dkpic" data-card="${card.id}" title="${esc(card.name)}">
+              <img loading="lazy" src="${esc(card.image)}" alt="${esc(card.name)}" />
+              <span class="dkcopies">${copies}</span>
+            </button>
+            ${
+              editable
+                ? `<span class="dkadd">
+                     <button class="dbless" data-card="${card.id}" aria-label="One fewer">−</button>
+                     <button class="dbmore" data-card="${card.id}" aria-label="One more">+</button>
+                   </span>`
+                : ""
+            }
+            <span class="dkname">${esc(card.name)}</span>
+          </span>`;
+      }
+      return `
+        <div class="dbrow ${card.status}">
+          ${
+            editable
+              ? `<button class="dbless" data-card="${card.id}" aria-label="One fewer">−</button>`
+              : ""
+          }
+          <span class="dbcount">${copies}</span>
+          ${
+            editable
+              ? `<button class="dbmore" data-card="${card.id}" aria-label="One more">+</button>`
+              : ""
+          }
+          <button class="dbcard" data-card="${card.id}">${esc(card.name)}</button>
+          <span class="dbtraits">${esc(traitLine(card))}</span>
+          ${card.status === "playable" ? "" : statusBadge(card)}
+        </div>`;
+    };
+    const group = (cells: string): string =>
+      view === "grid" ? `<div class="dkgrid">${cells}</div>` : cells;
 
     const crypt = rows
       .filter((r) => r.card.kind === "crypt")
@@ -1137,19 +1198,68 @@ export class Shell {
       const n = inType.reduce((acc, r) => acc + r.copies, 0);
       return `
         <div class="dbsection">${esc(type)} <span class="dim">(${n})</span></div>
-        ${inType.map((r) => line(r.card, r.copies)).join("")}`;
+        ${group(inType.map((r) => line(r.card, r.copies)).join(""))}`;
     }).join("");
 
     return `
-      <div class="dblist">
+      <div class="dblist ${view}">
         <div class="dbsection big">Crypt <span class="dim">(${counts.crypt})</span></div>
         ${
           crypt.length === 0
             ? `<p class="note dim">No vampires yet.</p>`
-            : crypt.map((r) => line(r.card, r.copies)).join("")
+            : group(crypt.map((r) => line(r.card, r.copies)).join(""))
         }
         <div class="dbsection big">Library <span class="dim">(${counts.library})</span></div>
         ${library.length === 0 ? `<p class="note dim">No library cards yet.</p>` : sections}
+      </div>`;
+  }
+
+  /** Grid or list, for a deck's own cards. Shared by the builder and the viewer. */
+  private deckViewToggle(): string {
+    return `
+      <span class="dktoggle">
+        <button id="dk-grid" class="csview${this.deckCardView === "grid" ? " on" : ""}">Grid</button>
+        <button id="dk-list" class="csview${this.deckCardView === "list" ? " on" : ""}">List</button>
+      </span>`;
+  }
+
+  /**
+   * A saved deck, read rather than edited (owner request, 2026-09-22).
+   *
+   * It runs the deck through the SAME `parseDraft` and `reviewDraft` the
+   * builder uses, so the legality panel, the half-deck label and the
+   * "no vampire can play this" warning all appear here for free and
+   * cannot say something different from what the editor would say about
+   * the same deck.
+   */
+  private deckViewer(name: string): string {
+    const saved = findDeck(name);
+    if (!saved || !this.catalog) {
+      return `<div class="supported deckstore">
+        <p class="note dim">${saved ? "Loading the card list…" : "That deck is no longer there."}</p>
+        <div class="row"><button id="dv-back">Back to my decks</button></div>
+      </div>`;
+    }
+    const { byId, byName } = indexCatalog(this.catalog);
+    // A precon has no text of its own, so it is expanded the same way the
+    // builder expands one.
+    const text =
+      saved.source.kind === "paste"
+        ? saved.source.text
+        : draftToText(this.preconDraft(saved.source.set, saved.source.name) ?? emptyDraft(), byId);
+    const { draft } = parseDraft(text, byName);
+    const review = reviewDraft(draft, byId);
+    return `
+      <div class="supported deckstore">
+        <div class="row cardhead">
+          <h1>${esc(saved.name)}</h1>
+          ${this.deckViewToggle()}
+          <button id="dv-edit" class="primary">Edit</button>
+          <button id="dv-back">Back</button>
+        </div>
+        ${this.legalityPanel(review)}
+        ${this.selectedCard() ? cardDetailMarkup(this.selectedCard()!) : ""}
+        ${this.deckCardsMarkup(draftCards(draft, byId), this.deckCardView, false)}
       </div>`;
   }
 
@@ -1942,10 +2052,55 @@ export class Shell {
     this.on("#m-profile", () => this.go("profile"));
     this.on("#m-leaderboard", () => this.go("leaderboard"));
     this.on("#lb-back, #pback, #join-back, #db-back", () => this.go("menu"));
+    // --- looking at a saved deck (owner request, 2026-09-22) ---
+    this.on(".deckopen", (el) => {
+      this.viewingDeck = el.dataset["deck"] ?? null;
+      this.deckError = "";
+      this.paint();
+    });
+    this.on("#dv-back", () => {
+      this.viewingDeck = null;
+      this.paint();
+    });
+    this.on("#dv-edit", () => {
+      const name = this.viewingDeck;
+      const saved = name ? findDeck(name) : null;
+      if (!saved) return;
+      // The SAME path the Build tab's "open one of your decks" takes, so
+      // a deck opened from the viewer is bound to its saved name exactly
+      // as it would be the other way in — and Save overwrites rather
+      // than duplicating.
+      this.openSavedDraft(saved.name, saved.source);
+      this.viewingDeck = null;
+      this.deckTab = "build";
+      this.paint();
+    });
+    // Clicking a card in a deck opens its detail — in the builder AND in
+    // the viewer, which is why it is bound out here rather than inside
+    // `wireDeckBuild`'s build-tab guard. Bound once, so the toggle works.
+    this.on(".dbcard", (el) => {
+      const id = Number(el.dataset["card"]);
+      if (!Number.isFinite(id)) return;
+      this.selectedCardId = this.selectedCardId === id ? null : id;
+      this.paint();
+    });
+    this.on("#dk-grid", () => {
+      this.deckCardView = "grid";
+      this.paint();
+    });
+    this.on("#dk-list", () => {
+      this.deckCardView = "list";
+      this.paint();
+    });
+
     this.on(".dbtab", (el) => {
       const tab = el.dataset["tab"];
       if (tab !== "decks" && tab !== "build" && tab !== "search") return;
       this.deckTab = tab;
+      // Leaving the My decks tab closes whatever deck was open on it, so
+      // coming back lands on the list rather than on a deck you have
+      // since stopped thinking about.
+      if (tab !== "decks") this.viewingDeck = null;
       // The deck error belongs to the decks tab; carrying it onto the
       // search would leave a message pointing at a panel that is no
       // longer on screen.
@@ -2141,12 +2296,10 @@ export class Shell {
 
     this.on(".dbless", (el) => this.bumpCard(el, -1));
     this.on(".dbmore", (el) => this.bumpCard(el, +1));
-    this.on(".dbcard", (el) => {
-      const id = Number(el.dataset["card"]);
-      if (!Number.isFinite(id)) return;
-      this.selectedCardId = this.selectedCardId === id ? null : id;
-      this.paint();
-    });
+    // `.dbcard` is wired in `wire()`, NOT here. It exists on the deck
+    // viewer too, and binding it in both places would fire the toggle
+    // twice — opening and immediately closing the card, which looks
+    // exactly like a button that does nothing.
   }
 
   /** One card, one step, from any of the four +/− controls. */
@@ -2158,32 +2311,48 @@ export class Shell {
     this.paint();
   }
 
-  private openPreconDraft(set: string, name: string): void {
+  /**
+   * A precon expanded into a draft, named exactly as the precon is.
+   *
+   * Pulled out of `openPreconDraft` so the deck VIEWER can expand a
+   * saved precon the same way — a precon has no deck text of its own, and
+   * two expansions would be two chances to tally it differently.
+   */
+  private preconDraft(set: string, name: string): DeckDraft | null {
     const deck = preconDeck(set, name, "You");
-    if (!deck || !this.catalog) {
-      this.draftError = "that precon could not be read";
-      this.paint();
-      return;
-    }
+    if (!deck || !this.catalog) return null;
     const { byName } = indexCatalog(this.catalog);
-    // A PRECON IS A DECKLIST, ONE ENTRY PER COPY — the builder counts
-    // copies, so it is tallied rather than assigned. Assigning would
-    // leave every card at one copy and quietly halve the deck.
-    // A NEW BLOOD STARTER OPENS WITH THE BOX ALREADY TICKED. The answer
-    // is known for a precon — `supportedPrecons` has always computed it
-    // — so making somebody tick it themselves would be asking a question
-    // the screen can already answer, and the deck would read as illegal
-    // until they did.
     const isHalf = supportedPrecons().some(
       (p) => p.set === set && p.name === name && p.halfDeck,
     );
-    let draft = emptyDraft(`${name} (copy)`, isHalf);
+    let draft = emptyDraft(name, isHalf);
+    // A PRECON IS A DECKLIST, ONE ENTRY PER COPY — the builder counts
+    // copies, so it is tallied rather than assigned. Assigning would
+    // leave every card at one copy and quietly halve the deck.
     for (const v of deck.crypt) draft = withCard(draft, v.id, 1);
     for (const cardName of deck.library) {
       const card = byName.get(cardName.toLowerCase());
       if (card) draft = withCard(draft, card.id, 1);
     }
-    this.draft = draft;
+    return draft;
+  }
+
+  private openPreconDraft(set: string, name: string): void {
+    const built = this.preconDraft(set, name);
+    if (!built) {
+      this.draftError = "that precon could not be read";
+      this.paint();
+      return;
+    }
+    // A NEW BLOOD STARTER ARRIVES WITH THE HALF-DECK BOX ALREADY TICKED —
+    // `preconDraft` sets it, because for a precon the answer is known and
+    // asking would leave the deck reading as illegal until somebody
+    // answered a question the screen could already answer.
+    //
+    // The "(copy)" is added HERE rather than in `preconDraft`: a precon
+    // opened to be EDITED is a new deck, but one opened to be READ is
+    // still the printed deck and should be called by its name.
+    this.draft = { ...built, name: `${name} (copy)` };
     this.draftUnreadable = [];
     // A precon opens as a NEW deck, never bound to the printed one:
     // `savedAs` stays null, so Save writes a new entry rather than
