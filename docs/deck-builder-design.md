@@ -1,4 +1,4 @@
-# The Deck Builder (0.11.07–0.11.12, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.13, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
@@ -663,3 +663,86 @@ storage failure rather than pretending it saved" is testable too.
 `saveDeck` keeping its refusal is asserted as well: **adding** a deck
 from the My decks box is a different act from **saving** in the builder,
 and it should still stop you making two decks alike.
+
+---
+
+## §13 — Clan and sect scope, and the Profile back button (0.11.13)
+
+### The scope covers three things now, not one
+
+The §11 checkbox is still **"Only cards my crypt can play"** — it just
+finally means it. It now hides library cards that need a **discipline**,
+a **clan** or a **sect** the crypt has not got. One toggle rather than
+three, because it is one question.
+
+`scopeMiss` returns **which** gate failed, so the warning on the deck can
+say *"needs Tremere"* or *"needs a Sabbat vampire"* rather than guessing
+it is a discipline and sending somebody after the wrong fix.
+
+**Every gate is "any one of", and they are independent.** A card listing
+three disciplines is satisfied by any one; a card that *also* names a
+clan must satisfy that too.
+
+### A CLAN ICON ON A MASTER IS NOT A REQUIREMENT
+
+The trap, and it is a big one: **179 masters carry a clan field**.
+CLAUDE.md already records that a clan icon is a requirement on a MINION
+card (p. 10) and that masters are the exception — Achilles' Heel is
+played on a vampire *another Methuselah* controls, and Acquired Ventrue
+Assets counts Giovanni.
+
+A clan filter that read `clans` would have hidden all 179 from every deck
+whose crypt did not happen to match, and the result would have looked
+entirely plausible. So the catalogue carries **`requiresClans`**,
+computed once at build time and empty on every master, alongside `clans`
+which is still what the card is *labelled* with. The search never has to
+know about the exception.
+
+### Sect is PARSED, because KRCG has no field for it
+
+A library card's sect requirement is a printed sentence — *"Requires a
+Sabbat vampire."* — so `requiresSects` is parsed in
+`scripts/build-catalog.mts`, once, at build time. Re-reading 4,149 card
+texts on every keystroke was the alternative.
+
+**Two false positives were found by checking the output rather than
+reasoning about it**, and the parse is narrow because of them:
+
+- It demands **"Requires"**, with the *s*, at the **start of a
+  sentence**. An earlier `Requires?` anywhere in the text matched An
+  Anarch Manifesto's *"+1 stealth on actions that require an anarch"* —
+  a description of what *other* cards need, read as a rule about this
+  one.
+- It cannot match **"non-Camarilla"**, because the article and the sect
+  are adjacent in the pattern. A negation read as a requirement would
+  hide exactly the cards a deck of that sect most wants. Bear-Baiting
+  has both clauses and takes only the first.
+
+**199 cards** state a sect requirement; the **161** that merely mention a
+sect in their effect (*"Only usable if a Camarilla or Sabbat vampire is
+bleeding"*) are correctly not among them. Eight take **either** of two
+sects, and the parse keeps both. Spellings are normalised — the cards
+print "Anarch" 54 times and "anarch" 26 times, and two spellings in the
+set would make the filter miss half of them.
+
+### One fixture had to change, and that is the finding
+
+`legalDeck()` picked the first six playable library cards, and some of
+them are clan- or discipline-gated. The moment the check existed, the
+"nothing is off-scope" **positive control** failed — correctly. The
+fixture now picks cards that require nothing, so it is genuinely a deck
+whose crypt can play all of it, and the positive control means something
+again.
+
+### The Profile back button
+
+Moved to the upper right of the card, out of the row with Save and
+Delete profile. It is **navigation, not an action on the form** — it was
+the only button in that row that changed nothing, sitting next to a red
+Delete profile, which is a poor neighbour for the button you press to
+leave.
+
+`.dbhead` became **`.cardhead`** and is now shared with the Deck
+Builder's header, rather than a second class doing the same job. On a
+profile that does not exist yet the header is just the title: there is
+nowhere to go back to.

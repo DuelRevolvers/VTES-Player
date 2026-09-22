@@ -1465,8 +1465,11 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
    draws a grid of card scans. 520px is right for a form and wrong for a
    contact sheet. */
 .shell .card.deckbuilder { width: min(1180px, 96vw); }
-.dbhead { margin-top: 0; align-items: baseline; justify-content: space-between; }
-.dbhead h1 { margin: 0; }
+/* A card header: the title, and whatever belongs in the corner beside
+   it. Shared by the Deck Builder and the Profile screen, whose Back
+   button moved up here (owner request, 2026-09-22). */
+.cardhead { margin-top: 0; align-items: baseline; justify-content: space-between; }
+.cardhead h1 { margin: 0; }
 
 /* The reserved panel. It is disabled rather than absent so the shape of
    the finished screen is visible now (docs/deck-builder-design.md §5). */

@@ -39,6 +39,87 @@ const OUT = path.join(process.cwd(), "src", "cards", "catalog.json");
  */
 const SECT = /^(Camarilla|Sabbat|Anarch|Independent|Laibon)\b/;
 
+/**
+ * The sect a LIBRARY card demands, read out of its text.
+ *
+ * KRCG has no field for it — a library card's sect requirement is a
+ * printed sentence, "Requires a Sabbat vampire." — so unlike clan and
+ * discipline it has to be parsed. It is parsed HERE, once, at build
+ * time: the alternative is re-reading 4,149 card texts on every
+ * keystroke of the search.
+ *
+ * Deliberately narrow. It matches only the requirement PHRASING —
+ * "Requires a/an/the [ready] <Sect>", plus one "or <Sect>" for the eight
+ * cards that take either — and so it does NOT match the 161 cards that
+ * merely mention a sect in their effect ("Only usable if a Camarilla or
+ * Sabbat vampire is bleeding"), which are not requirements at all.
+ *
+ * It also cannot match "non-Camarilla", because the article and the sect
+ * are adjacent in the pattern and "non-" sits between them. A negation
+ * read as a requirement would hide exactly the cards a deck of that sect
+ * most wants.
+ *
+ * TWO THINGS MAKE IT PRECISE, and both were found by checking the output
+ * rather than by reasoning about it:
+ *
+ *  - It demands "Requires", WITH the s, at the START of a sentence. An
+ *    earlier `Requires?` anywhere in the text matched An Anarch
+ *    Manifesto's "+1 stealth on actions that require an anarch" — a
+ *    description of what other cards need, read as a rule about this
+ *    one.
+ *  - It stops at the sentence, so Bear-Baiting's "Requires a ready
+ *    anarch. Only usable when an older non-Anarch vampire blocks" takes
+ *    the requirement and ignores the rest.
+ */
+const SECTS = "Camarilla|Sabbat|Anarch|Independent|Laibon";
+const REQUIRES_SECT = new RegExp(
+  `(?:^|[.\\n]\\s*)Requires\\s+(?:an?|the)\\s+(?:ready\\s+)?(${SECTS})\\b(?:\\s+or\\s+(${SECTS})\\b)?`,
+  "gi",
+);
+
+function requiredSects(card: RawKrcgCard): string[] {
+  if (isCryptRaw(card)) return [];
+  const text = card.card_text ?? "";
+  const out = new Set<string>();
+  for (const m of text.matchAll(REQUIRES_SECT)) {
+    // Capitalised to one spelling: the cards print both "Anarch" and
+    // "anarch", and a set holding both would make the filter miss half
+    // of them.
+    for (const found of [m[1], m[2]]) {
+      if (found) out.add(found[0]!.toUpperCase() + found.slice(1).toLowerCase());
+    }
+  }
+  return [...out].sort();
+}
+
+/**
+ * The clans a LIBRARY card demands.
+ *
+ * A CLAN ICON ON A MINION CARD IS A REQUIREMENT (p. 10) and KRCG's text
+ * does not repeat it — but **a master is the exception**, and that is
+ * not a detail: 179 masters carry a clan field, and on them it is a
+ * label rather than a gate. Achilles' Heel is played on a vampire
+ * another Methuselah controls; Acquired Ventrue Assets counts Giovanni.
+ * Treating those as requirements would hide cards any deck can play.
+ */
+const MINION_TYPES = [
+  "Action",
+  "Action Modifier",
+  "Ally",
+  "Combat",
+  "Equipment",
+  "Political Action",
+  "Reaction",
+  "Retainer",
+];
+
+function requiredClans(card: RawKrcgCard): string[] {
+  if (isCryptRaw(card)) return [];
+  const types = card.types ?? [];
+  if (!types.some((t) => MINION_TYPES.includes(t))) return [];
+  return [...(card.clans ?? [])].sort();
+}
+
 function sectOf(card: RawKrcgCard): string | null {
   if (!isCryptRaw(card)) return null;
   const text = (card.card_text ?? "").trim().replace(/^Advanced,\s*/i, "");
@@ -147,6 +228,8 @@ function toCatalog(
     capacity: typeof card.capacity === "number" ? card.capacity : null,
     group: crypt ? (card.group === undefined ? "ANY" : String(card.group)) : null,
     sect: sectOf(card),
+    requiresClans: requiredClans(card),
+    requiresSects: requiredSects(card),
     title: str(card["title"]),
     path: str(card.path),
     advanced: /advanced/i.test(String(card["adv"] ?? "")) || card["adv"] === true,

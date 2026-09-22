@@ -246,7 +246,7 @@ export class Shell {
    * machine. It is off by default — a filter nobody asked for that hides
    * most of the game is worse than one they have to find.
    */
-  private scopeToDisciplines = false;
+  private scopeToCrypt = false;
   /** Lines of a reopened deck that named no card. Shown, never dropped. */
   private draftUnreadable: string[] = [];
 
@@ -472,7 +472,20 @@ export class Shell {
     const draft = this.profileDraft;
     return `
       <div class="card">
-        <h1>${p ? "Your profile" : "Welcome"}</h1>
+        <!--
+          BACK SITS IN THE HEADER (owner request, 2026-09-22), not down
+          among Save and Delete profile. It is navigation rather than an
+          action on the form, and it was the one button in that row that
+          did not change anything — next to a red Delete profile, which
+          is a bad neighbour for the button you press to leave.
+
+          On a profile that does not exist yet there is nowhere to go
+          back TO, so the header is just the title.
+        -->
+        <div class="row cardhead">
+          <h1>${p ? "Your profile" : "Welcome"}</h1>
+          ${p ? `<button id="pback">Back</button>` : ""}
+        </div>
         <p class="note">
           Your profile lives <b>in this browser only</b> — there is no
           account and no server. Your name is how other players see you at a
@@ -510,7 +523,6 @@ export class Shell {
         ${this.error ? `<p class="err">${esc(this.error)}</p>` : ""}
         <div class="row">
           <button id="psave" class="primary">${p ? "Save" : "Create profile"}</button>
-          ${p ? `<button id="pback">Back</button>` : ""}
           ${p ? `<button id="pclear" class="danger">Delete profile</button>` : ""}
         </div>
         <!--
@@ -751,7 +763,7 @@ export class Shell {
           : this.cardSearchPanel();
     return `
       <div class="card deckbuilder">
-        <div class="row dbhead">
+        <div class="row cardhead">
           <h1>Deck Builder</h1>
           <button id="db-back">Back</button>
         </div>
@@ -861,7 +873,7 @@ export class Shell {
     // The scope is DERIVED from the draft on every paint, never stored —
     // it changes the moment a vampire is added or removed, and a stored
     // copy would be a second answer to the same question.
-    const query = this.builderQuery(review.cryptDisciplines);
+    const query = this.builderQuery(review.cryptScope);
     const results = searchCards(file.cards, query);
     return `
       <div class="dbeditor">
@@ -913,9 +925,9 @@ export class Shell {
    * handlers read it, and a scope applied in only one of them would show
    * a filtered list with an unfiltered count beside it.
    */
-  private builderQuery(cryptDisciplines: string[]): CardQuery {
-    if (!this.scopeToDisciplines) return this.cardQuery;
-    return { ...this.cardQuery, withinDisciplines: cryptDisciplines };
+  private builderQuery(cryptScope: NonNullable<CardQuery["withinCrypt"]>): CardQuery {
+    if (!this.scopeToCrypt) return this.cardQuery;
+    return { ...this.cardQuery, withinCrypt: cryptScope };
   }
 
   /**
@@ -932,30 +944,39 @@ export class Shell {
    * broken and the reason this is reported by name rather than left for
    * a playtest to find.
    */
-  private offDisciplinePanel(review: ReturnType<typeof reviewDraft>): string {
-    const off = review.offDiscipline;
+  private offScopePanel(review: ReturnType<typeof reviewDraft>): string {
+    const off = review.offScope;
     if (off.length === 0) return "";
     const copies = off.reduce((n, r) => n + r.copies, 0);
+    // NAME THE THING THE CARD ACTUALLY WANTS. `missing` says which of the
+    // three gates failed, so a Sabbat card is not reported as needing a
+    // discipline — guessing would send somebody looking for the wrong
+    // fix.
+    const needs = (r: (typeof off)[number]): string => {
+      if (r.missing === "clan") return `needs ${r.card.requiresClans.join(" or ")}`;
+      if (r.missing === "sect") return `needs a ${r.card.requiresSects.join(" or ")} vampire`;
+      return `needs ${r.card.disciplines.map((d) => disciplineName(d)).join(" or ")}`;
+    };
+    const kinds = [...new Set(off.map((r) => r.missing))];
     return `
       <div class="dboffdisc">
         <p class="note dbcaution">
           <b>${copies} library card${copies === 1 ? "" : "s"}</b>
-          need${copies === 1 ? "s" : ""} a discipline no vampire in this
-          crypt has. That is legal, but no minion you control will be able
-          to play ${copies === 1 ? "it" : "them"}.
+          need${copies === 1 ? "s" : ""} a
+          ${esc(kinds.join(" or "))} no vampire in this crypt has. That is
+          legal, but no minion you control will be able to play
+          ${copies === 1 ? "it" : "them"}.
         </p>
         <p class="note">
           ${off
             .map(
               (r) =>
-                `${esc(r.card.name)} ×${r.copies} <span class="dim">(needs ${esc(
-                  r.card.disciplines.map((d) => disciplineName(d)).join(" or "),
-                )})</span>`,
+                `${esc(r.card.name)} ×${r.copies} <span class="dim">(${esc(needs(r))})</span>`,
             )
             .join(" · ")}
         </p>
         ${
-          this.scopeToDisciplines
+          this.scopeToCrypt
             ? ""
             : `<button id="db-scopeon">Narrow the search to my crypt</button>`
         }
@@ -964,21 +985,35 @@ export class Shell {
 
   /** The discipline-scope switch, and what it is currently doing. */
   private scopePanel(review: ReturnType<typeof reviewDraft>): string {
-    const have = review.cryptDisciplines;
+    const s = review.cryptScope;
+    const empty = s.disciplines.length === 0 && s.clans.length === 0;
+    // Each part of the scope is listed separately, because each is a
+    // separate gate — and a crypt of one clan reads very differently
+    // from a crypt of five.
+    const part = (label: string, values: string[]): string =>
+      values.length === 0 ? "" : `<b>${esc(label)}:</b> ${esc(values.join(", "))}`;
     return `
-      <label class="dbscope${this.scopeToDisciplines ? " on" : ""}">
-        <input id="db-scope" type="checkbox"${this.scopeToDisciplines ? " checked" : ""} />
+      <label class="dbscope${this.scopeToCrypt ? " on" : ""}">
+        <input id="db-scope" type="checkbox"${this.scopeToCrypt ? " checked" : ""} />
         <span>Only cards my crypt can play</span>
         <span class="note dim">
           ${
-            have.length === 0
+            empty
               ? `No vampires in this deck yet, so there is nothing to narrow
                  to — add some and this will limit the library results to
-                 disciplines they have.`
-              : `Hides library cards needing a discipline your crypt has not
-                 got. Your crypt has: <b>${esc(
-                   have.map((d) => disciplineName(d)).join(", "),
-                 )}</b>. Cards needing no discipline are always shown.`
+                 the disciplines, clans and sects they have.`
+              : `Hides library cards needing a discipline, clan or sect your
+                 crypt has not got.
+                 ${[
+                   part("Disciplines", s.disciplines.map((d) => disciplineName(d))),
+                   part("Clans", s.clans),
+                   part("Sects", s.sects),
+                 ]
+                   .filter(Boolean)
+                   .join(" · ")}.
+                 Cards that require nothing are always shown, and a clan
+                 icon on a <em>master</em> is a label rather than a
+                 requirement, so those are never hidden.`
           }
         </span>
       </label>`;
@@ -1045,7 +1080,7 @@ export class Shell {
                </div>`
             : ""
         }
-        ${this.offDisciplinePanel(review)}
+        ${this.offScopePanel(review)}
         ${review.cautions.map((p) => `<p class="note dbcaution">${esc(p)}</p>`).join("")}
         ${
           review.inert.length > 0
@@ -2093,13 +2128,13 @@ export class Shell {
 
     const scope = find<HTMLInputElement>("#db-scope");
     scope?.addEventListener("change", () => {
-      this.scopeToDisciplines = scope.checked;
+      this.scopeToCrypt = scope.checked;
       // A narrower list can leave you past the end of it.
       this.cardPage = 1;
       this.paint();
     });
     this.on("#db-scopeon", () => {
-      this.scopeToDisciplines = true;
+      this.scopeToCrypt = true;
       this.cardPage = 1;
       this.paint();
     });

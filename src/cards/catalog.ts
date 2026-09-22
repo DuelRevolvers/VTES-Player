@@ -75,8 +75,25 @@ export interface CatalogCard {
   capacity: number | null;
   /** "1".."7", or "ANY" for the groupless. Null on a library card. */
   group: string | null;
-  /** Camarilla / Sabbat / Anarch / Independent / Laibon, or null. */
+  /** Camarilla / Sabbat / Anarch / Independent / Laibon, or null. Crypt only. */
   sect: string | null;
+  /**
+   * Library only: the clans that may play this card, or empty for "any".
+   *
+   * NOT the same list as `clans`, which is what the card is LABELLED
+   * with. A clan icon on a minion card is a requirement (p. 10); on a
+   * MASTER it is not, and 179 masters carry one. Keeping the two apart
+   * is what stops a clan filter hiding cards every deck can play.
+   */
+  requiresClans: string[];
+  /**
+   * Library only: the sects that may play this card, or empty for "any".
+   *
+   * Parsed from the printed text at build time, because KRCG has no
+   * field for it — see `requiredSects` in scripts/build-catalog.mts for
+   * what the parse does and does not match.
+   */
+  requiresSects: string[];
   /** "Prince", "Justicar", "1 vote"… A printed KRCG field, not parsed. */
   title: string | null;
   /** Path of Enlightenment, on the Sabbat V5 crypt and nowhere else. */

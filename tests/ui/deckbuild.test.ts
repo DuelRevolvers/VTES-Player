@@ -67,8 +67,22 @@ function legalDeck(): ReturnType<typeof emptyDraft> {
     .filter((c) => c.kind === "crypt" && c.group === "6" && c.status === "playable")
     .slice(0, 4);
   expect(vampires.length).toBe(4);
+  // LIBRARY CARDS THAT REQUIRE NOTHING, so this fixture is a deck whose
+  // crypt really can play all of it. Picking the first six playable
+  // cards instead pulled in clan- and discipline-gated ones, which made
+  // the "nothing is off-scope" positive control fail for a reason that
+  // was about the fixture rather than the rule.
   const libs = file.cards
-    .filter((c) => c.kind === "library" && c.status === "playable" && !isUnique(c) && !c.banned)
+    .filter(
+      (c) =>
+        c.kind === "library" &&
+        c.status === "playable" &&
+        !isUnique(c) &&
+        !c.banned &&
+        c.disciplines.length === 0 &&
+        c.requiresClans.length === 0 &&
+        c.requiresSects.length === 0,
+    )
     .slice(0, 6);
   expect(libs.length).toBe(6);
 
@@ -504,8 +518,8 @@ describe("cards no vampire in the deck can play", () => {
   it("names them, with how many copies", () => {
     const { draft, stray } = withOffDiscipline();
     const review = reviewDraft(draft, byId);
-    expect(review.offDiscipline.map((r) => r.card.id)).toEqual([stray.id]);
-    expect(review.offDiscipline[0]!.copies).toBe(2);
+    expect(review.offScope.map((r) => r.card.id)).toEqual([stray.id]);
+    expect(review.offScope[0]!.copies).toBe(2);
   });
 
   it("is a CAUTION, never illegal", () => {
@@ -521,7 +535,7 @@ describe("cards no vampire in the deck can play", () => {
     // THE POSITIVE CONTROL. Without it, a check that flagged every
     // library card would pass the test above just as happily.
     const review = reviewDraft(legalDeck(), byId);
-    expect(review.offDiscipline).toEqual([]);
+    expect(review.offScope).toEqual([]);
   });
 
   it("reports the crypt's disciplines, read off the vampires", () => {
@@ -529,7 +543,7 @@ describe("cards no vampire in the deck can play", () => {
     // Dominate is a real card, and a clan's usual disciplines are a
     // guideline rather than a fact about this crypt.
     const { draft, scope } = withOffDiscipline();
-    expect(reviewDraft(draft, byId).cryptDisciplines).toEqual([...scope].sort());
+    expect(reviewDraft(draft, byId).cryptScope.disciplines).toEqual([...scope].sort());
   });
 
   it("says nothing while the crypt is still empty", () => {
@@ -540,8 +554,8 @@ describe("cards no vampire in the deck can play", () => {
       if (r.card.kind === "crypt") d = setCount(d, r.card.id, 0);
     }
     const review = reviewDraft(d, byId);
-    expect(review.cryptDisciplines).toEqual([]);
-    expect(review.offDiscipline).toEqual([]);
+    expect(review.cryptScope.disciplines).toEqual([]);
+    expect(review.offScope).toEqual([]);
   });
 
   it("does not report a card that needs no discipline at all", () => {
@@ -550,6 +564,73 @@ describe("cards no vampire in the deck can play", () => {
       (c) => c.kind === "library" && c.status === "playable" && c.disciplines.length === 0,
     )!;
     const review = reviewDraft(setCount(draft, free.id, 3), byId);
-    expect(review.offDiscipline.map((r) => r.card.id)).not.toContain(free.id);
+    expect(review.offScope.map((r) => r.card.id)).not.toContain(free.id);
+  });
+});
+
+describe("off-scope by clan and by sect", () => {
+  /** Put one library card in the deck and ask why it cannot be played. */
+  function withCard(stray: CatalogCard): ReturnType<typeof reviewDraft> {
+    let d = legalDeck();
+    const lib = draftCards(d, byId).find((r) => r.card.kind === "library")!.card;
+    d = setCount(setCount(d, lib.id, 9), stray.id, 1);
+    return reviewDraft(d, byId);
+  }
+
+  it("names the CLAN when that is what is missing", () => {
+    // Not "needs a discipline" — the screen reports `missing`, so
+    // somebody is not sent looking for the wrong fix.
+    const scope = reviewDraft(legalDeck(), byId).cryptScope;
+    const stray = file.cards.find(
+      (c) =>
+        c.kind === "library" &&
+        c.status === "playable" &&
+        c.requiresClans.length > 0 &&
+        c.requiresClans.every((x) => !scope.clans.includes(x)) &&
+        c.disciplines.every((d) => scope.disciplines.includes(d)),
+    )!;
+    expect(stray).toBeTruthy();
+    const off = withCard(stray).offScope;
+    expect(off.map((r) => r.card.id)).toContain(stray.id);
+    expect(off.find((r) => r.card.id === stray.id)!.missing).toBe("clan");
+  });
+
+  it("names the SECT when that is what is missing", () => {
+    const scope = reviewDraft(legalDeck(), byId).cryptScope;
+    const stray = file.cards.find(
+      (c) =>
+        c.kind === "library" &&
+        c.status === "playable" &&
+        c.requiresSects.length > 0 &&
+        c.requiresSects.every((x) => !scope.sects.includes(x)) &&
+        c.requiresClans.every((x) => scope.clans.includes(x)) &&
+        c.disciplines.every((d) => scope.disciplines.includes(d)),
+    )!;
+    expect(stray).toBeTruthy();
+    const off = withCard(stray).offScope;
+    expect(off.find((r) => r.card.id === stray.id)!.missing).toBe("sect");
+  });
+
+  it("never reports a master for its clan icon", () => {
+    // 179 masters carry a clan field and it is a label, not a gate.
+    const scope = reviewDraft(legalDeck(), byId).cryptScope;
+    const master = file.cards.find(
+      (c) =>
+        c.types.includes("Master") &&
+        c.status === "playable" &&
+        c.clans.length > 0 &&
+        !c.clans.some((x) => scope.clans.includes(x)) &&
+        c.disciplines.length === 0,
+    )!;
+    expect(master).toBeTruthy();
+    expect(withCard(master).offScope.map((r) => r.card.id)).not.toContain(master.id);
+  });
+
+  it("reports the crypt's clans and sects alongside its disciplines", () => {
+    const scope = reviewDraft(legalDeck(), byId).cryptScope;
+    expect(scope.clans.length).toBeGreaterThan(0);
+    expect(scope.disciplines.length).toBeGreaterThan(0);
+    // Sorted, so the screen never reorders between repaints.
+    expect(scope.clans).toEqual([...scope.clans].sort());
   });
 });

@@ -69,16 +69,17 @@ export interface CardQuery {
   sort: SortKey;
   sortDir: SortDir;
   /**
-   * Keep library cards to the disciplines a crypt actually has.
+   * Keep library cards to what a crypt can actually play — its
+   * disciplines, its clans and its sects.
    *
-   * Null means "do not" — the deck builder sets it from the vampires in
-   * the draft (owner request, 2026-09-22). It is NOT the same question
-   * as the `disciplines` filter above: that one keeps cards that require
-   * one of the ticked disciplines, this one keeps cards that require
-   * NOTHING YOU HAVEN'T GOT, which includes every card with no
-   * discipline requirement at all.
+   * Null means "do not". The deck builder sets it from the vampires in
+   * the draft (owner request, 2026-09-22; clans and sects added the same
+   * day). It is NOT the same question as the `disciplines`/`clans`
+   * filters above: those keep cards that REQUIRE one of the ticked
+   * values, this keeps cards that require NOTHING YOU HAVEN'T GOT —
+   * which includes every card that requires nothing at all.
    */
-  withinDisciplines: string[] | null;
+  withinCrypt: { disciplines: string[]; clans: string[]; sects: string[] } | null;
 }
 
 export function emptyQuery(): CardQuery {
@@ -101,23 +102,77 @@ export function emptyQuery(): CardQuery {
     status: "any",
     sort: "name",
     sortDir: "asc",
-    withinDisciplines: null,
+    withinCrypt: null,
   };
 }
 
 /**
- * Can a crypt with these disciplines use this library card?
- *
- * A library card's `disciplines` are a REQUIREMENT, and any one of them
- * satisfies it (p. 10) — so a card listing three is in scope if the
- * crypt has any of the three. A card requiring none is in scope always,
- * which is the case that makes this a useful filter rather than a way of
- * hiding every master card in the game.
+ * What a crypt can bring to a library card: its disciplines, its clans
+ * and its sects.
  */
-export function withinScope(card: CatalogCard, scope: ReadonlySet<string>): boolean {
-  if (card.kind === "crypt") return true;
-  if (card.disciplines.length === 0) return true;
-  return card.disciplines.some((d) => scope.has(d));
+export interface CryptScope {
+  disciplines: ReadonlySet<string>;
+  clans: ReadonlySet<string>;
+  sects: ReadonlySet<string>;
+}
+
+/** Why a card is out of scope, in the words the screen uses. */
+export type ScopeMiss = "discipline" | "clan" | "sect";
+
+/**
+ * What this card needs that the crypt has not got — or null if it can be
+ * played.
+ *
+ * EVERY REQUIREMENT IS "ANY ONE OF", and each is checked separately.
+ * A card's disciplines, clans and sects are three independent gates
+ * (p. 10): a card listing three disciplines is satisfied by any one of
+ * them, and a card that also names a clan must satisfy that too.
+ *
+ * An EMPTY requirement is not a gate. That is the case that makes this a
+ * filter rather than a way of hiding most of the library — the majority
+ * of cards ask for nothing, and `requiresClans` is deliberately empty on
+ * all 179 masters that merely carry a clan icon.
+ *
+ * An empty SCOPE is not a gate either: a crypt with no sects (or a
+ * search run before any vampire is added) must not hide every card that
+ * names one.
+ */
+export function scopeMiss(card: CatalogCard, scope: CryptScope): ScopeMiss | null {
+  if (card.kind === "crypt") return null;
+  const missing = (need: string[], have: ReadonlySet<string>): boolean =>
+    need.length > 0 && have.size > 0 && !need.some((n) => have.has(n));
+  if (missing(card.disciplines, scope.disciplines)) return "discipline";
+  if (missing(card.requiresClans, scope.clans)) return "clan";
+  if (missing(card.requiresSects, scope.sects)) return "sect";
+  return null;
+}
+
+export function withinScope(card: CatalogCard, scope: CryptScope): boolean {
+  return scopeMiss(card, scope) === null;
+}
+
+/** The query's plain-array scope as the sets `scopeMiss` compares against. */
+export function asScope(lists: {
+  disciplines: string[];
+  clans: string[];
+  sects: string[];
+}): CryptScope {
+  return {
+    disciplines: new Set(lists.disciplines),
+    clans: new Set(lists.clans),
+    sects: new Set(lists.sects),
+  };
+}
+
+/** The scope a set of crypt cards provides. */
+export function scopeOf(crypt: CatalogCard[]): CryptScope {
+  return {
+    disciplines: new Set(crypt.flatMap((c) => c.disciplines)),
+    clans: new Set(crypt.flatMap((c) => c.clans)),
+    // A vampire's sect is a single value, and some legacy vampires print
+    // none at all.
+    sects: new Set(crypt.map((c) => c.sect).filter((s): s is string => s !== null)),
+  };
 }
 
 /** True when nothing at all is set — neither the text nor a filter. */
@@ -151,7 +206,7 @@ export function filtersAreDefault(q: CardQuery): boolean {
     q.costMin === null &&
     q.costMax === null &&
     q.status === base.status &&
-    q.withinDisciplines === null
+    q.withinCrypt === null
   );
 }
 
@@ -311,15 +366,14 @@ export function searchCards(cards: CatalogCard[], q: CardQuery): CatalogCard[] {
     if (q.costMax !== null && (cost === null || cost > q.costMax)) return false;
 
     // AN EMPTY SCOPE IS NOT A FILTER. A draft with no vampires yet has
-    // no disciplines, and applying that literally would hide every
-    // discipline card in the game the moment somebody started a deck
-    // from scratch — a blank screen that looks like a broken search
+    // no disciplines, clans or sects, and applying that literally would
+    // hide most of the library the moment somebody started a deck from
+    // scratch — a blank screen that looks like a broken search
     // (CLAUDE.md, "empty for the wrong reason"). The caller switches it
-    // off by passing null; this handles the emptied-crypt case, which
-    // the caller cannot see coming.
-    if (q.withinDisciplines !== null && q.withinDisciplines.length > 0) {
-      if (!withinScope(c, new Set(q.withinDisciplines))) return false;
-    }
+    // off by passing null; `scopeMiss` ignores each empty half of the
+    // scope, which is the emptied-crypt case the caller cannot see
+    // coming.
+    if (q.withinCrypt !== null && !withinScope(c, asScope(q.withinCrypt))) return false;
 
     return matchesText(c, q);
   });

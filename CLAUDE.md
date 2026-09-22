@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 295 test files, 3120 tests**, with `npm run typecheck`,
+**Green baseline: 295 test files, 3133 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -174,6 +174,13 @@ overwrite (`replaceDeck`, which keeps the deck-s place and created date
 where delete-then-save would not): re-saving a deck you had opened FAILED
 outright before, because `saveDeck` refuses any name in use. It asks
 first, except when saving the deck you opened under its own name.
+**0.11.13** widened the builder scope filter to CLANS and SECTS as well as
+disciplines. Two traps, both recorded in `docs/deck-builder-design.md`
+§13: a clan icon on a MASTER is not a requirement (179 of them carry
+one), so the catalogue has `requiresClans` separate from `clans`; and a
+library card sect requirement is PARSED from text at build time, anchored
+to a sentence-initial "Requires" so it cannot read a description or a
+negation as a rule.
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 

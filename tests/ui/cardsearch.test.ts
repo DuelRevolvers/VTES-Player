@@ -638,7 +638,7 @@ describe("sort direction (owner request, 2026-09-22)", () => {
 describe("keeping the search to what a crypt can play", () => {
   it("keeps a card the crypt has a discipline for, and drops one it has not", () => {
     const scope = ["dom"];
-    const out = searchCards(cards, { ...emptyQuery(), pile: "library", withinDisciplines: scope });
+    const out = searchCards(cards, { ...emptyQuery(), pile: "library", withinCrypt: { disciplines: scope, clans: [], sects: [] } });
     expect(out.length).toBeGreaterThan(0);
     for (const c of out) {
       // Either it needs nothing, or it needs something we have.
@@ -658,7 +658,7 @@ describe("keeping the search to what a crypt can play", () => {
     const free = cards.filter((c) => c.kind === "library" && c.disciplines.length === 0);
     expect(free.length).toBeGreaterThan(0);
     const out = new Set(
-      searchCards(cards, { ...emptyQuery(), pile: "library", withinDisciplines: scope }).map(
+      searchCards(cards, { ...emptyQuery(), pile: "library", withinCrypt: { disciplines: scope, clans: [], sects: [] } }).map(
         (c) => c.id,
       ),
     );
@@ -672,7 +672,7 @@ describe("keeping the search to what a crypt can play", () => {
     const out = searchCards(cards, {
       ...emptyQuery(),
       pile: "library",
-      withinDisciplines: [one],
+      withinCrypt: { disciplines: [one], clans: [], sects: [] },
     });
     expect(out.map((c) => c.id)).toContain(multi.id);
   });
@@ -681,23 +681,162 @@ describe("keeping the search to what a crypt can play", () => {
     // The scope is about which LIBRARY cards your vampires can play. A
     // vampire is not gated by it, and hiding vampires while you are
     // still building the crypt would be self-defeating.
-    const out = searchCards(cards, { ...emptyQuery(), pile: "crypt", withinDisciplines: ["dom"] });
+    const out = searchCards(cards, {
+      ...emptyQuery(),
+      pile: "crypt",
+      withinCrypt: { disciplines: ["dom"], clans: ["Tremere"], sects: ["Camarilla"] },
+    });
     expect(out.length).toBe(searchCards(cards, { ...emptyQuery(), pile: "crypt" }).length);
   });
 
   it("does nothing at all when the crypt is empty", () => {
     // EMPTY FOR THE WRONG REASON. A deck started from scratch has no
-    // disciplines, and applying that literally would hide every
-    // discipline card in the game — a blank screen that reads as a
-    // broken search.
-    const out = searchCards(cards, { ...emptyQuery(), withinDisciplines: [] });
-    expect(out.length).toBe(cards.length);
+    // disciplines, clans or sects, and applying that literally would
+    // hide most of the library — a blank screen that reads as a broken
+    // search. Each half is independent, so a crypt with clans but no
+    // sects must not have the sect gate applied either.
+    const none = { disciplines: [], clans: [], sects: [] };
+    expect(searchCards(cards, { ...emptyQuery(), withinCrypt: none }).length).toBe(cards.length);
   });
 
   it("is off by default", () => {
-    expect(emptyQuery().withinDisciplines).toBeNull();
+    expect(emptyQuery().withinCrypt).toBeNull();
     expect(queryIsEmpty(emptyQuery())).toBe(true);
-    expect(queryIsEmpty({ ...emptyQuery(), withinDisciplines: ["dom"] })).toBe(false);
+    expect(
+      queryIsEmpty({
+        ...emptyQuery(),
+        withinCrypt: { disciplines: ["dom"], clans: [], sects: [] },
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps a card whose CLAN the crypt has, and drops one it has not", () => {
+    const scope = { disciplines: [], clans: ["Tremere"], sects: [] };
+    const out = searchCards(cards, { ...emptyQuery(), pile: "library", withinCrypt: scope });
+    expect(out.length).toBeGreaterThan(0);
+    for (const c of out) {
+      expect(c.requiresClans.length === 0 || c.requiresClans.includes("Tremere")).toBe(true);
+    }
+    // The negative: a Brujah-only minion card is gone.
+    const brujahOnly = cards.find(
+      (c) => c.requiresClans.length === 1 && c.requiresClans[0] === "Brujah",
+    )!;
+    expect(out.map((c) => c.id)).not.toContain(brujahOnly.id);
+  });
+
+  it("NEVER hides a master for its clan icon", () => {
+    // p. 10: a clan icon on a MINION card is a requirement. On a master
+    // it is a label — 179 of them carry one, and Achilles' Heel is
+    // played on somebody else's vampire entirely. Hiding those would
+    // remove cards every deck can play, and it would look plausible.
+    const masters = cards.filter((c) => c.types.includes("Master") && c.clans.length > 0);
+    expect(masters.length).toBeGreaterThan(100);
+    for (const m of masters) expect(m.requiresClans).toEqual([]);
+    const out = new Set(
+      searchCards(cards, {
+        ...emptyQuery(),
+        withinCrypt: { disciplines: [], clans: ["Tremere"], sects: [] },
+      }).map((c) => c.id),
+    );
+    for (const m of masters) expect(out.has(m.id)).toBe(true);
+  });
+
+  it("keeps a card whose SECT the crypt has, and drops one it has not", () => {
+    const out = searchCards(cards, {
+      ...emptyQuery(),
+      pile: "library",
+      withinCrypt: { disciplines: [], clans: [], sects: ["Sabbat"] },
+    });
+    for (const c of out) {
+      expect(c.requiresSects.length === 0 || c.requiresSects.includes("Sabbat")).toBe(true);
+    }
+    const anarchOnly = cards.find(
+      (c) => c.requiresSects.length === 1 && c.requiresSects[0] === "Anarch",
+    )!;
+    expect(out.map((c) => c.id)).not.toContain(anarchOnly.id);
+  });
+
+  it("keeps a card that takes EITHER of two sects", () => {
+    // "Requires an Independent or Anarch vampire" — eight cards say it,
+    // and any one of the two satisfies it.
+    const both = cards.find((c) => c.requiresSects.length > 1)!;
+    for (const sect of both.requiresSects) {
+      const out = searchCards(cards, {
+        ...emptyQuery(),
+        withinCrypt: { disciplines: [], clans: [], sects: [sect] },
+      });
+      expect(out.map((c) => c.id)).toContain(both.id);
+    }
+  });
+
+  it("applies the three gates independently", () => {
+    // A card must clear ALL of them, not just one. Take a card with both
+    // a discipline and a clan requirement and satisfy only the clan.
+    const gated = cards.find(
+      (c) => c.requiresClans.length > 0 && c.disciplines.length > 0,
+    )!;
+    const clanOnly = searchCards(cards, {
+      ...emptyQuery(),
+      withinCrypt: {
+        disciplines: ["for"].filter((d) => !gated.disciplines.includes(d)),
+        clans: gated.requiresClans,
+        sects: [],
+      },
+    });
+    expect(clanOnly.map((c) => c.id)).not.toContain(gated.id);
+    // …and with the discipline too, it comes back.
+    const both2 = searchCards(cards, {
+      ...emptyQuery(),
+      withinCrypt: {
+        disciplines: [gated.disciplines[0]!],
+        clans: gated.requiresClans,
+        sects: [],
+      },
+    });
+    expect(both2.map((c) => c.id)).toContain(gated.id);
+  });
+});
+
+describe("the sect requirement parse", () => {
+  const lib = cards.filter((c) => c.kind === "library");
+
+  it("only claims a sect for a card that prints 'Requires'", () => {
+    expect(lib.filter((c) => c.requiresSects.length > 0).length).toBeGreaterThan(150);
+    for (const c of lib) {
+      if (c.requiresSects.length > 0) expect(c.text).toMatch(/Requires\s/i);
+    }
+  });
+
+  it("does not read a DESCRIPTION of a requirement as one", () => {
+    // An Anarch Manifesto gives "+1 stealth on actions that require an
+    // anarch" — a statement about other cards. An earlier parse used
+    // `Requires?` anywhere in the text and claimed it.
+    const manifesto = cards.find((c) => c.name.startsWith("Anarch Manifesto"))!;
+    expect(manifesto.requiresSects).toEqual([]);
+  });
+
+  it("does not read a NEGATION as a requirement", () => {
+    // "Requires a ready anarch. Only usable when an older non-Anarch
+    // vampire blocks" must take the first clause and ignore the second.
+    const bear = cards.find((c) => c.name === "Bear-Baiting");
+    if (bear) expect(bear.requiresSects).toEqual(["Anarch"]);
+    for (const c of lib) {
+      // Nothing may claim a sect it only ever mentions as "non-<sect>".
+      for (const sect of c.requiresSects) {
+        const onlyNegated =
+          new RegExp(`non-${sect}`, "i").test(c.text) &&
+          !new RegExp(`Requires[^.]*\\b${sect}\\b`, "i").test(c.text);
+        expect(onlyNegated).toBe(false);
+      }
+    }
+  });
+
+  it("normalises the spelling, because the cards print both", () => {
+    // 54 cards print "Anarch" and 26 print "anarch". Two spellings in
+    // the set would make the filter miss half of them.
+    for (const c of lib) {
+      for (const s of c.requiresSects) expect(s).toMatch(/^[A-Z][a-z]+$/);
+    }
   });
 });
 

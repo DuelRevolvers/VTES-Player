@@ -18,7 +18,8 @@
 import type { CatalogCard, CatalogFile } from "../cards/catalog.ts";
 import { cryptGroupProblem, MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
 import { findHalfDeck } from "./deckimport.ts";
-import { withinScope } from "./cardsearch.ts";
+import type { ScopeMiss } from "./cardsearch.ts";
+import { scopeMiss, scopeOf } from "./cardsearch.ts";
 
 /**
  * A deck being edited.
@@ -169,18 +170,22 @@ export interface DraftReview {
   unplayable: Array<{ card: CatalogCard; copies: number }>;
   /** Vampires whose printed ability is not implemented. Never fatal. */
   inert: string[];
-  /** Every discipline the crypt actually has, as codes. */
-  cryptDisciplines: string[];
+  /** What the crypt brings: discipline codes, clans and sects. */
+  cryptScope: { disciplines: string[]; clans: string[]; sects: string[] };
   /**
-   * Library cards in the deck that NO vampire in the crypt can play
-   * (owner request, 2026-09-22).
+   * Library cards in the deck that NO vampire in the crypt can play, and
+   * WHY each one cannot (owner request, 2026-09-22; clans and sects added
+   * the same day).
    *
    * Never illegal — the rules do not stop you putting a Dominate card in
    * a Gangrel deck, they just make sure you regret it. It is the single
    * most common way a real deck is quietly broken, which is why it is
    * reported by name rather than left for a playtest to discover.
+   *
+   * `missing` says which gate failed, so the screen can name the thing
+   * the card actually wants rather than guessing it is a discipline.
    */
-  offDiscipline: Array<{ card: CatalogCard; copies: number }>;
+  offScope: Array<{ card: CatalogCard; copies: number; missing: ScopeMiss }>;
   /**
    * The two minimums were waived because this deck declares itself half
    * a deck. Carried on the review so the screen can SAY so — "legal"
@@ -268,16 +273,21 @@ export function reviewDraft(draft: DeckDraft, byId: Map<number, CatalogCard>): D
   // never from their clans: a Malkavian with Dominate is a real card and
   // a clan's "usual" disciplines are a guideline, not a fact about this
   // crypt.
-  const scope = new Set(
-    rows.filter((r) => r.card.kind === "crypt").flatMap((r) => r.card.disciplines),
-  );
-  // Only worth asking once there IS a crypt — with none, every
-  // discipline card in the deck would be reported and the warning would
-  // be noise on a deck that is simply unfinished.
-  const offDiscipline =
-    scope.size === 0
+  const crypt = rows.filter((r) => r.card.kind === "crypt").map((r) => r.card);
+  const scope = scopeOf(crypt);
+  // Only worth asking once there IS a crypt — with none, every card in
+  // the deck with any requirement would be reported and the warning
+  // would be noise on a deck that is simply unfinished. `scopeMiss`
+  // already ignores an empty half of the scope, so a crypt with no sects
+  // never triggers the sect half on its own.
+  const offScope =
+    crypt.length === 0
       ? []
-      : rows.filter((r) => r.card.kind === "library" && !withinScope(r.card, scope));
+      : rows.flatMap((r) => {
+          if (r.card.kind !== "library") return [];
+          const missing = scopeMiss(r.card, scope);
+          return missing ? [{ ...r, missing }] : [];
+        });
   // NOT pushed onto `cautions`. It stays structured because the screen
   // offers a button that acts on it, and because the alternative — the
   // screen fishing this one sentence back out of a list of strings by
@@ -295,8 +305,12 @@ export function reviewDraft(draft: DeckDraft, byId: Map<number, CatalogCard>): D
     cautions,
     unplayable,
     inert,
-    cryptDisciplines: [...scope].sort(),
-    offDiscipline,
+    cryptScope: {
+      disciplines: [...scope.disciplines].sort(),
+      clans: [...scope.clans].sort(),
+      sects: [...scope.sects].sort(),
+    },
+    offScope,
     halfDeck: draft.halfDeck,
     legal: illegal.length === 0,
     dealable: illegal.length === 0 && unplayable.length === 0,
