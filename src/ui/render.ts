@@ -133,6 +133,9 @@ export interface TableCtx {
   /** The card the player has clicked open, if it is on the table. */
   selected: string | null;
   state: GameState;
+  /** Answers given so far in the open card's stepped menu (`playMenu`).
+   *  Pure view state; it never reaches the engine. */
+  narrow: Record<string, string>;
 }
 
 /**
@@ -265,7 +268,13 @@ function tableActionMarks(id: string, ctx: TableCtx | null): { cls: string; body
     body:
       `<span class="playdot" title="${count} action(s)">${count}</span>` +
       (open
-        ? playMenu(opts, ctx!.state, "down", stored.length > 0 ? { id, count: stored.length } : null)
+        ? playMenu(
+            opts,
+            ctx!.state,
+            "down",
+            stored.length > 0 ? { id, count: stored.length } : null,
+            ctx!.narrow,
+          )
         : ""),
   };
 }
@@ -1351,6 +1360,7 @@ function handStrip(
   handOrder: string[],
   thinking = false,
   localSeat: string | null = null,
+  narrow: Record<string, string> = {},
 ): string {
   // WHOSE HAND. With one human at this client (playing bots, or online)
   // the answer is always theirs: a player wants to read their own hand
@@ -1383,7 +1393,7 @@ function handStrip(
            data-card="${esc(c.id)}" data-hand-index="${i}" draggable="true">
         ${cardImage(c.name, "hand-card")}
         ${playable ? `<span class="playdot" title="${plays.length} legal play(s)">${plays.length}</span>` : ""}
-        ${isSelected && plays.length > 0 ? playMenu(plays, state) : ""}
+        ${isSelected && plays.length > 0 ? playMenu(plays, state, "up", null, narrow) : ""}
       </div>`;
   };
 
@@ -1568,6 +1578,116 @@ function deckPanel(state: GameState, open: string | null): string {
  * they say things the structured fields cannot ("fill Muhsin Samir to
  * capacity"). Only the repeated card name is trimmed off the front.
  */
+/**
+ * SEQUENTIAL PICKERS FOR A CARD WITH TOO MANY PLAYS
+ * (docs/play-menu-steps-design.md; owner request 2026-09-21).
+ *
+ * A long menu is almost never a long LIST — it is a CROSS PRODUCT. Vessel
+ * enumerates every minion at the table × (nothing, or each Blood Doll in
+ * play), so a busy table offers it forty-odd ways and the menu runs off
+ * the screen. A grid would make forty cells instead of forty rows; what
+ * actually shrinks it is asking one question at a time, because 12 + 4 is
+ * not 48.
+ *
+ * `cheap-tail-design.md` §1 is the precedent and the licence: a
+ * cross-product menu becomes sequential pickers FOR FREE, and the
+ * sequencing is unobservable — nothing here reaches the engine, nobody
+ * else is asked anything between the steps, and the final click submits
+ * exactly the option id that was always there. The engine, the AI, the
+ * transport and every option-id test are untouched.
+ *
+ * (That doc's caveat — it does not work where the params are fixed at
+ * announcement, p. 25 — does not bite here, because this is narrowing a
+ * list of whole options that already exist rather than assembling one.)
+ */
+const PLAY_MENU_FLAT_MAX = 8;
+
+/**
+ * One option's value on one axis, or null if it has none.
+ *
+ * TOTAL over the union on purpose: the table menu carries `useAbility`
+ * and `useEntryAction` options, which have `params` but no `minion` or
+ * `mode`, and a narrowing that threw those away would hide a legal play.
+ */
+function axisValue(o: LegalOption, axis: string): string | null {
+  if (axis === "mode") return "mode" in o ? (o.mode ?? null) : null;
+  if (axis === "minion") return "minion" in o ? (o.minion ?? null) : null;
+  return ("params" in o ? o.params : undefined)?.[axis] ?? null;
+}
+
+/**
+ * The axes this set of plays could be split on, in the order to ask them.
+ *
+ * ORDER IS THE CARD AUTHOR'S, not a heuristic: `mode` and `minion` first
+ * because they are the frame of the play ("at which level, played by
+ * whom"), then the params in the order the enumerator wrote them — which
+ * on Vessel is target, then Blood Doll, which is the order a player would
+ * say it out loud. Sorting by how many values an axis has would read as
+ * arbitrary and would change between turns.
+ *
+ * AN AXIS ONLY QUALIFIES IF EVERY PLAY HAS A VALUE FOR IT. An option
+ * missing the param could not be reached by any of that axis's buttons,
+ * so narrowing on it would silently make a legal play unclickable.
+ */
+export function playAxes(plays: LegalOption[]): string[] {
+  const keys: string[] = ["mode", "minion"];
+  for (const o of plays) {
+    if (!("params" in o)) continue;
+    for (const k of Object.keys(o.params)) if (!keys.includes(k)) keys.push(k);
+  }
+  return keys.filter((k) => {
+    const values = new Set<string>();
+    for (const o of plays) {
+      const v = axisValue(o, k);
+      if (v === null) return false;
+      values.add(v);
+    }
+    return values.size > 1;
+  });
+}
+
+/** The plays still reachable under the answers given so far. Falls back to
+ *  the whole list if the narrowing matches nothing, so a stale answer can
+ *  never present an empty menu. */
+export function narrowPlays(
+  plays: LegalOption[],
+  narrow: Record<string, string>,
+): LegalOption[] {
+  const entries = Object.entries(narrow);
+  if (entries.length === 0) return plays;
+  const kept = plays.filter((o) => entries.every(([k, v]) => axisValue(o, k) === v));
+  return kept.length > 0 ? kept : plays;
+}
+
+/** What each axis is asking, as a question. Falls back to the key, which
+ *  is still a word rather than an id. */
+const AXIS_QUESTION: Record<string, string> = {
+  mode: "At which level?",
+  minion: "Played by whom?",
+  target: "On whom?",
+  targetSeat: "At which Methuselah?",
+  seat: "At which Methuselah?",
+  victim: "At whom?",
+  recipient: "To whom?",
+  permanent: "On which card?",
+  equipment: "On which equipment?",
+  card: "On which card?",
+  clan: "Naming which clan?",
+  x: "How much?",
+  amount: "How much?",
+  n: "How much?",
+  blood: "How much blood?",
+};
+
+/** One axis value, as a person would say it. */
+function axisLabel(axis: string, value: string, state: GameState): string {
+  if (axis === "mode") return value === "superior" ? "Superior" : "Basic";
+  if (axis === "minion") return owned(state, value);
+  // A card that spells "no second thing" as a literal — Vessel's `bd`.
+  if (value === "none") return "None";
+  return resolveId(state, value);
+}
+
 function playMenu(
   plays: LegalOption[],
   state: GameState,
@@ -1579,6 +1699,9 @@ function playMenu(
    *  submits an id reads `data-opt`, so an entry without one cannot be
    *  mistaken for a move. */
   peek: { id: string; count: number } | null = null,
+  /** The answers given so far, when this menu is being asked one question
+   *  at a time. View state — it never reaches the engine. */
+  narrow: Record<string, string> = {},
 ): string {
   const peekItem = peek
     ? `<button class="opt peek" data-peek="${esc(peek.id)}"
@@ -1587,7 +1710,57 @@ function playMenu(
         <span class="pdetail">Out of play — looking at them changes nothing</span>
       </button>`
     : "";
-  return `<div class="playmenu ${grow}">${peekItem}${plays
+
+  const remaining = narrowPlays(plays, narrow);
+  // The answers already given, and the way back. Drawn whenever anything
+  // has been narrowed, INCLUDING on the final flat list — a player who
+  // has picked a target must be able to change their mind without
+  // closing the card and opening it again.
+  // Only the answers that mean something HERE. A card on the table can
+  // have no plays at all and still open its menu to show the cards set
+  // aside on it, so `remaining` may be empty — and an answer left over
+  // from a different card must not be drawn as this one's.
+  const sample = remaining[0];
+  const chosen = sample
+    ? Object.entries(narrow).filter(([k]) => axisValue(sample, k) !== null)
+    : [];
+  const trail =
+    chosen.length === 0
+      ? ""
+      : `<div class="pcrumbs">
+          ${chosen
+            .map((e) => `<span class="pcrumb">${esc(axisLabel(e[0], e[1], state))}</span>`)
+            .join("")}
+          <button class="opt pback" data-narrow-reset="1">⟲ Start over</button>
+        </div>`;
+
+  // TOO MANY TO READ: ask the next question instead of listing the cross
+  // product. `axes[0]` is the frame of the play before its details — see
+  // `playAxes` on why the order is the enumerator's and not a heuristic.
+  const axes = remaining.length > PLAY_MENU_FLAT_MAX ? playAxes(remaining) : [];
+  const axis = axes.find((a) => !(a in narrow));
+  if (axis) {
+    const byValue = new Map<string, number>();
+    for (const o of remaining) {
+      const v = axisValue(o, axis)!;
+      byValue.set(v, (byValue.get(v) ?? 0) + 1);
+    }
+    return `<div class="playmenu ${grow} stepped">${peekItem}${trail}
+      <div class="pstep">${esc(AXIS_QUESTION[axis] ?? axis)}</div>
+      ${[...byValue.entries()]
+        .map(
+          ([value, count]) =>
+            `<button class="opt narrow" data-narrow="${esc(axis)}=${esc(value)}"
+                     title="${count} play${count === 1 ? "" : "s"}">
+              <span class="pmain">${esc(axisLabel(axis, value, state))}</span>
+              ${count > 1 ? `<span class="pdetail">${count} ways</span>` : ""}
+            </button>`,
+        )
+        .join("")}
+    </div>`;
+  }
+
+  return `<div class="playmenu ${grow}">${peekItem}${trail}${remaining
     .map((o) => {
       const p = describePlay(o, state);
       return `<button class="opt ${o.kind}" data-opt="${esc(o.id)}" title="${esc(o.id)}">
@@ -1971,6 +2144,16 @@ export interface RenderInput {
    * whoever is being asked.
    */
   localSeat: string | null;
+  /**
+   * The answers given so far in the open card's STEPPED play menu.
+   *
+   * View state, like the selection it hangs off: a card with more plays
+   * than fit on screen is asked one question at a time (`playMenu`), and
+   * these are the answers so far. Nothing here reaches the engine — the
+   * final click submits an option id that existed all along. Optional so
+   * the existing render fixtures keep their shape.
+   */
+  playNarrow?: Record<string, string>;
   /** Whose ash heap is open, if any. View state — the zone is public. */
   ashOpen: string | null;
   /** "<seat>:crypt" or "<seat>:library" while your own deck list is open.
@@ -2028,6 +2211,7 @@ export function render(input: RenderInput): string {
         stores: readableStores(state),
         selected: input.selectedCard,
         state,
+        narrow: input.playNarrow ?? {},
       };
   const onTable = new Set<LegalOption>();
   for (const list of ctx?.actions.values() ?? []) for (const o of list) onTable.add(o);
@@ -2149,6 +2333,7 @@ export function render(input: RenderInput): string {
             input.handOrder,
             input.thinking || input.waitingFor !== null,
             input.localSeat,
+            input.playNarrow ?? {},
           )}
           ${decisionBar(dp, input.thinking, onTable, input.waitingFor, input.passClockMs)}
         </div>

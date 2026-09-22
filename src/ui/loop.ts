@@ -378,7 +378,28 @@ export class DebugApp {
     if (this.selectedCard && !stillOffered(this.selectedCard, dp, state)) {
       this.selectedCard = null;
     }
+    // THE ANSWERS BELONG TO ONE CARD ON ONE DECISION. Half-answering
+    // Vessel's target and then clicking a different card — or the game
+    // moving on — must not leave that answer filtering the next menu,
+    // which would show a short list and silently hide the rest.
+    if (this.selectedCard !== this.narrowFor) {
+      this.narrowFor = this.selectedCard;
+      this.playNarrow = {};
+    }
   }
+
+  /**
+   * Answers given so far in the open card's stepped play menu, and the
+   * card they were given about.
+   *
+   * PURE VIEW STATE, like `selectedCard` and the allocation draft: a card
+   * with more plays than fit on screen asks one question at a time
+   * (docs/play-menu-steps-design.md), and narrowing submits nothing. The
+   * final click sends an option id the engine has been offering all
+   * along.
+   */
+  private playNarrow: Record<string, string> = {};
+  private narrowFor: string | null = null;
 
   /**
    * A DRAFT BELONGS TO ONE DECISION. The same reasoning as
@@ -419,6 +440,7 @@ export class DebugApp {
       canRewind: this.transport.history !== null,
       omniscient: this.transport instanceof LocalTransport && this.transport.isOmniscient,
       selectedCard: this.selectedCard,
+      playNarrow: this.playNarrow,
       handOrder: this.handOrder[this.handSeat() ?? ""] ?? [],
       settingsOpen: this.settingsOpen,
       helpOpen: this.helpOpen,
@@ -1020,6 +1042,26 @@ export class DebugApp {
         const id = btn.dataset["opt"];
         if (!id || this.isThinking()) return;
         this.submitOption(id);
+      });
+    }
+    // ANSWERING ONE STEP OF A STEPPED MENU. These carry `data-narrow` and
+    // NOT `data-opt`, so the handler above cannot mistake one for a move —
+    // the same separation `data-peek` already relies on. Split on the
+    // FIRST "=" only: the value is a card or minion id, which may not
+    // contain one, but the key is ours and the value is not.
+    for (const btn of Array.from(this.root.querySelectorAll<HTMLElement>("[data-narrow]"))) {
+      btn.addEventListener("click", () => {
+        const pair = btn.dataset["narrow"] ?? "";
+        const at = pair.indexOf("=");
+        if (at <= 0) return;
+        this.playNarrow[pair.slice(0, at)] = pair.slice(at + 1);
+        this.paint();
+      });
+    }
+    for (const btn of Array.from(this.root.querySelectorAll<HTMLElement>("[data-narrow-reset]"))) {
+      btn.addEventListener("click", () => {
+        this.playNarrow = {};
+        this.paint();
       });
     }
     this.wireAlloc();

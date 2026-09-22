@@ -615,6 +615,35 @@ button.opt.declareBlock.wouldfail { border-color: var(--line); color: var(--dim)
 }
 .playmenu .opt.peek .pmain { color: var(--counter); }
 
+/* A STEPPED MENU: one question at a time, for a card whose plays are a
+   cross product too long to read (docs/play-menu-steps-design.md). It is
+   wider than the flat menu because the values are names, and it wraps
+   into rows so a dozen targets are a block rather than a column running
+   off the top of the screen. */
+.playmenu.stepped { min-width: 300px; max-width: 460px; }
+.playmenu.stepped .opt.narrow {
+  display: inline-flex; flex: 0 1 auto; padding: 4px 8px;
+}
+.playmenu.stepped { flex-flow: row wrap; align-items: stretch; }
+.pstep {
+  flex: 1 0 100%; color: var(--dim);
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  margin: 2px 0 1px;
+}
+/* What has been answered already, and the way back out of it. */
+.pcrumbs {
+  flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  border-bottom: 1px solid var(--line); padding-bottom: 4px;
+}
+.pcrumb {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 3px;
+  padding: 1px 6px; font-size: 11px; color: var(--gold);
+}
+.playmenu .opt.pback {
+  margin-left: auto; padding: 1px 6px; font-size: 11px;
+  display: inline-block; color: var(--dim);
+}
+
 /* Drag and drop: only legal targets light up. */
 .dragging .minion, .dragging .mat { transition: box-shadow .1s ease; }
 .droptarget {

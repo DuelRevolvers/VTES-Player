@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 290 test files, 2986 tests**, with `npm run typecheck`,
+**Green baseline: 291 test files, 2997 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -807,7 +807,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-203 files under `docs/`, one per mechanic that took a decision. **Read the
+204 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -870,7 +870,7 @@ ai-ash-heap-reading, ai-playstyles.
 **UI, net and shipping:** debug-ui, shell, saved-games, lobby,
 lobby-rework-2026-09-06, multiplayer, deck-import, fresh-game, game-log,
 futile-options, playtest-2026-09-05, table-ux-2026-09-11, table-ux-2026-09-18,
-table-ux-2026-09-20, pass-timeout, pages,
+table-ux-2026-09-20, pass-timeout, play-menu-steps, pages,
 cockatrice-lessons.
 
 **Archive:** `project-memory-archive-2026-09-07.md`.
