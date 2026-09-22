@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 293 test files, 3050 tests**, with `npm run typecheck`,
+**Green baseline: 293 test files, 3061 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -146,7 +146,9 @@ Partly implemented / Not in the player. `src/cards/catalog.json` is a
 SECOND GENERATED FILE beside the registry — all cards, browsing data only,
 built by `scripts/build-catalog.mts`, which `npm run cards:registry` now
 chains so the two cannot drift. It is **lazily imported** (3.2MB, its own
-chunk) and the engine must never import it.
+chunk) and the engine must never import it. **0.11.08** made the screen
+three tabs (My decks / Build a deck / Card search — one body DRAWN, not
+three hidden) and paged the search at 30, 50, 75 or 100 a page.
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 

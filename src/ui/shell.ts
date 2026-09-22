@@ -21,12 +21,26 @@ import { loadCatalog } from "../cards/catalog.ts";
 import type { CardQuery, CardView, Facets, SearchScope, SortKey } from "./cardsearch.ts";
 import {
   cardDetailMarkup,
+  DEFAULT_PAGE_SIZE,
   emptyQuery,
   facetsOf,
+  PAGE_SIZES,
   resultsMarkup,
   searchCards,
   searchPanelMarkup,
 } from "./cardsearch.ts";
+
+/**
+ * The Deck Builder's three tabs, in the order the owner asked for them:
+ * your decks, then the builder, then the search.
+ */
+type DeckTab = "decks" | "build" | "search";
+
+const DECK_TABS: Array<{ id: DeckTab; label: string }> = [
+  { id: "decks", label: "My decks" },
+  { id: "build", label: "Build a deck" },
+  { id: "search", label: "Card search" },
+];
 import { LobbyHost, LobbyPeer } from "../net/lobby.ts";
 import type { HostSession } from "../net/host.ts";
 import { PeerTransport } from "../net/peer.ts";
@@ -175,6 +189,18 @@ export class Shell {
   private advancedOpen = false;
   /** The card whose detail panel is open, by KRCG id. */
   private selectedCardId: number | null = null;
+  /** Which tab of the Deck Builder is showing (owner request, 2026-09-22). */
+  private deckTab: DeckTab = "decks";
+  /**
+   * The page of results, 1-based, and how many fit on one.
+   *
+   * The page number OUTLIVES THE LIST IT INDEXES — it survives every
+   * repaint while the results under it change on every keystroke. It is
+   * never clamped here; `paginate` does that, once, because it is the
+   * only thing that knows how many pages exist.
+   */
+  private cardPage = 1;
+  private cardPageSize = DEFAULT_PAGE_SIZE;
 
   // --- online ---------------------------------------------------------------
   /** Hosting: the room on the broker, and the lobby it feeds. */
@@ -631,15 +657,31 @@ export class Shell {
    * brought you here.
    */
   private deckBuilderScreen(): string {
+    // ONE TAB IS DRAWN, not three hidden with CSS. The search tab is a
+    // grid of up to a hundred card scans; building it and then setting
+    // `display: none` on it would cost every one of those requests to
+    // show somebody their deck list.
+    const body =
+      this.deckTab === "decks"
+        ? this.deckLibrary()
+        : this.deckTab === "build"
+          ? this.buildPanel()
+          : this.cardSearchPanel();
     return `
       <div class="card deckbuilder">
         <div class="row dbhead">
           <h1>Deck Builder</h1>
           <button id="db-back">Back</button>
         </div>
-        ${this.deckLibrary()}
-        ${this.buildPanel()}
-        ${this.cardSearchPanel()}
+        <div class="dbtabs" role="tablist">
+          ${DECK_TABS.map(
+            (t) =>
+              `<button class="dbtab${this.deckTab === t.id ? " on" : ""}"
+                       role="tab" aria-selected="${this.deckTab === t.id}"
+                       data-tab="${t.id}">${esc(t.label)}</button>`,
+          ).join("")}
+        </div>
+        <div class="dbbody">${body}</div>
       </div>`;
   }
 
@@ -659,9 +701,10 @@ export class Shell {
         <div class="sethead">Build a deck</div>
         <p class="note">
           Building a deck card by card is not here yet. For now, put a list
-          together elsewhere and paste it above — the importer checks it
-          against the pool and tells you exactly which cards this platform
-          cannot play, rather than dropping them.
+          together elsewhere and paste it into <b>My decks</b> — the
+          importer checks it against the pool and tells you exactly which
+          cards this platform cannot play, rather than dropping them. Use
+          <b>Card search</b> to see what is in the pool before you do.
         </p>
         <p class="note dim">
           A legal deck is <b>at least 12 crypt cards</b> and
@@ -734,7 +777,14 @@ export class Shell {
     const file = this.catalog;
     if (!file) return "";
     const results = searchCards(file.cards, this.cardQuery);
-    return resultsMarkup(results, this.cardView, this.selectedCardId, file.cards.length);
+    return resultsMarkup(
+      results,
+      this.cardView,
+      this.selectedCardId,
+      file.cards.length,
+      this.cardPage,
+      this.cardPageSize,
+    );
   }
 
   /**
@@ -1454,6 +1504,16 @@ export class Shell {
     this.on("#m-profile", () => this.go("profile"));
     this.on("#m-leaderboard", () => this.go("leaderboard"));
     this.on("#lb-back, #pback, #join-back, #db-back", () => this.go("menu"));
+    this.on(".dbtab", (el) => {
+      const tab = el.dataset["tab"];
+      if (tab !== "decks" && tab !== "build" && tab !== "search") return;
+      this.deckTab = tab;
+      // The deck error belongs to the decks tab; carrying it onto the
+      // search would leave a message pointing at a panel that is no
+      // longer on screen.
+      this.deckError = "";
+      this.paint();
+    });
     // Leaving the table screen has to hang up as well as navigate: an
     // online table has a room on the broker and, possibly, people in it.
     this.on("#ng-back", () => {
@@ -1514,6 +1574,22 @@ export class Shell {
    * the results block. Both render through `cardResultsMarkup`, so there
    * is one answer to "what does a result look like" and it cannot drift.
    */
+  /**
+   * Change the search, and GO BACK TO PAGE ONE.
+   *
+   * The one place a query is replaced, because the page number has to
+   * move with it and there are five ways to change a query — typing, a
+   * multi-select, a single select, a numeric bound and the reset button.
+   * Five sites resetting the page by hand is five chances to forget one,
+   * and the symptom is nasty and quiet: type a narrower search while on
+   * page 12 and you get an empty result area that looks exactly like
+   * "nothing matched" (CLAUDE.md, "one question asked in two places").
+   */
+  private setCardQuery(q: CardQuery): void {
+    this.cardQuery = q;
+    this.cardPage = 1;
+  }
+
   private wireCardSearch(): void {
     if (this.screen !== "deckbuilder") return;
     const find = <T extends HTMLElement>(sel: string): T | null =>
@@ -1523,7 +1599,7 @@ export class Shell {
     // rewired afterwards because they are new nodes.
     const box = find<HTMLInputElement>("#cs-q");
     box?.addEventListener("input", () => {
-      this.cardQuery = { ...this.cardQuery, text: box.value };
+      this.setCardQuery({ ...this.cardQuery, text: box.value });
       const slot = find<HTMLElement>("#cs-results");
       if (!slot) return;
       slot.innerHTML = this.cardResultsMarkup();
@@ -1537,14 +1613,14 @@ export class Shell {
       const el = find<HTMLSelectElement>(sel);
       el?.addEventListener("change", () => {
         const chosen = Array.from(el.selectedOptions).map((o) => o.value);
-        this.cardQuery = { ...this.cardQuery, [key]: chosen };
+        this.setCardQuery({ ...this.cardQuery, [key]: chosen });
         this.paint();
       });
     };
     const single = (sel: string, apply: (v: string) => Partial<CardQuery>): void => {
       const el = find<HTMLSelectElement>(sel);
       el?.addEventListener("change", () => {
-        this.cardQuery = { ...this.cardQuery, ...apply(el.value) };
+        this.setCardQuery({ ...this.cardQuery, ...apply(el.value) });
         this.paint();
       });
     };
@@ -1557,7 +1633,7 @@ export class Shell {
         // meaning something else the day a card costs nothing.
         const raw = el.value.trim();
         const value = raw === "" || !Number.isFinite(Number(raw)) ? null : Number(raw);
-        this.cardQuery = { ...this.cardQuery, [key]: value };
+        this.setCardQuery({ ...this.cardQuery, [key]: value });
         this.paint();
       });
     };
@@ -1593,7 +1669,7 @@ export class Shell {
       // does NOT repaint, so a `const q` captured at wiring time holds
       // the text as it was before the person typed — and "clear filters"
       // would quietly put the old search back.
-      this.cardQuery = { ...emptyQuery(), text: this.cardQuery.text };
+      this.setCardQuery({ ...emptyQuery(), text: this.cardQuery.text });
       this.paint();
     });
     this.on("#cs-grid", () => {
@@ -1611,8 +1687,37 @@ export class Shell {
     this.wireCardResults();
   }
 
-  /** Clicking a result opens it. Re-run whenever the results are redrawn. */
+  /**
+   * Everything INSIDE the results block — re-run whenever it is redrawn.
+   *
+   * The pager and the per-page dropdown live in that block, so typing
+   * replaces their nodes and takes their listeners with them. They are
+   * bound here rather than in `wireCardSearch` for that reason: a
+   * handler bound to a node that has since been thrown away is a control
+   * that silently stops working, and only after the person has typed.
+   */
   private wireCardResults(): void {
+    this.on(".cspage", (el) => {
+      const to = Number(el.dataset["page"]);
+      if (!Number.isFinite(to)) return;
+      // Not clamped here: `paginate` is the only thing that knows how
+      // many pages there are, and it clamps on the way out.
+      this.cardPage = to;
+      this.paint();
+    });
+
+    const size = this.root.querySelector<HTMLSelectElement>("#cs-size");
+    size?.addEventListener("change", () => {
+      const n = Number(size.value);
+      if (!PAGE_SIZES.includes(n)) return;
+      this.cardPageSize = n;
+      // BACK TO PAGE ONE. Page 9 of 30-a-page is past the end at 100 a
+      // page, and "show me more per page" landing on an empty screen is
+      // the opposite of what was asked for.
+      this.cardPage = 1;
+      this.paint();
+    });
+
     this.on(".cscard, .csrow", (el) => {
       const id = Number(el.dataset["card"]);
       if (!Number.isFinite(id)) return;

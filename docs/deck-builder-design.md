@@ -1,5 +1,10 @@
 # The Deck Builder (0.11.07, owner request 2026-09-22)
 
+> **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
+> three tabs in the order asked for: **My decks**, **Build a deck**,
+> **Card search**. The search shows **30 results a page** by default,
+> changeable to 50 / 75 / 100, with a windowed pager. See §8.
+
 A fourth item on the main menu, and one home for everything to do with
 decks. It ships with three of its four parts built: your saved decks, the
 importer, and a search over **every card in the game**. The fourth — the
@@ -33,16 +38,18 @@ call, both below.
 | Name, set, type, abilities, pool, cost, clan, title | **Built**, plus group, sect, path, discipline levels, burn option, artist, flavour text and whether the card is banned |
 | Grid view with card images | **Built** |
 | List view, text only | **Built** |
+| Three tabs: decks, builder, search | **Built** (0.11.08) |
+| 30 a page, with pages, sizeable to 50/75/100 | **Built** (0.11.08) |
 
 **The qualification: "supported" is a three-state question, not a
 boolean.** See §4 — reading `config/supported.json` directly would have
 badged 118 whole cards as broken.
 
-**The judgement call: the results are capped at 120 drawn at a time.** The
-grid draws a card scan per result, and clearing the search box would
-otherwise fire 4,149 image requests at static.krcg.org in one go. The cap
-says it is capping ("Showing the first 120 of 1,730 matches"), so a
-truncated list never looks like the whole answer.
+**The judgement call: the results are PAGED** (30 a page by default; §8).
+The grid draws a card scan per result, and showing every match at once
+would fire 4,149 image requests at static.krcg.org in one go. The count
+line says where you are — "Showing 31–60 of 1,730 matches, out of 4,149
+cards" — so a page is never mistaken for the whole answer.
 
 **What was NOT attempted**, and would need a decision first:
 
@@ -230,3 +237,66 @@ indistinguishable from one that was deleted — this project has had that
 report twice, about features that worked.
 
 Saved games and default bot names stay on Profile. They are not decks.
+
+---
+
+## §8 — Tabs and paging (0.11.08)
+
+### The tabs
+
+Three, in the owner's order: **My decks** → **Build a deck** → **Card
+search**. The first is the tab that opens, because it is the one with
+your own things in it.
+
+**One tab's body is DRAWN, not three with two hidden.** The usual
+`display: none` trick would build the search's grid — up to a hundred
+card scans — every time somebody opened the screen to look at their deck
+list, and pay for all hundred image requests to show nothing. The screen
+renders the body of the selected tab and nothing else; the test asserts
+both halves (no `display: none` on a tab in the CSS, and the screen
+branching on `this.deckTab`).
+
+Switching tabs clears `deckError`. It belongs to the decks tab, and
+carrying it across would leave a message pointing at a panel no longer on
+screen.
+
+### The paging
+
+**30 a page by default, and 30 / 50 / 75 / 100 on the dropdown.** The
+default is the smallest of the four on purpose: in grid view the page
+size *is* the number of scans requested at once.
+
+Three rules, each stated once:
+
+- **`paginate` clamps; nothing else does.** The page number outlives the
+  list it indexes — it survives every repaint while the results beneath it
+  change on every keystroke. Page 40 of a 3,000-card search is past the
+  end of a two-card one a letter later, and an unclamped slice returns
+  `[]`, **which on screen is indistinguishable from "nothing matched"**.
+  Clamping lives in the one function that knows how many pages there are,
+  rather than at the four places that set a page.
+- **`Shell.setCardQuery` is the only way a query changes, and it resets
+  to page 1.** There are five ways to change a search (typing, a
+  multi-select, a single select, a numeric bound, the reset button) and
+  five hand-written resets would be five chances to forget one.
+- **Changing the page size resets to page 1 too.** Page 9 at 30-a-page is
+  past the end at 100-a-page, and "show me more per page" landing on an
+  empty screen is the opposite of the request.
+
+**The pager is windowed.** 4,149 cards at 30 a page is 139 pages, and 139
+buttons is a wall, not a pager: first, last, a window of three around the
+current page, and an ellipsis for each gap. The first and last page are
+always one click away, which the test asserts at five different positions
+rather than at one.
+
+**The per-page dropdown and the pager live INSIDE the results block**, so
+typing replaces their nodes and takes their listeners with them. They are
+bound in `wireCardResults` for that reason — a handler bound to a node
+that has since been thrown away is a control that silently stops working,
+and only after the person has typed, which is the hardest kind of bug to
+report.
+
+**The dropdown ticks the size in use, not `cards.length`.** A last page
+of 30 results out of 50 would otherwise tick "30" and the control would
+quietly disagree with the paging it describes. `paginate` returns the
+normalised `size` so there is one answer to that question.

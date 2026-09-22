@@ -1569,3 +1569,41 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .csfacttable td { padding: 2px 0; vertical-align: top; }
 .cstext { font-size: 13px; line-height: 1.6; white-space: normal; }
 .csflavor { font-size: 12px; color: var(--dim); font-style: italic; margin: 10px 0 0; }
+
+/* --- the deck builder's tabs ------------------------------------------- */
+
+/* One tab is DRAWN, not three hidden — so this is a row of buttons over a
+   single body, not a stack of panels with display:none. */
+.dbtabs {
+  display: flex; gap: 4px; margin: 14px 0 0;
+  border-bottom: 1px solid var(--line);
+}
+.shell button.dbtab {
+  background: none; border: 1px solid transparent; border-bottom: none;
+  border-radius: 4px 4px 0 0; padding: 8px 16px;
+  color: var(--dim); margin-bottom: -1px;
+}
+.shell button.dbtab:hover { background: var(--panel2); color: var(--ink); }
+.shell button.dbtab.on {
+  background: var(--panel2); color: var(--gold);
+  border-color: var(--line); border-bottom-color: var(--panel2);
+}
+/* The tab body owns the top rule now, so the panel inside it must not
+   draw a second one right underneath the tabs. */
+.dbbody > .supported { margin-top: 0; border-top: none; padding-top: 14px; }
+
+/* --- paging ------------------------------------------------------------ */
+
+.cscount { align-items: baseline; justify-content: space-between; gap: 12px; }
+.cscount .csmore { margin: 0; }
+.cssize { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.cssize span { color: var(--dim); }
+.cssize select { padding: 4px 6px; }
+
+.cspager { justify-content: center; align-items: center; gap: 4px; margin-top: 16px; }
+.shell button.cspage { padding: 6px 11px; min-width: 36px; }
+.shell button.cspage.on {
+  background: var(--accent); border-color: var(--accent); color: var(--ink);
+}
+.shell button.cspage.off { opacity: .35; }
+.csgap { color: var(--dim); padding: 0 2px; }

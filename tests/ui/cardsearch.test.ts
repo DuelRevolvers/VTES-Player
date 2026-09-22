@@ -30,13 +30,17 @@ import type { CardRegistry } from "../../src/cards/types.ts";
 import {
   cardDetailMarkup,
   costLine,
+  DEFAULT_PAGE_SIZE,
   emptyQuery,
   facetsOf,
   filtersAreDefault,
   fold,
+  PAGE_SIZES,
+  pagerMarkup,
+  pageWindow,
+  paginate,
   queryIsEmpty,
   resultsMarkup,
-  RESULT_LIMIT,
   searchCards,
   statusBadge,
   traitLine,
@@ -372,19 +376,112 @@ describe("what the screen says about a card", () => {
     expect(cardDetailMarkup({ ...gun, text: "<script>x</script>" })).not.toContain("<script>");
   });
 
-  it("caps how many results are drawn, and says it is doing so", () => {
+  it("draws only one page of results, and says which", () => {
     // 4,149 card scans requested at once is what clearing the search box
     // would otherwise do.
     const all = searchCards(cards, emptyQuery());
-    const html = resultsMarkup(all, "grid", null, cards.length);
-    expect((html.match(/class="cscard/g) ?? []).length).toBe(RESULT_LIMIT);
-    expect(html).toContain(`first ${RESULT_LIMIT}`);
+    const html = resultsMarkup(all, "grid", null, cards.length, 1, DEFAULT_PAGE_SIZE);
+    expect((html.match(/class="cscard/g) ?? []).length).toBe(DEFAULT_PAGE_SIZE);
+    expect(html).toContain(`Showing 1–${DEFAULT_PAGE_SIZE} of ${all.length}`);
   });
 
   it("says how many were searched when nothing matched", () => {
-    const html = resultsMarkup([], "list", null, cards.length);
+    const html = resultsMarkup([], "list", null, cards.length, 1, DEFAULT_PAGE_SIZE);
     expect(html).toContain("No card matches");
     expect(html).toContain(String(cards.length));
+  });
+
+  it("ticks the page size in use, not the number of cards on the page", () => {
+    // A last page of 30 out of 50 would otherwise tick "30", and the
+    // dropdown would silently disagree with the paging it describes.
+    const all = searchCards(cards, emptyQuery());
+    const last = Math.ceil(all.length / 50);
+    const html = resultsMarkup(all, "list", null, cards.length, last, 50);
+    expect(html).toContain(`<option value="50" selected>`);
+    expect(html).not.toContain(`<option value="30" selected>`);
+  });
+});
+
+describe("paging", () => {
+  const all = searchCards(cards, emptyQuery());
+
+  it("offers exactly the four sizes asked for, smallest by default", () => {
+    expect(PAGE_SIZES).toEqual([30, 50, 75, 100]);
+    expect(DEFAULT_PAGE_SIZE).toBe(30);
+  });
+
+  it("cuts the results into pages that tile them exactly", () => {
+    // Every card appears on exactly one page: no gap at a boundary and
+    // no card shown twice. An off-by-one here is invisible on screen —
+    // page 2 simply starts one card late and nothing looks wrong.
+    const seen: number[] = [];
+    const pages = Math.ceil(all.length / 50);
+    for (let i = 1; i <= pages; i++) {
+      const p = paginate(all, i, 50);
+      expect(p.from).toBe(seen.length + 1);
+      seen.push(...p.cards.map((c) => c.id));
+      expect(p.to).toBe(seen.length);
+    }
+    expect(seen.length).toBe(all.length);
+    expect(new Set(seen).size).toBe(all.length);
+  });
+
+  it("clamps a page past the end to the last one that exists", () => {
+    // THE CASE THAT MATTERS: the page number outlives the list it
+    // indexes. On page 40, typing a narrower search leaves 40 pointing
+    // past the end — and an unclamped slice returns [], which looks
+    // exactly like "nothing matched".
+    const few = searchCards(cards, { ...emptyQuery(), clans: ["Salubri"] });
+    expect(few.length).toBeGreaterThan(0);
+    const p = paginate(few, 999, 30);
+    expect(p.page).toBe(p.pages);
+    expect(p.cards.length).toBeGreaterThan(0);
+  });
+
+  it("clamps a nonsense page rather than throwing", () => {
+    for (const bad of [0, -5, Number.NaN]) {
+      expect(paginate(all, bad, 30).page).toBe(1);
+    }
+    // An unknown size falls back to the default rather than slicing by NaN.
+    expect(paginate(all, 1, 999).size).toBe(DEFAULT_PAGE_SIZE);
+  });
+
+  it("reports one page, and draws no pager, when everything fits", () => {
+    const p = paginate(all.slice(0, 5), 1, 30);
+    expect(p.pages).toBe(1);
+    expect(pagerMarkup(p)).toBe("");
+  });
+
+  it("says nothing is there without pretending there is a page 0", () => {
+    const p = paginate([], 1, 30);
+    expect(p).toMatchObject({ page: 1, pages: 1, from: 0, to: 0, total: 0 });
+  });
+
+  it("windows the page buttons instead of drawing 139 of them", () => {
+    // 4,149 cards at 30 a page really is 139 pages.
+    expect(pageWindow(1, 3)).toEqual([1, 2, 3]);
+    expect(pageWindow(70, 139)).toEqual([1, null, 69, 70, 71, null, 139]);
+    // The first and last page are always reachable in one click.
+    for (const at of [1, 2, 70, 138, 139]) {
+      const w = pageWindow(at, 139);
+      expect(w[0]).toBe(1);
+      expect(w[w.length - 1]).toBe(139);
+      expect(w).toContain(at);
+    }
+  });
+
+  it("disables the arrow that would walk off the end", () => {
+    const pages = Math.ceil(all.length / 30);
+    const first = pagerMarkup(paginate(all, 1, 30));
+    // Previous points at page 0 and is disabled; Next is live.
+    expect(first).toMatch(/data-page="0" disabled>‹ Previous/);
+    expect(first).toMatch(/data-page="2">Next ›/);
+
+    const last = pagerMarkup(paginate(all, 9999, 30));
+    // …and the mirror image on the clamped last page. Both halves, or a
+    // pager that disabled BOTH arrows would pass the first check alone.
+    expect(last).toMatch(new RegExp(`data-page="${pages + 1}" disabled>Next ›`));
+    expect(last).toMatch(new RegExp(`data-page="${pages - 1}">‹ Previous`));
   });
 });
 
@@ -413,6 +510,29 @@ describe("the deck builder screen", () => {
   it("reserves a section for the builder proper", () => {
     expect(shell).toContain("private buildPanel");
     expect(shell).toContain("Build a deck");
+  });
+
+  it("has three tabs, in the order the owner asked for", () => {
+    const order = shell.slice(
+      shell.indexOf("const DECK_TABS"),
+      shell.indexOf("export class Shell"),
+    );
+    expect(order.indexOf("My decks")).toBeGreaterThan(-1);
+    expect(order.indexOf("My decks")).toBeLessThan(order.indexOf("Build a deck"));
+    expect(order.indexOf("Build a deck")).toBeLessThan(order.indexOf("Card search"));
+  });
+
+  it("draws one tab's body rather than hiding two with CSS", () => {
+    // The search tab is up to a hundred card scans. Building it and then
+    // setting display:none would cost every one of those requests to
+    // show somebody their deck list.
+    const css = readFileSync(
+      join(import.meta.dirname, "..", "..", "src", "ui", "style.css"),
+      "utf8",
+    );
+    expect(css).not.toMatch(/\.dbtab[^{]*\{[^}]*display:\s*none/);
+    const screen = section(shell, "private deckBuilderScreen", "Where the deck builder proper");
+    expect(screen).toContain("this.deckTab ===");
   });
 
   it("loads the catalogue lazily, off the first paint", () => {

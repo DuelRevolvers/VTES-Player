@@ -290,14 +290,84 @@ export function searchCards(cards: CatalogCard[], q: CardQuery): CatalogCard[] {
 }
 
 /**
- * How many results are DRAWN at once.
+ * How many results a page may hold (owner request, 2026-09-22).
  *
- * The grid draws a card scan per row, and 4,149 of them is 4,149 image
- * requests the moment somebody clears the search box. The count is shown
- * beside the cap, so a truncated list says so rather than looking like
- * the whole answer.
+ * The grid draws a card scan per result, so the page size is also the
+ * number of images requested at once — which is why the default is the
+ * smallest of the four rather than the largest.
  */
-export const RESULT_LIMIT = 120;
+export const PAGE_SIZES = [30, 50, 75, 100];
+export const DEFAULT_PAGE_SIZE = 30;
+
+export interface Page {
+  /** The results on this page. */
+  cards: CatalogCard[];
+  /** The page actually shown, 1-based and CLAMPED — see `paginate`. */
+  page: number;
+  /** How many pages there are. 1 when there are no results at all. */
+  pages: number;
+  /** 1-based inclusive range of results on this page, for "31–60 of 1,730". */
+  from: number;
+  to: number;
+  total: number;
+  /** The page size actually used — the requested one, or the default if
+   *  it was not one of `PAGE_SIZES`. The dropdown ticks THIS, not what
+   *  was asked for, and not `cards.length`: a last page of 30 out of 50
+   *  would otherwise tick the wrong row. */
+  size: number;
+}
+
+/**
+ * Cut the results into a page, and CLAMP rather than trusting the caller.
+ *
+ * The page number outlives the thing it indexes: it is held on the shell
+ * across repaints, and the result list under it changes every time
+ * somebody types a letter. So page 40 of a 3,000-card search is page 1
+ * of a two-card one a keystroke later, and the honest answer is the last
+ * page that exists, not an empty screen that looks like "no matches".
+ *
+ * Clamping lives HERE, in the one function that knows how many pages
+ * there are, rather than at each of the four places that set the page —
+ * the typing handler, the size dropdown, the pager and the filters. Four
+ * clamps would be four chances to forget one, and the symptom (a blank
+ * result area) is indistinguishable from a search that genuinely found
+ * nothing.
+ */
+export function paginate(results: CatalogCard[], page: number, pageSize: number): Page {
+  const size = PAGE_SIZES.includes(pageSize) ? pageSize : DEFAULT_PAGE_SIZE;
+  const pages = Math.max(1, Math.ceil(results.length / size));
+  const shown = Math.min(Math.max(1, Math.floor(page) || 1), pages);
+  const start = (shown - 1) * size;
+  const cards = results.slice(start, start + size);
+  return {
+    cards,
+    page: shown,
+    pages,
+    from: results.length === 0 ? 0 : start + 1,
+    to: start + cards.length,
+    total: results.length,
+    size,
+  };
+}
+
+/**
+ * Which page buttons to draw: first, last, and a window round the
+ * current one, with gaps marked.
+ *
+ * 4,149 cards at 30 a page is 139 pages, and 139 buttons is not a pager,
+ * it is a wall. `null` is a gap — the caller draws an ellipsis.
+ */
+export function pageWindow(page: number, pages: number): Array<number | null> {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+  const out: Array<number | null> = [1];
+  const from = Math.max(2, page - 1);
+  const to = Math.min(pages - 1, page + 1);
+  if (from > 2) out.push(null);
+  for (let i = from; i <= to; i++) out.push(i);
+  if (to < pages - 1) out.push(null);
+  out.push(pages);
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Markup
@@ -393,24 +463,56 @@ export function resultsMarkup(
   view: CardView,
   selectedId: number | null,
   total: number,
+  page: number,
+  pageSize: number,
 ): string {
   if (results.length === 0) {
     return `<p class="note dim csempty">
       No card matches that. ${total} cards were searched.
     </p>`;
   }
-  const shown = results.slice(0, RESULT_LIMIT);
-  const more =
-    results.length > shown.length
-      ? `<p class="note dim csmore">
-           Showing the first ${shown.length} of ${results.length} matches —
-           narrow the search to see the rest.
-         </p>`
-      : `<p class="note dim csmore">${results.length} of ${total} cards.</p>`;
+  const p = paginate(results, page, pageSize);
+  const count =
+    p.pages === 1
+      ? `${p.total} of ${total} cards.`
+      : `Showing ${p.from}–${p.to} of ${p.total} matches, out of ${total} cards.`;
   return `
-    ${more}
+    <div class="row cscount">
+      <p class="note dim csmore">${count}</p>
+      <label class="cssize"><span>Per page</span>
+        <select id="cs-size">
+          ${PAGE_SIZES.map(
+            (n) => `<option value="${n}"${n === p.size ? " selected" : ""}>${n}</option>`,
+          ).join("")}
+        </select></label>
+    </div>
     <div class="csresults ${view}">
-      ${shown.map((c) => cardCell(c, view, c.id === selectedId)).join("")}
+      ${p.cards.map((c) => cardCell(c, view, c.id === selectedId)).join("")}
+    </div>
+    ${pagerMarkup(p)}`;
+}
+
+/**
+ * The pager. Nothing at all when there is only one page — a "1 of 1"
+ * with two dead arrows is furniture, not information.
+ */
+export function pagerMarkup(p: Page): string {
+  if (p.pages <= 1) return "";
+  const step = (to: number, label: string, on: boolean): string =>
+    `<button class="cspage${on ? "" : " off"}" data-page="${to}"${
+      on ? "" : " disabled"
+    }>${label}</button>`;
+  return `
+    <div class="row cspager">
+      ${step(p.page - 1, "‹ Previous", p.page > 1)}
+      ${pageWindow(p.page, p.pages)
+        .map((n) =>
+          n === null
+            ? `<span class="csgap">…</span>`
+            : `<button class="cspage${n === p.page ? " on" : ""}" data-page="${n}">${n}</button>`,
+        )
+        .join("")}
+      ${step(p.page + 1, "Next ›", p.page < p.pages)}
     </div>`;
 }
 
