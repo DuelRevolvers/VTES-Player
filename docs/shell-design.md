@@ -106,3 +106,26 @@ straight into one.
   playtest snapshot is still the fastest way to reach a mid-game position
   for a hands-on look at a card, and a fresh deal spends its first turns
   influencing on purpose.
+
+---
+
+## How to Play on the main menu (0.11.18, owner request 2026-09-22)
+
+The rules panel was reachable only from the table's ❔ button — so a new
+player had to start a game to read how to play one, and the menu's own
+credit line pointed at a panel the menu could not open.
+
+**One renderer, two screens.** `helpPanel` in `render.ts` took the whole
+table render input but read only three fields of it, which is what kept
+the menu (which has no game) from drawing it. Those three became the
+parameters of an exported `howToPlayPanel(query, openSections)`; the
+table's `helpPanel` now delegates to it and the menu calls it directly.
+The panel's markup is written in exactly one place, asserted by a test —
+a second copy for the menu would be the one that fell behind the next
+time a rule section was added.
+
+The menu keeps the same three pieces of view state the table does (open,
+search text, open sections) for the same reason: it repaints whole on
+every keystroke in the search box, and the sections someone had opened
+must survive that. Leaving the menu closes the panel, so coming back
+lands on the menu rather than on a panel left open.

@@ -2001,11 +2001,25 @@ function settingsPanel(input: RenderInput): string {
  */
 function helpPanel(input: RenderInput): string {
   if (!input.helpOpen) return "";
+  return howToPlayPanel(input.helpQuery, input.helpOpenSections);
+}
+
+/**
+ * The How to Play panel itself — ONE renderer for the table's ❔ button
+ * and the main menu's How to Play button (owner request, 2026-09-22).
+ *
+ * It takes only what it reads — the search text and which sections are
+ * open — rather than the table's whole render input, which is what lets
+ * the menu draw it at all: the menu has no game, and a second copy of
+ * the panel for it would be the one that fell behind when a rule section
+ * was added.
+ */
+export function howToPlayPanel(helpQuery: string, openSections: readonly string[]): string {
   // Which sections are expanded is remembered by the caller: the screen
   // fully re-renders on every state change, and an agent or auto-passing
   // seat can step while the panel is open, which would otherwise collapse
   // whatever the player was reading.
-  const query = input.helpQuery.trim();
+  const query = helpQuery.trim();
   const matches = searchRules(query);
   // While searching, every hit opens: the player is looking for a phrase,
   // not a heading, and making them click each result would defeat the
@@ -2013,7 +2027,7 @@ function helpPanel(input: RenderInput): string {
   const searching = query.length > 0;
   const section = (s: RuleSection): string => `
     <details class="rulesec" data-rule="${esc(s.id)}"
-             ${searching || input.helpOpenSections.includes(s.id) ? "open" : ""}>
+             ${searching || openSections.includes(s.id) ? "open" : ""}>
       <summary>
         ${esc(s.title)}
         ${s.pages ? `<span class="rulepage">${esc(s.pages)}</span>` : ""}
@@ -2036,7 +2050,7 @@ function helpPanel(input: RenderInput): string {
         </p>
         <input id="help-search" class="helpsearch" type="search"
                placeholder="Search the rules — e.g. block, torpor, bleed"
-               value="${esc(input.helpQuery)}" />
+               value="${esc(helpQuery)}" />
         ${
           searching
             ? `<p class="setnote">${matches.length === 0

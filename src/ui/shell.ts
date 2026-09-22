@@ -102,7 +102,13 @@ import {
 } from "./results.ts";
 import { DebugApp } from "./loop.ts";
 import type { ModerationView, SeatFace } from "./render.ts";
-import { chatLinesMarkup, chatSettings, DEFAULT_EMOJI_CATEGORY, emojiPad } from "./render.ts";
+import {
+  chatLinesMarkup,
+  chatSettings,
+  DEFAULT_EMOJI_CATEGORY,
+  emojiPad,
+  howToPlayPanel,
+} from "./render.ts";
 import type { DeckSource, SeatConfig, TableConfig } from "./newgame.ts";
 import {
   botSeats,
@@ -254,6 +260,16 @@ export class Shell {
    * most of the game is worse than one they have to find.
    */
   private scopeToCrypt = false;
+  /**
+   * The How to Play panel on the main menu (owner request, 2026-09-22):
+   * open, its search text, and which sections are expanded — the same
+   * three things the table keeps, for the same reason. The menu repaints
+   * whole on every change, and the sections someone opened must survive
+   * the next keystroke in the search box.
+   */
+  private helpOpen = false;
+  private helpQuery = "";
+  private helpOpenSections = new Set<string>();
   /** The saved deck being READ on the My decks tab, by name. */
   private viewingDeck: string | null = null;
   /**
@@ -330,6 +346,9 @@ export class Shell {
     // render, which runs on every keystroke and must stay a pure function
     // of state.
     if (screen === "deckbuilder") this.ensureCatalog();
+    // The rules panel belongs to the menu screen; coming back to the menu
+    // from somewhere else lands on the menu, not on a panel left open.
+    this.helpOpen = false;
     this.error = "";
     // A deliberate move somewhere else acknowledges the "you were removed"
     // banner. `leaveTable` does NOT go through here, which is what leaves
@@ -575,8 +594,9 @@ export class Shell {
    *
    * On the Profile screen for the reason the deck library is: this is
    * where the things that are YOURS live, and a saved game is one of them.
-   * It could equally have been a menu entry, and the menu is deliberately
-   * five buttons — a sixth that is empty for most of a player's first
+   * It could equally have been a menu entry, and the menu is kept short
+   * on purpose (seven buttons since the Deck Builder and How to Play
+   * joined it) — an entry that is empty for most of a player's first
    * session is a worse first screen than a section they find when they
    * have something in it.
    */
@@ -1489,6 +1509,7 @@ export class Shell {
           <button id="m-decks">Deck Builder</button>
           <button id="m-profile">Profile</button>
           <button id="m-leaderboard">Leaderboard</button>
+          <button id="m-help">How to Play</button>
           <button id="m-exit">Exit</button>
         </div>
         <p class="note dim">
@@ -1521,7 +1542,12 @@ export class Shell {
         report that names a version is worth several that do not.
       -->
       <p class="version">${esc(PLATFORM_VERSION_LABEL)}</p>
-      </div>`;
+      </div>
+      ${
+        // The table's own panel, drawn by the same function (render.ts),
+        // so the rules on the menu and at the table cannot drift apart.
+        this.helpOpen ? howToPlayPanel(this.helpQuery, [...this.helpOpenSections]) : ""
+      }`;
   }
 
   // --- new game ------------------------------------------------------------
@@ -2158,6 +2184,7 @@ export class Shell {
     this.on("#m-decks, #p-decks", () => this.go("deckbuilder"));
     this.on("#m-profile", () => this.go("profile"));
     this.on("#m-leaderboard", () => this.go("leaderboard"));
+    this.wireHelp();
     this.on("#lb-back, #pback, #join-back, #db-back", () => this.go("menu"));
     // --- looking at a saved deck (owner request, 2026-09-22) ---
     this.on(".deckopen", (el) => {
@@ -2301,6 +2328,47 @@ export class Shell {
   private setCardQuery(q: CardQuery): void {
     this.cardQuery = q;
     this.cardPage = 1;
+  }
+
+  /**
+   * The menu's How to Play panel — the same handlers the table's panel
+   * has (loop.ts `wireHelp`), on the same element ids, because it is the
+   * same panel. Every element here is recreated by each paint, so these
+   * per-element listeners cannot stack up the way root-level ones would.
+   */
+  private wireHelp(): void {
+    this.on("#m-help", () => {
+      this.helpOpen = true;
+      this.paint();
+    });
+    this.on("#help-close, #help-scrim", () => {
+      this.helpOpen = false;
+      this.paint();
+    });
+
+    // Searching repaints on every keystroke, so the caret is put back
+    // afterwards — or the second letter would land before the first.
+    const search = this.root.querySelector<HTMLInputElement>("#help-search");
+    search?.addEventListener("input", () => {
+      this.helpQuery = search.value;
+      const caret = search.selectionStart;
+      this.paint();
+      const again = this.root.querySelector<HTMLInputElement>("#help-search");
+      if (again) {
+        again.focus();
+        if (caret !== null) again.setSelectionRange(caret, caret);
+      }
+    });
+
+    // `toggle` does not bubble, so each section is wired on its own.
+    this.root.querySelectorAll<HTMLDetailsElement>(".rulesec").forEach((el) => {
+      el.addEventListener("toggle", () => {
+        const id = el.dataset["rule"];
+        if (!id) return;
+        if (el.open) this.helpOpenSections.add(id);
+        else this.helpOpenSections.delete(id);
+      });
+    });
   }
 
   /**
