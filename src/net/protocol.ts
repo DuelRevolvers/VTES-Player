@@ -220,6 +220,24 @@ export interface SyncMsg {
    * the state is — a reconnecting peer then needs no catch-up.
    */
   botNames?: Record<string, string>;
+  /**
+   * Milliseconds left before the host passes for this peer, when the pass
+   * clock is running on their decision (docs/pass-timeout-design.md §4).
+   *
+   * THE HOST'S CLOCK IS THE ONLY CLOCK. It runs the engine, so it is the
+   * only side that knows when the decision was raised; a guest counting
+   * for itself would be a second timer that disagreed with the one that
+   * actually fires. What travels is therefore how much is LEFT, measured
+   * as this message was built, and the guest counts down from receiving
+   * it — which is also why this is not an absolute time: two browsers'
+   * clocks are not the same clock.
+   *
+   * Absent means no clock is running, which is the ordinary case: the
+   * setting is off by default, it never applies on the peer's own turn,
+   * and a peer is sent no `decision` at all when the decision is not
+   * theirs.
+   */
+  passIn?: number;
 }
 
 /** The answer to one `choose`. `error` means the host refused it. */

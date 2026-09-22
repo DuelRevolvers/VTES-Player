@@ -11,8 +11,9 @@
  *     already renders, so the client needs no change to go online.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import playtestDecks from "../../config/playtest-decks.json";
+import { turnSeatOf } from "../../src/engine/index.ts";
 import type { DeckDef, GameSetup } from "../../src/ui/decks.ts";
 import { LocalTransport } from "../../src/ui/transport.ts";
 import { HostSession } from "../../src/net/host.ts";
@@ -487,5 +488,105 @@ describe("changing your chat colour", () => {
     peers["Bob"]!.say("hello");
     await settle();
     expect(seen).toEqual([]);
+  });
+});
+
+/**
+ * THE PASS CLOCK ACROSS THE WIRE (docs/pass-timeout-design.md §4).
+ *
+ * The clock runs on the HOST, because the host runs the engine and is the
+ * only side that knows when a decision was raised. A guest is therefore
+ * TOLD how long it has left rather than counting for itself, and what
+ * travels is a REMAINING time rather than a deadline — two browsers'
+ * clocks are not the same clock.
+ *
+ * What these pin: a peer being waited on can see its own clock; a peer is
+ * never sent anybody else's; and the host answering for a guest reaches
+ * that guest as an ordinary state change, with a line in the log saying
+ * what happened.
+ */
+describe("the pass clock on a networked table", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Walk the host to the first off-turn pass-able decision that belongs
+   *  to a REMOTE seat, and assert we got there. */
+  async function playToRemoteOffTurn(host: LocalTransport): Promise<string> {
+    for (let i = 0; i < 4000; i++) {
+      const dp = host.decision();
+      if (!dp) break;
+      const offTurn = dp.seat !== turnSeatOf(host.view());
+      const remote = dp.seat !== SEATS[0];
+      if (offTurn && remote && dp.options.some((o) => o.kind === "pass")) return dp.seat;
+      const pick =
+        dp.options.find((o) => o.id.startsWith("block:")) ??
+        dp.options.find((o) => o.id.startsWith("bleed:")) ??
+        dp.options.find((o) => o.kind === "pass") ??
+        dp.options.find((o) => o.kind === "endMinionPhase") ??
+        dp.options[0]!;
+      await host.choose(pick.id);
+    }
+    throw new Error("never reached an off-turn decision for a remote seat");
+  }
+
+  it("tells the peer being waited on how long it has, and nobody else", async () => {
+    const { host, peers } = await table();
+    const asked = await playToRemoteOffTurn(host);
+    host.setPassTimeout(20_000);
+    await settle();
+
+    expect(peers[asked]!.passClockMs()).toBe(20_000);
+    // THE NEGATIVE SPACE, and the same rule the option list follows: a
+    // countdown on a decision you cannot answer is a countdown you can do
+    // nothing about, so it is not sent. A peer that showed one would be
+    // showing another player's clock as if it were its own.
+    for (const [seat, p] of Object.entries(peers)) {
+      if (seat === asked) continue;
+      expect(p.passClockMs()).toBeNull();
+    }
+  });
+
+  it("counts down on the guest's side between syncs", async () => {
+    const { host, peers } = await table();
+    const asked = await playToRemoteOffTurn(host);
+    host.setPassTimeout(20_000);
+    await settle();
+
+    // No message arrives in this gap — the host is just waiting — so this
+    // is the client counting down from what it was last told, which is
+    // what keeps the chip ticking on a screen nothing is updating.
+    vi.advanceTimersByTime(8000);
+    expect(peers[asked]!.passClockMs()).toBe(12_000);
+
+    // NEVER NEGATIVE once it runs out: the pass has either happened
+    // already or the message saying so is still in flight, and a client
+    // arguing with the authority about that is a client showing a number
+    // it cannot act on.
+    vi.advanceTimersByTime(60_000);
+    expect(peers[asked]!.passClockMs()).toBe(0);
+  });
+
+  it("reaches the guest as an ordinary state change, with a line in the log", async () => {
+    const { host, peers } = await table();
+    const asked = await playToRemoteOffTurn(host);
+    const guest = peers[asked]!;
+    host.setPassTimeout(5000);
+    await settle();
+    expect(guest.decision()).not.toBeNull();
+
+    vi.advanceTimersByTime(5000);
+    await settle();
+
+    // The host answered for them, and their screen knows: the decision is
+    // no longer theirs, the clock is gone with it, and the log every
+    // player is reading says why.
+    expect(guest.decision()).toBeNull();
+    expect(guest.passClockMs()).toBeNull();
+    expect(guest.notices().at(-1)?.text).toMatch(/ran out of time/i);
+    // …and so does everybody else at the table. A pass nobody can see is
+    // the table answering out of nowhere.
+    for (const p of Object.values(peers)) {
+      expect(p.notices().at(-1)?.text).toMatch(/ran out of time/i);
+    }
   });
 });

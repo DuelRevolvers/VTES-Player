@@ -21,7 +21,7 @@ import {
   render,
 } from "../../src/ui/render.ts";
 import { RULE_SECTIONS, ruleText, searchRules } from "../../src/ui/rules.ts";
-import { AI_SPEEDS } from "../../src/ui/settings.ts";
+import { AI_SPEEDS, PASS_TIMEOUTS } from "../../src/ui/settings.ts";
 import { LocalTransport } from "../../src/ui/transport.ts";
 
 const config = playtestDecks as unknown as {
@@ -51,6 +51,10 @@ function screen(
     notices?: import("../../src/ui/transport.ts").LogNotice[];
     finished?: import("../../src/ui/render.ts").FinishedView | null;
     aiDelayMs?: number;
+    /** The pass clock's interval — the Moderation control. */
+    passTimeoutMs?: number;
+    /** Milliseconds left on a running pass clock, or null for none. */
+    passClockMs?: number | null;
     cardTextPx?: number;
     seatFaces?: Record<string, { avatar: string | null; bot: boolean; label?: string }>;
     localSeat?: string | null;
@@ -108,6 +112,8 @@ function screen(
     notices: opts.notices ?? [],
     finished: opts.finished ?? null,
     aiDelayMs: opts.aiDelayMs ?? 0,
+    passTimeoutMs: opts.passTimeoutMs ?? 0,
+    passClockMs: opts.passClockMs ?? null,
     helpQuery: opts.helpQuery ?? "",
     helpOpen: opts.helpOpen ?? false,
     helpOpenSections: opts.helpOpenSections ?? [],
@@ -332,6 +338,51 @@ describe("moderation", () => {
     expect(settings).not.toContain('id="aispeed"');
   });
 
+  /**
+   * THE PASS CLOCK's control (owner request 2026-09-21). In Moderation
+   * rather than Settings on the line §19 of the lobby rework drew:
+   * Moderation is about WHO ANSWERS FOR A SEAT, and this decides when the
+   * table answers for somebody. Settings is about this screen and this
+   * player.
+   */
+  it("offers a pass clock from Off to a minute, in fives, with the current one selected", () => {
+    const html = screen({ moderation: mod, passTimeoutMs: 20_000 });
+    // Sliced to its own select: the AI pace above it has a `value="0"`
+    // too, and `indexOf` would find that one.
+    const at = html.indexOf('id="passclock-set"');
+    expect(at).toBeGreaterThan(-1);
+    const select = html.slice(at, html.indexOf("</select>", at));
+    for (const t of PASS_TIMEOUTS) expect(select).toContain(`value="${t.ms}"`);
+    // Every five seconds up to a minute, and nothing in between — the
+    // increments the request named, asserted as the SHAPE of the list
+    // rather than as a count, so adding a step is one edit.
+    expect(PASS_TIMEOUTS.map((t) => t.ms)).toEqual([
+      0, 5000, 10_000, 15_000, 20_000, 25_000, 30_000, 35_000, 40_000, 45_000, 50_000, 55_000,
+      60_000,
+    ]);
+    const chosen = (ms: number): boolean =>
+      select.slice(select.indexOf(`value="${ms}"`), select.indexOf(`value="${ms}"`) + 30)
+        .includes("selected");
+    expect(chosen(20_000)).toBe(true);
+    expect(chosen(0)).toBe(false);
+  });
+
+  it("shows Off selected by default, because it is off by default", () => {
+    const select = (h: string): string =>
+      h.slice(h.indexOf('id="passclock-set"'), h.indexOf("</select>", h.indexOf('id="passclock-set"')));
+    const html = select(screen({ moderation: mod }));
+    expect(html.slice(html.indexOf('value="0"'), html.indexOf('value="0"') + 30)).toContain(
+      "selected",
+    );
+  });
+
+  it("is host-only, like the rest of the panel", () => {
+    // A guest cannot set it — the clock runs on the machine with the
+    // engine on it, so a guest's copy would decide nothing.
+    expect(screen({ canModerate: false })).not.toContain('id="passclock-set"');
+    expect(screen({ settingsOpen: true })).not.toContain('id="passclock-set"');
+  });
+
   it("is reached from the top bar, beside How to Play and Settings", () => {
     const html = screen();
     const top = html.slice(html.indexOf('class="top"'), html.indexOf('class="main"'));
@@ -397,6 +448,43 @@ describe("moderation", () => {
     });
     const at = html.indexOf(`class="mod-ban" data-seat="${seats[1]}"`);
     expect(html.slice(at, at + 80)).toContain("Unban");
+  });
+});
+
+/**
+ * THE COUNTDOWN ITSELF (docs/pass-timeout-design.md §5).
+ *
+ * A feature that cannot be discovered is indistinguishable from one that
+ * is absent (CLAUDE.md), and a clock nobody can see is worse than that:
+ * the pass would arrive as the table answering out of nowhere. So the
+ * chip is drawn wherever the decision is drawn — on the screen of the
+ * player being waited on, and on the screens watching them.
+ */
+describe("the pass clock in the decision bar", () => {
+  it("is absent when no clock is running, which is the ordinary case", () => {
+    expect(screen()).not.toContain('id="passclock"');
+    expect(screen({ passClockMs: null })).not.toContain('id="passclock"');
+  });
+
+  it("shows whole seconds, rounded UP so the last one shown is 1s", () => {
+    expect(screen({ passClockMs: 20_000 })).toContain("<b>20s</b>");
+    // 12.3 seconds is "13s": rounding down would show 12s for 1.3s and
+    // then 0s while the buttons still worked, which reads as broken.
+    expect(screen({ passClockMs: 12_300 })).toContain("<b>13s</b>");
+    expect(screen({ passClockMs: 1 })).toContain("<b>1s</b>");
+  });
+
+  it("goes urgent under five seconds, and not above", () => {
+    expect(screen({ passClockMs: 5000 })).toContain("passclock urgent");
+    expect(screen({ passClockMs: 5001 })).not.toContain("passclock urgent");
+    expect(screen({ passClockMs: 5001 })).toContain('class="passclock"');
+  });
+
+  it("is drawn while waiting on somebody else, so the table can see the wait", () => {
+    const html = screen({ waitingFor: "Bob", passClockMs: 9000 });
+    expect(html).toContain("is deciding…");
+    expect(html).toContain('id="passclock"');
+    expect(html).toContain("<b>9s</b>");
   });
 });
 

@@ -105,6 +105,20 @@ body {
   color: var(--dim);
 }
 
+/* The pass clock, ticking down in the decision bar. Gold while there is
+   time and blood-red under five seconds — the same two colours the rest
+   of the table already uses for "worth reading" and "this is costing
+   you", so it needs no legend. The digits are tabular so the chip does
+   not jump about as they change width. */
+.passclock {
+  margin-left: auto; color: var(--gold);
+  background: var(--panel2); border: 1px solid var(--line);
+  padding: 1px 7px; border-radius: 3px; font-size: 12px;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.passclock.urgent { color: var(--blood); border-color: var(--blood); }
+.decision.thinking .passclock { margin-left: 8px; }
+
 .ogroup { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
 .olabel {
   min-width: 110px; text-align: right; color: var(--dim);

@@ -1667,6 +1667,7 @@ export class Shell {
       },
       deckLabels: this.deckLabels(),
       aiDelayMs: loadSettings().aiDelayMs,
+      passTimeoutMs: loadSettings().passTimeoutMs,
       // NO OPENING BEAT. That pause exists so a fresh deal does not open
       // on a board the bots have already played; a load lands mid-game,
       // where a hold before the next move reads as the load having hung.
@@ -1901,6 +1902,12 @@ export class Shell {
       // board they had already played (owner report 2026-09-07). Setting
       // it here is what makes that comment true on this path too.
       aiDelayMs: loadSettings().aiDelayMs,
+      // The pass clock rides along for the same reason, though it is the
+      // weaker case: `DebugApp` sets it too, and it re-arms against
+      // whatever decision is on the table when it does. Setting it here
+      // means a table that opens straight onto somebody's reaction window
+      // is already clocked (docs/pass-timeout-design.md §1).
+      passTimeoutMs: loadSettings().passTimeoutMs,
       openingDelayMs: OPENING_DELAY_MS,
     });
     const settings = loadSettings();

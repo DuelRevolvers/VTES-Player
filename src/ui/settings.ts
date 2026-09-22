@@ -34,6 +34,21 @@ export interface UiSettings {
    */
   aiDelayMs: number;
   /**
+   * How long a PERSON may sit on an off-turn decision before the table
+   * passes for them, in milliseconds. 0 is off, and off is the default.
+   *
+   * The owner's standing rule is that a player is never auto-skipped, and
+   * this does not break it: it is a table setting the host turns on, it
+   * only ever answers a decision where PASSING IS ALREADY LEGAL, and it
+   * never touches a seat on its own turn (docs/pass-timeout-design.md).
+   *
+   * A CLIENT preference in the same sense as `autoPass` — it never reaches
+   * the command log, so the same game replays identically with it on or
+   * off — but unlike the rest of this file it is the HOST's copy that
+   * decides, because the host is the authority that runs the engine.
+   */
+  passTimeoutMs: number;
+  /**
    * Point size for the rules text under a magnified card.
    *
    * A card scan is read at a glance; its TEXT is read word by word, and at
@@ -134,6 +149,27 @@ export const AI_SPEEDS: { ms: number; label: string }[] = [
 ];
 
 /**
+ * The pass-clock choices offered in Moderation: off, then every five
+ * seconds up to a minute (owner request 2026-09-21).
+ *
+ * GENERATED rather than written out, so the increments cannot drift from
+ * the sentence that describes them, and so the twelve labels are spelled
+ * one way. `0` first, because off is the default and the list is read top
+ * to bottom.
+ */
+export const PASS_TIMEOUTS: { ms: number; label: string }[] = [
+  { ms: 0, label: "Off" },
+  ...Array.from({ length: 12 }, (_, i) => {
+    const seconds = (i + 1) * 5;
+    return { ms: seconds * 1000, label: seconds === 60 ? "1 minute" : `${seconds} seconds` };
+  }),
+];
+
+/** The longest pass clock the panel offers, and the cap a stored setting
+ *  is clamped to — see `loadSettings`. */
+export const MAX_PASS_TIMEOUT_MS = PASS_TIMEOUTS[PASS_TIMEOUTS.length - 1]!.ms;
+
+/**
  * The beat between the deal and the first bot move (owner request
  * 2026-09-07: "give it a few seconds before the bots start their first
  * plays … it appears as though the game starts with the first bots
@@ -150,6 +186,10 @@ export const DEFAULT_SETTINGS: UiSettings = {
   autoPass: {},
   aiSeats: {},
   aiDelayMs: 900,
+  // OFF. A clock that answered for a player by default would be exactly
+  // the auto-skip the owner ruled out; the host turns it on when a table
+  // needs it.
+  passTimeoutMs: 0,
   // Larger than the 11px the panel shipped with — the owner could not read
   // card text at that size, and this is text you read rather than glance at.
   cardTextPx: 15,
@@ -230,6 +270,14 @@ export function loadSettings(): UiSettings {
         typeof parsed.aiDelayMs === "number" && Number.isFinite(parsed.aiDelayMs)
           ? Math.min(10000, Math.max(0, parsed.aiDelayMs))
           : DEFAULT_SETTINGS.aiDelayMs,
+      // Clamped to the longest clock the panel offers, for the reason
+      // above AND a sharper one: this value decides when a decision is
+      // answered for somebody, so a stored blob must not be able to name
+      // an interval nobody could have chosen.
+      passTimeoutMs:
+        typeof parsed.passTimeoutMs === "number" && Number.isFinite(parsed.passTimeoutMs)
+          ? Math.min(MAX_PASS_TIMEOUT_MS, Math.max(0, Math.round(parsed.passTimeoutMs)))
+          : DEFAULT_SETTINGS.passTimeoutMs,
       // Clamped for the same reason as the pause: a hand-edited or stale
       // value must not be able to make the panel unreadable.
       cardTextPx:

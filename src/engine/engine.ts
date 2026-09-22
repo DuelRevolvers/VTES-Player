@@ -116,6 +116,7 @@ import {
   isReady,
   newCycle,
   standingSeats,
+  turnSeatOf,
 } from "./state.ts";
 
 
@@ -239,10 +240,13 @@ export class VtesEngine implements EngineOps {
 
   /** Whose game turn it is (the turn frame sits at the bottom of the
    *  stack). Cards that say "during your X phase" compare their controller
-   *  to this, since some phase windows are offered to every seat. */
+   *  to this, since some phase windows are offered to every seat.
+   *
+   *  The rule itself is `turnSeatOf` in state.ts — the transport's pass
+   *  timer asks the same question of a state it holds, and two copies of
+   *  it would drift. */
   private turnSeat(): SeatId {
-    const tf = this.state.frames[0];
-    return tf && tf.kind === "turn" ? tf.seat : this.state.seats[0]!.id;
+    return turnSeatOf(this.state);
   }
 
   private referendum(): ReferendumFrame | null {

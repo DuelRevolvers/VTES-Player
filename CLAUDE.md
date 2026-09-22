@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 289 test files, 2962 tests**, with `npm run typecheck`,
+**Green baseline: 290 test files, 2986 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -698,7 +698,12 @@ Each has cost an hour of "why is my card not offered":
 ## Owner decisions on record
 
 - **Never auto-skip a player** — per-seat auto-pass toggle, default off,
-  applied outside the engine core.
+  applied outside the engine core. The **pass clock** (0.11.03, owner
+  request 2026-09-21) lives beside this rule rather than against it: off
+  by default, host-only, **never on a seat's own turn**, and it can only
+  take an answer the engine already offers — so a mandatory decision has
+  no `pass` to take and is never timed out
+  (`docs/pass-timeout-design.md` §0).
 - **Design docs get owner review before kernel code.**
 - **Profiles are LOCAL ONLY** (2026-09-04). No backend: profile and
   leaderboard in browser storage, avatar as a data URI, username unique
@@ -802,7 +807,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-202 files under `docs/`, one per mechanic that took a decision. **Read the
+203 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -865,7 +870,7 @@ ai-ash-heap-reading, ai-playstyles.
 **UI, net and shipping:** debug-ui, shell, saved-games, lobby,
 lobby-rework-2026-09-06, multiplayer, deck-import, fresh-game, game-log,
 futile-options, playtest-2026-09-05, table-ux-2026-09-11, table-ux-2026-09-18,
-table-ux-2026-09-20, pages,
+table-ux-2026-09-20, pass-timeout, pages,
 cockatrice-lessons.
 
 **Archive:** `project-memory-archive-2026-09-07.md`.

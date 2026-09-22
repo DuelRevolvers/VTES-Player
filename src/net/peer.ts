@@ -90,6 +90,19 @@ export class PeerTransport implements GameTransport {
   private deciding: string | null = null;
   /** Log lines the host sent that are not engine events. */
   private uiNotices: LogNotice[] = [];
+  /**
+   * The pass clock as the host last reported it: how much was left, and
+   * when we heard.
+   *
+   * TWO NUMBERS, because the wire carries a REMAINING time rather than a
+   * deadline — two browsers' clocks are not the same clock, so an absolute
+   * time from the host would be read against the wrong one here. The
+   * countdown is therefore "what the host said, less however long ago it
+   * said it", which is right to within the latency of one message and
+   * cannot drift: every sync replaces it.
+   */
+  private passLeftMs: number | null = null;
+  private passHeardAt = 0;
 
   decision(): DecisionPoint | null {
     return this.dp;
@@ -101,6 +114,20 @@ export class PeerTransport implements GameTransport {
 
   notices(): LogNotice[] {
     return [...this.uiNotices];
+  }
+
+  /**
+   * Milliseconds left before the HOST passes for us, or null when no
+   * clock is running (docs/pass-timeout-design.md §4).
+   *
+   * Never negative: once it reaches zero the pass has either already been
+   * made and the next sync will say so, or the message carrying it is
+   * still on its way. A countdown that went negative would be a client
+   * arguing with the authority about a decision that is not its to make.
+   */
+  passClockMs(): number | null {
+    if (this.passLeftMs === null) return null;
+    return Math.max(0, this.passLeftMs - (Date.now() - this.passHeardAt));
   }
 
   /** Seat id → what to call it, when a bot has taken it over. Display
@@ -180,6 +207,9 @@ export class PeerTransport implements GameTransport {
         this.deciding = msg.deciding ?? null;
         this.uiNotices = msg.notices ?? [];
         this.labels = msg.botNames ?? {};
+        // Stamped with the arrival, not with the send: see `passLeftMs`.
+        this.passLeftMs = msg.passIn ?? null;
+        this.passHeardAt = Date.now();
         this.emit();
         return;
       case "ack": {

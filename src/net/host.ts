@@ -408,6 +408,11 @@ export class HostSession {
     const peer = this.peers.get(seat);
     if (!peer || !peer.channel.open) return;
     const dp = this.transport.decision();
+    // HOW LONG THEY HAVE LEFT, when the pass clock is running on their
+    // decision. Only theirs: the clock is a courtesy to the player being
+    // waited on, and a countdown on somebody else's decision would be a
+    // countdown they could not answer. See SyncMsg.passIn.
+    const passIn = dp && dp.seat === seat ? this.transport.passClockMs() : null;
     peer.channel.send({
       type: "sync",
       state: this.transport.stateFor(seat),
@@ -420,6 +425,7 @@ export class HostSession {
       deciding: dp?.seat ?? null,
       notices: this.transport.notices(),
       botNames: this.transport.botNames(),
+      ...(passIn === null ? {} : { passIn }),
     });
   }
 

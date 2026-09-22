@@ -3690,6 +3690,24 @@ export function standingSeats(state: GameState): SeatState[] {
   return state.seats.filter((s) => !s.ousted);
 }
 
+/**
+ * Whose game TURN it is — the turn frame sits at the bottom of the stack.
+ *
+ * Not the same question as "whose decision is it": most phase windows are
+ * offered to every seat in impulse order, so a seat can be answering
+ * something in the middle of somebody else's turn. Cards that say "during
+ * your X phase" compare their controller to this.
+ *
+ * Here rather than only inside the engine because a second caller
+ * appeared — the pass timer has to know whether a decision is off-turn
+ * (docs/pass-timeout-design.md §2) — and one question asked in two places
+ * drifts. `VtesEngine.turnSeat` delegates to it.
+ */
+export function turnSeatOf(state: GameState): SeatId {
+  const tf = state.frames[0];
+  return tf && tf.kind === "turn" ? tf.seat : state.seats[0]!.id;
+}
+
 export function findUncontrolled(
   state: GameState,
   seatId: SeatId,

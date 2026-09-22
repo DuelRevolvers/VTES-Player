@@ -34,7 +34,7 @@ import { minionName, narrate, owned } from "./narrate.ts";
 import type { RuleSection } from "./rules.ts";
 import { CREDITS, RULE_SECTIONS, searchRules } from "./rules.ts";
 import type { LogNotice } from "./transport.ts";
-import { AI_SPEEDS, CARD_TEXT_SIZES } from "./settings.ts";
+import { AI_SPEEDS, CARD_TEXT_SIZES, PASS_TIMEOUTS } from "./settings.ts";
 
 /**
  * Who is sitting in a seat, for the thumbnail on their mat.
@@ -1081,11 +1081,34 @@ function allocPanel(
     </div>`;
 }
 
+/**
+ * The pass clock, as a chip in the decision bar.
+ *
+ * SECONDS, ROUNDED UP, so the last second shown is "1s" and not "0s" —
+ * a countdown that sits on zero while the buttons still work reads as
+ * broken. `id` is fixed because the ticker updates this one node's text
+ * between repaints rather than re-rendering the screen every second
+ * (docs/pass-timeout-design.md §5); `.urgent` at five seconds is the only
+ * thing about it that changes appearance, and the ticker sets that too.
+ *
+ * Empty when no clock is running, which is the ordinary case: the setting
+ * is off by default.
+ */
+export function passClockChip(ms: number | null | undefined): string {
+  if (ms === null || ms === undefined) return "";
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  return `<span class="passclock${seconds <= 5 ? " urgent" : ""}" id="passclock"
+                title="the table will pass for this seat when the clock runs out">
+            ⏳ <b>${seconds}s</b>
+          </span>`;
+}
+
 function decisionBar(
   dp: DecisionPoint | null,
   thinking: boolean,
   onTable: Set<LegalOption>,
   waitingFor: string | null,
+  passClockMs: number | null | undefined,
 ): string {
   // SOMEBODY ELSE IS BEING ASKED, and this client may not answer for them.
   //
@@ -1102,6 +1125,14 @@ function decisionBar(
         <span class="tdots"><i></i><i></i><i></i></span>
         <b>${esc(waitingFor)}</b> is deciding…
         ${dp ? `<span class="dim">${esc(dp.window)}</span>` : ""}
+        ${
+          // THE CLOCK BELONGS TO THE DECISION, not to the viewer, so the
+          // rest of the table can see how long they are waiting for. This
+          // is the host's screen watching a remote player: a guest is sent
+          // no clock for anybody else's decision (SyncMsg.passIn), so
+          // there is nothing to draw there and nothing is drawn.
+          passClockChip(passClockMs)
+        }
       </div>`;
   }
   if (!dp) {
@@ -1131,6 +1162,7 @@ function decisionBar(
           <span class="dseat">${esc(dp.seat)}</span>
           <span class="dwindow">${esc(dp.window)}</span>
           <span class="dim">seq ${dp.seq}</span>
+          ${passClockChip(passClockMs)}
         </div>
         <div class="cardgrid picker">
           ${picks
@@ -1231,6 +1263,7 @@ function decisionBar(
         <span class="dseat">${esc(dp.seat)}</span>
         <span class="dwindow">${esc(dp.window)}</span>
         <span class="dim">seq ${dp.seq}</span>
+        ${passClockChip(passClockMs)}
       </div>
       ${
         allocs.length > 0 && allocs[0]
@@ -1909,6 +1942,24 @@ export interface RenderInput {
   finished: FinishedView | null;
   /** The pause after each visible AI move, in ms — the Settings control. */
   aiDelayMs: number;
+  /**
+   * The pass clock's interval, in ms — the Moderation control. 0 is off.
+   *
+   * Optional so every existing render fixture keeps its shape; absent
+   * reads as off, which is also the default.
+   */
+  passTimeoutMs?: number;
+  /**
+   * Milliseconds left before the table passes for the seat being asked,
+   * or null/absent when no clock is running.
+   *
+   * DRAWN, not merely enforced. A feature that cannot be seen is
+   * indistinguishable from one that is absent, and a clock nobody can see
+   * is worse than that — the pass would arrive as the table answering for
+   * you out of nowhere. The number is the authority's (the transport's),
+   * never counted up in here.
+   */
+  passClockMs?: number | null;
   /** Point size for the rules text under a magnified card. */
   cardTextPx: number;
   /** Seat id → the face on their mat. A bot has none by design. */
@@ -2099,7 +2150,7 @@ export function render(input: RenderInput): string {
             input.thinking || input.waitingFor !== null,
             input.localSeat,
           )}
-          ${decisionBar(dp, input.thinking, onTable, input.waitingFor)}
+          ${decisionBar(dp, input.thinking, onTable, input.waitingFor, input.passClockMs)}
         </div>
       </div>
       <aside class="side">
@@ -2619,6 +2670,27 @@ function moderationPanel(input: RenderInput): string {
           is time to read what happened. Passes are never paced. Pacing
           changes no decision: the same game replays identically at any
           speed.
+        </p>
+
+        <label class="setrow">
+          <span>Pass clock</span>
+          <select id="passclock-set">
+            ${PASS_TIMEOUTS.map(
+              (t) =>
+                `<option value="${t.ms}" ${
+                  t.ms === (input.passTimeoutMs ?? 0) ? "selected" : ""
+                }>${esc(t.label)}</option>`,
+            ).join("")}
+          </select>
+        </label>
+        <p class="note">
+          How long a player may sit on a decision <b>during somebody
+          else's turn</b> before the table passes for them. It applies to
+          every person at the table, yourself included, and to no bot. It
+          never runs on your own turn, and it can only ever take an answer
+          the rules already offer — a pass. A decision you <i>must</i>
+          answer (a strike, a discard) has no pass to take and is never
+          timed out.
         </p>
 
         <div class="row"><button id="mod-close" class="primary">Close</button></div>

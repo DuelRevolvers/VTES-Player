@@ -211,6 +211,11 @@ export class DebugApp {
       // 2026-09-07). Setting it twice is harmless — same value, and the
       // opening beat is latched until its timer fires.
       this.transport.setAiDelay(this.settings.aiDelayMs);
+      // The pass clock survives a reload like every other preference, and
+      // it is the HOST's copy that decides for the whole table — a guest's
+      // stored value never reaches the transport, because a guest has no
+      // LocalTransport to put it on.
+      this.transport.setPassTimeout(this.settings.passTimeoutMs);
       for (const [seat, on] of Object.entries(this.settings.autoPass)) {
         if (on) this.transport.setAutoPass(seat, true);
       }
@@ -435,6 +440,17 @@ export class DebugApp {
         this.transport instanceof LocalTransport
           ? this.transport.aiDelay
           : this.settings.aiDelayMs,
+      // The CONTROL reads the transport's value where there is one, like
+      // the pacing above it — the panel must show what is actually being
+      // enforced, not what this client last stored.
+      passTimeoutMs:
+        this.transport instanceof LocalTransport
+          ? this.transport.passTimeout
+          : this.settings.passTimeoutMs,
+      // …and the COUNTDOWN is whatever the authority says is left, on
+      // either side of the wire: a peer is told, and never counts for
+      // itself.
+      passClockMs: this.transport.passClockMs?.() ?? null,
       cardTextPx: this.settings.cardTextPx,
       seatFaces: this.table.faces?.() ?? {},
       localSeat: this.table.localSeat ?? null,
@@ -458,6 +474,53 @@ export class DebugApp {
     // Keep the event log pinned to the newest entry.
     const log = this.root.querySelector("#events");
     if (log) log.scrollTop = log.scrollHeight;
+    this.startPassClock();
+  }
+
+  /**
+   * The live pass countdown.
+   *
+   * IT DOES NOT REPAINT. A repaint is `innerHTML =` on the whole table and
+   * throws away every scroll position, the magnified card and the panel
+   * that is open — costs this screen already pays on a real change and
+   * has machinery to undo, but paying them once a second for a number
+   * ticking down would be a table that could not be read while the clock
+   * ran. So this touches exactly one text node, and the markup around it
+   * stays render.ts's (docs/pass-timeout-design.md §5).
+   *
+   * Self-stopping: when the chip is gone — a new decision, the clock
+   * turned off, or the shell having replaced this whole screen — there is
+   * nothing to tick and the interval clears itself. Nothing else has to
+   * remember to tear it down.
+   */
+  private passTicker: ReturnType<typeof setInterval> | null = null;
+
+  private startPassClock(): void {
+    if (this.passTicker !== null) {
+      clearInterval(this.passTicker);
+      this.passTicker = null;
+    }
+    if (this.transport.passClockMs?.() == null) return;
+    // Four times a second: fast enough that the seconds fall when they
+    // should, slow enough to cost nothing.
+    this.passTicker = setInterval(() => this.tickPassClock(), 250);
+  }
+
+  private tickPassClock(): void {
+    const chip = this.root.querySelector<HTMLElement>("#passclock");
+    const digits = chip?.querySelector("b");
+    const ms = this.transport.passClockMs?.() ?? null;
+    if (!chip || !digits || ms === null) {
+      if (this.passTicker !== null) clearInterval(this.passTicker);
+      this.passTicker = null;
+      // The chip is stale markup from the last paint if the clock has
+      // stopped but the node is still there — a repaint is coming (the
+      // pass itself emits), so it is left alone rather than half-erased.
+      return;
+    }
+    const seconds = Math.max(0, Math.ceil(ms / 1000));
+    digits.textContent = `${seconds}s`;
+    chip.classList.toggle("urgent", seconds <= 5);
   }
 
   /**
@@ -1385,6 +1448,18 @@ export class DebugApp {
       this.settings.aiDelayMs = Number(speed.value) || 0;
       saveSettings(this.settings);
       t.setAiDelay(this.settings.aiDelayMs);
+      this.paint();
+    });
+
+    // The pass clock (owner request 2026-09-21). On the transport for the
+    // same reason as everything above it, and more strongly: this one
+    // ANSWERS for seats on other machines, so it can only live on the side
+    // that runs the engine (docs/pass-timeout-design.md §1).
+    const clock = this.root.querySelector<HTMLSelectElement>("#passclock-set");
+    clock?.addEventListener("change", () => {
+      this.settings.passTimeoutMs = Number(clock.value) || 0;
+      saveSettings(this.settings);
+      t.setPassTimeout(this.settings.passTimeoutMs);
       this.paint();
     });
   }
