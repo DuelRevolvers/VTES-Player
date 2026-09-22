@@ -470,3 +470,86 @@ describe("half decks", () => {
     expect(buildTable(table).problems.length).toBeGreaterThan(0);
   });
 });
+
+describe("cards no vampire in the deck can play", () => {
+  /** A crypt with a known discipline set, plus a library card off it. */
+  function withOffDiscipline(): {
+    draft: ReturnType<typeof emptyDraft>;
+    stray: CatalogCard;
+    scope: string[];
+  } {
+    let d = legalDeck();
+    const scope = [
+      ...new Set(
+        draftCards(d, byId)
+          .filter((r) => r.card.kind === "crypt")
+          .flatMap((r) => r.card.disciplines),
+      ),
+    ];
+    expect(scope.length).toBeGreaterThan(0);
+    // A library card whose every discipline is outside that set.
+    const stray = file.cards.find(
+      (c) =>
+        c.kind === "library" &&
+        c.status === "playable" &&
+        c.disciplines.length > 0 &&
+        c.disciplines.every((x) => !scope.includes(x)),
+    )!;
+    expect(stray).toBeTruthy();
+    const lib = draftCards(d, byId).find((r) => r.card.kind === "library")!.card;
+    d = setCount(setCount(d, lib.id, 8), stray.id, 2);
+    return { draft: d, stray, scope };
+  }
+
+  it("names them, with how many copies", () => {
+    const { draft, stray } = withOffDiscipline();
+    const review = reviewDraft(draft, byId);
+    expect(review.offDiscipline.map((r) => r.card.id)).toEqual([stray.id]);
+    expect(review.offDiscipline[0]!.copies).toBe(2);
+  });
+
+  it("is a CAUTION, never illegal", () => {
+    // Nothing in the rules stops you putting a Dominate card in a
+    // Gangrel deck. It just means dead cards.
+    const review = reviewDraft(withOffDiscipline().draft, byId);
+    expect(review.illegal).toEqual([]);
+    expect(review.legal).toBe(true);
+    expect(review.dealable).toBe(true);
+  });
+
+  it("says nothing about a deck whose cards its crypt can all play", () => {
+    // THE POSITIVE CONTROL. Without it, a check that flagged every
+    // library card would pass the test above just as happily.
+    const review = reviewDraft(legalDeck(), byId);
+    expect(review.offDiscipline).toEqual([]);
+  });
+
+  it("reports the crypt's disciplines, read off the vampires", () => {
+    // Off the VAMPIRES, never off their clans: a Malkavian with
+    // Dominate is a real card, and a clan's usual disciplines are a
+    // guideline rather than a fact about this crypt.
+    const { draft, scope } = withOffDiscipline();
+    expect(reviewDraft(draft, byId).cryptDisciplines).toEqual([...scope].sort());
+  });
+
+  it("says nothing while the crypt is still empty", () => {
+    // Every library card would be "off discipline" with no vampires,
+    // which is noise on a deck that is merely unfinished.
+    let d = legalDeck();
+    for (const r of draftCards(d, byId)) {
+      if (r.card.kind === "crypt") d = setCount(d, r.card.id, 0);
+    }
+    const review = reviewDraft(d, byId);
+    expect(review.cryptDisciplines).toEqual([]);
+    expect(review.offDiscipline).toEqual([]);
+  });
+
+  it("does not report a card that needs no discipline at all", () => {
+    const { draft } = withOffDiscipline();
+    const free = file.cards.find(
+      (c) => c.kind === "library" && c.status === "playable" && c.disciplines.length === 0,
+    )!;
+    const review = reviewDraft(setCount(draft, free.id, 3), byId);
+    expect(review.offDiscipline.map((r) => r.card.id)).not.toContain(free.id);
+  });
+});

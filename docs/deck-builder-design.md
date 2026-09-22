@@ -1,4 +1,4 @@
-# The Deck Builder (0.11.07–0.11.10, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.11, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
@@ -510,3 +510,89 @@ Two of them are negative controls, and they are the point:
 And the seating test itself runs a built half deck through **`buildTable`**
 — the thing the lobby really calls — rather than asserting the plumbing
 in a comment.
+
+---
+
+## §11 — Discipline scope, sort direction, and the jumping page (0.11.11)
+
+Three owner requests, 2026-09-22.
+
+### Keep the search to what the crypt can play
+
+A checkbox above the builder's search: **"Only cards my crypt can play"**.
+It hides library cards that need a discipline no vampire in the draft
+has, and it names the ones you have so the filter is never a mystery.
+
+**What "in scope" means.** A library card's disciplines are a
+REQUIREMENT and **any one of them satisfies it** (p. 10), so a card
+listing three is in scope if the crypt has any of the three. A card
+requiring **none** is always in scope — that is the case that makes this
+a filter rather than a way of hiding every master in the game.
+
+**The scope is read off the VAMPIRES, never off their clans.** A
+Malkavian with Dominate is a real card; a clan's "usual" disciplines are
+a guideline, not a fact about this crypt.
+
+**An empty crypt switches it off.** A deck started from scratch has no
+disciplines, and applying that literally would hide every discipline card
+in the game the moment you began — a blank screen that reads as a broken
+search (CLAUDE.md, "empty for the wrong reason"). `searchCards` handles
+the emptied-crypt case itself, because the caller cannot see it coming.
+
+**It is a setting on the SCREEN, not on the draft.** It is about how you
+are looking for cards right now, so it is not written into the deck's
+text and does not follow the deck to another machine. Off by default: a
+filter nobody asked for that hides most of the game is worse than one
+they have to find.
+
+### …and it tells you when the deck already has one
+
+`reviewDraft` reports `offDiscipline` — library cards in the deck that no
+vampire in the crypt can play — **by name, with the discipline each one
+wants**, and offers a button that turns the scope filter on.
+
+It is a **caution, not an error**. Nothing in the rules stops you putting
+a Dominate card in a Gangrel deck; it just means dead cards, which is the
+most common way a real deck is quietly broken and precisely why it is
+worth saying out loud.
+
+It stays **structured** on the review rather than being pushed onto
+`cautions` as a sentence, because the screen offers a button that acts on
+it — and because the alternative is the screen fishing one sentence back
+out of a list of strings by matching on its words, which is a vocabulary
+kept in a regex.
+
+### Ascending and descending
+
+`sortDir` applies to the two sorts with numbers in them, **capacity** and
+**cost**. It is deliberately **not** offered for "Oldest set" / "Newest
+set", which already ARE the two directions of one sort — a second control
+beside them would offer the same choice twice and let the two disagree.
+
+**A card with no such number sorts LAST in both directions.** The old
+code used `?? 99`, which did the right thing ascending *by accident* and
+would have put all several hundred costless cards **first** on "highest
+cost first". The name tie-break stays ascending whichever way the numbers
+run, so equal-capacity cards do not flip order when you change direction.
+
+### The page no longer jumps to the top
+
+Owner-reported: adding a card threw the page back to the top.
+
+**The cause is one layer out from the card being added.** `paint()`
+rebuilds the screen with `innerHTML`, and **the scrolling element IS
+`.shell`** — so every repaint threw the scroller away and built a fresh
+one at `scrollTop` 0. Nothing showed it until the deck builder, because
+every earlier screen fits on a page; there, every **+** repaints.
+
+`paint()` now saves the scroll of each panel in `SCROLL_KEEPERS` before
+the write and restores it after. `.dblist` is in that list too — the deck
+list is its own scroller, so removing the fourth copy of a card 200 rows
+down would otherwise fling you back to the crypt.
+
+The test pins the **order** (`savedScroll` → `innerHTML` →
+`restoreScroll`), not the presence: reading `scrollTop` *after* the
+assignment reads the new empty element and restores 0, which is exactly
+the bug. A second test holds the list and the stylesheet together, so a
+panel made scrollable later and left out of it cannot quietly start
+jumping again.

@@ -18,6 +18,7 @@
 import type { CatalogCard, CatalogFile } from "../cards/catalog.ts";
 import { cryptGroupProblem, MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
 import { findHalfDeck } from "./deckimport.ts";
+import { withinScope } from "./cardsearch.ts";
 
 /**
  * A deck being edited.
@@ -168,6 +169,18 @@ export interface DraftReview {
   unplayable: Array<{ card: CatalogCard; copies: number }>;
   /** Vampires whose printed ability is not implemented. Never fatal. */
   inert: string[];
+  /** Every discipline the crypt actually has, as codes. */
+  cryptDisciplines: string[];
+  /**
+   * Library cards in the deck that NO vampire in the crypt can play
+   * (owner request, 2026-09-22).
+   *
+   * Never illegal — the rules do not stop you putting a Dominate card in
+   * a Gangrel deck, they just make sure you regret it. It is the single
+   * most common way a real deck is quietly broken, which is why it is
+   * reported by name rather than left for a playtest to discover.
+   */
+  offDiscipline: Array<{ card: CatalogCard; copies: number }>;
   /**
    * The two minimums were waived because this deck declares itself half
    * a deck. Carried on the review so the screen can SAY so — "legal"
@@ -251,6 +264,26 @@ export function reviewDraft(draft: DeckDraft, byId: Map<number, CatalogCard>): D
     );
   }
 
+  // WHAT THE CRYPT CAN ACTUALLY PLAY. Read off the vampires in the deck,
+  // never from their clans: a Malkavian with Dominate is a real card and
+  // a clan's "usual" disciplines are a guideline, not a fact about this
+  // crypt.
+  const scope = new Set(
+    rows.filter((r) => r.card.kind === "crypt").flatMap((r) => r.card.disciplines),
+  );
+  // Only worth asking once there IS a crypt — with none, every
+  // discipline card in the deck would be reported and the warning would
+  // be noise on a deck that is simply unfinished.
+  const offDiscipline =
+    scope.size === 0
+      ? []
+      : rows.filter((r) => r.card.kind === "library" && !withinScope(r.card, scope));
+  // NOT pushed onto `cautions`. It stays structured because the screen
+  // offers a button that acts on it, and because the alternative — the
+  // screen fishing this one sentence back out of a list of strings by
+  // matching on its words — is a vocabulary kept in a regex, which is a
+  // list nobody greps (CLAUDE.md).
+
   const unplayable = rows.filter((r) => r.card.status !== "playable");
   const inert = rows
     .filter((r) => r.card.kind === "crypt" && r.card.status === "pool")
@@ -262,6 +295,8 @@ export function reviewDraft(draft: DeckDraft, byId: Map<number, CatalogCard>): D
     cautions,
     unplayable,
     inert,
+    cryptDisciplines: [...scope].sort(),
+    offDiscipline,
     halfDeck: draft.halfDeck,
     legal: illegal.length === 0,
     dealable: illegal.length === 0 && unplayable.length === 0,

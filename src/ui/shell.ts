@@ -17,8 +17,8 @@
 import { PLAYSTYLES_LIST, PLAYSTYLE_LABELS } from "../ai/playstyles.ts";
 import { botAgentFor, playstyleOf } from "./botagent.ts";
 import type { CatalogCard, CatalogFile } from "../cards/catalog.ts";
-import { loadCatalog } from "../cards/catalog.ts";
-import type { CardQuery, CardView, Facets, SearchScope, SortKey } from "./cardsearch.ts";
+import { disciplineName, loadCatalog } from "../cards/catalog.ts";
+import type { CardQuery, CardView, Facets, SearchScope, SortDir, SortKey } from "./cardsearch.ts";
 import type { DeckDraft } from "./deckbuild.ts";
 import {
   countsOf,
@@ -52,6 +52,15 @@ import { MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
  * your decks, then the builder, then the search.
  */
 type DeckTab = "decks" | "build" | "search";
+
+/**
+ * The panels whose scroll position outlives a repaint.
+ *
+ * `.shell` is the page itself; `.dblist` is the deck list, which scrolls
+ * inside it. Both are rebuilt by `innerHTML` on every paint, and a
+ * rebuilt element starts at the top.
+ */
+const SCROLL_KEEPERS = [".shell", ".dblist"];
 
 const DECK_TABS: Array<{ id: DeckTab; label: string }> = [
   { id: "decks", label: "My decks" },
@@ -225,6 +234,17 @@ export class Shell {
    */
   private draft: DeckDraft | null = null;
   private draftError = "";
+  /**
+   * Keep the builder's search to what the crypt can play (owner request,
+   * 2026-09-22).
+   *
+   * A setting on the SCREEN rather than on the draft: it is about how you
+   * are looking for cards right now, not about the deck, so it must not
+   * be saved into the deck's text and must not follow it to another
+   * machine. It is off by default — a filter nobody asked for that hides
+   * most of the game is worse than one they have to find.
+   */
+  private scopeToDisciplines = false;
   /** Lines of a reopened deck that named no card. Shown, never dropped. */
   private draftUnreadable: string[] = [];
 
@@ -308,8 +328,42 @@ export class Shell {
     // to align with); the lobby is sized to fill it, because it is a table
     // and a table should look like the room it is.
     const cls = this.screen === "menu" ? "shell centred" : "shell";
+    // WHERE YOU WERE LOOKING SURVIVES THE REPAINT TOO.
+    //
+    // The same lesson as the half-typed name above, one layer out: the
+    // scrolling element IS `.shell`, and `innerHTML` throws it away and
+    // builds a new one at scrollTop 0. Nothing showed this until the
+    // deck builder, because every earlier screen fits on a page — but
+    // there, adding a card repaints, and the page jumped to the top on
+    // every single **+** (owner-reported, 2026-09-22).
+    //
+    // `.dblist` is saved as well: the deck list is its own scroller, so
+    // removing the fourth copy of a card 200 rows down would otherwise
+    // fling you back to the crypt.
+    const scrolls = this.savedScroll();
     this.root.innerHTML = `<div class="${cls}">${this.body()}</div>`;
+    this.restoreScroll(scrolls);
     this.wire();
+  }
+
+  /** How far each scrolling panel is scrolled, before a repaint eats it. */
+  private savedScroll(): Array<[string, number]> {
+    const out: Array<[string, number]> = [];
+    for (const sel of SCROLL_KEEPERS) {
+      const el = this.root.querySelector<HTMLElement>(sel);
+      if (el && el.scrollTop > 0) out.push([sel, el.scrollTop]);
+    }
+    return out;
+  }
+
+  private restoreScroll(saved: Array<[string, number]>): void {
+    for (const [sel, top] of saved) {
+      const el = this.root.querySelector<HTMLElement>(sel);
+      // CLAMPED BY THE BROWSER, and that is the behaviour we want: if
+      // the new content is shorter (a filter just cut the list), landing
+      // at the bottom of what there is beats landing past the end.
+      if (el) el.scrollTop = top;
+    }
   }
 
   private body(): string {
@@ -802,7 +856,11 @@ export class Shell {
     const { byId } = indexCatalog(file);
     const review = reviewDraft(draft, byId);
     const facets = this.catalogFacets;
-    const results = searchCards(file.cards, this.cardQuery);
+    // The scope is DERIVED from the draft on every paint, never stored —
+    // it changes the moment a vampire is added or removed, and a stored
+    // copy would be a second answer to the same question.
+    const query = this.builderQuery(review.cryptDisciplines);
+    const results = searchCards(file.cards, query);
     return `
       <div class="dbeditor">
         <div class="dbdeck">
@@ -831,11 +889,8 @@ export class Shell {
           ${this.deckListMarkup(draft, byId)}
         </div>
         <div class="dbsearch">
-          ${
-            facets
-              ? searchPanelMarkup(this.cardQuery, facets, this.advancedOpen, this.cardView)
-              : ""
-          }
+          ${this.scopePanel(review)}
+          ${facets ? searchPanelMarkup(query, facets, this.advancedOpen, this.cardView) : ""}
           ${this.selectedCard() ? cardDetailMarkup(this.selectedCard()!) : ""}
           <div id="cs-results">${resultsMarkup(results, {
             view: this.cardView,
@@ -847,6 +902,84 @@ export class Shell {
           })}</div>
         </div>
       </div>`;
+  }
+
+  /**
+   * The builder's search query: the screen's query, plus the scope.
+   *
+   * ONE PLACE, because the editor renders the query and the search
+   * handlers read it, and a scope applied in only one of them would show
+   * a filtered list with an unfiltered count beside it.
+   */
+  private builderQuery(cryptDisciplines: string[]): CardQuery {
+    if (!this.scopeToDisciplines) return this.cardQuery;
+    return { ...this.cardQuery, withinDisciplines: cryptDisciplines };
+  }
+
+  /**
+   * "No vampire you have can play this card."
+   *
+   * Its own panel rather than one of the `cautions` strings: it names
+   * cards, it names the discipline each one wants, and it offers a
+   * button that does something about it. A sentence in a list could do
+   * none of those.
+   *
+   * It is a CAUTION, not an error. Nothing in the rules stops you
+   * putting a Dominate card in a Gangrel deck — it just means you have
+   * dead cards, which is the most common way a real deck is quietly
+   * broken and the reason this is reported by name rather than left for
+   * a playtest to find.
+   */
+  private offDisciplinePanel(review: ReturnType<typeof reviewDraft>): string {
+    const off = review.offDiscipline;
+    if (off.length === 0) return "";
+    const copies = off.reduce((n, r) => n + r.copies, 0);
+    return `
+      <div class="dboffdisc">
+        <p class="note dbcaution">
+          <b>${copies} library card${copies === 1 ? "" : "s"}</b>
+          need${copies === 1 ? "s" : ""} a discipline no vampire in this
+          crypt has. That is legal, but no minion you control will be able
+          to play ${copies === 1 ? "it" : "them"}.
+        </p>
+        <p class="note">
+          ${off
+            .map(
+              (r) =>
+                `${esc(r.card.name)} ×${r.copies} <span class="dim">(needs ${esc(
+                  r.card.disciplines.map((d) => disciplineName(d)).join(" or "),
+                )})</span>`,
+            )
+            .join(" · ")}
+        </p>
+        ${
+          this.scopeToDisciplines
+            ? ""
+            : `<button id="db-scopeon">Narrow the search to my crypt</button>`
+        }
+      </div>`;
+  }
+
+  /** The discipline-scope switch, and what it is currently doing. */
+  private scopePanel(review: ReturnType<typeof reviewDraft>): string {
+    const have = review.cryptDisciplines;
+    return `
+      <label class="dbscope${this.scopeToDisciplines ? " on" : ""}">
+        <input id="db-scope" type="checkbox"${this.scopeToDisciplines ? " checked" : ""} />
+        <span>Only cards my crypt can play</span>
+        <span class="note dim">
+          ${
+            have.length === 0
+              ? `No vampires in this deck yet, so there is nothing to narrow
+                 to — add some and this will limit the library results to
+                 disciplines they have.`
+              : `Hides library cards needing a discipline your crypt has not
+                 got. Your crypt has: <b>${esc(
+                   have.map((d) => disciplineName(d)).join(", "),
+                 )}</b>. Cards needing no discipline are always shown.`
+          }
+        </span>
+      </label>`;
   }
 
   /**
@@ -910,6 +1043,7 @@ export class Shell {
                </div>`
             : ""
         }
+        ${this.offDisciplinePanel(review)}
         ${review.cautions.map((p) => `<p class="note dbcaution">${esc(p)}</p>`).join("")}
         ${
           review.inert.length > 0
@@ -1955,6 +2089,19 @@ export class Shell {
       this.paint();
     });
 
+    const scope = find<HTMLInputElement>("#db-scope");
+    scope?.addEventListener("change", () => {
+      this.scopeToDisciplines = scope.checked;
+      // A narrower list can leave you past the end of it.
+      this.cardPage = 1;
+      this.paint();
+    });
+    this.on("#db-scopeon", () => {
+      this.scopeToDisciplines = true;
+      this.cardPage = 1;
+      this.paint();
+    });
+
     this.on(".dbless", (el) => this.bumpCard(el, -1));
     this.on(".dbmore", (el) => this.bumpCard(el, +1));
     this.on(".dbcard", (el) => {
@@ -2136,6 +2283,7 @@ export class Shell {
     single("#cs-scope", (v) => ({ scope: v as SearchScope }));
     single("#cs-status", (v) => ({ status: v as CardQuery["status"] }));
     single("#cs-sort", (v) => ({ sort: v as SortKey }));
+    single("#cs-sortdir", (v) => ({ sortDir: v as SortDir }));
     single("#cs-discmode", (v) => ({ disciplineMode: v as CardQuery["disciplineMode"] }));
     bound("#cs-capmin", "capacityMin");
     bound("#cs-capmax", "capacityMax");

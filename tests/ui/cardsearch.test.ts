@@ -42,6 +42,7 @@ import {
   queryIsEmpty,
   resultsMarkup,
   searchCards,
+  SORTS_WITH_DIRECTION,
   statusBadge,
   traitLine,
 } from "../../src/ui/cardsearch.ts";
@@ -563,3 +564,166 @@ function section(src: string, from: string, to: string): string {
   expect(end).toBeGreaterThan(start);
   return src.slice(start, end);
 }
+
+describe("sort direction (owner request, 2026-09-22)", () => {
+  const all = searchCards(cards, { ...emptyQuery(), pile: "crypt" });
+
+  it("offers a direction only for the sorts it means something for", () => {
+    // "Oldest set" and "Newest set" ARE the two directions of one sort;
+    // a second control beside them would let the two contradict.
+    expect(SORTS_WITH_DIRECTION).toEqual(["capacity", "cost"]);
+    expect(SORTS_WITH_DIRECTION).not.toContain("newest");
+    expect(SORTS_WITH_DIRECTION).not.toContain("name");
+  });
+
+  it("reverses capacity, and stays total either way", () => {
+    const q = { ...emptyQuery(), pile: "crypt" as const, sort: "capacity" as const };
+    const up = searchCards(cards, q).map((c) => c.capacity!);
+    const down = searchCards(cards, { ...q, sortDir: "desc" }).map((c) => c.capacity!);
+    expect(up.length).toBe(all.length);
+    expect(down.length).toBe(all.length);
+    for (let i = 1; i < up.length; i++) expect(up[i - 1]!).toBeLessThanOrEqual(up[i]!);
+    for (let i = 1; i < down.length; i++) expect(down[i - 1]!).toBeGreaterThanOrEqual(down[i]!);
+    expect(down[0]).toBe(up[up.length - 1]);
+  });
+
+  it("keeps the name tie-break ASCENDING in both directions", () => {
+    // Reversing the whole comparator would reverse the tie-break too, so
+    // equal-capacity cards would flip order when you changed direction —
+    // a list that reshuffles for no reason the reader can see.
+    const q = {
+      ...emptyQuery(),
+      pile: "crypt" as const,
+      sort: "capacity" as const,
+      sortDir: "desc" as const,
+    };
+    const out = searchCards(cards, q);
+    for (let i = 1; i < out.length; i++) {
+      const a = out[i - 1]!;
+      const b = out[i]!;
+      if (a.capacity === b.capacity) expect(a.name.localeCompare(b.name, "en")).toBeLessThan(0);
+    }
+  });
+
+  it("sorts a card with NO cost last in both directions", () => {
+    // THE BUG A DESCENDING OPTION WOULD HAVE INTRODUCED. The old code
+    // used `?? 99`, which put costless cards last ascending by accident
+    // — and would have put all several hundred of them FIRST on
+    // "highest cost first", which is not what anybody means by it.
+    const q = { ...emptyQuery(), pile: "library" as const, sort: "cost" as const };
+    for (const dir of ["asc", "desc"] as const) {
+      const out = searchCards(cards, { ...q, sortDir: dir });
+      const firstCostless = out.findIndex((c) => c.poolCost === null && c.bloodCost === null);
+      const lastCosted = out.reduce(
+        (acc, c, i) => (c.poolCost !== null || c.bloodCost !== null ? i : acc),
+        -1,
+      );
+      expect(firstCostless).toBeGreaterThan(lastCosted);
+    }
+  });
+});
+
+describe("keeping the search to what a crypt can play", () => {
+  it("keeps a card the crypt has a discipline for, and drops one it has not", () => {
+    const scope = ["dom"];
+    const out = searchCards(cards, { ...emptyQuery(), pile: "library", withinDisciplines: scope });
+    expect(out.length).toBeGreaterThan(0);
+    for (const c of out) {
+      // Either it needs nothing, or it needs something we have.
+      expect(c.disciplines.length === 0 || c.disciplines.includes("dom")).toBe(true);
+    }
+    // The negative: an Obfuscate-only card is gone.
+    const obfOnly = cards.find(
+      (c) => c.kind === "library" && c.disciplines.length === 1 && c.disciplines[0] === "obf",
+    )!;
+    expect(out.map((c) => c.id)).not.toContain(obfOnly.id);
+  });
+
+  it("keeps every card that needs NO discipline", () => {
+    // The case that makes it a filter rather than a way of hiding most
+    // of the library: masters, and plenty else, require nothing.
+    const scope = ["dom"];
+    const free = cards.filter((c) => c.kind === "library" && c.disciplines.length === 0);
+    expect(free.length).toBeGreaterThan(0);
+    const out = new Set(
+      searchCards(cards, { ...emptyQuery(), pile: "library", withinDisciplines: scope }).map(
+        (c) => c.id,
+      ),
+    );
+    for (const c of free) expect(out.has(c.id)).toBe(true);
+  });
+
+  it("keeps a multi-discipline card when the crypt has ANY of them", () => {
+    // p. 10: any one of the listed disciplines satisfies the card.
+    const multi = cards.find((c) => c.kind === "library" && c.disciplines.length > 1)!;
+    const one = multi.disciplines[1]!;
+    const out = searchCards(cards, {
+      ...emptyQuery(),
+      pile: "library",
+      withinDisciplines: [one],
+    });
+    expect(out.map((c) => c.id)).toContain(multi.id);
+  });
+
+  it("never filters the crypt itself", () => {
+    // The scope is about which LIBRARY cards your vampires can play. A
+    // vampire is not gated by it, and hiding vampires while you are
+    // still building the crypt would be self-defeating.
+    const out = searchCards(cards, { ...emptyQuery(), pile: "crypt", withinDisciplines: ["dom"] });
+    expect(out.length).toBe(searchCards(cards, { ...emptyQuery(), pile: "crypt" }).length);
+  });
+
+  it("does nothing at all when the crypt is empty", () => {
+    // EMPTY FOR THE WRONG REASON. A deck started from scratch has no
+    // disciplines, and applying that literally would hide every
+    // discipline card in the game — a blank screen that reads as a
+    // broken search.
+    const out = searchCards(cards, { ...emptyQuery(), withinDisciplines: [] });
+    expect(out.length).toBe(cards.length);
+  });
+
+  it("is off by default", () => {
+    expect(emptyQuery().withinDisciplines).toBeNull();
+    expect(queryIsEmpty(emptyQuery())).toBe(true);
+    expect(queryIsEmpty({ ...emptyQuery(), withinDisciplines: ["dom"] })).toBe(false);
+  });
+});
+
+describe("the page does not jump to the top when you add a card", () => {
+  // Owner-reported, 2026-09-22. Source-level, like the rest of the
+  // screen checks: the shell has no jsdom, and the failure is a property
+  // of `paint` rather than of any pure function.
+  const shell = readShell();
+  const css = readFileSync(
+    join(import.meta.dirname, "..", "..", "src", "ui", "style.css"),
+    "utf8",
+  );
+
+  it("saves the scroll position before innerHTML and puts it back after", () => {
+    // ORDER IS THE WHOLE THING: reading scrollTop after the assignment
+    // reads the new, empty element and restores 0, which is exactly the
+    // bug. So the test pins the sequence, not the presence.
+    const paint = section(shell, "private paint()", "private savedScroll");
+    const save = paint.indexOf("savedScroll()");
+    const write = paint.indexOf("this.root.innerHTML");
+    const restore = paint.indexOf("restoreScroll(");
+    expect(save).toBeGreaterThan(-1);
+    expect(save).toBeLessThan(write);
+    expect(write).toBeLessThan(restore);
+  });
+
+  it("keeps the scroll of every panel the CSS actually scrolls", () => {
+    // The list and the stylesheet must agree. A panel made scrollable
+    // later and not added here would silently start jumping again —
+    // and it would only show up as "the page moved", which is the
+    // hardest kind of bug to report.
+    const keepers = section(shell, "const SCROLL_KEEPERS", ";");
+    for (const sel of [".shell", ".dblist"]) {
+      expect(keepers).toContain(`"${sel}"`);
+      // And the stylesheet really does make that element a scroller, so
+      // the list cannot quietly name something that never scrolled.
+      const rule = css.slice(css.indexOf(`${sel} {`));
+      expect(rule.slice(0, rule.indexOf("}"))).toContain("overflow-y: auto");
+    }
+  });
+});

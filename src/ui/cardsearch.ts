@@ -26,6 +26,18 @@ export type CardView = "grid" | "list";
 
 export type SortKey = "name" | "capacity" | "cost" | "oldest" | "newest";
 
+/** Which way a NUMERIC sort runs. Ignored by the others — see `SORTS_WITH_DIRECTION`. */
+export type SortDir = "asc" | "desc";
+
+/**
+ * The sorts a direction means anything for.
+ *
+ * Name has a conventional direction and "oldest"/"newest" ARE the two
+ * directions of one sort, so offering a second control for them would be
+ * offering the same choice twice and letting the two disagree.
+ */
+export const SORTS_WITH_DIRECTION: SortKey[] = ["capacity", "cost"];
+
 /** Which part of a card the typed words are matched against. */
 export type SearchScope = "any" | "name" | "text";
 
@@ -55,6 +67,18 @@ export interface CardQuery {
   /** "any", or only what this platform plays, or only what it does not. */
   status: "any" | CatalogStatus;
   sort: SortKey;
+  sortDir: SortDir;
+  /**
+   * Keep library cards to the disciplines a crypt actually has.
+   *
+   * Null means "do not" — the deck builder sets it from the vampires in
+   * the draft (owner request, 2026-09-22). It is NOT the same question
+   * as the `disciplines` filter above: that one keeps cards that require
+   * one of the ticked disciplines, this one keeps cards that require
+   * NOTHING YOU HAVEN'T GOT, which includes every card with no
+   * discipline requirement at all.
+   */
+  withinDisciplines: string[] | null;
 }
 
 export function emptyQuery(): CardQuery {
@@ -76,7 +100,24 @@ export function emptyQuery(): CardQuery {
     costMax: null,
     status: "any",
     sort: "name",
+    sortDir: "asc",
+    withinDisciplines: null,
   };
+}
+
+/**
+ * Can a crypt with these disciplines use this library card?
+ *
+ * A library card's `disciplines` are a REQUIREMENT, and any one of them
+ * satisfies it (p. 10) — so a card listing three is in scope if the
+ * crypt has any of the three. A card requiring none is in scope always,
+ * which is the case that makes this a useful filter rather than a way of
+ * hiding every master card in the game.
+ */
+export function withinScope(card: CatalogCard, scope: ReadonlySet<string>): boolean {
+  if (card.kind === "crypt") return true;
+  if (card.disciplines.length === 0) return true;
+  return card.disciplines.some((d) => scope.has(d));
 }
 
 /** True when nothing at all is set — neither the text nor a filter. */
@@ -109,7 +150,8 @@ export function filtersAreDefault(q: CardQuery): boolean {
     q.capacityMax === null &&
     q.costMin === null &&
     q.costMax === null &&
-    q.status === base.status
+    q.status === base.status &&
+    q.withinDisciplines === null
   );
 }
 
@@ -268,18 +310,52 @@ export function searchCards(cards: CatalogCard[], q: CardQuery): CatalogCard[] {
     if (q.costMin !== null && (cost === null || cost < q.costMin)) return false;
     if (q.costMax !== null && (cost === null || cost > q.costMax)) return false;
 
+    // AN EMPTY SCOPE IS NOT A FILTER. A draft with no vampires yet has
+    // no disciplines, and applying that literally would hide every
+    // discipline card in the game the moment somebody started a deck
+    // from scratch — a blank screen that looks like a broken search
+    // (CLAUDE.md, "empty for the wrong reason"). The caller switches it
+    // off by passing null; this handles the emptied-crypt case, which
+    // the caller cannot see coming.
+    if (q.withinDisciplines !== null && q.withinDisciplines.length > 0) {
+      if (!withinScope(c, new Set(q.withinDisciplines))) return false;
+    }
+
     return matchesText(c, q);
   });
 
   const byName = (a: CatalogCard, b: CatalogCard): number => a.name.localeCompare(b.name, "en");
+  /**
+   * Sort on a number some cards do not have.
+   *
+   * A CARD WITHOUT THE NUMBER SORTS LAST IN BOTH DIRECTIONS. It is not
+   * zero and it is not huge — it is absent, and "cheapest first" should
+   * not open with three hundred cards that have no cost. The old code
+   * used `?? 99`, which did the right thing ascending by accident and
+   * would have put every costless card FIRST the moment a descending
+   * option existed.
+   */
+  const numeric =
+    (pick: (c: CatalogCard) => number | null) =>
+    (a: CatalogCard, b: CatalogCard): number => {
+      const va = pick(a);
+      const vb = pick(b);
+      if (va === null || vb === null) {
+        if (va === vb) return byName(a, b);
+        return va === null ? 1 : -1;
+      }
+      const dir = q.sortDir === "desc" ? -1 : 1;
+      return dir * (va - vb) || byName(a, b);
+    };
+
   // Every sort falls back to the name, so the order is TOTAL: two cards
   // of the same capacity keep the same relative order between repaints,
   // and a list that reshuffles under the cursor is a bug report.
   switch (q.sort) {
     case "capacity":
-      return out.sort((a, b) => (a.capacity ?? 99) - (b.capacity ?? 99) || byName(a, b));
+      return out.sort(numeric((c) => c.capacity));
     case "cost":
-      return out.sort((a, b) => (costOf(a) ?? 99) - (costOf(b) ?? 99) || byName(a, b));
+      return out.sort(numeric(costOf));
     case "oldest":
       return out.sort((a, b) => a.firstPrinted.localeCompare(b.firstPrinted) || byName(a, b));
     case "newest":
@@ -682,6 +758,23 @@ export function filtersMarkup(q: CardQuery, f: Facets, open: boolean): string {
           <option value="newest"${q.sort === "newest" ? " selected" : ""}>Newest set</option>
           <option value="oldest"${q.sort === "oldest" ? " selected" : ""}>Oldest set</option>
         </select></label>
+
+      ${
+        // Only for the sorts it means something for. Offering it beside
+        // "Oldest set" would be offering the same choice twice and
+        // letting the two contradict each other.
+        SORTS_WITH_DIRECTION.includes(q.sort)
+          ? `<label class="csfield"><span>Order</span>
+               <select id="cs-sortdir">
+                 <option value="asc"${q.sortDir === "asc" ? " selected" : ""}>
+                   Lowest first
+                 </option>
+                 <option value="desc"${q.sortDir === "desc" ? " selected" : ""}>
+                   Highest first
+                 </option>
+               </select></label>`
+          : ""
+      }
 
       <label class="csfield wide"><span>Type${count(q.types.length)}</span>
         <select id="cs-types" multiple size="6">${options(f.types, q.types)}</select></label>
