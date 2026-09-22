@@ -56,11 +56,13 @@ type DeckTab = "decks" | "build" | "search";
 /**
  * The panels whose scroll position outlives a repaint.
  *
- * `.shell` is the page itself; `.dblist` is the deck list, which scrolls
- * inside it. Both are rebuilt by `innerHTML` on every paint, and a
- * rebuilt element starts at the top.
+ * `.shell` is the page itself; `.dblist` is the deck list on the My decks
+ * viewer; `.dbdeck` and `.dbsearch` are the builder's two columns, which
+ * scroll independently since 0.11.16. All of them are rebuilt by
+ * `innerHTML` on every paint, and a rebuilt element starts at the top —
+ * so a column left out of this list would jump on every +.
  */
-const SCROLL_KEEPERS = [".shell", ".dblist"];
+const SCROLL_KEEPERS = [".shell", ".dblist", ".dbdeck", ".dbsearch"];
 
 const DECK_TABS: Array<{ id: DeckTab; label: string }> = [
   { id: "decks", label: "My decks" },
@@ -2441,12 +2443,22 @@ export class Shell {
     // question asked here and the rule enforced underneath cannot give
     // different answers.
     const clash = findDeckLoosely(name);
-    // Saving the deck you opened, under the name you opened it with, is
-    // not a collision and is not worth a question. Anything else that
-    // lands on an existing deck is.
-    const isSelf = clash !== null && draft.savedAs !== null && clash.name === draft.savedAs;
-    if (clash && !isSelf) {
-      if (!confirm(`You already have a deck called "${clash.name}". Overwrite it?`)) {
+    // EVERY SAVE THAT REPLACES A SAVED DECK ASKS FIRST — including the
+    // deck you opened, under the name you opened it with (owner request,
+    // 2026-09-22). 0.11.12 exempted that case as "not a collision", and it
+    // is not one; but it IS an overwrite, and the saved copy is the only
+    // other copy there is. A rename-in-place of an opened deck replaces it
+    // too, so `draft.savedAs` asks even when the new name lands on nothing.
+    //
+    // The question names the deck that will be LOST, which is the clash
+    // when there is one and the opened deck otherwise.
+    const replaced = clash?.name ?? draft.savedAs;
+    if (replaced !== null) {
+      const sameDeck = replaced === draft.savedAs;
+      const question = sameDeck
+        ? `Overwrite your saved deck "${replaced}" with these changes?`
+        : `You already have a deck called "${replaced}". Overwrite it?`;
+      if (!confirm(question)) {
         // Answering no leaves the draft exactly as it was, still open and
         // still unsaved — it is a cancelled save, not a failed one, so it
         // does not set `draftError`.

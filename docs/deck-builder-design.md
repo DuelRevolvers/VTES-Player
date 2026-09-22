@@ -1,4 +1,4 @@
-# The Deck Builder (0.11.07–0.11.14, owner request 2026-09-22)
+# The Deck Builder (0.11.07–0.11.16, owner request 2026-09-22)
 
 > **0.11.08 — TABS AND PAGING** (owner request, same day). The screen is
 > three tabs in the order asked for: **My decks**, **Build a deck**,
@@ -837,3 +837,42 @@ was never created.
 them on the right instead of spreading them across the row. The Deck
 Builder and Profile headers get the same treatment, which is what they
 already wanted.
+
+---
+
+## §15 — Save always asks; the two columns scroll apart (0.11.16)
+
+### Every save that replaces a saved deck asks first
+
+**Reverses a §12 decision, on the owner's word (2026-09-22).** §12
+exempted "saving the deck you opened, under the name you opened it with"
+from the question, as not a collision. It isn't one — but it IS an
+overwrite, and the saved copy is the only other copy there is.
+
+The question is now driven by *is anything saved being replaced*:
+`replaced = clash?.name ?? draft.savedAs`. That covers a clash with
+another deck, a re-save of the opened deck, and a rename-in-place of the
+opened deck (which replaces it under a new name). It names the deck that
+will be lost, in one of two wordings: *"Overwrite your saved deck X with
+these changes?"* for your own, *"You already have a deck called X.
+Overwrite it?"* for another. A brand-new deck landing on no name asks
+nothing — the negative control, because a confirm there would be nagging.
+
+### The deck and the search scroll independently
+
+The deck column used to be `position: sticky` over one page-length
+scroll, which worked only while the deck was shorter than the window —
+and grid view never is, so scrolling to the bottom of the deck carried
+the search results away with it.
+
+`.dbdeck` and `.dbsearch` are now each their own scroller
+(`max-height: calc(100vh - 200px); overflow-y: auto`), and inside the
+editor `.dblist` is explicitly **not** a scroller
+(`max-height: none; overflow: visible`) — otherwise grid view would get a
+scrollbar inside a scrollbar. Both columns joined `SCROLL_KEEPERS`: every
+paint rebuilds them, and a column left out would jump to the top on every
+**+**, which is the §11 bug again one level down.
+
+The scroll-keeper test had to learn to find a rule that *starts* with the
+selector: `.dbeditor .dblist {` contains `.dblist {`, and `indexOf` found
+the override before the rule it overrides.

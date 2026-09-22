@@ -1318,7 +1318,17 @@ export function stillOffered(
   state: GameState,
 ): boolean {
   if (!id) return false;
-  return playsByCard(dp).has(id) || actionsByTableCard(dp, state).has(id);
+  // "Look at the cards set aside on this" is one of the things a card can
+  // do now — `tableActionMarks` has counted it as a menu entry since the
+  // store panel landed, and this did not. The two disagreeing is why the
+  // Shilmulo Tarot menu snapped shut on every bot decision: the selection
+  // was pruned as "nothing offered here" while the menu drawn on it said
+  // otherwise (owner-reported, 2026-09-22).
+  return (
+    playsByCard(dp).has(id) ||
+    actionsByTableCard(dp, state).has(id) ||
+    readableStores(state).has(id)
+  );
 }
 
 /**
@@ -2204,15 +2214,21 @@ export function render(input: RenderInput): string {
   // While an AI's move is paced — or while the seat being asked belongs to
   // somebody else entirely — the decision on the table is THEIRS, and
   // nothing on screen may offer to answer it, the table included.
-  const ctx: TableCtx | null = input.thinking || input.waitingFor
-    ? null
-    : {
-        actions: actionsByTableCard(dp, state),
-        stores: readableStores(state),
-        selected: input.selectedCard,
-        state,
-        narrow: input.playNarrow ?? {},
-      };
+  //
+  // BUT THE MOVES ARE ALL THAT GOES. The context used to be dropped whole,
+  // and the set-aside cards went with it: Shilmulo Tarot prints "you can
+  // look at the cards AT ANY TIME", and on a table with bots that was
+  // "only on your own decisions", a fraction of the game (owner-reported,
+  // 2026-09-22). Looking changes nothing and asks the engine nothing, so
+  // it has no business waiting for a turn — only `actions` is emptied.
+  const deciding = !(input.thinking || input.waitingFor);
+  const ctx: TableCtx = {
+    actions: deciding ? actionsByTableCard(dp, state) : new Map(),
+    stores: readableStores(state),
+    selected: input.selectedCard,
+    state,
+    narrow: input.playNarrow ?? {},
+  };
   const onTable = new Set<LegalOption>();
   for (const list of ctx?.actions.values() ?? []) for (const o of list) onTable.add(o);
 

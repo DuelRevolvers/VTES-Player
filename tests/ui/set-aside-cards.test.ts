@@ -16,10 +16,10 @@
 
 import { describe, expect, it } from "vitest";
 import type { GameState, PermanentInPlay } from "../../src/engine/index.ts";
-import { redactFor } from "../../src/engine/index.ts";
+import { redactFor, VtesEngine } from "../../src/engine/index.ts";
 import type { RenderInput } from "../../src/ui/render.ts";
-import { readableStores, render } from "../../src/ui/render.ts";
-import { threeSeatGame } from "../engine/fixtures.ts";
+import { readableStores, render, stillOffered } from "../../src/ui/render.ts";
+import { testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
 function screen(state: GameState, over: Partial<RenderInput> = {}): string {
   return render({
@@ -141,16 +141,53 @@ describe("cards set aside on a card in play", () => {
     }
   });
 
-  it("draws no look at all while somebody else's move is on the table", () => {
-    // The table is dead while an AI is being watched or a remote seat is
-    // deciding, and this is part of the table.
+  it("lets the owner look AT ANY TIME — while a bot moves, or another seat decides", () => {
+    // THE OWNER-REPORTED BUG (2026-09-22), and a reversal. This test used
+    // to assert the opposite — "the table is dead while somebody else is
+    // deciding, and this is part of the table" — which made the card's
+    // own "you can look at the cards at any time" mean "only on your own
+    // decisions", a fraction of any game with bots. Looking changes
+    // nothing and asks the engine nothing, so it has no turn to wait for.
     const state = redactFor(tarotGame(), "Alice");
     for (const over of [{ thinking: true }, { waitingFor: "Bob" }]) {
       const html = screen(state, { selectedCard: "tarot", ...over });
-      expect(html).not.toContain("data-peek=");
-      expect(html).not.toContain("actionable");
-      // The count stays: it is state, not an offer.
+      expect(html).toContain(`data-peek="tarot"`);
+      expect(html).toContain("actionable selected");
       expect(html).toContain(`title="2 card(s) set aside"`);
+      // …and the panel opens and names them, not only the menu entry.
+      const panel = screen(state, { storeOpen: "tarot", ...over });
+      expect(panel).toContain("Shilmulo Tarot — 2 cards set aside");
+      expect(panel).toContain(".44 Magnum");
     }
+  });
+
+  it("still draws NO MOVES on the table while somebody else is deciding", () => {
+    // What the old rule was actually protecting, kept. A real decision
+    // with moves on table cards: they are drawn on the owner's own
+    // decision (the positive control) and not while a bot moves — so the
+    // only tile left lit is the one holding cards she may look at.
+    const real = tarotGame();
+    const dp = new VtesEngine(real, testRegistry).decision();
+    const view = redactFor(real, "Alice");
+    const count = (html: string): number => (html.match(/actionable/g) ?? []).length;
+
+    const deciding = screen(view, { dp });
+    expect(count(deciding)).toBeGreaterThan(1);
+
+    for (const over of [{ thinking: true }, { waitingFor: "Bob" }]) {
+      const html = screen(view, { dp, ...over });
+      expect(count(html)).toBe(1);
+      expect(html).toContain(`data-tcard="tarot"`);
+    }
+  });
+
+  it("keeps the menu open across decisions while the only thing on it is the look", () => {
+    // The second half of the same bug. The loop prunes a selection that
+    // `stillOffered` says has nothing on it, and `stillOffered` used to
+    // ask about MOVES only — so the Tarot's menu, whose one entry is the
+    // look, was snapped shut on every bot decision.
+    expect(stillOffered("tarot", null, redactFor(tarotGame(), "Alice"))).toBe(true);
+    // Bob may not look, so for him there is nothing to keep open.
+    expect(stillOffered("tarot", null, redactFor(tarotGame(), "Bob"))).toBe(false);
   });
 });

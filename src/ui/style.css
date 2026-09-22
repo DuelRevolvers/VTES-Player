@@ -1628,7 +1628,17 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
    the deck is the thing being built. */
 @media (max-width: 900px) { .dbeditor { grid-template-columns: 1fr; } }
 
-.dbdeck { position: sticky; top: 0; }
+/* TWO SCROLLERS, SIDE BY SIDE (owner request, 2026-09-22). The deck on
+   the left and the search on the right each scroll on their own, so a
+   sixty-card deck in grid view can be read top to bottom without the
+   search results sliding away beside it. The column used to be sticky
+   over one page-length scroll, which only worked while the deck was
+   shorter than the window - grid view never is. */
+.dbdeck { max-height: calc(100vh - 200px); overflow-y: auto; padding-right: 6px; }
+.dbsearch { max-height: calc(100vh - 200px); overflow-y: auto; padding-right: 6px; }
+/* Inside the editor the COLUMN scrolls, so the deck list must not be a
+   second, nested scroller inside it. */
+.dbeditor .dblist { max-height: none; overflow: visible; }
 .dbdeckhead { margin-top: 0; align-items: center; }
 .dbname { flex: 1; min-width: 120px; }
 
@@ -1793,5 +1803,4 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .shell .dkadd button { padding: 0 8px; line-height: 1.5; }
 /* A card the player cannot deal, marked in the grid as well as the list. */
 .dkcell.absent .dkpic, .dkcell.pool .dkpic { border-color: var(--blood); }
-/* In grid view the deck column needs the room the pictures want. */
-.dbeditor .dblist.grid { max-height: none; }
+

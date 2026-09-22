@@ -901,8 +901,12 @@ export class DebugApp {
    * one gesture cannot mean two things on the same element.
    */
   private wireTable(): void {
-    if (this.isThinking()) return;
-
+    // NO `isThinking()` BAIL-OUT HERE ANY MORE. It was the third of three
+    // gates that kept Shilmulo Tarot's set-aside cards unreachable while
+    // a bot was moving (owner-reported, 2026-09-22). It is not needed for
+    // safety: while somebody else is deciding the renderer draws no moves
+    // at all, so the only tile it can light is one holding cards you may
+    // look at — and the class below is the whole answer, as it says.
     for (const tile of Array.from(this.root.querySelectorAll<HTMLElement>("[data-tcard]"))) {
       const id = tile.dataset["tcard"];
       if (!id) continue;

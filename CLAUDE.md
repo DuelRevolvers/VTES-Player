@@ -128,7 +128,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 295 test files, 3143 tests**, with `npm run typecheck`,
+**Green baseline: 295 test files, 3146 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -183,7 +183,9 @@ to a sentence-initial "Requires" so it cannot read a description or a
 negation as a rule. **0.11.14** lets you READ a saved deck from My decks
 (grid or list, plus Edit, which reuses openSavedDraft so Save still
 overwrites): one deckCardsMarkup renderer serves the viewer and the
-builder, differing only in view and editable.
+builder, differing only in view and editable. **0.11.16**: every save that
+replaces a saved deck asks (reversing 0.11.12-s self-save exemption), and
+the builder-s two columns scroll independently (both in SCROLL_KEEPERS).
 
 **Only runtime dependency: `peerjs` ^1.5.5.**
 

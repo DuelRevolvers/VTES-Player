@@ -508,16 +508,29 @@ describe("the deck builder screen", () => {
     expect(profile).toContain(`id="p-decks"`);
   });
 
-  it("asks before overwriting a deck, but not when saving the one it opened", () => {
-    // Source-level, like the rest of the screen checks. BOTH halves: a
-    // builder that always asked would nag on every Save of the deck you
-    // are already editing, which is the commonest press of that button.
+  it("asks before ANY save that replaces a saved deck — its own included", () => {
+    // Owner request, 2026-09-22, reversing 0.11.12's exemption: saving
+    // the deck you opened under its own name is not a COLLISION, but it
+    // is an OVERWRITE of the only other copy there is. So the question
+    // is driven by "is something saved being replaced", which covers the
+    // clash AND the deck that was opened.
     const save = section(shell, "private saveDraft", "private wireCardSearch");
-    expect(save).toMatch(/confirm\([^)]*Overwrite/);
-    expect(save).toContain("const isSelf");
-    expect(save).toContain("if (clash && !isSelf)");
+    expect(save).toContain("const replaced = clash?.name ?? draft.savedAs;");
+    expect(save).toContain("if (replaced !== null)");
+    expect(save).not.toContain("isSelf");
+    // Two wordings: the deck you are editing, and somebody else's name.
+    expect(save).toMatch(/Overwrite your saved deck/);
+    expect(save).toMatch(/You already have a deck called[^?]*Overwrite it\?/);
     // Cancelling is not a failure, so it must not leave an error behind.
-    expect(save).toMatch(/Overwrite[\s\S]{0,400}return;/);
+    expect(save).toMatch(/if \(!confirm\(question\)\) \{[\s\S]{0,300}return;/);
+  });
+
+  it("does NOT ask when a brand-new deck lands on nothing", () => {
+    // The negative control. Nothing saved is replaced, so there is no
+    // question to ask — a confirm here would be nagging.
+    const save = section(shell, "private saveDraft", "private wireCardSearch");
+    // `replaced` is null exactly when there is no clash and no opened deck.
+    expect(save).toMatch(/clash\?\.name \?\? draft\.savedAs/);
   });
 
   it("offers both ways to start a deck (owner request)", () => {
@@ -869,11 +882,21 @@ describe("the page does not jump to the top when you add a card", () => {
     // and it would only show up as "the page moved", which is the
     // hardest kind of bug to report.
     const keepers = section(shell, "const SCROLL_KEEPERS", ";");
-    for (const sel of [".shell", ".dblist"]) {
+    // The builder's two columns scroll on their own (owner request,
+    // 2026-09-22) — and the deck list inside the left one must NOT be a
+    // second scroller nested in it, or grid view gets a scrollbar inside
+    // a scrollbar.
+    expect(css).toMatch(/\.dbeditor \.dblist \{[^}]*max-height: none[^}]*overflow: visible/);
+    expect(css).not.toMatch(/\.dbdeck \{[^}]*position: sticky/);
+    for (const sel of [".shell", ".dblist", ".dbdeck", ".dbsearch"]) {
       expect(keepers).toContain(`"${sel}"`);
       // And the stylesheet really does make that element a scroller, so
       // the list cannot quietly name something that never scrolled.
-      const rule = css.slice(css.indexOf(`${sel} {`));
+      // The rule that STARTS with the selector — not a descendant rule
+      // like `.dbeditor .dblist {`, which contains it and overrides it.
+      const at = css.indexOf(`\n${sel} {`);
+      expect(at, sel).toBeGreaterThan(-1);
+      const rule = css.slice(at);
       expect(rule.slice(0, rule.indexOf("}"))).toContain("overflow-y: auto");
     }
   });
