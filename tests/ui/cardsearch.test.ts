@@ -34,6 +34,7 @@ import {
   emptyQuery,
   facetsOf,
   filtersAreDefault,
+  filtersMarkup,
   fold,
   PAGE_SIZES,
   pagerMarkup,
@@ -483,6 +484,53 @@ describe("paging", () => {
     // pager that disabled BOTH arrows would pass the first check alone.
     expect(last).toMatch(new RegExp(`data-page="${pages + 1}" disabled>Next ›`));
     expect(last).toMatch(new RegExp(`data-page="${pages - 1}">‹ Previous`));
+  });
+
+  it("draws the pager above the results as well as below", () => {
+    const html = resultsMarkup(all, { view: "grid", selectedId: null, total: cards.length, page: 2, pageSize: 30 });
+    const top = html.indexOf("cspager cspager-top");
+    const bottom = html.indexOf("cspager cspager-bottom");
+    const count = html.indexOf("cscount");
+    const grid = html.indexOf("csresults grid");
+    // Both present, the top one before the "Showing…" line, the bottom
+    // one after the cards.
+    expect(top).toBeGreaterThan(-1);
+    expect(top).toBeLessThan(count);
+    expect(bottom).toBeGreaterThan(grid);
+  });
+
+  it("draws no pager at either end when there is one page", () => {
+    const one = all.slice(0, 5);
+    const html = resultsMarkup(one, { view: "list", selectedId: null, total: cards.length, page: 1, pageSize: 30 });
+    expect(html).not.toContain("cspager");
+  });
+});
+
+describe("the advanced panel", () => {
+  it("shows Sort by whether or not the panel is open", () => {
+    const q = { ...emptyQuery(), sort: "cost" as const };
+    for (const open of [false, true]) {
+      const html = filtersMarkup(q, facets, open);
+      expect(html).toContain(`id="cs-sort"`);
+      // The direction follows the sort, outside the panel too.
+      expect(html).toContain(`id="cs-sortdir"`);
+      // And it is in the advanced ROW, not inside the filter panel.
+      const panel = html.indexOf("csfilters");
+      if (panel > -1) expect(html.indexOf(`id="cs-sort"`)).toBeLessThan(panel);
+    }
+  });
+
+  it("keeps every filter inside the open panel, and none when closed", () => {
+    const ids = ["cs-pile", "cs-scope", "cs-status", "cs-types", "cs-clans", "cs-disc",
+      "cs-discmode", "cs-sects", "cs-titles", "cs-sets", "cs-groups",
+      "cs-capmin", "cs-capmax", "cs-costmin", "cs-costmax"];
+    const open = filtersMarkup(emptyQuery(), facets, true);
+    const closed = filtersMarkup(emptyQuery(), facets, false);
+    const panel = open.indexOf("csfilters");
+    for (const id of ids) {
+      expect(open.indexOf(`id="${id}"`), id).toBeGreaterThan(panel);
+      expect(closed, id).not.toContain(`id="${id}"`);
+    }
   });
 });
 

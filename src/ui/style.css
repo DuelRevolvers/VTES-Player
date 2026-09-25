@@ -1487,20 +1487,57 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .csbar { align-items: center; }
 .csq { flex: 1; min-width: 220px; }
 .shell button.csview.on { background: var(--panel2); border-color: var(--gold); color: var(--gold); }
-.csadvrow { margin-top: 8px; }
+.csadvrow { margin-top: 8px; flex-wrap: wrap; }
 .shell button.csadv.open { border-color: var(--gold); color: var(--gold); }
 
-/* The filter wall. Auto-fit rather than a fixed column count: the panel
-   is used at 1180px and at 96vw on a smaller screen, and a fixed grid
-   would leave one of the two wrong. */
+/* The advanced row: the toggle and Clear on the left, Sort on the right,
+   under Grid/List. Sort lives outside the panel so it is always shown. */
+.csadvrow { align-items: center; }
+.cssort { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.cssortfield { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.cssortfield > span { color: var(--dim); }
+.cssort select { padding: 4px 6px; }
+
+/* The filter panel is nine GROUPS (a column of related fields each).
+   Card search tab: the groups sit side by side at their own width and
+   wrap, so a column is only as wide as what is in it. */
 .csfilters {
-  display: grid; gap: 10px; margin: 12px 0 4px;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  display: flex; flex-wrap: wrap; align-items: flex-start;
+  gap: 14px 22px; margin: 12px 0 4px;
+  padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px;
 }
-.csfield { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.csgroup { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* Fields hug their content instead of stretching to the column. */
+.csfield {
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: 4px; font-size: 12px;
+}
 .csfield > span:first-child { color: var(--dim); }
-.csfield.wide { grid-column: span 2; }
-.csfield select[multiple] { min-height: 108px; }
+/* A scrolling list is as wide as its longest entry, plus room on the
+   right for the scrollbar and some air. */
+.shell .csfield select[multiple] {
+  width: max-content; max-width: 100%;
+  padding-right: 22px; min-height: 108px;
+}
+
+/* Build a deck tab: the search sits in half the window, so the groups go
+   into a 3 / 2 / 1 column grid sized by THAT column (a container query),
+   not by the window, which the two-column editor splits. `.dbsearch`
+   declares itself the container, further down. `auto` tracks start at
+   their content and share what is left, so the columns stay even.
+   Set is the widest list, so it goes last, into the right-hand column,
+   rather than swelling the left one. */
+.dbsearch .csfilters {
+  display: grid; grid-template-columns: repeat(3, auto);
+  gap: 16px 20px;
+}
+.dbsearch .csgroup-set { order: 1; }
+@container (max-width: 560px) {
+  .dbsearch .csfilters { grid-template-columns: repeat(2, auto); }
+}
+@container (max-width: 380px) {
+  .dbsearch .csfilters { grid-template-columns: minmax(0, 1fr); }
+}
 /* How many are chosen, beside the label — a collapsed multi-select
    otherwise hides the filter that is making the results look wrong. */
 .csn {
@@ -1604,6 +1641,7 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 .cssize select { padding: 4px 6px; }
 
 .cspager { justify-content: center; align-items: center; gap: 4px; margin-top: 16px; }
+.cspager-top { margin: 12px 0 8px; }
 .shell button.cspage { padding: 6px 11px; min-width: 36px; }
 .shell button.cspage.on {
   background: var(--accent); border-color: var(--accent); color: var(--ink);
@@ -1635,7 +1673,7 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
    over one page-length scroll, which only worked while the deck was
    shorter than the window - grid view never is. */
 .dbdeck { max-height: calc(100vh - 200px); overflow-y: auto; padding-right: 6px; }
-.dbsearch { max-height: calc(100vh - 200px); overflow-y: auto; padding-right: 6px; }
+.dbsearch { max-height: calc(100vh - 200px); overflow-y: auto; padding-right: 6px; container-type: inline-size; }
 /* Inside the editor the COLUMN scrolls, so the deck list must not be a
    second, nested scroller inside it. */
 .dbeditor .dblist { max-height: none; overflow: visible; }

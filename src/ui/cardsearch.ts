@@ -648,7 +648,10 @@ export function resultsMarkup(results: CatalogCard[], o: ResultsOptions): string
     p.pages === 1
       ? `${p.total} of ${total} cards.`
       : `Showing ${p.from}–${p.to} of ${p.total} matches, out of ${total} cards.`;
+  // The pager at the TOP as well as the bottom (owner request,
+  // 2026-09-25): at 100 a page the bottom one is a long scroll away.
   return `
+    ${pagerMarkup(p, "top")}
     <div class="row cscount">
       <p class="note dim csmore">${count}</p>
       <label class="cssize"><span>Per page</span>
@@ -668,14 +671,14 @@ export function resultsMarkup(results: CatalogCard[], o: ResultsOptions): string
  * The pager. Nothing at all when there is only one page — a "1 of 1"
  * with two dead arrows is furniture, not information.
  */
-export function pagerMarkup(p: Page): string {
+export function pagerMarkup(p: Page, where: "top" | "bottom" = "bottom"): string {
   if (p.pages <= 1) return "";
   const step = (to: number, label: string, on: boolean): string =>
     `<button class="cspage${on ? "" : " off"}" data-page="${to}"${
       on ? "" : " disabled"
     }>${label}</button>`;
   return `
-    <div class="row cspager">
+    <div class="row cspager cspager-${where}">
       ${step(p.page - 1, "‹ Previous", p.page > 1)}
       ${pageWindow(p.page, p.pages)
         .map((n) =>
@@ -760,49 +763,17 @@ function num(id: string, label: string, value: number | null, max: number): stri
 }
 
 /**
- * The advanced panel. Multi-selects rather than checkbox walls: there are
- * 47 clans and 110 sets, and a wall of 110 checkboxes is a screen nobody
- * reads. Each one says how many are chosen in its own label, because a
- * collapsed multi-select otherwise hides the filter that is making the
- * results look wrong.
+ * Sort by, and the direction beside it when the sort has one.
+ *
+ * OUTSIDE the advanced panel (owner request, 2026-09-25): the order the
+ * results come in is not a filter, and a sort you cannot see is a list
+ * that looks shuffled. It sits on the right of the advanced row, under
+ * the Grid/List toggle, whether or not the panel is open.
  */
-export function filtersMarkup(q: CardQuery, f: Facets, open: boolean): string {
-  const count = (n: number): string => (n > 0 ? ` <span class="csn">${n}</span>` : "");
-  if (!open) {
-    return `<div class="row csadvrow">
-      <button id="cs-adv" class="csadv">Advanced search ▾</button>
-      ${filtersAreDefault(q) ? "" : `<button id="cs-reset">Clear filters</button>`}
-    </div>`;
-  }
+export function sortMarkup(q: CardQuery): string {
   return `
-    <div class="row csadvrow">
-      <button id="cs-adv" class="csadv open">Advanced search ▴</button>
-      ${filtersAreDefault(q) ? "" : `<button id="cs-reset">Clear filters</button>`}
-    </div>
-    <div class="csfilters">
-      <label class="csfield"><span>Pile</span>
-        <select id="cs-pile">
-          <option value="any"${q.pile === "any" ? " selected" : ""}>Any</option>
-          <option value="crypt"${q.pile === "crypt" ? " selected" : ""}>Crypt</option>
-          <option value="library"${q.pile === "library" ? " selected" : ""}>Library</option>
-        </select></label>
-
-      <label class="csfield"><span>Search in</span>
-        <select id="cs-scope">
-          <option value="any"${q.scope === "any" ? " selected" : ""}>Name and text</option>
-          <option value="name"${q.scope === "name" ? " selected" : ""}>Name only</option>
-          <option value="text"${q.scope === "text" ? " selected" : ""}>Card text only</option>
-        </select></label>
-
-      <label class="csfield"><span>In this player</span>
-        <select id="cs-status">
-          <option value="any"${q.status === "any" ? " selected" : ""}>Any</option>
-          <option value="playable"${q.status === "playable" ? " selected" : ""}>Playable here</option>
-          <option value="absent"${q.status === "absent" ? " selected" : ""}>Not added yet</option>
-          <option value="pool"${q.status === "pool" ? " selected" : ""}>Partly implemented</option>
-        </select></label>
-
-      <label class="csfield"><span>Sort by</span>
+    <div class="cssort">
+      <label class="cssortfield"><span>Sort by</span>
         <select id="cs-sort">
           <option value="name"${q.sort === "name" ? " selected" : ""}>Name</option>
           <option value="capacity"${q.sort === "capacity" ? " selected" : ""}>Capacity</option>
@@ -810,62 +781,119 @@ export function filtersMarkup(q: CardQuery, f: Facets, open: boolean): string {
           <option value="newest"${q.sort === "newest" ? " selected" : ""}>Newest set</option>
           <option value="oldest"${q.sort === "oldest" ? " selected" : ""}>Oldest set</option>
         </select></label>
-
       ${
         // Only for the sorts it means something for. Offering it beside
         // "Oldest set" would be offering the same choice twice and
         // letting the two contradict each other.
         SORTS_WITH_DIRECTION.includes(q.sort)
-          ? `<label class="csfield"><span>Order</span>
-               <select id="cs-sortdir">
-                 <option value="asc"${q.sortDir === "asc" ? " selected" : ""}>
-                   Lowest first
-                 </option>
-                 <option value="desc"${q.sortDir === "desc" ? " selected" : ""}>
-                   Highest first
-                 </option>
-               </select></label>`
+          ? `<select id="cs-sortdir" aria-label="Order">
+               <option value="asc"${q.sortDir === "asc" ? " selected" : ""}>Lowest first</option>
+               <option value="desc"${q.sortDir === "desc" ? " selected" : ""}>Highest first</option>
+             </select>`
           : ""
       }
+    </div>`;
+}
 
-      <label class="csfield wide"><span>Type${count(q.types.length)}</span>
-        <select id="cs-types" multiple size="6">${options(f.types, q.types)}</select></label>
-
-      <label class="csfield wide"><span>Clan${count(q.clans.length)}</span>
-        <select id="cs-clans" multiple size="6">${options(f.clans, q.clans)}</select></label>
-
-      <label class="csfield wide"><span>Discipline${count(q.disciplines.length)}</span>
-        <select id="cs-disc" multiple size="6">
-          ${options(f.disciplines, q.disciplines, disciplineName)}
-        </select></label>
-
-      <label class="csfield"><span>Discipline match</span>
-        <select id="cs-discmode">
-          <option value="any"${q.disciplineMode === "any" ? " selected" : ""}>Any of them</option>
-          <option value="all"${q.disciplineMode === "all" ? " selected" : ""}>All of them</option>
-        </select></label>
-
-      <label class="csfield"><span>Sect${count(q.sects.length)}</span>
-        <select id="cs-sects" multiple size="5">${options(f.sects, q.sects)}</select></label>
-
-      <label class="csfield"><span>Title${count(q.titles.length)}</span>
-        <select id="cs-titles" multiple size="5">${options(f.titles, q.titles)}</select></label>
-
-      <label class="csfield"><span>Group${count(q.groups.length)}</span>
-        <select id="cs-groups" multiple size="5">${options(f.groups, q.groups)}</select></label>
-
-      <label class="csfield wide"><span>Set${count(q.sets.length)}</span>
-        <select id="cs-sets" multiple size="6">${options(f.sets, q.sets)}</select></label>
-
-      <div class="csrange">
-        <span class="cslabel">Capacity</span>
-        ${num("cs-capmin", "from", q.capacityMin, f.capacityMax)}
-        ${num("cs-capmax", "to", q.capacityMax, f.capacityMax)}
+/**
+ * The advanced panel. Multi-selects rather than checkbox walls: there are
+ * 47 clans and 110 sets, and a wall of 110 checkboxes is a screen nobody
+ * reads. Each one says how many are chosen in its own label, because a
+ * collapsed multi-select otherwise hides the filter that is making the
+ * results look wrong.
+ *
+ * NINE GROUPS, in reading order, so the same markup lays out as a 3×3 in
+ * the builder's narrow column and as a row of fitted columns on the Card
+ * search tab (the CSS decides which): the general questions first, then
+ * what a card IS (type, clan, discipline), then who can use it (sect,
+ * title), then where it was printed and the crypt numbers.
+ */
+export function filtersMarkup(q: CardQuery, f: Facets, open: boolean): string {
+  const count = (n: number): string => (n > 0 ? ` <span class="csn">${n}</span>` : "");
+  const head = `
+    <div class="row csadvrow">
+      <button id="cs-adv" class="csadv${open ? " open" : ""}">Advanced search ${open ? "▴" : "▾"}</button>
+      ${filtersAreDefault(q) ? "" : `<button id="cs-reset">Clear filters</button>`}
+      ${sortMarkup(q)}
+    </div>`;
+  if (!open) return head;
+  return `${head}
+    <div class="csfilters">
+      <div class="csgroup">
+        <label class="csfield"><span>Pile</span>
+          <select id="cs-pile">
+            <option value="any"${q.pile === "any" ? " selected" : ""}>Any</option>
+            <option value="crypt"${q.pile === "crypt" ? " selected" : ""}>Crypt</option>
+            <option value="library"${q.pile === "library" ? " selected" : ""}>Library</option>
+          </select></label>
+        <label class="csfield"><span>Search in</span>
+          <select id="cs-scope">
+            <option value="any"${q.scope === "any" ? " selected" : ""}>Name and text</option>
+            <option value="name"${q.scope === "name" ? " selected" : ""}>Name only</option>
+            <option value="text"${q.scope === "text" ? " selected" : ""}>Card text only</option>
+          </select></label>
+        <label class="csfield"><span>In this player</span>
+          <select id="cs-status">
+            <option value="any"${q.status === "any" ? " selected" : ""}>Any</option>
+            <option value="playable"${q.status === "playable" ? " selected" : ""}>Playable here</option>
+            <option value="absent"${q.status === "absent" ? " selected" : ""}>Not added yet</option>
+            <option value="pool"${q.status === "pool" ? " selected" : ""}>Partly implemented</option>
+          </select></label>
       </div>
-      <div class="csrange">
-        <span class="cslabel">Cost</span>
-        ${num("cs-costmin", "from", q.costMin, f.costMax)}
-        ${num("cs-costmax", "to", q.costMax, f.costMax)}
+
+      <div class="csgroup">
+        <label class="csfield"><span>Type${count(q.types.length)}</span>
+          <select id="cs-types" multiple size="7">${options(f.types, q.types)}</select></label>
+      </div>
+
+      <div class="csgroup">
+        <label class="csfield"><span>Clan${count(q.clans.length)}</span>
+          <select id="cs-clans" multiple size="7">${options(f.clans, q.clans)}</select></label>
+      </div>
+
+      <div class="csgroup">
+        <label class="csfield"><span>Discipline${count(q.disciplines.length)}</span>
+          <select id="cs-disc" multiple size="5">
+            ${options(f.disciplines, q.disciplines, disciplineName)}
+          </select></label>
+        <label class="csfield"><span>Discipline match</span>
+          <select id="cs-discmode">
+            <option value="any"${q.disciplineMode === "any" ? " selected" : ""}>Any of them</option>
+            <option value="all"${q.disciplineMode === "all" ? " selected" : ""}>All of them</option>
+          </select></label>
+      </div>
+
+      <div class="csgroup">
+        <label class="csfield"><span>Sect${count(q.sects.length)}</span>
+          <select id="cs-sects" multiple size="7">${options(f.sects, q.sects)}</select></label>
+      </div>
+
+      <div class="csgroup">
+        <label class="csfield"><span>Title${count(q.titles.length)}</span>
+          <select id="cs-titles" multiple size="7">${options(f.titles, q.titles)}</select></label>
+      </div>
+
+      <div class="csgroup csgroup-set">
+        <label class="csfield"><span>Set${count(q.sets.length)}</span>
+          <select id="cs-sets" multiple size="7">${options(f.sets, q.sets)}</select></label>
+      </div>
+
+      <div class="csgroup">
+        <label class="csfield"><span>Group${count(q.groups.length)}</span>
+          <select id="cs-groups" multiple size="7">${options(f.groups, q.groups)}</select></label>
+      </div>
+
+      <div class="csgroup">
+        <div class="csrange">
+          <span class="cslabel">Capacity</span>
+          ${num("cs-capmin", "from", q.capacityMin, f.capacityMax)}
+          ${num("cs-capmax", "to", q.capacityMax, f.capacityMax)}
+        </div>
+        <div class="csrange">
+          <span class="cslabel">Cost</span>
+          ${num("cs-costmin", "from", q.costMin, f.costMax)}
+          ${num("cs-costmax", "to", q.costMax, f.costMax)}
+        </div>
       </div>
     </div>`;
 }
