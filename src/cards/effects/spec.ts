@@ -526,6 +526,12 @@ export type EffectPrimitive =
       burnWhenBearerLeavesReady?: boolean;
       /** "Burn this card during your unlock phase" (Khabar: Glory). */
       burnAtControllerUnlock?: boolean;
+      /** "Once each turn, when this vampire successfully hunts, they gain N
+       *  additional blood" (Harvest Rites) — an attached hunt trigger, which
+       *  is the card that found the `onHuntSuccess` dispatch reading seat
+       *  permanents only. `oncePerTurn` is the printed limit, latched on the
+       *  entry. docs/hunt-payouts-design.md §4 */
+      huntBonusBlood?: { amount: number; oncePerTurn?: boolean };
       /** "If your prey is ousted, you gain N additional pool"
        *  (Khabar: Glory) — read on the `onSeatOusted` hook, the only
        *  moment `preyOf(controller)` still names the seat going out. */
@@ -2945,6 +2951,35 @@ export interface CardSpec {
      *  (Hunger Moon) — any vampire's hunt, not just the controller's.
      *  docs/events-design.md §2 */
     huntTax?: { blood: number; burnAt: number };
+    /**
+     * "LOCK to give a vampire who successfully hunts an additional blood from
+     * the blood bank" (Inbase Discotek, Frankfurt) / "LOCK WHEN an anarch
+     * ANNOUNCES a hunting action. If that action is successful, the anarch
+     * gains an additional blood" (Hospital Food).
+     *
+     * The same blood for the same lock, bought at two different MOMENTS —
+     * which is the whole reason these two cards are one wave. `when` is a
+     * named value rather than a boolean because the difference is not
+     * "earlier or later" but what the lock BUYS: a certainty or a bet.
+     * docs/hunt-payouts-design.md §2
+     */
+    huntBlood?: {
+      amount: number;
+      /** `"success"` is offered once the hunt has resolved successfully, so
+       *  the lock is never wasted; `"announce"` is offered at announcement,
+       *  before anyone has decided whether to block, and pays only if the
+       *  hunt then succeeds. */
+      when: "announce" | "success";
+      /** "…when an ANARCH announces a hunting action" — the HUNTER's sect,
+       *  not the controller's. Any seat's hunter qualifies: both cards say
+       *  "a vampire" / "an anarch", never "you control". */
+      sect?: Sect;
+    };
+    /** "During your unlock phase, burn this card" (Festivo dello Estinto) —
+     *  the seat-permanent twin of `attachSelf.burnAtControllerUnlock`, and
+     *  both go through the one `onControllerUnlock` burn so the rule cannot
+     *  be honoured in one place and not the other. §5 */
+    burnAtControllerUnlock?: boolean;
     retainerAbilities?: {
       /** "If this \<sect\> is blocked, they can burn N life from this
        *  retainer BEFORE BLOCK RESOLUTION to lock the blocking minion and

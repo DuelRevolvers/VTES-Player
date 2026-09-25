@@ -557,7 +557,14 @@ export function openHandsFor(state: GameState, viewer: SeatId): SeatId[] {
 export function auraBonus(
   state: GameState,
   minion: MinionState,
-  key: "strength" | "bleedStealth" | "maneuverPerCombat" | "bleed" | "hunt" | "votes",
+  key:
+    | "strength"
+    | "bleedStealth"
+    | "huntStealth"
+    | "maneuverPerCombat"
+    | "bleed"
+    | "hunt"
+    | "votes",
 ): number {
   let total = 0;
   const apply = (entry: PermanentInPlay, holder: SeatId): void => {
@@ -599,13 +606,26 @@ export function auraBonus(
  * applies to every hunt they make. docs/blood-locations-design.md §4
  */
 export function huntAmountFor(state: GameState, minion: MinionState): number {
-  // Two sources, and they are different questions: an AURA radiates onto
-  // other minions ("Sabbat vampires you control get +1 hunt"), while a
-  // STATIC sits on a card attached to this minion and applies to it alone
-  // (Aaron's Feeding Razor). Equipment cannot use the aura — an unfiltered
-  // one would feed every minion at the table.
+  // "…gain enough blood from the blood bank to reach FULL CAPACITY" (Festivo
+  // dello Estinto). It answers the same question with a different shape, so
+  // it is folded HERE rather than bolted onto the hunt payout: every reader
+  // of the hunt amount — the option label, `huntGain`, the AI — gets the
+  // right number without knowing this card exists.
+  // docs/hunt-payouts-design.md §3
+  //
+  // Two sources for the BONUS, and they are different questions: an AURA
+  // radiates onto other minions ("Sabbat vampires you control get +1 hunt"),
+  // while a STATIC sits on a card attached to this minion and applies to it
+  // alone (Aaron's Feeding Razor). Equipment cannot use the aura — an
+  // unfiltered one would feed every minion at the table.
   const attached = minion.attached.reduce((n, p) => n + (p.statics.hunt ?? 0), 0);
-  return 1 + auraBonus(state, minion, "hunt") + attached;
+  const base = 1 + auraBonus(state, minion, "hunt") + attached;
+  // The fill and a "+N hunt" are two effects both saying "gains blood", so
+  // the LARGER wins rather than one silently replacing the other.
+  if (auraFillsHunt(state, minion)) {
+    return Math.max(base, capacityOf(minion) - minion.blood);
+  }
+  return base;
 }
 
 /**
@@ -826,6 +846,13 @@ export function currentStealth(state: GameState, actionId: ActionId): number {
       if (announced.actionKind === "bleed") {
         stealth += auraBonus(state, acting, "bleedStealth");
       }
+      // "Sabbat vampires get −1 stealth during HUNT actions" (Festivo dello
+      // Estinto) — written beside its sibling on purpose, and signed: this is
+      // the first aura that makes an action EASIER to block.
+      // docs/hunt-payouts-design.md §3
+      if (announced.actionKind === "hunt") {
+        stealth += auraBonus(state, acting, "huntStealth");
+      }
     }
   }
   return stealth;
@@ -838,7 +865,7 @@ export function currentStealth(state: GameState, actionId: ActionId): number {
 /** "<clan> … do not hunt as normal" (Week of Nightmares) — an aura that
  *  takes the hunt action away rather than modifying it. */
 export function auraBlocksHunt(state: GameState, minion: MinionState): boolean {
-  return auraBlocks(state, minion, "cannotHunt");
+  return auraFlag(state, minion, "cannotHunt");
 }
 
 /** "Primogen cannot attempt political actions" (Beyond Reproach) — the
@@ -846,13 +873,23 @@ export function auraBlocksHunt(state: GameState, minion: MinionState): boolean {
  *  helper rather than beside it: the pair above and below this one drifted
  *  by exactly one filter the last time they were copied. */
 export function auraBlocksPolitical(state: GameState, minion: MinionState): boolean {
-  return auraBlocks(state, minion, "cannotActPolitical");
+  return auraFlag(state, minion, "cannotActPolitical");
 }
 
-function auraBlocks(
+/** "Sabbat vampires successfully hunting gain enough blood from the blood
+ *  bank to reach full capacity" (Festivo dello Estinto) — the first POSITIVE
+ *  reader of this helper, which is why it is no longer called `auraBlocks`:
+ *  what it answers is "does a filtered aura set this flag for this minion",
+ *  and the sect and clan filters are the whole point.
+ *  docs/hunt-payouts-design.md §3 */
+export function auraFillsHunt(state: GameState, minion: MinionState): boolean {
+  return auraFlag(state, minion, "huntFill");
+}
+
+function auraFlag(
   state: GameState,
   minion: MinionState,
-  key: "cannotHunt" | "cannotActPolitical",
+  key: "cannotHunt" | "cannotActPolitical" | "huntFill",
 ): boolean {
   for (const seat of state.seats) {
     for (const p of seat.permanents) {

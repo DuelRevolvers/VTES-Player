@@ -6,7 +6,7 @@
  * in config/supported.json (CLAUDE.md registry rules).
  */
 
-import type { CardHandler, ConditionalStatic, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
+import type { CardHandler, ConditionalStatic, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
 import { blockEligibleSeats, canAct, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
 import {
   allocToParams,
@@ -10904,6 +10904,149 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
 
+  // --- The blood hunt (docs/blood-hunt-answers-design.md) ---
+  // Three cards on one referendum: this one tilts the VOTE, and the two
+  // bespoke handlers beside Sudden Reversal answer the VERDICT.
+  {
+    // "Unique Master.
+    //  Put this card on any ready vampire. This vampire gets +1 stealth when
+    //  attempting to commit diablerie. This vampire may not cast votes or
+    //  ballots during a referendum to call a blood hunt on this vampire."
+    //
+    // Both clauses help the bearer's OWNER at one moment and hurt them at
+    // another, which is why it goes on "any ready vampire": it is as much a
+    // weapon to hand an opponent's diablerist as a gift to your own.
+    krcgId: 100946,
+    name: "The Hunt Club",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {
+        cannotCastVotesInOwnBloodHunt: true,
+        // "+1 stealth when attempting to commit diablerie" — the existing
+        // conditional, the same one Depravity uses. Conditionals live INSIDE
+        // `statics`, not beside it.
+        conditional: [{ stealth: 1, actionKinds: ["diablerize"] }],
+      },
+      tags: ["The Hunt Club"],
+      // "Put this card on ANY ready vampire" — including another
+      // Methuselah's, and the card still answers to whoever played it (p. 16).
+      attach: { scope: "any", kind: "vampire" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- The hunt payout (docs/hunt-payouts-design.md) ---
+  // Four cards that all put one more blood on a successful hunt, and differ in
+  // everything else: WHO pays (a lock, a card slot, a card in play), WHEN the
+  // payer commits (announcement or resolution), WHOSE hunt it is, and how much.
+  // The hunt is the one built-in action nothing in the pool bent until now.
+  {
+    // "Master: unique location. Requires a ready anarch.
+    //  Lock when an anarch announces a hunting action. If that action is
+    //  successful, the anarch gains an additional blood."
+    //
+    // "LOCK WHEN … ANNOUNCES": the lock is spent before anyone decides whether
+    // to block, so a blocked hunt costs the location for nothing. That is the
+    // card's price and the reason it is free (§2).
+    krcgId: 100938,
+    name: "Hospital Food",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    requiresControlledSect: ["anarch"],
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      huntBlood: { amount: 1, when: "announce", sect: "anarch" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location.
+    //  Lock to give a vampire who successfully hunts an additional blood from
+    //  the blood bank. (Ignore excess blood.)"
+    //
+    // The control for Hospital Food: same blood, same lock, but bought AFTER
+    // the hunt has succeeded, so it is never wasted — which is what the 2 pool
+    // buys. "(Ignore excess blood.)" is a parenthetical DESCRIBING p. 6 rather
+    // than asking for anything: excess always drains to the bank (§2).
+    krcgId: 100968,
+    name: "Inbase Discotek, Frankfurt",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      huntBlood: { amount: 1, when: "success" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Only one Festivo dello Estinto can be played in a game.
+    //  Put this card in play. Sabbat vampires get -1 stealth during hunt
+    //  actions. Sabbat vampires successfully hunting gain enough blood from the
+    //  blood bank to reach full capacity. During your unlock phase, burn this
+    //  card."
+    //
+    // A GLOBAL aura, not "you control": it feeds every Sabbat vampire at the
+    // table and makes every one of them easier to block, including the player's
+    // own. One turn of it, then it burns itself (§3).
+    krcgId: 100723,
+    name: "Festivo dello Estinto",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    oncePerGameByName: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["Festivo dello Estinto"],
+      aura: { scope: "global", sect: "sabbat", huntStealth: -1, huntFill: true },
+      burnAtControllerUnlock: true,
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "+1 stealth action. Requires a Sabbat vampire.
+    //  Put this card on this vampire. Once each turn, when this vampire
+    //  successfully hunts, they gain 1 additional blood. A vampire can have
+    //  only one Harvest Rites."
+    //
+    // The only one of the four that is ATTACHED, and so the only one that could
+    // not work at all: `onHuntSuccess` was dispatched over seat permanents
+    // alone (§5).
+    krcgId: 100889,
+    name: "Harvest Rites",
+    cardType: "action",
+    bloodCost: 1,
+    requiresSect: ["sabbat"],
+    permanent: { where: "bearer", statics: {}, tags: ["Harvest Rites"], exclusiveKey: "Harvest Rites" },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "attachSelf", huntBonusBlood: { amount: 1, oncePerTurn: true } },
+        ],
+      },
+    ],
+  },
+
   // --- Choosing a minion (docs/choosing-a-minion-design.md) ---
   // Three directed actions that each pick a minion at announcement. The payoffs
   // differ (unlock, lock, damage) but so do the FILTERS, and the filter is the
@@ -18307,6 +18450,130 @@ const theCoven: CardHandler = {
   },
 };
 
+/**
+ * The two answers to a blood hunt that has already passed
+ * (docs/blood-hunt-answers-design.md).
+ *
+ * Both are bespoke for the same reason Sudden Reversal is: their window is the
+ * after-resolution impulse of a REFERENDUM, which no spec shape covers — the
+ * one `afterReferendumPassed` rule that reaches that window is written for the
+ * caller's own payout (Voter Captivation) and asks for a `callingMinion`, and a
+ * blood hunt has neither a caller who wants it nor a calling card at all.
+ *
+ *   Absolution of the Diabolist  "Master: out-of-turn. Requires a ready
+ *                                justicar or Inner Circle member. This card is
+ *                                playable during your minion phase. Only usable
+ *                                when a vampire is about to be burned by a blood
+ *                                hunt. Cancel that blood hunt."
+ *   Lay Low                      "Requires an anarch. Only usable when a blood
+ *                                hunt referendum passes and would burn this
+ *                                anarch. Move this anarch to the uncontrolled
+ *                                region (breaking any temporary control
+ *                                effects). Any cards and counters on this
+ *                                vampire remain with him or her (but are out of
+ *                                play as long as the vampire remains
+ *                                uncontrolled)."
+ *
+ * "About to be burned" is one moment, and the engine already had it: the
+ * after-resolution step of a passed referendum runs BEFORE the effect is
+ * applied (§2).
+ */
+function bloodHuntVictim(ctx: PlayContext): MinionState | null {
+  const rf = ctx.referendum;
+  if (!rf || rf.variant !== "bloodHunt" || rf.passed !== true) return null;
+  if (rf.step !== "afterResolution" || rf.bloodHuntCanceled === true) return null;
+  // TOTAL read: an effect earlier in this same impulse can have removed them,
+  // and then there is nothing to save.
+  return rf.bloodHuntTarget ? findMinion(ctx.state, rf.bloodHuntTarget) : null;
+}
+
+const absolutionOfTheDiabolist: CardHandler = {
+  name: "Absolution of the Diabolist",
+  bloodCost: 0,
+  poolCost: 1,
+  isMasterCard: true,
+  isOutOfTurnMaster: true,
+  playEffects: () => [{ tag: "deny" }],
+  options(card, ctx) {
+    if (ctx.window !== "referendum.afterResolution") return [];
+    const victim = bloodHuntVictim(ctx);
+    if (!victim) return [];
+    const seat = getSeat(ctx.state, ctx.seat);
+    if (seat.pool < 1) return [];
+    // The out-of-turn master budget (p. 8), the same gate Sudden Reversal
+    // uses — but NOT Sudden Reversal's "another Methuselah's turn only":
+    // "this card is playable during your minion phase" is the card buying
+    // itself out of exactly that restriction.
+    if (seat.outOfTurnMasterUsed) return [];
+    // "Requires a ready justicar or Inner Circle member" — one you control,
+    // and READY: the requirement is about who can grant absolution, not about
+    // who is being burned, so it is never the victim.
+    const ok = seat.minions.some(
+      (m) =>
+        m.kind === "vampire" &&
+        isReady(m) &&
+        (m.title === "justicar" || m.title === "innerCircle"),
+    );
+    if (!ok) return [];
+    return [
+      {
+        id: playOptionId(this.name, null, card.id),
+        kind: "playCard",
+        label: `Absolution of the Diabolist — cancel the blood hunt on ${victim.name}`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: {},
+      },
+    ];
+  },
+  resolve(_play, ops) {
+    ops.cancelBloodHunt();
+  },
+};
+
+const layLow: CardHandler = {
+  name: "Lay Low",
+  bloodCost: 1,
+  // Printed "Action Modifier / Combat" though it acts in a REFERENDUM window,
+  // and the printed types still matter: a card that answers no type is
+  // invisible to every play-cost modifier and every card that filters by type
+  // (the Hide the Mind note, and `central-queries.test.ts` enforces it).
+  costTypes: () => ["actionModifier", "combat"],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "referendum.afterResolution") return [];
+    const victim = bloodHuntVictim(ctx);
+    // "…would burn THIS anarch": the card is played BY the victim, so the
+    // option belongs to its controller and to nobody else.
+    if (!victim || victim.controller !== ctx.seat) return [];
+    if (victim.kind !== "vampire" || victim.sect !== "anarch") return [];
+    if (victim.blood < 1) return []; // the card costs the anarch 1 blood
+    return [
+      {
+        id: playOptionId(this.name, victim.id, card.id),
+        kind: "playCard",
+        label: `Lay Low — ${victim.name} goes uncontrolled instead of burning`,
+        card: card.id,
+        name: this.name,
+        minion: victim.id,
+        mode: null,
+        params: {},
+      },
+    ];
+  },
+  resolve(play, ops) {
+    const m = play.minion ? findMinion(ops.state, play.minion) : null;
+    if (!m) return;
+    // Banishment's event, and everything the card's parentheses promise is
+    // already what it does: blood becomes counters, attached cards travel with
+    // the vampire and are out of play, and the vampire lands in its OWNER's
+    // uncontrolled region — which IS "breaking any temporary control effects".
+    ops.emit({ type: "MovedToUncontrolled", seat: m.controller, minion: m.id });
+  },
+};
+
 const suddenReversal: CardHandler = {
   name: "Sudden Reversal",
   playEffects: () => [{ tag: "deny" }],
@@ -22654,6 +22921,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     anarchTroublemaker,
     theCoven,
     suddenReversal,
+    absolutionOfTheDiabolist,
+    layLow,
     hideTheMind,
     warsawStation,
     guardianAngel,
@@ -22756,4 +23025,6 @@ export const implementedIds: number[] = [
   100303, // Carver's Meat Packing and Storage (bespoke — hostage counters)
   102166, // Week of Nightmares (bespoke — game-wide unique, nightmare counters)
   100921, // Hide the Mind (bespoke — cancel by required discipline)
+  100012, // Absolution of the Diabolist (bespoke — referendum after-resolution)
+  101075, // Lay Low (bespoke — referendum after-resolution)
 ];

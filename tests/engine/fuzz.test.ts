@@ -863,6 +863,25 @@ function fourSeatGame(seed: number): GameState {
     "Legal Manipulations",
     "Media Influence",
     "Flurry of Action",
+    // The hunt payout (docs/hunt-payouts-design.md, wave 88). The first cards
+    // in the decks that bend the built-in HUNT, and the fuzz is what exercises
+    // the part a scenario test fixes in place: a hunt that is blocked after the
+    // lock was already spent, a Sabbat vampire filled to capacity (so the
+    // blood-conservation replay has to agree about excess draining to the
+    // bank), and an aura that makes a hunt easier to block.
+    "Hospital Food",
+    "Inbase Discotek, Frankfurt",
+    "Festivo dello Estinto",
+    "Harvest Rites",
+    // The blood hunt (docs/blood-hunt-answers-design.md, wave 89). The fuzz
+    // DIABLERIZES, so the blood hunt is one of the few referendums it reaches
+    // on its own — and these three fire inside its after-resolution impulse,
+    // where a vampire can be saved from a burn the log has already announced.
+    // Lay Low is the fuzz's first mid-referendum move to the uncontrolled
+    // region, which the pool/blood conservation replay has to agree with.
+    "The Hunt Club",
+    "Absolution of the Diabolist",
+    "Lay Low",
     // Choosing a minion (docs/choosing-a-minion-design.md, wave 87). Each picks
     // a minion at announcement, and the fuzz is what walks the gap between the
     // choice and the resolution: the named minion can be burned, torpored or

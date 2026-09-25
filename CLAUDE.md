@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 297 test files, 3173 tests**, with `npm run typecheck`,
+**Green baseline: 299 test files, 3201 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -470,9 +470,12 @@ doc named beside it.
 - **A CLAN ICON on a minion card is a REQUIREMENT (p. 10)** and KRCG's
   text does not repeat it. Registry `clans` non-empty on a minion-type
   card ⇒ `requiresClans()` non-empty. Masters are the exception.
-- **The registry's clan names are not the card's.** Text says Assamite and
-  Follower of Set; the registry says Banu Haqim and Ministry. A filter
-  spelled from the card text matches nothing, silently.
+- **The registry's clan names are not the card's** — and neither are its CARD
+  names. Text says Assamite and Follower of Set; the registry says Banu Haqim
+  and Ministry. KRCG prints "Hunt Club, The"; the registry says "The Hunt
+  Club". A filter or a spec name spelled from the card text matches nothing;
+  `supported.test.ts` is what catches the name
+  (`blood-hunt-answers-design.md` §4).
 - **A set derived from "the registry" has to name its card KIND.** A
   library card's clan is an ICON, not a vampire; the two sets stopped
   being equal when the legacy library arrived.
@@ -529,6 +532,15 @@ doc named beside it.
   `params.targetMinion`. Teach only the first and every option enumerates
   perfectly while every payoff silently does nothing
   (`choosing-a-minion-design.md` §5).
+- **A NEW `permanent` CLAUSE MUST BE ADDED TWICE** — to the destructure AND
+  to the long negated guard that decides whether `addLocationAbilities`
+  installs an enumerator at all. One of two means the card compiles,
+  typechecks, enters play and offers nothing (`hunt-payouts-design.md` §5).
+- **A SPEC FIELD WITH NO READER IS A PARTIAL CARD NO TEST CAN SEE**, because
+  nothing fails when a field is merely ignored. `burnInUnlockPhase` was
+  declared and never read, so Shadow Cloak never burned itself. When two
+  clauses spell the same rule, make them call one helper
+  (`hunt-payouts-design.md` §5).
 - **When you add a hook to a FAMILY, re-read the SIBLINGS** — they were
   written at different times and they do not agree. Same for option
   enumerators (`meetsRequirements` has been forgotten four times), for
@@ -884,7 +896,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-205 files under `docs/`, one per mechanic that took a decision. **Read the
+208 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -909,12 +921,12 @@ rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pa
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
-choosing-a-minion.
+choosing-a-minion, hunt-payouts.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,
 acting-minion-reactions, politics, abstain-gate, politics-followups,
-polling-votes, ballots, politics-locations, referendum-terms,
+polling-votes, ballots, politics-locations, referendum-terms, blood-hunt-answers,
 referendum-margin.
 
 **Cards and economies:** blood-bank-actions, blood-banking-locations,

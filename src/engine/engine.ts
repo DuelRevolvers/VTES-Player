@@ -2037,6 +2037,12 @@ export class VtesEngine implements EngineOps {
       this.endTurn(tf);
       return true;
     }
+    // The discard phase's last replacement draw has been answered.
+    if (tf.endTurnWhenSurfaced) {
+      delete tf.endTurnWhenSurfaced;
+      this.endTurn(tf);
+      return true;
+    }
 
     if (tf.phase === "unlock") {
       if (!tf.unlockDone) {
@@ -2745,8 +2751,13 @@ export class VtesEngine implements EngineOps {
       return;
     }
     if (rf.variant === "bloodHunt") {
+      // "Cancel that blood hunt" (Absolution of the Diabolist), played in the
+      // after-resolution impulse above. docs/blood-hunt-answers-design.md §2
+      if (rf.bloodHuntCanceled) return;
       // A passed blood hunt burns the diablerist (p. 35) — if still in
-      // play (a mid-referendum effect could have removed them).
+      // play (a mid-referendum effect could have removed them). Lay Low is
+      // the first card to USE that guard: the anarch is in the uncontrolled
+      // region by now, so there is nobody to burn.
       if (rf.bloodHuntTarget && findMinion(this.state, rf.bloodHuntTarget)) {
         this.emit({ type: "BloodHuntCalled", diablerist: rf.bloodHuntTarget });
         this.burnMinion(rf.bloodHuntTarget);
@@ -3076,6 +3087,18 @@ export class VtesEngine implements EngineOps {
       // bar with no expiry, carried by a card on the vampire
       // (docs/pay-to-unlock-design.md §4).
       if (m.attached.some((p) => p.statics.cannotCastVotes)) continue;
+      // "This vampire may not cast votes or ballots during a referendum to
+      // call a blood hunt ON THIS VAMPIRE" (The Hunt Club) — the same bar,
+      // scoped to one referendum, so it is read HERE where the frame is in
+      // hand rather than as an unconditional static.
+      // docs/blood-hunt-answers-design.md §3
+      if (
+        rf.variant === "bloodHunt" &&
+        rf.bloodHuntTarget === m.id &&
+        m.attached.some((p) => p.statics.cannotCastVotesInOwnBloodHunt)
+      ) {
+        continue;
+      }
       // "Non-<sect> vampires cannot cast votes or ballots" (p. 28).
       if (rf.voteRestriction && m.sect !== rf.voteRestriction.sect) continue;
       // "+2 votes when casting votes AGAINST blood hunt referendums"
@@ -7944,6 +7967,22 @@ export class VtesEngine implements EngineOps {
     af.afterResolutionUnlocks = [...(af.afterResolutionUnlocks ?? []), entry];
   }
 
+  /** "Cancel that blood hunt" (Absolution of the Diabolist).
+   *  docs/blood-hunt-answers-design.md §2 */
+  cancelBloodHunt(): void {
+    const rf = this.state.frames.find((f) => f.kind === "referendum");
+    if (rf?.kind !== "referendum" || rf.variant !== "bloodHunt") return;
+    rf.bloodHuntCanceled = true;
+  }
+
+  /** "…the anarch gains an additional blood" if the announced hunt succeeds
+   *  (Hospital Food). docs/hunt-payouts-design.md §2 */
+  addHuntBonusBlood(minion: MinionId, amount: number): void {
+    const af = this.action();
+    if (!af) return;
+    af.huntBonusBlood = [...(af.huntBonusBlood ?? []), { minion, amount }];
+  }
+
   private resolveAction(af: ActionFrame, success: boolean): void {
     this.deferChoices = true;
     try {
@@ -8101,14 +8140,24 @@ export class VtesEngine implements EngineOps {
           minion: af.acting,
           amount: hunter ? huntAmountFor(this.state, hunter) : 1,
         });
+        // "…gains an additional blood" bought at ANNOUNCEMENT (Hospital
+        // Food): registered when the location locked, paid only here, which
+        // is what makes the lock a commitment rather than a purchase.
+        // docs/hunt-payouts-design.md §2
+        for (const bonus of af.huntBonusBlood ?? []) {
+          this.emit({ type: "BloodGained", minion: bonus.minion, amount: bonus.amount });
+        }
         // Cards triggered by a successful hunt (The Anarch Free Press).
         // The mirror of onBleedSuccess above; reaching this branch IS the
         // success, since a blocked hunt never resolves.
+        //
+        // `allEntries()`, NOT `seat.permanents`: this loop read seat-level
+        // cards only, one line below a sibling that reads both, so an
+        // ATTACHED hunt trigger (Harvest Rites, and every crypt ability)
+        // never fired. docs/hunt-payouts-design.md §5
         const huntInfo = { actingMinion: af.acting, actingSeat: af.actingSeat };
-        for (const s of this.state.seats) {
-          for (const p of [...s.permanents]) {
-            this.registry[p.card.name]?.onHuntSuccess?.(p, { seat: s.id, minion: null }, huntInfo, this);
-          }
+        for (const { entry, owner } of this.allEntries()) {
+          this.registry[entry.card.name]?.onHuntSuccess?.(entry, owner, huntInfo, this);
         }
       } else if (af.actionKind === "leaveTorpor") {
         // Cost (2 blood) is paid at resolution, only on success (p. 24,
@@ -9843,7 +9892,12 @@ export class VtesEngine implements EngineOps {
           this.emit({ type: "PoolBurned", seat: tf.seat, amount: discardTax });
         }
         this.discardCard(tf.seat, option.card);
-        if ((tf.discardActionsLeft ?? 0) <= 0) this.endTurn(tf);
+        if ((tf.discardActionsLeft ?? 0) <= 0) {
+          // `endTurn` rewrites the TOP frame. If the replacement draw raised
+          // a choice, that is not this frame — wait for it to resolve.
+          if (this.top() === tf) this.endTurn(tf);
+          else tf.endTurnWhenSurfaced = true;
+        }
         return;
       }
       case "playCard":

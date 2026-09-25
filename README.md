@@ -155,11 +155,6 @@ To reach it faster: right-click `Play VTES.bat` > **Show more options** >
 Playing this way also writes a full log of each game into a `logs/` folder,
 which is handy for reporting a bug.
 
-## Playing online
-
-The published version runs on GitHub Pages. See
-[PUBLISHING.md](PUBLISHING.md) for how to put your own copy up. It is a
-plain static site: no server to run and nothing to pay for.
 
 ## Reporting a bug
 

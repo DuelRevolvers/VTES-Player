@@ -811,6 +811,16 @@ export interface EngineOps {
     cardName: string;
     cardId: CardInstanceId;
   }): void;
+  /** "Lock when an anarch announces a hunting action. If that action is
+   *  successful, the anarch gains an additional blood" (Hospital Food) — the
+   *  announcement-time sibling of the after-resolution payout, and the reason
+   *  the two hunt locations are one wave: same blood, different moment of
+   *  commitment. docs/hunt-payouts-design.md §2 */
+  addHuntBonusBlood(minion: MinionId, amount: number): void;
+  /** "Cancel that blood hunt" (Absolution of the Diabolist) — called from the
+   *  after-resolution impulse of a passed blood hunt, the one moment a vampire
+   *  is "about to be burned" by one. docs/blood-hunt-answers-design.md §2 */
+  cancelBloodHunt(): void;
   /** "+2 hand size until the end of the turn" (Dreams of the Sphinx),
    *  "this combat, you get +1 hand size" (Rage of Apedemak). The grant is
    *  recorded on the turn or combat frame whose lifetime it shares, so the

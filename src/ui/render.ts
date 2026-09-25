@@ -576,10 +576,10 @@ function seatMat(
           // is — and because a pile that costs its holder 1 pool every
           // unlock phase should be visible to the table.
           (seat.contested ?? []).length > 0
-            ? `<span class="pile contested"
-                     title="contested — face down and out of play; 1 pool each unlock phase (p. 17): ${esc(
-                       (seat.contested ?? []).map((c) => c.card.name).join(", "),
-                     )}">CONTESTED ${(seat.contested ?? []).length}</span>`
+            ? `<button class="pile contested opens" data-contested="${esc(seat.id)}"
+                     title="contested — face down and out of play; 1 pool each unlock phase (p. 17). Click to look">CONTESTED ${
+                       (seat.contested ?? []).length
+                     }</button>`
             : ""
         }
       </footer>
@@ -1473,6 +1473,45 @@ function ashPanel(state: GameState, seatId: string | null): string {
 }
 
 /**
+ * A seat's CONTESTED cards, as cards — the ash heap panel's shape.
+ *
+ * Public for the reason the pile's count is: everyone watched them go
+ * face down, and turning them over marks them out of play rather than
+ * hiding which card each is (p. 17).
+ */
+function contestedPanel(state: GameState, seatId: string | null): string {
+  if (!seatId) return "";
+  const seat = state.seats.find((s) => s.id === seatId);
+  if (!seat) return "";
+  const cards = (seat.contested ?? []).map((c) => c.card);
+  return `
+    <div class="scrim" id="contested-scrim"></div>
+    <div class="settings ashheap" id="contestedview" role="dialog" aria-label="Contested cards">
+      <header>
+        <h3>${esc(seat.id)}'s contested cards — ${cards.length} card${cards.length === 1 ? "" : "s"}</h3>
+        <button id="contested-close" title="Close">✕</button>
+      </header>
+      <section>
+        <p class="setnote">
+          Face down and <b>out of play</b> while the contest lasts. Their
+          controller pays 1 pool each unlock phase to keep contesting, or
+          yields (p. 17).
+        </p>
+        ${
+          cards.length === 0
+            ? `<p class="dim">Nothing contested.</p>`
+            : `<div class="cardgrid">${cards
+                .map(
+                  (c) => `<div class="gridcard">${cardImage(c.name, "small")}
+                    <span class="gcname">${esc(c.name)}</span></div>`,
+                )
+                .join("")}</div>`
+        }
+      </section>
+    </div>`;
+}
+
+/**
  * THE CARDS SET ASIDE ON ONE CARD IN PLAY (owner request, 2026-09-20).
  *
  * Shilmulo Tarot holds two cards out of play and says "you can look at
@@ -2218,6 +2257,8 @@ export interface RenderInput {
   /** The card in play whose SET-ASIDE cards are open, if any. View state:
    *  looking at them is not a move and never reaches the command log. */
   storeOpen?: string | null;
+  /** Whose CONTESTED cards are open, if any. View state, like `ashOpen`. */
+  contestedOpen?: string | null;
   /** Whether to offer Leave — false when there is nowhere to go back to. */
   canLeave: boolean;
   /** Whether to show the table chat — false when there is nobody to talk to
@@ -2421,6 +2462,7 @@ export function render(input: RenderInput): string {
     ${ashPanel(state, input.ashOpen)}
     ${deckPanel(state, input.deckOpen ?? null)}
     ${storePanel(state, input.storeOpen ?? null)}
+    ${contestedPanel(state, input.contestedOpen ?? null)}
     ${
       // Only ever over a decision this client may actually answer: the
       // same gate the buttons are behind, since the dialog IS a button.

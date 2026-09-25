@@ -36,6 +36,7 @@ import {
 import {
   cardDetailMarkup,
   DEFAULT_PAGE_SIZE,
+  builderDefaultQuery,
   emptyQuery,
   facetsOf,
   PAGE_SIZES,
@@ -117,6 +118,7 @@ import {
   howToPlayPanel,
 } from "./render.ts";
 import type { DeckSource, SeatConfig, TableConfig } from "./newgame.ts";
+import { deckLabel as labelForDeck } from "./newgame.ts";
 import {
   botSeats,
   buildTable,
@@ -233,7 +235,25 @@ export class Shell {
   private pointer = { x: 0, y: 0 };
   private catalogFacets: Facets | null = null;
   private catalogError = "";
-  private cardQuery: CardQuery = emptyQuery();
+  /**
+   * ONE QUERY PER TAB. The Build tab starts on "Playable here" — you are
+   * building a deck to play — while Card search starts on Any, because it
+   * exists to browse all 4,149 cards. Every reader goes through
+   * `cardQuery`, which picks the tab's own.
+   */
+  private searchTabQuery: CardQuery = emptyQuery();
+  private buildTabQuery: CardQuery = builderDefaultQuery();
+  private get cardQuery(): CardQuery {
+    return this.deckTab === "build" ? this.buildTabQuery : this.searchTabQuery;
+  }
+  private set cardQuery(q: CardQuery) {
+    if (this.deckTab === "build") this.buildTabQuery = q;
+    else this.searchTabQuery = q;
+  }
+  /** What "Clear filters" returns this tab to. */
+  private defaultCardQuery(): CardQuery {
+    return this.deckTab === "build" ? builderDefaultQuery() : emptyQuery();
+  }
   private cardView: CardView = "grid";
   private advancedOpen = false;
   /** The card whose detail panel is open, by KRCG id. */
@@ -1001,7 +1021,7 @@ export class Shell {
         </div>
         <div class="dbsearch">
           ${this.scopePanel(review)}
-          ${facets ? searchPanelMarkup(query, facets, this.advancedOpen, this.cardView) : ""}
+          ${facets ? searchPanelMarkup(query, facets, this.advancedOpen, this.cardView, builderDefaultQuery()) : ""}
           ${this.selectedCard() ? cardDetailMarkup(this.selectedCard()!) : ""}
           <div id="cs-results">${resultsMarkup(results, {
             view: this.cardView,
@@ -1765,11 +1785,7 @@ export class Shell {
     // A seat a guest holds is theirs: they brought that deck and that name.
     const remote = seat.kind === "remote";
     const deckLabel =
-      seat.deck === null
-        ? "choose a deck"
-        : seat.deck.kind === "precon"
-          ? `${seat.deck.name} — ${seat.deck.set}`
-          : "pasted deck list";
+      seat.deck === null ? "choose a deck" : labelForDeck(seat.deck);
     const hash = seatDeckHash(seat);
     return `
       <div class="seatbox ${isHost ? "host" : ""} ${remote ? "remote" : ""}" data-i="${i}">
@@ -2888,7 +2904,7 @@ export class Shell {
       // does NOT repaint, so a `const q` captured at wiring time holds
       // the text as it was before the person typed — and "clear filters"
       // would quietly put the old search back.
-      this.setCardQuery({ ...emptyQuery(), text: this.cardQuery.text });
+      this.setCardQuery({ ...this.defaultCardQuery(), text: this.cardQuery.text });
       this.paint();
     });
     this.on("#cs-grid", () => {
@@ -3456,7 +3472,12 @@ export class Shell {
     // anywhere downstream.
     this.on(".mydeck", (el) => {
       const deck = findDeck(el.dataset["deck"] ?? "");
-      if (deck) chooseDeck(seatAt(el), deck.source);
+      // The saved NAME rides along, so the seat says what it is.
+      if (deck)
+        chooseDeck(
+          seatAt(el),
+          deck.source.kind === "paste" ? { ...deck.source, name: deck.name } : deck.source,
+        );
     });
 
     this.on(".decksave", (el) => {
@@ -3885,8 +3906,7 @@ export class Shell {
     const out: Record<string, string> = {};
     for (const s of this.lobbyHost?.seats ?? this.table.seats) {
       if (!s.deck) continue;
-      out[s.name] =
-        s.deck.kind === "precon" ? `${s.deck.name} — ${s.deck.set}` : "a pasted deck list";
+      out[s.name] = labelForDeck(s.deck, "a pasted deck list");
     }
     return out;
   }

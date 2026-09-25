@@ -21,7 +21,7 @@ import { HeuristicAgent } from "../ai/heuristic.ts";
 import { addChat } from "../ui/chat.ts";
 import { DevServerSink, GameLog } from "../ui/gamelog.ts";
 import type { SeatConfig, TableConfig } from "../ui/newgame.ts";
-import { botSeats, buildTable, MAX_SEATS, seatDeckHash } from "../ui/newgame.ts";
+import { botSeats, buildTable, deckLabel, MAX_SEATS, seatDeckHash } from "../ui/newgame.ts";
 import { avatarProblem, colorProblem, nameProblem } from "../ui/profile.ts";
 import type { GameResult } from "../ui/results.ts";
 import { recordResult } from "../ui/results.ts";
@@ -370,12 +370,7 @@ export class LobbyHost {
       mine: guest?.seat === s.name,
       // A LABEL, never the list. What is in a deck is its owner's
       // business, and after the deal it is hidden information.
-      deck:
-        s.deck === null
-          ? null
-          : s.deck.kind === "precon"
-            ? `${s.deck.name} — ${s.deck.set}`
-            : "a pasted deck list",
+      deck: s.deck === null ? null : deckLabel(s.deck, "a pasted deck list"),
       // The fingerprint IS shared, and that is the point of it: it says
       // two decks are the same without saying what either contains.
       deckHash: seatDeckHash(s),
@@ -437,14 +432,7 @@ export class LobbyHost {
         this.table.seats.flatMap((s) =>
           s.deck === null
             ? []
-            : [
-                [
-                  s.name,
-                  s.deck.kind === "precon"
-                    ? `${s.deck.name} — ${s.deck.set}`
-                    : "a pasted deck list",
-                ] as const,
-              ],
+            : [[s.name, deckLabel(s.deck, "a pasted deck list")] as const],
         ),
       ),
     });

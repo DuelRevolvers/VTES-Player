@@ -56,6 +56,7 @@ import {
   findMinion,
   getMinion,
   getSeat,
+  huntAmountFor,
   isReady,
   playCostFor,
   untargetableBy,
@@ -6664,6 +6665,9 @@ function compileMasterCard(spec: CardSpec): CardHandler {
   // this card; burn it at M" (Hunger Moon). ANY vampire's hunt — the hook
   // fires for every card in play, and this one deliberately does not ask
   // whose minion it was. docs/events-design.md §2
+  // "During your unlock phase, burn this card" on a SEAT permanent (Festivo
+  // dello Estinto) — the same helper the two attached spellings use. §5
+  if (spec.permanent?.burnAtControllerUnlock) burnAtControllerUnlock(handler);
   const ht = spec.permanent?.huntTax;
   if (ht) {
     handler.onHuntSuccess = (entry, _owner, info, ops) => {
@@ -15001,6 +15005,25 @@ function addCombatAttachBehaviour(spec: CardSpec, handler: CardHandler): void {
  * it, for the reason `addLocationAbilities` records: a card can carry more
  * than one of these clauses.
  */
+/**
+ * "During your unlock phase, burn this card" — ONE implementation for the
+ * three spellings that ask for it: `attachSelf.burnAtControllerUnlock`
+ * (Khabar: Glory), `afterResolutionAttach.burnInUnlockPhase` (Shadow Cloak)
+ * and `permanent.burnAtControllerUnlock` (Festivo dello Estinto).
+ *
+ * The second of those had been declared in the spec and read NOWHERE, so
+ * Shadow Cloak sat on its vampire for the rest of the game — a partial card
+ * in the pool that no test could see, because nothing fails when a field is
+ * merely ignored. docs/hunt-payouts-design.md §5
+ */
+function burnAtControllerUnlock(handler: CardHandler): void {
+  const priorUnlock = handler.onControllerUnlock;
+  handler.onControllerUnlock = (entry, owner, ops) => {
+    priorUnlock?.(entry, owner, ops);
+    ops.burnPermanent(entry.card.id);
+  };
+}
+
 function addAttachedCardBehaviour(spec: CardSpec, handler: CardHandler): void {
   const eff = spec.modes
     .flatMap((m) => m.effects)
@@ -15010,6 +15033,14 @@ function addAttachedCardBehaviour(spec: CardSpec, handler: CardHandler): void {
   const unlockAbility = spec.modes
     .flatMap((m) => m.effects)
     .some((e) => e.kind === "lockCardToUnlockBearer");
+  // BEFORE the early return: an `afterResolutionAttach` card has no
+  // `attachSelf` effect, so Shadow Cloak left this function immediately and
+  // its printed "burn this card during your unlock phase" was never wired.
+  // docs/hunt-payouts-design.md §5
+  const burnsAtUnlock = spec.modes
+    .flatMap((m) => m.effects)
+    .some((e) => e.kind === "afterResolutionAttach" && e.burnInUnlockPhase === true);
+  if (burnsAtUnlock) burnAtControllerUnlock(handler);
   if (!eff && !unlockAbility) return;
 
   if (eff?.burnWhenBearerLeavesReady) {
@@ -15022,10 +15053,23 @@ function addAttachedCardBehaviour(spec: CardSpec, handler: CardHandler): void {
   }
   if (eff?.burnAtControllerUnlock) {
     // "Burn this card during your unlock phase" (Khabar: Glory).
-    const priorUnlock = handler.onControllerUnlock;
-    handler.onControllerUnlock = (entry, owner, ops) => {
-      priorUnlock?.(entry, owner, ops);
-      ops.burnPermanent(entry.card.id);
+    burnAtControllerUnlock(handler);
+  }
+  if (eff?.huntBonusBlood) {
+    // "Once each turn, when this vampire successfully hunts, they gain 1
+    // additional blood" (Harvest Rites) — the BEARER's hunt only, and a TOTAL
+    // read of the hunter, who can be gone by the time this fires.
+    // docs/hunt-payouts-design.md §4
+    const hb = eff.huntBonusBlood;
+    const priorHunt = handler.onHuntSuccess;
+    handler.onHuntSuccess = (entry, owner, info, ops) => {
+      priorHunt?.(entry, owner, info, ops);
+      if (owner.minion === null || owner.minion !== info.actingMinion) return;
+      if (hb.oncePerTurn && entry.usedThisTurn === true) return;
+      const hunter = findMinion(ops.state, info.actingMinion);
+      if (!hunter) return;
+      if (hb.oncePerTurn) entry.usedThisTurn = true;
+      ops.emit({ type: "BloodGained", minion: hunter.id, amount: hb.amount });
     };
   }
   if (eff?.poolWhenPreyOusted) {
@@ -15187,6 +15231,7 @@ function ashExchangeTargets(
 function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   const perm = spec.permanent;
   const afterBlood = perm?.afterActionBlood;
+  const huntBlood = perm?.huntBlood;
   const frenzy = perm?.frenzyCancel;
   const exchange = perm?.ashExchange;
   const combatEnd = perm?.combatEndGrant;
@@ -15219,6 +15264,10 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     !perm?.statics?.lockInsteadOfBlocker &&
     !unc &&
     !afterBlood &&
+    // Wave 88: this guard is a SECOND list of the same clauses, and reading
+    // the first one is not reading this one — a clause absent here compiles,
+    // typechecks and installs no enumerator at all (§5).
+    !huntBlood &&
     !frenzy &&
     !exchange &&
     !combatEnd &&
@@ -15658,6 +15707,48 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         }
       }
     }
+    // "Lock to give a vampire who successfully hunts an additional blood from
+    // the blood bank" (Inbase Discotek) and "Lock WHEN an anarch ANNOUNCES a
+    // hunting action" (Hospital Food) — one clause, two windows, because the
+    // moment the lock is spent is the difference between the cards.
+    // docs/hunt-payouts-design.md §2
+    if (huntBlood && !entry.locked && ctx.action !== null) {
+      const af = ctx.action;
+      const hunter = af.actionKind === "hunt" ? findMinion(ctx.state, af.acting) : null;
+      const window =
+        huntBlood.when === "success" ? "action.afterResolution" : "action.announce";
+      // `resolvedSuccess` is OPTIONAL, not nullable: it is absent until the
+      // action resolves, so "not yet resolved" is `undefined` and a `=== null`
+      // test is false at every moment of the action's life.
+      const timing =
+        huntBlood.when === "success"
+          ? af.resolvedSuccess === true
+          : af.resolvedSuccess === undefined;
+      const ok =
+        ctx.window === window &&
+        timing &&
+        hunter !== null &&
+        hunter.kind === "vampire" &&
+        (huntBlood.sect === undefined || hunter.sect === huntBlood.sect) &&
+        // A full vampire gains nothing and this costs a lock
+        // (docs/futile-options-design.md). At ANNOUNCEMENT the hunt has not
+        // paid out yet, so the room is measured against what the hunt itself
+        // will put on: that is the honest read of "an ADDITIONAL blood".
+        (huntBlood.when === "success"
+          ? canGainBlood(hunter)
+          : hunter.blood + huntAmountFor(ctx.state, hunter) < capacityOf(hunter));
+      if (ok && hunter) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:huntBlood:${hunter.id}`,
+          kind: "useAbility",
+          label: `${spec.name}: ${hunter.name} gains ${huntBlood.amount} additional blood${
+            huntBlood.when === "announce" ? " if the hunt succeeds" : ""
+          }`,
+          source: entry.card.id,
+          params: { act: "huntBlood", target: hunter.id },
+        });
+      }
+    }
     if (afterBlood && ctx.window === "action.afterResolution" && !entry.locked) {
       const af = ctx.action;
       const card = af?.card;
@@ -16089,6 +16180,21 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       if (!target) throw new Error(`${spec.name}: no blood target`);
       ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
       ops.emit({ type: "BloodGained", minion: target, amount: afterBlood.amount });
+    };
+  }
+  if (huntBlood) {
+    extraUse["huntBlood"] = (entry, _owner, choice, ops) => {
+      const target = choice.params["target"];
+      if (!target) throw new Error(`${spec.name}: no hunt-blood target`);
+      // The lock is paid either way. What differs is WHEN the blood lands:
+      // after a hunt that has already succeeded, or on the action frame, to be
+      // collected only if the announced hunt gets there.
+      ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      if (huntBlood.when === "success") {
+        ops.emit({ type: "BloodGained", minion: target, amount: huntBlood.amount });
+      } else {
+        ops.addHuntBonusBlood(target, huntBlood.amount);
+      }
     };
   }
   if (offers.length > 0) {

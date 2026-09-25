@@ -404,6 +404,42 @@ describe("Shilmulo Tarot (101767)", () => {
     const next = new VtesEngine(unlockPhase(state), testRegistry);
     expect(next.decision()!.options.some((o) => o.id === ADD_TOP)).toBe(true);
   });
+
+  // Owner game log 2026-09-25: a discard-phase discard with cards on the
+  // Tarot raised "draw from where?", and ending the turn at once overwrote
+  // THAT frame — the draw was lost (hand stuck at 6) and the old discard
+  // frame stayed on the stack, so the next seat's unlock phase offered
+  // the Tarot and Vessel to Alice as if it were still her turn.
+  it("a discard-phase replacement it redirects is asked BEFORE the turn ends", () => {
+    const state = equipped();
+    const entry = find(state, "V1").attached.find((p) => p.card.id === "tarot")!;
+    entry.stored = [{ id: "s1", name: ".44 Magnum" }];
+    entry.storedFaceUp = false;
+    alice(state).hand.push({ id: "h1", name: "Conditioning" });
+    const tf = state.frames[0]!;
+    if (tf.kind !== "turn") throw new Error("fixture: no turn frame");
+    Object.assign(tf, { seat: "Alice", phase: "discard" });
+    const handBefore = alice(state).hand.length;
+    const engine = new VtesEngine(state, testRegistry);
+
+    runTrace(engine, [["Alice", "discard:h1"]]);
+    // Still Alice's turn, with the redirect being asked.
+    const ask = engine.decision()!;
+    expect(ask.seat).toBe("Alice");
+    expect(ask.options.map((o) => o.id)).toContain("choice:Shilmulo Tarot:tarot:drawFrom:s1");
+
+    runTrace(engine, [["Alice", "choice:Shilmulo Tarot:tarot:drawFrom:s1"]]);
+    // The draw happened: the hand is back to where it was.
+    expect(alice(state).hand.length).toBe(handBefore);
+    expect(alice(state).hand.some((c) => c.id === "s1")).toBe(true);
+    // ONE turn frame, and it is the next seat's — nothing of Alice's left.
+    const turns = state.frames.filter((f) => f.kind === "turn");
+    expect(turns).toHaveLength(1);
+    expect(turns[0]!.kind === "turn" && turns[0]!.seat).not.toBe("Alice");
+    expect(
+      engine.decision()!.options.some((o) => o.id.startsWith("ability:Shilmulo Tarot")),
+    ).toBe(false);
+  });
 });
 
 describe("Fleshforge Chamber (102354)", () => {

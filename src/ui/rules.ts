@@ -267,6 +267,12 @@ export const RULE_SECTIONS: RuleSection[] = [
       can take no action but <b>leave torpor</b>, cannot block, cannot play
       reactions and must abstain from votes. They still unlock normally, and
       they may still play action modifiers during their own actions.</p>
+      <p><b>Leave torpor</b> is an action a vampire in torpor takes during
+      your minion phase: it locks them like any action, costs <b>2
+      blood</b>, and can be blocked. If it succeeds, the vampire returns to
+      the ready region. They need to be unlocked and to have the 2 blood to
+      take it — in the player it shows up as "leave torpor" on that
+      vampire. Another of your ready vampires can also <b>rescue</b> them.</p>
       <p><b>Diablerie</b> is drinking a torpid vampire dry: the diablerist
       takes their blood and the victim is burned. It is resolved as a single
       indivisible unit — nothing interrupts it. Because vampiric society

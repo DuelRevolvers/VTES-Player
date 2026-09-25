@@ -973,6 +973,12 @@ export interface PermanentStatics {
    *  persistent form of `MinionState.expelledThisTurn`, which is one turn
    *  long. §4 */
   cannotCastVotes?: boolean;
+  /** "This vampire may not cast votes or ballots during a referendum to call
+   *  a blood hunt on THIS VAMPIRE" (The Hunt Club) — the same bar as
+   *  `cannotCastVotes`, live in exactly one referendum. Read where the
+   *  referendum frame is in hand, never folded into a vote count.
+   *  docs/blood-hunt-answers-design.md §3 */
+  cannotCastVotesInOwnBloodHunt?: boolean;
   /** "This vampire DOES NOT LOCK for blocking a vampire the same age or
    *  younger" (Atonement) — an exemption from the lock a block costs (p. 25),
    *  carried by a card on the BLOCKER and conditional on who they blocked.
@@ -1154,6 +1160,16 @@ export interface PermanentAura {
    *  positive sibling of `cannotHunt`, read by `huntAmountFor`.
    *  docs/blood-locations-design.md §4 */
   hunt?: number;
+  /** "Sabbat vampires get −1 stealth DURING HUNT ACTIONS" (Festivo dello
+   *  Estinto) — the hunt sibling of `bleedStealth`, signed, and read in the
+   *  same place. docs/hunt-payouts-design.md §3 */
+  huntStealth?: number;
+  /** "Sabbat vampires successfully hunting gain enough blood from the blood
+   *  bank to REACH FULL CAPACITY" (Festivo dello Estinto) — not a bigger
+   *  `hunt` bonus but a different answer to the same question, so it is
+   *  folded by `huntAmountFor` rather than added to it.
+   *  docs/hunt-payouts-design.md §3 */
+  huntFill?: boolean;
   /** "…and N optional maneuver(s) each combat" (Brujah Debate) — credits
    *  granted at combat start, persisting until spent. */
   maneuverPerCombat?: number;
@@ -2017,6 +2033,12 @@ export interface TurnFrame {
    *  Effects may grant more (Powerbase: Los Angeles). Optional so old
    *  fixtures keep working: undefined means the default 1. */
   discardActionsLeft?: number;
+  /** The last discard action is spent but its REPLACEMENT is still being
+   *  asked (a draw redirect — Shilmulo Tarot, Black Market Cache — pushes
+   *  a choice frame). The turn ends when this frame surfaces again, not
+   *  under the choice: ending it then overwrote the choice frame, lost the
+   *  draw, and left this frame on the stack reading as the current turn. */
+  endTurnWhenSurfaced?: boolean;
   /** Actions announced so far in this minion phase, counted so a card can
    *  ask "is this the first action in a minion phase?" (Channel 10).
    *  Incremented at ANNOUNCEMENT, in `applyToFrames` rather than at the
@@ -2210,6 +2232,13 @@ export interface ActionFrame {
     cardName: string;
     cardId: CardInstanceId;
   }>;
+  /** "Lock when an anarch announces a hunting action. If that action is
+   *  successful, the anarch gains an additional blood" (Hospital Food) — the
+   *  payout is bought at ANNOUNCEMENT and collected at resolution, so it
+   *  rides on the action frame: a blocked hunt spends the lock and pays
+   *  nothing, which is the price the card prints.
+   *  docs/hunt-payouts-design.md §2 */
+  huntBonusBlood?: Array<{ minion: MinionId; amount: number }>;
   /** Seats whose card replacement waits "until after this action". */
   drawAfter: SeatId[];
   /** "Reaction cards cost +1 blood or life" (Consign to Oblivion), "the
@@ -3295,6 +3324,11 @@ export interface ReferendumFrame {
   variant: "political" | "bloodHunt";
   /** The diablerist, burned if a blood-hunt referendum passes. */
   bloodHuntTarget: MinionId | null;
+  /** "Cancel that blood hunt" (Absolution of the Diabolist) — set in the
+   *  after-resolution impulse of a PASSED blood hunt, which is the one moment
+   *  the vampire is "about to be burned". The referendum still passed; only
+   *  the burn is called off. docs/blood-hunt-answers-design.md §2 */
+  bloodHuntCanceled?: boolean;
   /** Extra votes this ONE referendum grants, by minion or by sect (Cloak of
    *  Blood, Stealing Years) — copied off the diablerist as the hunt is
    *  pushed, so the clause cannot leak into a later referendum.

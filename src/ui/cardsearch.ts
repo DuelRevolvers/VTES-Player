@@ -82,6 +82,11 @@ export interface CardQuery {
   withinCrypt: { disciplines: string[]; clans: string[]; sects: string[] } | null;
 }
 
+/** The Build tab's starting query: only cards this player can deal. */
+export function builderDefaultQuery(): CardQuery {
+  return { ...emptyQuery(), status: "playable" };
+}
+
 export function emptyQuery(): CardQuery {
   return {
     text: "",
@@ -189,8 +194,8 @@ export function queryIsEmpty(q: CardQuery): boolean {
  * text would only appear on the NEXT interaction — present, correct and
  * a beat late, which reads as broken.
  */
-export function filtersAreDefault(q: CardQuery): boolean {
-  const base = emptyQuery();
+export function filtersAreDefault(q: CardQuery, base: CardQuery = emptyQuery()): boolean {
+  // `base` is the TAB's default: the builder starts on "Playable here".
   return (
     q.scope === base.scope &&
     q.pile === base.pile &&
@@ -808,12 +813,12 @@ export function sortMarkup(q: CardQuery): string {
  * what a card IS (type, clan, discipline), then who can use it (sect,
  * title), then where it was printed and the crypt numbers.
  */
-export function filtersMarkup(q: CardQuery, f: Facets, open: boolean): string {
+export function filtersMarkup(q: CardQuery, f: Facets, open: boolean, base?: CardQuery): string {
   const count = (n: number): string => (n > 0 ? ` <span class="csn">${n}</span>` : "");
   const head = `
     <div class="row csadvrow">
       <button id="cs-adv" class="csadv${open ? " open" : ""}">Advanced search ${open ? "▴" : "▾"}</button>
-      ${filtersAreDefault(q) ? "" : `<button id="cs-reset">Clear filters</button>`}
+      ${filtersAreDefault(q, base) ? "" : `<button id="cs-reset">Clear filters</button>`}
       ${sortMarkup(q)}
     </div>`;
   if (!open) return head;
@@ -904,6 +909,7 @@ export function searchPanelMarkup(
   f: Facets,
   advancedOpen: boolean,
   view: CardView,
+  base?: CardQuery,
 ): string {
   return `
     <div class="row csbar">
@@ -912,5 +918,5 @@ export function searchPanelMarkup(
       <button id="cs-grid" class="csview${view === "grid" ? " on" : ""}">Grid</button>
       <button id="cs-list" class="csview${view === "list" ? " on" : ""}">List</button>
     </div>
-    ${filtersMarkup(q, f, advancedOpen)}`;
+    ${filtersMarkup(q, f, advancedOpen, base)}`;
 }

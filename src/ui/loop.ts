@@ -181,6 +181,8 @@ export class DebugApp {
   /** The card in play whose SET-ASIDE cards are open. View state: looking
    *  at cards a card says you may look at is not a move. */
   private storeOpen: string | null = null;
+  /** Whose contested cards are open (p. 17), if any. View state. */
+  private contestedOpen: string | null = null;
   /**
    * THE ALLOCATION DIALOG, and the split being assembled in it.
    *
@@ -243,6 +245,7 @@ export class DebugApp {
     }
     // Once: these listeners live on the root, which survives every repaint.
     this.wireZoom();
+    this.wireHeldSelects();
     // The newest table owns the keyboard. One listener for the whole page,
     // pointed at whichever table was built last — a listener per table
     // would leave a left table pressing buttons on the next one.
@@ -266,7 +269,56 @@ export class DebugApp {
     this.paint();
   }
 
+  /**
+   * AN OPEN DROPDOWN SURVIVES THE BOTS (owner report 2026-09-25).
+   *
+   * A repaint is `innerHTML =`, and a native `<select>` whose element is
+   * replaced closes its list — so in the Settings or moderation dialog the
+   * menu snapped shut on every bot move. While one of those selects has
+   * focus the repaint is HELD, and caught up the moment it lets go. Only
+   * the dialogs, not the table: a held table must never hide a decision.
+   */
+  private paintHeld = false;
+
+  private selectHeld(): boolean {
+    const el = typeof document === "undefined" ? null : document.activeElement;
+    return (
+      el !== null &&
+      el.tagName === "SELECT" &&
+      this.root.contains(el) &&
+      el.closest("#settings, #mod-panel") !== null
+    );
+  }
+
+  private wireHeldSelects(): void {
+    const flush = (): void => {
+      if (this.paintHeld && !this.selectHeld()) this.paint();
+    };
+    // A choice MADE lets go at once: blurring in the capture phase means
+    // the select's own handler, which repaints, finds nothing held.
+    this.root.addEventListener(
+      "change",
+      (e) => {
+        const t = e.target as HTMLElement | null;
+        if (t?.tagName === "SELECT" && t.closest("#settings, #mod-panel")) t.blur();
+      },
+      true,
+    );
+    // Focus moving elsewhere lets go too — but after the click that moved
+    // it has landed, or catching up would replace the button mid-click.
+    this.root.addEventListener("focusout", (e) => {
+      if (!this.paintHeld || (e.target as HTMLElement | null)?.tagName !== "SELECT") return;
+      window.addEventListener("click", () => setTimeout(flush, 0), { once: true });
+      setTimeout(flush, 400);
+    });
+  }
+
   private paint(): void {
+    if (this.selectHeld()) {
+      this.paintHeld = true;
+      return;
+    }
+    this.paintHeld = false;
     try {
       this.repaint();
       this.restorePreview();
@@ -507,6 +559,7 @@ export class DebugApp {
       ashOpen: this.ashOpen,
       deckOpen: this.deckOpen,
       storeOpen: this.storeOpen,
+      contestedOpen: this.contestedOpen,
       allocOpen: this.allocOpen,
       allocDraft: this.allocDraft,
       allocContext: this.allocContext,
@@ -1389,6 +1442,24 @@ export class DebugApp {
     });
     on("#ash-scrim", () => {
       this.ashOpen = null;
+      this.paint();
+    });
+
+    // Contested cards: public like the ash heap (p. 17), so every seat's.
+    for (const btn of Array.from(
+      this.root.querySelectorAll<HTMLButtonElement>("button[data-contested]"),
+    )) {
+      btn.addEventListener("click", () => {
+        this.contestedOpen = btn.dataset["contested"] ?? null;
+        this.paint();
+      });
+    }
+    on("#contested-close", () => {
+      this.contestedOpen = null;
+      this.paint();
+    });
+    on("#contested-scrim", () => {
+      this.contestedOpen = null;
       this.paint();
     });
 

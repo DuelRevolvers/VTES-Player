@@ -1006,6 +1006,85 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 89 — the blood hunt (3 cards), 2026-09-25
+
+Library **821 → 824**. The Hunt Club, Absolution of the Diabolist, Lay Low.
+Write-up: `docs/blood-hunt-answers-design.md`.
+
+The blood hunt (p. 35) had been engine-only: the diablerie's fifth step pushed
+it, the table voted, a pass burned the diablerist, and no card in the pool could
+touch any of it. One card here tilts the VOTE (the hunted vampire cannot vote on
+its own pyre) and two answer the VERDICT — cancel it outright, or move the anarch
+to the uncontrolled region so there is nobody left to burn.
+
+**No engine defect, and the reason is the finding:** this mechanism had been
+written defensively years of waves ago. The `referendum.afterResolution` step
+already runs BEFORE a passed referendum's effect is applied, the burn was already
+guarded by "if still in play (a mid-referendum effect could have removed them)" —
+Lay Low is the first card to make that comment true — and the out-of-turn master
+debt is already taken centrally. What the wave cost instead was two pieces of
+metadata no compiler checks:
+
+1. **The registry's name is not the printed name.** KRCG prints "Hunt Club, The";
+   the registry normalises it to "The Hunt Club". `supported.test.ts` catches it.
+   The clan-name lesson applied to card names.
+2. **A bespoke handler must declare its printed types** (`costTypes`), or the card
+   is invisible to every play-cost modifier and every type filter;
+   `central-queries.test.ts` enforces it.
+
+Both answers are bespoke handlers beside Sudden Reversal, because the one
+usability rule that reaches the after-referendum window (`afterReferendumPassed`)
+requires the player to be the CALLER with a calling minion — and a blood hunt has
+no calling card, while its "caller" is the seat whose vampire is being burned.
+
+Also recorded: a `conditional` key belongs INSIDE `statics`, and putting it beside
+it broke type inference for three hundred unrelated specs.
+
+**Deferred with the blocker named: Veles' Hunt (102099)** — a political action
+that CALLS a blood hunt, which would make this family reachable without a
+diablerie. Its "no more Veles' Hunts can be played this game if this one fails" is
+a game-scoped latch conditional on a FAILURE, which `oncePerGameByName` (a query
+over `CardPlayed`) cannot express.
+
+### Wave 88 — the hunt payout (4 cards), 2026-09-25
+
+Library **817 → 821**. Hospital Food, Inbase Discotek Frankfurt, Festivo dello
+Estinto, Harvest Rites. Write-up: `docs/hunt-payouts-design.md`.
+
+Four cards that all put one more blood on a successful HUNT — the one built-in
+action nothing in the pool had bent. What differs is the price and the moment:
+one location locks **at announcement** (a bet: a blocked hunt spends the lock and
+pays nothing), the other locks **after the hunt succeeded** (never wasted, and
+that is what its 2 pool buys), a master fills every Sabbat vampire at the table
+to capacity while taking −1 stealth off their hunts, and an attached card pays
+once each turn.
+
+**Three defects, none of them about hunting.**
+
+1. **`onHuntSuccess` was dispatched over seat permanents only** — one line below
+   `onBleedSuccess`, which iterates `allEntries()`. Every attached hunt trigger
+   was dead, including any crypt ability. The fourth instance of that lesson, and
+   the tell was again a hand-written `for (const s of this.state.seats)` beside a
+   sibling that calls the helper.
+2. **Shadow Cloak has never burned itself.** `afterResolutionAttach` declares
+   `burnInUnlockPhase` and NOTHING read it — a spec field with no reader, so the
+   card sat on its vampire for the rest of the game and kept non-Auspex minions
+   from targeting them. A partial card in the pool, invisible to
+   `no-partial-cards.test.ts` because nothing fails when a field is ignored.
+   `attachSelf.burnAtControllerUnlock` spells the same rule and was honoured;
+   all three spellings now call one helper.
+3. **A location clause must be added in TWO places**: the destructure and the
+   long negated guard that decides whether to install the enumerator at all.
+   `huntBlood` was in the first only, so the card compiled, typechecked, entered
+   play and offered nothing — wave 87's `targetRider` find in a new place.
+
+Also worth keeping: `resolvedSuccess` is OPTIONAL, not nullable, so a `=== null`
+test for "not yet resolved" is false for the whole life of the action; and a hunt
+is inherently +1 stealth (p. 21), so a "blocked hunt" fixture without real
+intercept on the blocker is quietly testing a successful one.
+
+Mutation-checked four ways, each failing exactly one case.
+
 ### Wave 87 — choosing a minion (3 cards), 2026-09-21
 
 Library **814 → 817**. Precognizant Mobility, Distraction, Horseshoes.

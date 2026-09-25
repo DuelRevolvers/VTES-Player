@@ -105,8 +105,10 @@ export interface JoinMsg {
  *  and tells everyone whether the table can start. */
 export interface SetDeckMsg {
   type: "setDeck";
-  /** A precon by set and name, or a pasted deck list. */
-  deck: { kind: "precon"; set: string; name: string } | { kind: "paste"; text: string };
+  /** A precon by set and name, or a deck list (named when it is a saved deck). */
+  deck:
+    | { kind: "precon"; set: string; name: string }
+    | { kind: "paste"; text: string; name?: string };
 }
 
 /**

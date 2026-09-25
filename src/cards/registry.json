@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-21T23:49:10.852Z",
+ "fetchedAt": "2026-09-25T15:46:01.664Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -72,6 +72,28 @@
     "image": "https://static.krcg.org/card/abbot.jpg",
     "sets": [
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "100012": {
+   "card": {
+    "kind": "library",
+    "id": 100012,
+    "name": "Absolution of the Diabolist",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nRequires a ready justicar or Inner Circle member. This card is playable during your minion phase. Only usable when a vampire is about to be burned by a blood hunt. Cancel that blood hunt.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/absolutionofthediabolist.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -5508,6 +5530,30 @@
    },
    "supported": true
   },
+  "100723": {
+   "card": {
+    "kind": "library",
+    "id": 100723,
+    "name": "Festivo dello Estinto",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Only one Festivo dello Estinto can be played in a game.\nPut this card in play. Sabbat vampires get -1 stealth during hunt actions. Sabbat vampires successfully hunting gain enough blood from the blood bank to reach full capacity. During your unlock phase, burn this card.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/festivodelloestinto.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition",
+     "2023 Zaragosa Promo"
+    ]
+   },
+   "supported": true
+  },
   "100724": {
    "card": {
     "kind": "library",
@@ -6711,6 +6757,27 @@
    },
    "supported": true
   },
+  "100889": {
+   "card": {
+    "kind": "library",
+    "id": 100889,
+    "name": "Harvest Rites",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+1 stealth action. Requires a Sabbat vampire.\nPut this card on this vampire. Once each turn, when this vampire successfully hunts, they gain 1 additional blood. A vampire can have only one Harvest Rites.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/harvestrites.jpg",
+    "sets": [
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100897": {
    "card": {
     "kind": "library",
@@ -7042,6 +7109,27 @@
    },
    "supported": true
   },
+  "100938": {
+   "card": {
+    "kind": "library",
+    "id": 100938,
+    "name": "Hospital Food",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Requires a ready anarch.\nLock when an anarch announces a hunting action. If that action is successful, the anarch gains an additional blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/hospitalfood.jpg",
+    "sets": [
+     "Anarchs"
+    ]
+   },
+   "supported": true
+  },
   "100944": {
    "card": {
     "kind": "library",
@@ -7085,6 +7173,27 @@
    },
    "supported": true
   },
+  "100946": {
+   "card": {
+    "kind": "library",
+    "id": 100946,
+    "name": "The Hunt Club",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique Master.\nPut this card on any ready vampire. This vampire gets +1 stealth when attempting to commit diablerie. This vampire may not cast votes or ballots during a referendum to call a blood hunt on this vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/huntclubthe.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
   "100959": {
    "card": {
     "kind": "library",
@@ -7108,6 +7217,28 @@
      "New Blood",
      "New Blood II",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "100968": {
+   "card": {
+    "kind": "library",
+    "id": 100968,
+    "name": "Inbase Discotek, Frankfurt",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nLock to give a vampire who successfully hunts an additional blood from the blood bank. (Ignore excess blood.)",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/inbasediscotekfrankfurt.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Final Nights"
     ]
    },
    "supported": true
@@ -7878,6 +8009,28 @@
      "Black Hand",
      "Legacies of Blood",
      "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101075": {
+   "card": {
+    "kind": "library",
+    "id": 101075,
+    "name": "Lay Low",
+    "types": [
+     "Action Modifier",
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Requires an anarch.\nOnly usable when a blood hunt referendum passes and would burn this anarch. Move this anarch to the uncontrolled region (breaking any temporary control effects). Any cards and counters on this vampire remain with him or her (but are out of play as long as the vampire remains uncontrolled).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/laylow.jpg",
+    "sets": [
+     "2008 Tournament promo"
     ]
    },
    "supported": true
