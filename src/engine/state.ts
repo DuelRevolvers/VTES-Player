@@ -282,6 +282,13 @@ export interface MinionState {
    *  beside `cannotActThisTurn`, and takes everything on the minion back
    *  with it (p. 16). docs/taking-actions-design.md §3 */
   controlRevertsTo?: SeatId;
+  /** WHEN the loan above ends. Absent means "the end of your turn", which is
+   *  what every borrow meant before Malkavian Dementia arrived with "until your
+   *  NEXT UNLOCK PHASE" — a whole turn longer, because the borrower acts with
+   *  the minion first and gives it back on the way into their following turn.
+   *  A second field rather than a second mechanism: one return address, one
+   *  sweep per moment. docs/borrowed-minions-design.md §2 */
+  controlRevertsAt?: "endOfTurn" | "borrowerUnlock";
   /** "The chosen minions cannot play reaction cards, block or cast votes
    *  or ballots this turn" (Expulsion). It does NOT stop them acting —
    *  `canAct` is a separate predicate and the card does not say so.
@@ -1393,6 +1400,13 @@ export interface SeatState {
   /** An out-of-turn master card was played; it consumes a master phase
    *  action from this seat's next master phase (p. 8). */
   outOfTurnMasterUsed: boolean;
+  /** "Each Methuselah CAN CHOOSE a ready vampire they control" (Ancient
+   *  Influence, Reins of Power) — this seat's answer, held only between the
+   *  choices and the payout that reads them ALL, then deleted. `null` is the
+   *  real answer "nobody"; absent means "not asked yet", and the difference is
+   *  what tells the payout it is the last one.
+   *  docs/once-in-a-game-design.md §2 */
+  referendumVampireChoice?: MinionId | null;
   /** Seat-level cards in play (locations and other masters). */
   permanents: PermanentInPlay[];
   /**

@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 299 test files, 3201 tests**, with `npm run typecheck`,
+**Green baseline: 302 test files, 3226 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -462,6 +462,11 @@ doc named beside it.
   "it already exists" is a claim to CHECK, not to make. **And a recorded
   DEVIATION is a claim about the card POOL as it was** — admitting
   Unflinching Persistence expired one by itself (`armour-design.md` §4).
+  **And "the engine has no such mechanic" is the same claim, inverted:**
+  borrowed control already existed as `controlRevertsTo`, filed under a doc
+  about ACTIONS, and a second model was three edits in before the first was
+  found (`borrowed-minions-design.md` §1). Grep for the VERB the rule uses,
+  not for the noun you would have named it.
 - **A card can be WHOLE and still be INERT, and the pool wants neither.**
   Before implementing a card that filters on a clan, title, sect, card
   type or DISCIPLINE, check the pool actually contains one (Tradition
@@ -896,7 +901,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-208 files under `docs/`, one per mechanic that took a decision. **Read the
+210 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -927,6 +932,7 @@ choosing-a-minion, hunt-payouts.
 referendum-blood, referendum-riders, crusades, fee-stake,
 acting-minion-reactions, politics, abstain-gate, politics-followups,
 polling-votes, ballots, politics-locations, referendum-terms, blood-hunt-answers,
+once-in-a-game, borrowed-minions,
 referendum-margin.
 
 **Cards and economies:** blood-bank-actions, blood-banking-locations,

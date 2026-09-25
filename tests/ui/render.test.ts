@@ -345,7 +345,7 @@ describe("moderation", () => {
    * table answers for somebody. Settings is about this screen and this
    * player.
    */
-  it("offers a pass clock from Off to a minute, in fives, with the current one selected", () => {
+  it("offers a pass clock from Off to a minute in fives, then 2, 2.5 and 3 minutes", () => {
     const html = screen({ moderation: mod, passTimeoutMs: 20_000 });
     // Sliced to its own select: the AI pace above it has a `value="0"`
     // too, and `indexOf` would find that one.
@@ -353,12 +353,17 @@ describe("moderation", () => {
     expect(at).toBeGreaterThan(-1);
     const select = html.slice(at, html.indexOf("</select>", at));
     for (const t of PASS_TIMEOUTS) expect(select).toContain(`value="${t.ms}"`);
-    // Every five seconds up to a minute, and nothing in between — the
-    // increments the request named, asserted as the SHAPE of the list
-    // rather than as a count, so adding a step is one edit.
+    // Every five seconds up to a minute, then the three long steps added
+    // 2026-09-25 — asserted as the SHAPE of the list rather than as a
+    // count, so adding a step is one edit.
     expect(PASS_TIMEOUTS.map((t) => t.ms)).toEqual([
       0, 5000, 10_000, 15_000, 20_000, 25_000, 30_000, 35_000, 40_000, 45_000, 50_000, 55_000,
-      60_000,
+      60_000, 120_000, 150_000, 180_000,
+    ]);
+    expect(PASS_TIMEOUTS.slice(-3).map((t) => t.label)).toEqual([
+      "2 minutes",
+      "2.5 minutes",
+      "3 minutes",
     ]);
     const chosen = (ms: number): boolean =>
       select.slice(select.indexOf(`value="${ms}"`), select.indexOf(`value="${ms}"`) + 30)

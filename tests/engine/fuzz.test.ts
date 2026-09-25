@@ -882,6 +882,23 @@ function fourSeatGame(seed: number): GameState {
     "The Hunt Club",
     "Absolution of the Diabolist",
     "Lay Low",
+    // Once in a game (docs/once-in-a-game-design.md, wave 90). The two table
+    // referendums are the fuzz's first per-seat CHOICE SWEEP during a
+    // referendum's resolution: one question per seat, and a payout that must
+    // fire exactly once after the last answer. They can also oust several seats
+    // at once, which the pool-conservation replay has to agree with.
+    "Ancient Influence",
+    "Reins of Power",
+    "Camarilla Exemplary",
+    "Sabbat Priest",
+    // Borrowed minions (docs/borrowed-minions-design.md, wave 91). Control
+    // moving between seats is what the fuzz's conservation replay is least
+    // prepared for — blood and counters travel with the minion (p. 16) — and
+    // one of these loans spans a whole round of turns, so the borrowed minion
+    // acts, fights and can be burned while it is somebody else's.
+    "The Art of Love",
+    "Malkavian Dementia",
+    "From a Sinking Ship",
     // Choosing a minion (docs/choosing-a-minion-design.md, wave 87). Each picks
     // a minion at announcement, and the fuzz is what walks the gap between the
     // choice and the resolution: the named minion can be burned, torpored or

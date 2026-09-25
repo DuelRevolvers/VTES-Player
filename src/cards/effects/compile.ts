@@ -6239,6 +6239,37 @@ function compileMasterCard(spec: CardSpec): CardHandler {
               }
             }
             return options;
+          case "takeControlOfMinion":
+            // "…controlled by ANOTHER Methuselah" is in all three cards, so it
+            // is the rule here rather than a filter: taking your own minion is
+            // not a legal play, and offering it would be a futile option.
+            // docs/borrowed-minions-design.md §3
+            for (const s of ctx.state.seats) {
+              if (s.ousted || s.id === ctx.seat) continue;
+              if (e.who.controllerMaxPool !== undefined && s.pool > e.who.controllerMaxPool) {
+                continue;
+              }
+              for (const m of s.minions) {
+                if (e.who.kind !== undefined && m.kind !== e.who.kind) continue;
+                if (e.who.clan !== undefined && m.clan !== e.who.clan) continue;
+                if (e.who.ready === true && !isReady(m)) continue;
+                // "Not usable to take control of a VAMPIRE with capacity 7 or
+                // more" — the cap is about vampires, and an ally's `capacity`
+                // is its life, so reading it for an ally would be a different
+                // card (docs/borrowed-minions-design.md §3).
+                if (
+                  e.who.maxCapacity !== undefined &&
+                  m.kind === "vampire" &&
+                  capacityOf(m) > e.who.maxCapacity
+                ) {
+                  continue;
+                }
+                options.push(
+                  makeMasterOption(spec, card, { target: m.id }, `Take ${m.name} (${s.id})`),
+                );
+              }
+            }
+            return options;
           case "addBloodToReadyVampire":
             // "Add 1 blood to a ready vampire" — vampires only (allies
             // are not vampires, p. 11).
@@ -6477,6 +6508,16 @@ function compileMasterCard(spec: CardSpec): CardHandler {
             const t = play.params["target"];
             if (!t) throw new Error(`${spec.name}: no target`);
             ops.emit({ type: "MinionLocked", minion: t });
+            break;
+          }
+          case "takeControlOfMinion": {
+            const t = play.params["target"];
+            if (!t) throw new Error(`${spec.name}: no target`);
+            // TOTAL read: the master phase is short, but the target is chosen
+            // when the option is built and read when the card resolves.
+            if (!findMinion(ops.state, t)) break;
+            if (e.until === "permanent") ops.changeMinionControl(t, play.seat);
+            else ops.borrowMinion(t, play.seat, e.until);
             break;
           }
           case "addBloodToReadyVampire": {
@@ -8278,6 +8319,10 @@ const REFERENDUM_POLARITY: Record<ReferendumPrimitive["kind"], ReferendumEffectK
   refClanBloodBurn: "other",
   refAttachToChosen: "other",
   refBurnAllKeepable: "other",
+  // Both cards in this family move pool in BOTH directions on every seat, so
+  // there is no sign to declare: a 10-capacity vampire makes Ancient Influence
+  // a gain and a 3-capacity one makes it a loss.
+  refEachSeatChoosesVampire: "other",
   refExpelMinions: "other",
   refGiveEdge: "other",
   refLockAndAllocate: "other",
@@ -8357,6 +8402,48 @@ export function referendumSeatMap(primitive: EffectPrimitive | null): Referendum
 
 /** The polarity of one card's referendum primitive, or null when the card
  *  has none (a bespoke handler, or a granted referendum with no spec). */
+/**
+ * The payout of Ancient Influence and Reins of Power, run ONCE, after the last
+ * seat has answered (docs/once-in-a-game-design.md §2).
+ *
+ * It runs for every STANDING seat, not only the ones that were asked: "each
+ * Methuselah … then burns 5 pool" charges a seat with no vampire too, and its
+ * gain is simply 0. Both halves name where they read their capacity, so the
+ * two cards cannot quietly swap.
+ */
+function payEachSeatChoice(
+  primitive: Extract<EffectPrimitive, { kind: "refEachSeatChoosesVampire" }>,
+  ops: EngineOps,
+): void {
+  const seats = ops.state.seats.filter((s) => !s.ousted);
+  const capacityOfChoice = (seatId: SeatId): number => {
+    const chosen = getSeat(ops.state, seatId).referendumVampireChoice;
+    if (!chosen) return 0;
+    // TOTAL read: the whole sweep of questions sits between the tally and this
+    // payout, and a vampire can leave play inside it.
+    const m = findMinion(ops.state, chosen);
+    return m ? capacityOf(m) : 0;
+  };
+  // Every amount is computed BEFORE any pool moves, so one seat's payout cannot
+  // be changed by another's — the cards read capacities, not pools, and that
+  // stays true only if nothing is emitted mid-loop.
+  const deltas = seats.map((s) => ({
+    seat: s.id,
+    gain: "flat" in primitive.gain ? primitive.gain.flat : capacityOfChoice(s.id),
+    burn:
+      "flat" in primitive.burn
+        ? primitive.burn.flat
+        : capacityOfChoice(predatorOf(ops.state, s.id) ?? s.id),
+  }));
+  for (const d of deltas) {
+    if (d.gain > 0) ops.emit({ type: "PoolGained", seat: d.seat, amount: d.gain });
+    // "…THEN burns": a seat that cannot pay is ousted by it, which is the
+    // card working, and the engine's own oust processing handles it.
+    if (d.burn > 0) ops.emit({ type: "PoolBurned", seat: d.seat, amount: d.burn });
+  }
+  for (const s of seats) delete getSeat(ops.state, s.id).referendumVampireChoice;
+}
+
 export function referendumPolarity(primitive: EffectPrimitive | null): ReferendumEffectKind | null {
   if (!primitive) return null;
   // `refPerMinion` is the one primitive whose polarity is a property of
@@ -9054,6 +9141,29 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
           }
           break;
         }
+        case "refEachSeatChoosesVampire": {
+          // Ask every seat that HAS a ready vampire; the payout then runs for
+          // every standing seat, asked or not — "each Methuselah … then burns
+          // 5 pool" charges a seat with nothing in play too.
+          const askable = standing.filter((s) => readyVampiresOf(ops.state, s.id).length > 0);
+          if (askable.length === 0) {
+            payEachSeatChoice(primitive, ops);
+            break;
+          }
+          // A STACK, so raising in reverse asks in table order from the caller.
+          // Nothing moves between the answers (a choice frame asks nobody else
+          // anything), so this is presentation, not a rules requirement.
+          for (const s of [...askable].reverse()) {
+            ops.raiseChoice({
+              seat: s.id,
+              cardName: frame.cardName,
+              cardId: frame.cardInstanceId ?? frame.actionId,
+              key: "tableVampireChoice",
+              optional: false,
+            });
+          }
+          break;
+        }
         case "refBurnAllKeepable": {
           // Gather every card in scope across the table FIRST, then raise
           // one question each. Nothing is burned here: the burn lives in
@@ -9449,6 +9559,51 @@ export function compileSpec(spec: CardSpec): CardHandler {
           return;
         }
         ops.applyEnvironmentalDamage(minion, amount, aggravated);
+      },
+    };
+  }
+
+  // "Each Methuselah can choose a ready vampire they control" (Ancient
+  // Influence, Reins of Power). MANDATORY with a "nobody" answer: the payout
+  // reads EVERY seat's answer, so a declined optional choice — which the
+  // handler is never told about — would strand it forever (§2).
+  const eachSeatChoice = spec.modes
+    .flatMap((m) => m.effects)
+    .find((e) => e.kind === "refEachSeatChoosesVampire") as
+    | Extract<EffectPrimitive, { kind: "refEachSeatChoosesVampire" }>
+    | undefined;
+  if (eachSeatChoice) {
+    choiceByKey["tableVampireChoice"] = {
+      options: (frame, state) => {
+        const opts: LegalOption[] = [];
+        for (const m of readyVampiresOf(state, frame.seat)) {
+          opts.push({
+            id: `choice:${spec.name}:${frame.cardId}:tableVampireChoice:${m.id}`,
+            kind: "answerChoice" as const,
+            label: `${spec.name}: choose ${m.name} (capacity ${capacityOf(m)})`,
+            params: { minion: m.id },
+          });
+        }
+        opts.push({
+          id: `choice:${spec.name}:${frame.cardId}:tableVampireChoice:none`,
+          kind: "answerChoice" as const,
+          label: `${spec.name}: choose nobody`,
+          params: { minion: "" },
+        });
+        return opts;
+      },
+      apply: (frame, choice, ops) => {
+        const chosen = choice.params["minion"] ?? "";
+        getSeat(ops.state, frame.seat).referendumVampireChoice = chosen === "" ? null : chosen;
+        // The LAST answer pays the table. "Asked" is recomputed rather than
+        // remembered: nothing can have changed it, because a choice frame asks
+        // nobody else anything.
+        const pending = ops.state.seats.filter((s) => !s.ousted).filter(
+          (s) =>
+            readyVampiresOf(ops.state, s.id).length > 0 &&
+            s.referendumVampireChoice === undefined,
+        );
+        if (pending.length === 0) payEachSeatChoice(eachSeatChoice, ops);
       },
     };
   }

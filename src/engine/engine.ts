@@ -368,13 +368,49 @@ export class VtesEngine implements EngineOps {
    * is recorded on the minion and honoured in `endTurn`, beside where
    * "cannot act this turn" expires. docs/taking-actions-design.md §3
    */
-  borrowMinion(minionId: MinionId, to: SeatId): void {
+  borrowMinion(minionId: MinionId, to: SeatId, until: "endOfTurn" | "borrowerUnlock" = "endOfTurn"): void {
     const m = getMinion(this.state, minionId);
     if (m.controller === to) return;
     // Set BEFORE the move: `changeMinionControl` relocates the object
     // between seats, and the return address has to travel with it.
     m.controlRevertsTo = m.controller;
+    // Default `endOfTurn` so Puppet Master, which was here first and says
+    // nothing about a duration, means exactly what it always meant.
+    if (until === "borrowerUnlock") m.controlRevertsAt = "borrowerUnlock";
+    else delete m.controlRevertsAt;
     this.changeMinionControl(minionId, to);
+  }
+
+  /**
+   * Give back every minion whose loan ends at `when`, for the seat whose moment
+   * it is — the BORROWER's, never the owner's (§2).
+   *
+   * One helper for both moments: `endTurn` calls it for `endOfTurn` and the
+   * unlock phase for `borrowerUnlock`, so a loan cannot be returned by one rule
+   * and forgotten by the other.
+   */
+  private returnBorrowedMinions(
+    borrower: SeatId | null,
+    when: "endOfTurn" | "borrowerUnlock",
+  ): void {
+    for (const seat of [...this.state.seats]) {
+      // `null` is every seat, which is what the end-of-turn sweep has always
+      // done: a loan made out of turn ends at the next turn boundary, and
+      // narrowing that now would change a rule this wave is not about.
+      if (borrower !== null && seat.id !== borrower) continue;
+      for (const m of [...seat.minions]) {
+        const back = m.controlRevertsTo;
+        if (back === undefined) continue;
+        if ((m.controlRevertsAt ?? "endOfTurn") !== when) continue;
+        delete m.controlRevertsTo;
+        delete m.controlRevertsAt;
+        // Their Methuselah may have been ousted while the loan ran; there
+        // is then nobody to give them back to and they stay put.
+        if (back !== seat.id && !getSeat(this.state, back).ousted) {
+          this.changeMinionControl(m.id, back);
+        }
+      }
+    }
   }
 
   changePermanentControl(cardId: CardInstanceId, to: SeatId): void {
@@ -2065,6 +2101,11 @@ export class VtesEngine implements EngineOps {
         const seat = getSeat(this.state, tf.seat);
         for (let i = 0; i < seat.delayedDraws; i++) this.drawToReplace(seat.id);
         seat.delayedDraws = 0;
+        // "…take control of a ready Malkavian … UNTIL YOUR NEXT UNLOCK PHASE"
+        // (Malkavian Dementia). BEFORE the unlock sweep, so the minion goes
+        // home locked and unlocks in its own controller's phase rather than
+        // being handed back rested (docs/borrowed-minions-design.md §2).
+        this.returnBorrowedMinions(tf.seat, "borrowerUnlock");
         // "Unlock all of your cards" — then unlock-phase effects (p. 17).
         for (const m of seat.minions) {
           // "Does not unlock as normal": persistent (a card in play names
@@ -2283,21 +2324,12 @@ export class VtesEngine implements EngineOps {
       }
     }
     // "…take control of them until the END OF YOUR TURN" (Puppet Master
-    // superior) — the one borrowed-control card in the pool. Reverting is
-    // the same op in the other direction, so everything on the minion
-    // goes home with it (p. 16). docs/taking-actions-design.md §3
-    for (const seat of [...this.state.seats]) {
-      for (const m of [...seat.minions]) {
-        const back = m.controlRevertsTo;
-        if (back === undefined) continue;
-        delete m.controlRevertsTo;
-        // Their Methuselah may have been ousted while the loan ran; there
-        // is then nobody to give them back to and they stay put.
-        if (back !== seat.id && !getSeat(this.state, back).ousted) {
-          this.changeMinionControl(m.id, back);
-        }
-      }
-    }
+    // superior, The Art of Love). Reverting is the same op in the other
+    // direction, so everything on the minion goes home with it (p. 16).
+    // The loans that run a whole turn longer are returned in the unlock phase
+    // instead (docs/borrowed-minions-design.md §2), which is why this names its
+    // moment rather than sweeping every loan it can see.
+    this.returnBorrowedMinions(null, "endOfTurn");
     const next = preyOf(this.state, tf.seat);
     const turnNumber = tf.turnNumber + 1;
     if (this.state.maxTurns !== null && turnNumber > this.state.maxTurns) {

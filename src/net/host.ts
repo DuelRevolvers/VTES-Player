@@ -341,6 +341,19 @@ export class HostSession {
     });
     channel.send({ type: "welcome", version: PROTOCOL_VERSION, seat: msg.seat, seats });
     this.syncOne(msg.seat);
+    // A DROPPED CONNECTION IS A DEPARTURE TOO. Closing the tab or losing
+    // the network sends no "leave", and without this the seat sat there
+    // with nobody to answer it — the table stalled rather than a bot
+    // stepping in (owner report 2026-09-25). Only while this channel is
+    // still the seat's: a kick, a Leave or a reconnect has already moved
+    // the seat on, and must not be taken over twice.
+    channel.onClose?.(() => {
+      if (this.closed) return;
+      const peer = this.peers.get(msg.seat);
+      if (!peer || peer.channel !== channel) return;
+      peer.off();
+      this.takeOver(peer.seat, peer.name, "lost connection");
+    });
   }
 
   private onChoose(channel: HostChannel, msg: ChooseMsg): void {

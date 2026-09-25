@@ -1625,6 +1625,61 @@ export type EffectPrimitive =
          *  `refPerMinion`. */
         | { of: "preyAshHeapCrypt" };
     }
+  /**
+   * "Successful referendum means EACH METHUSELAH CAN CHOOSE a ready vampire
+   * they control. Each Methuselah gains pool equal to their chosen vampire's
+   * capacity, then burns 5 pool" (Ancient Influence) / "…gains 6 pool, then
+   * burns pool equal to the capacity of THEIR PREDATOR's chosen vampire"
+   * (Reins of Power).
+   *
+   * One primitive, two cards, and the only difference between them is WHICH
+   * SEAT'S choice each number reads — which is exactly the thing a reader gets
+   * backwards, so both halves name their source rather than relying on order.
+   *
+   * The choice is MANDATORY with an explicit "nobody" answer, not optional with
+   * a decline: a declined optional choice is a plain `pass` the handler is never
+   * told about, and this payout cannot be computed until every asked seat has
+   * answered (the `refBurnAllKeepable` lesson, applied before it bit).
+   * docs/once-in-a-game-design.md §2
+   */
+  | {
+      kind: "refEachSeatChoosesVampire";
+      /** "…gains 6 pool" vs "…gains pool equal to their chosen vampire's
+       *  capacity". */
+      gain: { flat: number } | { capacityOfChosen: "own" };
+      /** "…then burns 5 pool" vs "…burns pool equal to the capacity of their
+       *  PREDATOR's chosen vampire". */
+      burn: { flat: number } | { capacityOfChosen: "predator" };
+    }
+  /**
+   * "Take control of an ally controlled by another Methuselah UNTIL THE END OF
+   * YOUR TURN" (The Art of Love) / "…a ready Malkavian that another Methuselah
+   * controls UNTIL YOUR NEXT UNLOCK PHASE" (Malkavian Dementia) / "…a minion
+   * controlled by a Methuselah with 3 or fewer pool" (From a Sinking Ship,
+   * which never gives it back).
+   *
+   * A master's target rides in the option id like every other master target.
+   * The DURATION is the axis this family differs along, so it is a named value
+   * on every card rather than a default: a borrowing that forgets to end is a
+   * permanent theft, and nothing on the table would show which was meant.
+   * docs/borrowed-minions-design.md §2
+   */
+  | {
+      kind: "takeControlOfMinion";
+      /** Every filter present must match; absent does not constrain. */
+      who: {
+        kind?: "vampire" | "ally";
+        clan?: string;
+        ready?: boolean;
+        /** "Not usable to take control of a vampire with capacity 7 or more". */
+        maxCapacity?: number;
+        /** "…controlled by a Methuselah with 3 or fewer pool". */
+        controllerMaxPool?: number;
+      };
+      /** `"permanent"` is a theft; the other two are loans, and the moment
+       *  they end is the borrower's, never the owner's. */
+      until: "endOfTurn" | "borrowerUnlock" | "permanent";
+    }
   /** "Choose a Methuselah OR a location — or BOTH if the acting vampire
    *  is one of \<titles\>" (Cold War). §2 */
   | {

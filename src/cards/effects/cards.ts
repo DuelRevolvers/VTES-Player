@@ -10904,6 +10904,214 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
 
+  // --- Borrowed minions (docs/borrowed-minions-design.md) ---
+  // Three masters that take a minion off another Methuselah. One mechanism, and
+  // the family differs along two axes worth asserting against each other: HOW
+  // LONG the loan runs, and WHO can be taken.
+  {
+    // "Master.
+    //  Take control of an ally controlled by another Methuselah until the end of
+    //  your turn."
+    //
+    // The shortest loan in the family: one turn's use of somebody else's ally,
+    // which goes home with everything on it (p. 16).
+    krcgId: 100096,
+    name: "The Art of Love",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "takeControlOfMinion", who: { kind: "ally" }, until: "endOfTurn" }],
+      },
+    ],
+  },
+  {
+    // "Master.
+    //  Take control of a ready Malkavian that another Methuselah controls until
+    //  your next unlock phase."
+    //
+    // A WHOLE TURN LONGER than The Art of Love: you act with the Malkavian this
+    // turn and hand it back on the way into your next one, so its own controller
+    // loses a whole turn of it rather than the tail of one.
+    krcgId: 101150,
+    name: "Malkavian Dementia",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "takeControlOfMinion",
+            who: { kind: "vampire", clan: "Malkavian", ready: true },
+            until: "borrowerUnlock",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Master.
+    //  Take control of a minion controlled by a Methuselah with 3 or fewer pool.
+    //  Not usable to take control of a vampire with capacity 7 or more. Only one
+    //  From a Sinking Ship can be played in a game."
+    //
+    // Not a loan at all — the theft in the family, and the reason the duration
+    // is a named value on every card rather than a default. Its price is the
+    // condition: the victim must already be nearly dead.
+    krcgId: 100793,
+    name: "From a Sinking Ship",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    oncePerGameByName: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "takeControlOfMinion",
+            who: { controllerMaxPool: 3, maxCapacity: 6 },
+            until: "permanent",
+          },
+        ],
+      },
+    ],
+  },
+
+  // --- Once in a game (docs/once-in-a-game-design.md) ---
+  // Four political actions that name a VAMPIRE and pay out from what that
+  // vampire IS, in two pairs of twins. Each pair differs in exactly one thing,
+  // which is the thing a reader gets backwards: whose capacity is read, and
+  // which sect is named.
+  {
+    // "Only one Ancient Influence can be played or called in a game.
+    //  Successful referendum means each Methuselah can choose a ready vampire
+    //  they control. Each Methuselah gains pool equal to their chosen vampire's
+    //  capacity, then burns 5 pool."
+    //
+    // Gains from your OWN vampire and pays a flat toll: a table of elders all
+    // profit, and a table of neonates all bleed.
+    krcgId: 100064,
+    name: "Ancient Influence",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    oncePerGameByName: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refEachSeatChoosesVampire",
+            gain: { capacityOfChosen: "own" },
+            burn: { flat: 5 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only one Reins of Power can be played or called in a game.
+    //  Successful referendum means each Methuselah can choose a ready vampire
+    //  they control. Each Methuselah gains 6 pool, then burns pool equal to the
+    //  capacity of their predator's chosen vampire."
+    //
+    // The mirror: the flat amount is the GAIN, and the charge is read off
+    // somebody else's board — your predator's, so the vampire you choose prices
+    // your PREY, never you.
+    krcgId: 101591,
+    name: "Reins of Power",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    oncePerGameByName: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refEachSeatChoosesVampire",
+            gain: { flat: 6 },
+            burn: { capacityOfChosen: "predator" },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a Camarilla vampire.
+    //  Choose a Camarilla vampire. Successful referendum means that for the
+    //  remainder of the game, any vampire attempting to block that vampire
+    //  burns 1 blood."
+    //
+    // Archon's block toll without Archon's rush grant or its blood-hunt
+    // immunity — the same `blockToll` static, put on the chosen vampire by the
+    // same `refAttachToChosen`.
+    krcgId: 100284,
+    name: "Camarilla Exemplary",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresSect: ["camarilla"],
+    permanent: {
+      where: "bearer",
+      statics: { blockToll: { amount: 1, payWith: "blood" } },
+      tags: ["Camarilla Exemplary"],
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refAttachToChosen", who: { sect: "camarilla" } }],
+      },
+    ],
+  },
+  {
+    // "Requires a ready Sabbat vampire.
+    //  Choose a ready Sabbat vampire. Successful referendum means that for the
+    //  remainder of the game, any vampire attempting to block the chosen
+    //  vampire burns 1 blood."
+    //
+    // The twin, one sect over. Printed as two cards because a Camarilla
+    // referendum and a Sabbat one are different tables; to the engine the only
+    // difference is the filter, which is why they are asserted against each
+    // other rather than one at a time.
+    krcgId: 101667,
+    name: "Sabbat Priest",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresSect: ["sabbat"],
+    permanent: {
+      where: "bearer",
+      statics: { blockToll: { amount: 1, payWith: "blood" } },
+      tags: ["Sabbat Priest"],
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refAttachToChosen", who: { sect: "sabbat" } }],
+      },
+    ],
+  },
+
   // --- The blood hunt (docs/blood-hunt-answers-design.md) ---
   // Three cards on one referendum: this one tilts the VOTE, and the two
   // bespoke handlers beside Sudden Reversal answer the VERDICT.

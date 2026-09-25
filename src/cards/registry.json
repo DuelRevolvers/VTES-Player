@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-25T15:46:01.664Z",
+ "fetchedAt": "2026-09-25T18:21:22.647Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -547,6 +547,34 @@
    },
    "supported": true
   },
+  "100064": {
+   "card": {
+    "kind": "library",
+    "id": 100064,
+    "name": "Ancient Influence",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only one Ancient Influence can be played or called in a game.\nSuccessful referendum means each Methuselah can choose a ready vampire they control. Each Methuselah gains pool equal to their chosen vampire's capacity, then burns 5 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/ancientinfluence.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Legacies of Blood",
+     "Sabbat Preconstructed",
+     "Twenty-Fifth Anniversary",
+     "Thirtieth Anniversary"
+    ]
+   },
+   "supported": true
+  },
   "100065": {
    "card": {
     "kind": "library",
@@ -797,6 +825,30 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100096": {
+   "card": {
+    "kind": "library",
+    "id": 100096,
+    "name": "The Art of Love",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Toreador antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nTake control of an ally controlled by another Methuselah until the end of your turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/artoflovethe.jpg",
+    "sets": [
+     "Sabbat",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -2101,6 +2153,29 @@
      "Kindred Most Wanted",
      "Third Edition",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "100284": {
+   "card": {
+    "kind": "library",
+    "id": 100284,
+    "name": "Camarilla Exemplary",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire.\nChoose a Camarilla vampire. Successful referendum means that for the remainder of the game, any vampire attempting to block that vampire burns 1 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/camarillaexemplary.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -6252,6 +6327,28 @@
    },
    "supported": true
   },
+  "100793": {
+   "card": {
+    "kind": "library",
+    "id": 100793,
+    "name": "From a Sinking Ship",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master.\nTake control of a minion controlled by a Methuselah with 3 or fewer pool. Not usable to take control of a vampire with capacity 7 or more. Only one From a Sinking Ship can be played in a game.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/fromasinkingship.jpg",
+    "sets": [
+     "Kindred Most Wanted",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100794": {
    "card": {
     "kind": "library",
@@ -8570,6 +8667,28 @@
     "image": "https://static.krcg.org/card/malajitchandramouli.jpg",
     "sets": [
      "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
+  "101150": {
+   "card": {
+    "kind": "library",
+    "id": 101150,
+    "name": "Malkavian Dementia",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nTake control of a ready Malkavian that another Methuselah controls until your next unlock phase.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/malkaviandementia.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
     ]
    },
    "supported": true
@@ -11823,6 +11942,33 @@
    },
    "supported": true
   },
+  "101591": {
+   "card": {
+    "kind": "library",
+    "id": 101591,
+    "name": "Reins of Power",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only one Reins of Power can be played or called in a game.\nSuccessful referendum means each Methuselah can choose a ready vampire they control. Each Methuselah gains 6 pool, then burns pool equal to the capacity of their predator's chosen vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/reinsofpower.jpg",
+    "sets": [
+     "Anarchs",
+     "Kindred Most Wanted",
+     "Third Edition",
+     "Keepers of Tradition",
+     "Sabbat Preconstructed",
+     "Twenty-Fifth Anniversary",
+     "Thirtieth Anniversary"
+    ]
+   },
+   "supported": true
+  },
   "101594": {
    "card": {
     "kind": "library",
@@ -12218,6 +12364,30 @@
     "image": "https://static.krcg.org/card/saatetta.jpg",
     "sets": [
      "The Unaligned"
+    ]
+   },
+   "supported": true
+  },
+  "101667": {
+   "card": {
+    "kind": "library",
+    "id": 101667,
+    "name": "Sabbat Priest",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a ready Sabbat vampire.\nChoose a ready Sabbat vampire. Successful referendum means that for the remainder of the game, any vampire attempting to block the chosen vampire burns 1 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sabbatpriest.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Black Hand",
+     "Third Edition"
     ]
    },
    "supported": true

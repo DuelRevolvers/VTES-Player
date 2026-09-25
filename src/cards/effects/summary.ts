@@ -115,6 +115,8 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   refLockClan: null,
   refRemoveChosenMinion: null,
   refBurnAllKeepable: null,
+  refEachSeatChoosesVampire: null,
+  takeControlOfMinion: "board",
   refChooseSeatsBurn: "poolDrain",
   refLockAndAllocate: "poolDrain",
 

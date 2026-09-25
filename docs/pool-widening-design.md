@@ -1006,6 +1006,72 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 91 — borrowed minions (3 cards), 2026-09-25
+
+Library **828 → 831**. The Art of Love, Malkavian Dementia, From a Sinking Ship.
+Write-up: `docs/borrowed-minions-design.md`.
+
+Three masters that take a minion off another Methuselah, differing along two axes:
+HOW LONG (end of your turn → your next unlock phase → never given back) and WHO
+(an ally → a ready Malkavian → anything a Methuselah on 3 or fewer pool controls,
+capacity 6 or less).
+
+**What it found, before a line was written: the mechanism already existed and this
+wave nearly built a second one.** The design had got as far as a
+`GameState.borrowedMinions` list, an `until` on `ControlChanged` and a fold to
+maintain it when `endTurn` turned out to already contain `controlRevertsTo` and a
+return sweep, written for Puppet Master superior and filed under
+`docs/taking-actions-design.md` — a doc about ACTIONS, which is why a search for
+control machinery missed it. All of it was reverted; the wave added ONE FIELD
+(`controlRevertsAt`, absent meaning "end of turn" so Puppet Master is untouched)
+and one shared sweep called from both moments. Nothing would have failed had the
+second model shipped, until the first card borrowed through one mechanism and read
+through the other.
+
+Rules worth keeping: the moment is the BORROWER's, not the owner's; the return
+happens BEFORE the unlock sweep, so a minion borrowed locked goes home locked
+rather than being rested by its borrower's phase; "ready" is the region, not the
+lock (a locked Malkavian is a legal target, a torpid one is not); and the capacity
+cap is about VAMPIRES, since an ally's `capacity` field holds its life.
+
+**A test-writing trap:** a master option id is
+`play:<Name>:<mode>:<target>:<cardInstanceId>`, so the target is the
+SECOND-TO-LAST segment. Matching the end of the string reported all three cards as
+offering nothing, which looks exactly like three unimplemented cards.
+
+### Wave 90 — once in a game (4 cards), 2026-09-25
+
+Library **824 → 828**. Ancient Influence, Reins of Power, Camarilla Exemplary,
+Sabbat Priest. Write-up: `docs/once-in-a-game-design.md`.
+
+Four political actions that name a VAMPIRE and pay out from what that vampire IS,
+in **two pairs of twins** — the cheapest correctness test there is, because each
+pair differs in exactly one thing and either card alone would look right with that
+one thing reversed. Ancient Influence and Reins of Power share one new primitive
+and differ in WHICH SEAT'S choice each number reads (your own capacity minus a
+flat 5, against a flat 6 minus your PREDATOR's pick). Camarilla Exemplary and
+Sabbat Priest differ only in the sect named, and needed no new code at all:
+`refAttachToChosen` plus `blockToll` are both already there, written for Archon.
+
+**The new primitive is a per-seat CHOICE SWEEP during a referendum's
+resolution**, and three decisions are worth carrying forward: the choice is
+MANDATORY with an explicit "choose nobody" answer (an optional choice is a plain
+`pass` the handler never hears, which would strand a payout that must read every
+seat's answer — the `refBurnAllKeepable` lesson applied before it bit); the payout
+fires once, after the last answer, identified by RECOMPUTING who was askable
+rather than remembering a count; and it runs for every STANDING seat, asked or
+not, because "each Methuselah then burns 5 pool" charges a seat with no vampire
+too.
+
+**Nothing was broken — second wave running.** The reason is worth keeping: a
+per-seat choice sweep had been built once before (the keepable ransom), and the
+SECOND user of a pattern is where you learn whether the first one generalised. It
+did. What the wave cost was finding that a new referendum primitive must be
+declared in THREE places: `REFERENDUM_POLARITY` and `EFFECT_TAGS` (both compile
+errors by design, both fired) and the `choiceByKey` key, which must match the
+string used to raise the choice and which nothing checks — the same shape as wave
+88's install guard and wave 87's target rider.
+
 ### Wave 89 — the blood hunt (3 cards), 2026-09-25
 
 Library **821 → 824**. The Hunt Club, Absolution of the Diabolist, Lay Low.

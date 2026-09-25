@@ -120,6 +120,14 @@ import {
 import type { DeckSource, SeatConfig, TableConfig } from "./newgame.ts";
 import { deckLabel as labelForDeck } from "./newgame.ts";
 import {
+  cardDatabase,
+  pickCardFolder,
+  reconnectCardFolder,
+  restoreCardFolder,
+  scanUrl,
+  useKrcg,
+} from "./localcards.ts";
+import {
   botSeats,
   buildTable,
   defaultTable,
@@ -212,6 +220,8 @@ export class Shell {
    *  `error` so a failed load does not clear what the deck importer or the
    *  profile form was telling you — they are three panels on one screen. */
   private saveError = "";
+  /** Why the last card-folder change failed, for the Card Database panel. */
+  private cardDbError = "";
   private botNameError = "";
   /** Which seat's deck panel is open on the new-game screen. */
   private editingDeck: number | null = null;
@@ -342,6 +352,13 @@ export class Shell {
     const invited = codeFromLink(location.href);
     if (invited) this.joinCode = invited;
     this.screen = !this.profile ? "profile" : invited ? "join" : "menu";
+    // Reopen a card folder chosen on an earlier visit. Images drawn before
+    // it lands come from krcg.org, and the repaint swaps them over.
+    void restoreCardFolder()
+      .then(() => {
+        if (cardDatabase().kind !== "krcg") this.paint();
+      })
+      .catch(() => undefined);
     // ONCE, here, and never in `wire()`: `wire()` runs on every paint, and
     // these listeners sit on the ROOT, which survives every paint — so
     // binding them there would stack another copy per repaint.
@@ -646,6 +663,7 @@ export class Shell {
             : ""
         }
         ${p ? this.savedGamesPanel() : ""}
+        ${p ? this.cardDatabasePanel() : ""}
       </div>`;
   }
 
@@ -684,6 +702,42 @@ export class Shell {
           it can be handed over with a bug report and replayed exactly.
         </p>
         ${this.saveError ? `<p class="err">${esc(this.saveError)}</p>` : ""}
+      </div>`;
+  }
+
+  /**
+   * Where card scans come from: static.krcg.org, or a folder on this
+   * computer (owner request 2026-09-25; see localcards.ts). Only the
+   * IMAGES move — card text and rules are built into the game.
+   */
+  private cardDatabasePanel(): string {
+    const db = cardDatabase();
+    const status =
+      db.kind === "local"
+        ? `Using the folder <b>${esc(db.folder)}</b> — ${db.images} card image${
+            db.images === 1 ? "" : "s"
+          }. A card it does not have still comes from krcg.org.`
+        : db.kind === "reconnect"
+          ? `Your folder <b>${esc(db.folder)}</b> needs your OK again before
+             this browser will read it. Until then, images come from krcg.org.`
+          : `Using <b>static.krcg.org</b>, the official VEKN card scans.`;
+    return `
+      <div class="supported carddb">
+        <div class="sethead">Card Database</div>
+        <p class="note">${status}</p>
+        <div class="row">
+          ${db.kind === "reconnect" ? `<button id="carddb-reconnect">Reconnect folder</button>` : ""}
+          <button id="carddb-pick">${db.kind === "local" ? "Choose another folder…" : "Use a local folder…"}</button>
+          ${db.kind === "krcg" ? "" : `<button id="carddb-krcg">Use krcg.org</button>`}
+        </div>
+        <p class="note dim">
+          The folder is matched by file name, the way KRCG names its scans
+          (<code>44magnum.jpg</code>); subfolders are searched too, and
+          .png or .webp work as well. Card text and rules are part of the
+          game itself and do not change. Nothing is uploaded — the images
+          stay on this computer.
+        </p>
+        ${this.cardDbError ? `<p class="err">${esc(this.cardDbError)}</p>` : ""}
       </div>`;
   }
 
@@ -1249,7 +1303,7 @@ export class Shell {
         return `
           <span class="dkcell ${card.status}">
             <button class="dbcard dkpic" data-card="${card.id}" data-zoomid="${card.id}">
-              <img loading="lazy" src="${esc(card.image)}" alt="${esc(card.name)}" />
+              <img loading="lazy" src="${esc(scanUrl(card.image))}" alt="${esc(card.name)}" />
               <span class="dkcopies">${copies}</span>
             </button>
             ${
@@ -1484,7 +1538,7 @@ export class Shell {
       const text = p.querySelector<HTMLDivElement>(".zoomtext");
       const name = p.querySelector<HTMLDivElement>(".zoomname");
       if (!card || !img || !text || !name) return;
-      img.src = card.image;
+      img.src = scanUrl(card.image);
       text.textContent = card.text;
       // The name fades, as on the table; restarting the animation is what
       // makes it fade again for the NEXT card, not only the first.
@@ -3207,6 +3261,21 @@ export class Shell {
       this.paint();
     });
 
+    const carddb = (work: () => Promise<number | null | void>): void => {
+      this.cardDbError = "";
+      void work()
+        .then((n) => {
+          if (n === 0) this.cardDbError = "That folder has no card images in it.";
+          this.paint();
+        })
+        .catch((err: unknown) => {
+          this.cardDbError = `Could not read that folder: ${(err as Error).message}`;
+          this.paint();
+        });
+    };
+    this.on("#carddb-pick", () => carddb(pickCardFolder));
+    this.on("#carddb-reconnect", () => carddb(reconnectCardFolder));
+    this.on("#carddb-krcg", () => carddb(useKrcg));
     this.on("#save-file", () => {
       const input = document.createElement("input");
       input.type = "file";

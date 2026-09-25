@@ -17,6 +17,7 @@
 
 import type { CatalogCard, CatalogFile, CatalogStatus } from "../cards/catalog.ts";
 import { disciplineName, VIRTUE_CODES } from "../cards/catalog.ts";
+import { scanUrl } from "./localcards.ts";
 
 const esc = (s: string): string =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -597,7 +598,7 @@ function cardCell(
     return `
       <span class="cscell${inDeck}">
         <button class="cscard ${c.status}${sel}" data-card="${c.id}" data-zoomid="${c.id}">
-          <img loading="lazy" src="${esc(c.image)}" alt="${esc(c.name)}" />
+          <img loading="lazy" src="${esc(scanUrl(c.image))}" alt="${esc(c.name)}" />
           <span class="csname">${esc(c.name)}</span>
           ${statusBadge(c)}
         </button>
@@ -732,7 +733,7 @@ export function cardDetailMarkup(c: CatalogCard): string {
         <button id="cs-close" class="csclose" aria-label="Close">&times;</button>
       </div>
       <div class="csdetailbody">
-        <img class="csbig" src="${esc(c.image)}" alt="${esc(c.name)}" />
+        <img class="csbig" src="${esc(scanUrl(c.image))}" alt="${esc(c.name)}" />
         <div class="csfacts">
           <table class="csfacttable">
             ${rows

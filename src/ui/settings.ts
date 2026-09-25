@@ -166,6 +166,9 @@ export const PASS_TIMEOUTS: { ms: number; label: string }[] = [
     const seconds = (i + 1) * 5;
     return { ms: seconds * 1000, label: seconds === 60 ? "1 minute" : `${seconds} seconds` };
   }),
+  { ms: 120_000, label: "2 minutes" },
+  { ms: 150_000, label: "2.5 minutes" },
+  { ms: 180_000, label: "3 minutes" },
 ];
 
 /** The longest pass clock the panel offers, and the cap a stored setting

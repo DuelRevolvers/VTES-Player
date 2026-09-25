@@ -406,6 +406,35 @@ describe("relabelling a seat a bot took over", () => {
     expect(peers["Carol"]!.botNames()["Bob"]).toBe("Bob Bot");
   });
 
+  // Owner report 2026-09-25: a player left mid-game and nobody took the
+  // seat. Closing a tab or losing the network sends no "leave" — only the
+  // channel closing says they have gone.
+  it("hands a seat to a bot when its connection DROPS, and back on rejoin", async () => {
+    const host = new LocalTransport({ setup });
+    const session = new HostSession(host, ["Bob"]);
+    const { host: h, peer: p } = loopback();
+    session.accept(h);
+    new PeerTransport(p, "Bob", "Bob");
+    await settle();
+    expect(host.botNames()).toEqual({});
+
+    p.close(); // no goodbye message — the wire just goes
+    await settle();
+    expect(host.botNames()["Bob"]).toBe("Bob Bot");
+    expect(session.connectedSeats).not.toContain("Bob");
+
+    const { host: h2, peer: p2 } = loopback();
+    session.accept(h2);
+    const again = new PeerTransport(p2, "Bob", "Bob");
+    await settle();
+    expect(again.connected).toBe(true);
+    expect(host.botNames()["Bob"]).toBeUndefined();
+    // The OLD channel closing late must not hand the seat back to a bot.
+    h.close();
+    await settle();
+    expect(host.botNames()["Bob"]).toBeUndefined();
+  });
+
   it("is DISPLAY ONLY — the seat id every option is written in terms of is untouched", () => {
     // The invariant this whole mechanism exists to protect. Renaming the
     // seat would invalidate every option id, the command log and every

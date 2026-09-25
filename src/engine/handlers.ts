@@ -451,7 +451,10 @@ export interface EngineOps {
   /** "Take control of them UNTIL THE END OF YOUR TURN" (Puppet Master
    *  superior) — `changeMinionControl` plus the return address, honoured
    *  in `endTurn`. docs/taking-actions-design.md §3 */
-  borrowMinion(minion: MinionId, to: SeatId): void;
+  /** `until` defaults to `"endOfTurn"`, which is what every borrow in the pool
+   *  meant before "…until your next unlock phase" arrived (Malkavian Dementia).
+   *  docs/borrowed-minions-design.md §2 */
+  borrowMinion(minion: MinionId, to: SeatId, until?: "endOfTurn" | "borrowerUnlock"): void;
   changePermanentControl(cardId: CardInstanceId, to: SeatId): void;
   /** The Methuselah controlling a card in play, or null if it has left. */
   controllerOfEntry(cardId: CardInstanceId): SeatId | null;

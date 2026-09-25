@@ -333,6 +333,12 @@ export interface Channel<In, Out> {
   /** True until `close()`. A send on a closed channel is dropped, not an
    *  error: a peer disappearing is ordinary, not exceptional. */
   readonly open: boolean;
+  /**
+   * Called once when the channel shuts from EITHER end — including a
+   * browser tab closed or a network gone, which send no goodbye. Optional
+   * so a hand-built test channel need not have one.
+   */
+  onClose?(cb: () => void): void;
 }
 
 export type HostChannel = Channel<PeerMessage, HostMessage>;
@@ -349,6 +355,16 @@ export function loopback(): { host: HostChannel; peer: PeerChannel } {
   const toHost: Array<(m: PeerMessage) => void> = [];
   const toPeer: Array<(m: HostMessage) => void> = [];
   let open = true;
+  const closers: Array<() => void> = [];
+  // Either end closing shuts both, and tells whoever asked — later, like
+  // a real network would.
+  const shut = (): void => {
+    if (!open) return;
+    open = false;
+    void Promise.resolve().then(() => {
+      for (const cb of closers.splice(0)) cb();
+    });
+  };
 
   // A message is dropped only if the channel was ALREADY closed when it
   // was sent. Once it is on the wire a later close does not recall it —
@@ -372,8 +388,9 @@ export function loopback(): { host: HostChannel; peer: PeerChannel } {
           if (i >= 0) toHost.splice(i, 1);
         };
       },
-      close: () => {
-        open = false;
+      close: shut,
+      onClose: (cb) => {
+        closers.push(cb);
       },
       get open() {
         return open;
@@ -388,8 +405,9 @@ export function loopback(): { host: HostChannel; peer: PeerChannel } {
           if (i >= 0) toPeer.splice(i, 1);
         };
       },
-      close: () => {
-        open = false;
+      close: shut,
+      onClose: (cb) => {
+        closers.push(cb);
       },
       get open() {
         return open;

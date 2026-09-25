@@ -12,6 +12,7 @@ import registry from "../cards/registry.json";
 import type { CardRegistry, CryptCardDef } from "../cards/types.ts";
 import type { DisciplineLevel, Sect, VampireTitle } from "../engine/index.ts";
 import { CITY_TITLES } from "../engine/index.ts";
+import { scanUrl } from "./localcards.ts";
 
 const reg = registry as unknown as CardRegistry;
 
@@ -29,7 +30,9 @@ for (const entry of Object.values(reg.entries)) {
 
 /** KRCG scan URL for a card, by exact registry name. */
 export function imageFor(name: string): string | null {
-  return byName.get(name)?.image ?? null;
+  const url = byName.get(name)?.image;
+  // Through the card-database switch, so a local folder serves the table.
+  return url ? scanUrl(url) : null;
 }
 
 export function cardText(name: string): string | null {

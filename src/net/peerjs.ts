@@ -27,6 +27,7 @@ import { peerIdForCode } from "./room.ts";
 /** Wrap a live PeerJS connection as a Channel. */
 function wrap<In, Out>(conn: DataConnection): Channel<In, Out> {
   const subs = new Set<(msg: In) => void>();
+  const closers: Array<() => void> = [];
   let open = true;
   conn.on("data", (data) => {
     // PeerJS hands over whatever was serialised. Anything that is not one
@@ -37,8 +38,10 @@ function wrap<In, Out>(conn: DataConnection): Channel<In, Out> {
     }
   });
   const shut = (): void => {
+    if (!open) return;
     open = false;
     subs.clear();
+    for (const cb of closers.splice(0)) cb();
   };
   conn.on("close", shut);
   conn.on("error", shut);
@@ -53,6 +56,10 @@ function wrap<In, Out>(conn: DataConnection): Channel<In, Out> {
     close: () => {
       shut();
       conn.close();
+    },
+    onClose: (cb) => {
+      if (open) closers.push(cb);
+      else cb();
     },
     get open() {
       return open;
