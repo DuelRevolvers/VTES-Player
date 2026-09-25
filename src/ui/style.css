@@ -1822,3 +1822,23 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
 }
 .dbclosecard h2 { margin: 0 0 10px; font-size: 16px; color: var(--gold); font-weight: 600; }
 .dbclosecard .row { justify-content: flex-end; }
+
+/* Keyboard shortcuts (keybinds.ts). The table's settings dialog borrows
+   the Deck Builder's tab row, which is otherwise scoped to .shell. */
+.settings .dbtabs { margin: 0 0 8px; }
+.settings button.dbtab {
+  background: none; border: 1px solid transparent; border-bottom: none;
+  border-radius: 4px 4px 0 0; padding: 6px 14px; color: var(--dim); margin-bottom: -1px;
+}
+.settings button.dbtab.on {
+  background: var(--panel2); color: var(--gold);
+  border-color: var(--line); border-bottom-color: var(--panel2);
+}
+.keyrow { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 3px 0; }
+button.keybind { min-width: 110px; font-family: monospace; }
+button.keybind.capturing { color: var(--gold); border-color: var(--gold); }
+.kbdhint {
+  display: inline-block; min-width: 1.2em; margin-right: 5px; padding: 0 3px;
+  border: 1px solid var(--line); border-radius: 3px;
+  font: 10px/1.4 monospace; color: var(--dim); text-align: center;
+}

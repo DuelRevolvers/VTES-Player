@@ -12,6 +12,7 @@
  */
 
 import { isPlaystyle, type Playstyle } from "../ai/playstyles.ts";
+import { cleanKeybinds, DEFAULT_KEYBINDS, type KeyAction } from "./keybinds.ts";
 import { nameProblem } from "./profile.ts";
 
 const KEY = "vtes-ui-settings";
@@ -90,6 +91,8 @@ export interface UiSettings {
    * so the host's settings decide, and nothing here crosses the wire.
    */
   botPlaystyles: string[];
+  /** Keyboard shortcuts, action → key name ("" = unbound). See keybinds.ts. */
+  keybinds: Record<KeyAction, string>;
 }
 
 /**
@@ -201,6 +204,7 @@ export const DEFAULT_SETTINGS: UiSettings = {
   // Empty rather than five "default" strings, for the reason above it: an
   // unset entry and a chosen "Default" must behave identically.
   botPlaystyles: [],
+  keybinds: { ...DEFAULT_KEYBINDS },
 };
 
 /** A stable per-seat seed, so two AI seats do not make identical choices
@@ -257,7 +261,7 @@ export function loadSettings(): UiSettings {
     const raw = localStorage.getItem(KEY);
     // The spread would share DEFAULT_SETTINGS' own objects and arrays with
     // every caller, so each mutable field is replaced with a fresh one.
-    if (!raw) return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [], botPlaystyles: [] };
+    if (!raw) return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [], botPlaystyles: [], keybinds: { ...DEFAULT_KEYBINDS } };
     const parsed = JSON.parse(raw) as Partial<UiSettings>;
     return {
       autoPass:
@@ -287,9 +291,10 @@ export function loadSettings(): UiSettings {
       omniscient: parsed.omniscient === true,
       botNames: cleanBotNames(parsed.botNames),
       botPlaystyles: cleanBotPlaystyles(parsed.botPlaystyles),
+      keybinds: cleanKeybinds(parsed.keybinds),
     };
   } catch {
-    return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [], botPlaystyles: [] };
+    return { ...DEFAULT_SETTINGS, autoPass: {}, aiSeats: {}, botNames: [], botPlaystyles: [], keybinds: { ...DEFAULT_KEYBINDS } };
   }
 }
 

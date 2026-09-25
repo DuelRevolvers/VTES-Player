@@ -35,6 +35,15 @@ import {
 import type { UiSettings } from "./settings.ts";
 import { botAgentFor, playstyleOf } from "./botagent.ts";
 import { loadSettings, saveSettings, seatSeed } from "./settings.ts";
+import {
+  actionForKey,
+  KEY_BUTTONS,
+  keyName,
+  primaryOption,
+  typingIn,
+  wireControls,
+  type KeyAction,
+} from "./keybinds.ts";
 import type { GameTransport } from "./transport.ts";
 import { LocalTransport } from "./transport.ts";
 
@@ -120,6 +129,10 @@ type LegalDecision = DecisionPoint | null;
 const escapeText = (s: string): string =>
   s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
 
+/** The table the keyboard belongs to — see the constructor. */
+let activeTable: DebugApp | null = null;
+let keyListening = false;
+
 export class DebugApp {
   private eventFilter = "";
   /** The hand card the player has clicked; its plays show on the card. */
@@ -132,6 +145,10 @@ export class DebugApp {
    */
   private handOrder: Record<string, string[]> = {};
   private settingsOpen = false;
+  /** Which tab of the settings dialog is showing. View state. */
+  private settingsTab: "general" | "controls" = "general";
+  /** The shortcut waiting for its new key on the Controls tab. */
+  private keyCapturing: KeyAction | null = null;
   /** Whether the How to Play panel is open. Pure view state, like
    *  `settingsOpen`: it never reaches the command log. */
   private helpOpen = false;
@@ -226,6 +243,14 @@ export class DebugApp {
     }
     // Once: these listeners live on the root, which survives every repaint.
     this.wireZoom();
+    // The newest table owns the keyboard. One listener for the whole page,
+    // pointed at whichever table was built last — a listener per table
+    // would leave a left table pressing buttons on the next one.
+    activeTable = this;
+    if (!keyListening) {
+      keyListening = true;
+      document.addEventListener("keydown", (ev) => activeTable?.onKey(ev));
+    }
     // Any state change repaints, whoever caused it — our own click today, a
     // message from the host once a peer transport exists.
     this.transport.onChanged(() => {
@@ -443,6 +468,9 @@ export class DebugApp {
       playNarrow: this.playNarrow,
       handOrder: this.handOrder[this.handSeat() ?? ""] ?? [],
       settingsOpen: this.settingsOpen,
+      settingsTab: this.settingsTab,
+      keybinds: this.settings.keybinds,
+      keyCapturing: this.keyCapturing,
       helpOpen: this.helpOpen,
       helpOpenSections: [...this.helpOpenSections],
       helpQuery: this.helpQuery,
@@ -492,6 +520,7 @@ export class DebugApp {
       moderation: this.modOpen ? (this.table.moderate?.() ?? null) : null,
     });
     this.wire();
+    this.numberOptions();
     this.restoreScroll();
     // Keep the event log pinned to the newest entry.
     const log = this.root.querySelector("#events");
@@ -706,6 +735,60 @@ export class DebugApp {
    * watched. The decision on the table is that AI's, so the whole screen
    * goes read-only for the length of the pause.
    */
+  /** The action bar's option buttons, in the order they are drawn. */
+  private optionButtons(): HTMLButtonElement[] {
+    return Array.from(
+      this.root.querySelectorAll<HTMLButtonElement>("#decision button.opt[data-opt]"),
+    ).filter((b) => !b.disabled);
+  }
+
+  /**
+   * A number on each of the first nine options when there is a real
+   * choice between them — the keys `option1`…`option9` press. Added to the
+   * DOM after the paint rather than in `render.ts`, because which key a
+   * number means is this client's preference, not part of the table.
+   */
+  private numberOptions(): void {
+    const buttons = this.optionButtons();
+    if (buttons.length < 2) return;
+    const binds = this.settings.keybinds;
+    buttons.slice(0, 9).forEach((b, i) => {
+      const key = binds[`option${i + 1}` as KeyAction];
+      if (!key) return;
+      const tag = document.createElement("span");
+      tag.className = "kbdhint";
+      tag.textContent = key;
+      b.prepend(tag);
+    });
+  }
+
+  /**
+   * A shortcut. It presses a button that is on screen and nothing else,
+   * so it can never do what a click could not (keybinds.ts).
+   */
+  onKey(ev: KeyboardEvent): void {
+    if (!this.root.isConnected || !this.root.querySelector("#decision")) return;
+    if (ev.repeat || typingIn(ev.target)) return;
+    const name = keyName(ev);
+    if (name === null) return;
+    const action = actionForKey(this.settings.keybinds, name);
+    if (action === null) return;
+    let target: HTMLElement | null = null;
+    if (action === "primary") {
+      const buttons = this.optionButtons();
+      const id = primaryOption(buttons.map((b) => b.dataset["opt"] ?? ""));
+      target = buttons.find((b) => b.dataset["opt"] === id) ?? null;
+    } else if (action.startsWith("option")) {
+      target = this.optionButtons()[Number(action.slice(6)) - 1] ?? null;
+    } else {
+      target = this.root.querySelector<HTMLButtonElement>(KEY_BUTTONS[action] ?? "");
+    }
+    if (!target || (target as HTMLButtonElement).disabled) return;
+    // A handled key does not also scroll the page or type into anything.
+    ev.preventDefault();
+    target.click();
+  }
+
   private isThinking(): boolean {
     return this.transport instanceof LocalTransport && this.transport.isThinking;
   }
@@ -1415,8 +1498,29 @@ export class DebugApp {
     });
     on("#settings-close", () => {
       this.settingsOpen = false;
+      this.keyCapturing = null;
       this.paint();
     });
+    for (const tab of Array.from(this.root.querySelectorAll<HTMLElement>("[data-settab]"))) {
+      tab.addEventListener("click", () => {
+        this.settingsTab = tab.dataset["settab"] === "controls" ? "controls" : "general";
+        this.paint();
+      });
+    }
+    wireControls(
+      this.root,
+      (a) => {
+        this.keyCapturing = a;
+        this.paint();
+      },
+      {
+        get: () => this.settings.keybinds,
+        set: (binds) => {
+          this.settings.keybinds = binds;
+          saveSettings(this.settings);
+        },
+      },
+    );
     on("#settings-scrim", () => {
       this.settingsOpen = false;
       this.paint();

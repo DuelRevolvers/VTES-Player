@@ -35,6 +35,7 @@ import type { RuleSection } from "./rules.ts";
 import { CREDITS, RULE_SECTIONS, searchRules } from "./rules.ts";
 import type { LogNotice } from "./transport.ts";
 import { AI_SPEEDS, CARD_TEXT_SIZES, PASS_TIMEOUTS } from "./settings.ts";
+import { controlsPanel, DEFAULT_KEYBINDS, type KeyAction } from "./keybinds.ts";
 
 /**
  * Who is sitting in a seat, for the thumbnail on their mat.
@@ -1934,7 +1935,33 @@ function settingsPanel(input: RenderInput): string {
         <h3>Settings</h3>
         <button id="settings-close" title="Close">✕</button>
       </header>
+      <div class="dbtabs" role="tablist">
+        ${(["general", "controls"] as const)
+          .map(
+            (t) =>
+              `<button class="dbtab settab${(input.settingsTab ?? "general") === t ? " on" : ""}" role="tab"
+                       aria-selected="${(input.settingsTab ?? "general") === t}" data-settab="${t}">${
+                t === "general" ? "General" : "Controls"
+              }</button>`,
+          )
+          .join("")}
+      </div>
+      ${
+        input.settingsTab === "controls"
+          ? `<section>${controlsPanel(input.keybinds ?? DEFAULT_KEYBINDS, input.keyCapturing ?? null)}</section>`
+          : generalSettings(input, authority, allOn, seats, seatRow)
+      }
+    </div>`;
+}
 
+function generalSettings(
+  input: RenderInput,
+  authority: boolean,
+  allOn: boolean,
+  seats: string[],
+  seatRow: (id: string) => string,
+): string {
+  return `
       <section>
         <div class="sethead">Auto-pass</div>
         <p class="setnote">
@@ -1990,8 +2017,7 @@ function settingsPanel(input: RenderInput): string {
         </p>
       </section>`
           : ""
-      }
-    </div>`;
+      }`;
 }
 
 /**
@@ -2106,6 +2132,12 @@ export interface RenderInput {
   handOrder: string[];
   /** Whether the settings dialog is open. */
   settingsOpen: boolean;
+  /** Which tab of it is showing; General when absent. */
+  settingsTab?: "general" | "controls";
+  /** The keyboard shortcuts (the defaults when absent), and the one
+   *  waiting for a new key. */
+  keybinds?: Record<KeyAction, string>;
+  keyCapturing?: KeyAction | null;
   /** Whether the How to Play dialog is open. */
   helpOpen: boolean;
   /** Ids of the rule sections the player has expanded. */

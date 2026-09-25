@@ -69,6 +69,13 @@ const DECK_TABS: Array<{ id: DeckTab; label: string }> = [
   { id: "build", label: "Build a deck" },
   { id: "search", label: "Card search" },
 ];
+
+type SettingsTab = "profile" | "bots" | "controls";
+const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
+  { id: "profile", label: "Profile" },
+  { id: "bots", label: "Bots" },
+  { id: "controls", label: "Controls" },
+];
 import { LobbyHost, LobbyPeer } from "../net/lobby.ts";
 import type { HostSession } from "../net/host.ts";
 import { PeerTransport } from "../net/peer.ts";
@@ -144,6 +151,7 @@ import {
   saveSettings,
   seatSeed,
 } from "./settings.ts";
+import { controlsPanel, wireControls, type KeyAction } from "./keybinds.ts";
 import type { SaveSlot } from "./savedgames.ts";
 import {
   botSeatsFor,
@@ -232,6 +240,10 @@ export class Shell {
   private selectedCardId: number | null = null;
   /** Which tab of the Deck Builder is showing (owner request, 2026-09-22). */
   private deckTab: DeckTab = "decks";
+  /** Which tab of the Settings screen is showing, and the shortcut on its
+   *  Controls tab waiting for a new key. View state. */
+  private settingsTab: SettingsTab = "profile";
+  private keyCapturing: KeyAction | null = null;
   /**
    * The page of results, 1-based, and how many fit on one.
    *
@@ -511,9 +523,41 @@ export class Shell {
 
   private profileScreen(): string {
     const p = this.profile;
-    const draft = this.profileDraft;
+    // SETTINGS, IN THREE TABS (owner request, 2026-09-25): the menu's
+    // Profile button became Settings, and what it holds split into the
+    // person, their bots and their keys. A first-time visitor has no
+    // profile yet, so they get the form alone — there is nothing else to
+    // set before there is somebody to set it for.
+    if (!p) return this.profileForm();
+    const tab = this.settingsTab;
+    const body =
+      tab === "bots"
+        ? this.botNamesPanel()
+        : tab === "controls"
+          ? `<div class="supported">${controlsPanel(loadSettings().keybinds, this.keyCapturing)}</div>`
+          : this.profileForm();
     return `
       <div class="card">
+        <div class="row cardhead">
+          <h1>Settings</h1>
+          <button id="pback">Back</button>
+        </div>
+        <div class="dbtabs" role="tablist">
+          ${SETTINGS_TABS.map(
+            (t) =>
+              `<button class="dbtab${tab === t.id ? " on" : ""}" role="tab"
+                       aria-selected="${tab === t.id}" data-stab="${t.id}">${esc(t.label)}</button>`,
+          ).join("")}
+        </div>
+        <div class="dbbody">${body}</div>
+      </div>`;
+  }
+
+  private profileForm(): string {
+    const p = this.profile;
+    const draft = this.profileDraft;
+    return `
+      <div class="${p ? "supported" : "card"}">
         <!--
           BACK SITS IN THE HEADER (owner request, 2026-09-22), not down
           among Save and Delete profile. It is navigation rather than an
@@ -524,10 +568,7 @@ export class Shell {
           On a profile that does not exist yet there is nowhere to go
           back TO, so the header is just the title.
         -->
-        <div class="row cardhead">
-          <h1>${p ? "Your profile" : "Welcome"}</h1>
-          ${p ? `<button id="pback">Back</button>` : ""}
-        </div>
+        ${p ? "" : `<div class="row cardhead"><h1>Welcome</h1></div>`}
         <p class="note">
           Your profile lives <b>in this browser only</b> — there is no
           account and no server. Your name is how other players see you at a
@@ -585,7 +626,6 @@ export class Shell {
             : ""
         }
         ${p ? this.savedGamesPanel() : ""}
-        ${p ? this.botNamesPanel() : ""}
       </div>`;
   }
 
@@ -1507,7 +1547,7 @@ export class Shell {
           <button id="m-host" class="primary">Host a game</button>
           <button id="m-join">Join a game</button>
           <button id="m-decks">Deck Builder</button>
-          <button id="m-profile">Profile</button>
+          <button id="m-profile">Settings</button>
           <button id="m-leaderboard">Leaderboard</button>
           <button id="m-help">How to Play</button>
           <button id="m-exit">Exit</button>
@@ -2296,6 +2336,24 @@ export class Shell {
     });
 
     this.wireProfile();
+    this.on("[data-stab]", (el) => {
+      const tab = el.dataset["stab"];
+      if (tab !== "profile" && tab !== "bots" && tab !== "controls") return;
+      this.settingsTab = tab;
+      this.keyCapturing = null;
+      this.paint();
+    });
+    wireControls(
+      this.root,
+      (a) => {
+        this.keyCapturing = a;
+        this.paint();
+      },
+      {
+        get: () => loadSettings().keybinds,
+        set: (binds) => saveSettings({ ...loadSettings(), keybinds: binds }),
+      },
+    );
     this.wireDeckBuild();
     this.wireCardSearch();
     this.wireNewGame();

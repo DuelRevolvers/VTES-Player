@@ -128,7 +128,12 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 **Everything plays.** `npm run play` deals a real game from real decks;
 bots fill any seat; two people can play over a room code.
 
-**Green baseline: 296 test files, 3163 tests**, with `npm run typecheck`,
+**Keyboard shortcuts** landed 0.11.19 (`src/ui/keybinds.ts`): a key only
+ever `.click()`s a button already on screen. The menu's Profile button is
+now **Settings** (tabs Profile / Bots / Controls); the table's Settings
+dialog has General / Controls.
+
+**Green baseline: 297 test files, 3169 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
