@@ -1507,6 +1507,8 @@ button.pile.opens:hover { border-color: var(--gold); color: var(--gold); }
   padding: 12px 14px; border: 1px solid var(--line); border-radius: 6px;
 }
 .csgroup { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+/* Capacity and Cost side by side rather than stacked. */
+.csgroup.csgroup-range { flex-direction: row; gap: 18px; }
 /* Fields hug their content instead of stretching to the column. */
 .csfield {
   display: flex; flex-direction: column; align-items: flex-start;

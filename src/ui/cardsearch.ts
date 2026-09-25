@@ -883,7 +883,7 @@ export function filtersMarkup(q: CardQuery, f: Facets, open: boolean): string {
           <select id="cs-groups" multiple size="7">${options(f.groups, q.groups)}</select></label>
       </div>
 
-      <div class="csgroup">
+      <div class="csgroup csgroup-range">
         <div class="csrange">
           <span class="cslabel">Capacity</span>
           ${num("cs-capmin", "from", q.capacityMin, f.capacityMax)}
