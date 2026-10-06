@@ -42,6 +42,7 @@ import {
   canRepeatAction,
   canGainBlood,
   capacityOf,
+  costSourceAvailable,
   uncontrolledCanTakeCounters,
   CITY_TITLES,
   CLANS,
@@ -474,7 +475,9 @@ function paymentSplits(
     // "…can lock this location to use those counters": a locked source
     // has nothing left to offer this turn.
     if (src.locks && entry.locked) continue;
-    const available = entry.counters ?? 0;
+    // A FLAT source (The Line) pays its fixed amount; a counter source pays
+    // what is on it. The same read the spend makes, so the two cannot differ.
+    const available = costSourceAvailable(entry);
     const payable =
       (src.pays.includes("blood") ? cost.blood : 0) +
       (src.pays.includes("pool") ? cost.pool : 0);
@@ -1526,13 +1529,24 @@ function enumeratePermanentTargets(
   state: GameState,
   seatId: string,
   e: Extract<EffectPrimitive, { kind: "actionOnPermanent" }>,
+  registry: HandlerRegistry,
 ): string[] {
   const out: string[] = [];
+  // "…a location that is FREE OR COSTS 1 blood or pool" (New Management) —
+  // the PRINTED cost, whichever currency it is in. Read off the handler, the
+  // one place a card's cost lives; an unknown card is not assumed free.
+  // docs/taking-by-force-design.md §3
+  const cheapEnough = (name: string): boolean => {
+    if (e.maxCost === undefined) return true;
+    const h = registry[name];
+    if (!h) return false;
+    return (h.poolCost ?? 0) + (h.bloodCost ?? 0) <= e.maxCost;
+  };
   for (const s of state.seats) {
     if (s.ousted || s.id === seatId) continue;
     if (e.what === "location") {
       for (const p of s.permanents) {
-        if (p.tags.includes("location")) out.push(p.card.id);
+        if (p.tags.includes("location") && cheapEnough(p.card.name)) out.push(p.card.id);
       }
     } else {
       for (const m of s.minions) {
@@ -1673,7 +1687,7 @@ function compileActionCard(spec: CardSpec): CardHandler {
               EffectPrimitive,
               { kind: "actionOnPermanent" }
             >;
-            for (const t of enumeratePermanentTargets(ctx.state, ctx.seat, eff)) {
+            for (const t of enumeratePermanentTargets(ctx.state, ctx.seat, eff, ctx.registry)) {
               push(mode, { permanent: t });
             }
           } else if (mode.effects.some((e) => e.kind === "playFromHand")) {
@@ -1918,15 +1932,40 @@ function compileActionCard(spec: CardSpec): CardHandler {
             // but the frame is NOT `optional`: declining an optional frame
             // never calls `applyChoice`, which would skip the shuffle
             // p. 14 makes mandatory. "Find nothing" is an ordinary answer.
-            if (!e.searchDisciplineMaster) break;
-            ops.raiseChoice({
-              seat: af.actingSeat,
-              cardName: spec.name,
-              cardId: af.card?.instance.id ?? "",
-              key: "searchDiscipline",
-              params: { minion: af.card?.instance.id ?? "" },
-              optional: false,
-            });
+            // Choice frames are a STACK — the last raised is asked first — so
+            // they are raised in REVERSE printed order: the blood question
+            // goes on first, the Discipline master search on top of it. That
+            // way a +1-capacity master has landed before the blood is offered,
+            // and the offer includes the room it made
+            // (docs/new-vampires-design.md §4).
+            if (e.bloodFromActor !== undefined) {
+              ops.raiseChoice({
+                seat: af.actingSeat,
+                cardName: spec.name,
+                cardId: af.card?.instance.id ?? "",
+                key: "tokenBlood",
+                params: {
+                  minion: af.card?.instance.id ?? "",
+                  actor: af.acting,
+                  max: String(e.bloodFromActor),
+                },
+                optional: false,
+              });
+            }
+            if (e.searchDisciplineMaster || e.disciplineMasterFromHand) {
+              ops.raiseChoice({
+                seat: af.actingSeat,
+                cardName: spec.name,
+                cardId: af.card?.instance.id ?? "",
+                key: "searchDiscipline",
+                params: {
+                  minion: af.card?.instance.id ?? "",
+                  // Tumnimos: "…FROM YOUR HAND" — so no library, and no shuffle.
+                  ...(e.disciplineMasterFromHand ? { zones: "hand" } : {}),
+                },
+                optional: false,
+              });
+            }
             break;
           }
           case "attachSelf":
@@ -2589,7 +2628,11 @@ function compileActionCard(spec: CardSpec): CardHandler {
         // "…of the same clan as the acting vampire" (Childe) is read ONCE,
         // here; nothing links the two afterwards (§7).
         clan: eff.clanFromActor ? (actor?.clan ?? null) : (eff.clan ?? null),
-        sect: eff.sect ?? null,
+        // "…and SECT" (The Embrace, Tumnimos) — read once too.
+        // docs/new-vampires-design.md §2
+        sect: eff.sectFromActor ? (actor?.sect ?? null) : (eff.sect ?? null),
+        ...(eff.disciplines ? { disciplines: eff.disciplines } : {}),
+        ...(eff.cannotActThisTurn ? { cannotActThisTurn: true } : {}),
       };
     };
   }
@@ -6459,7 +6502,13 @@ function compileMasterCard(spec: CardSpec): CardHandler {
         // strictly better on both cards that print this.
         const start = spec.permanent.bloodStore?.start;
         if (typeof start === "number") args.counters = start;
-        else if (start) {
+        else if (start && "perMethuselah" in start) {
+          // "…with X blood where X is the number of METHUSELAHS IN THE GAME"
+          // (Slave Auction) — the ones still in it: an ousted Methuselah has
+          // left the game (p. 36). Read at play, fixed thereafter.
+          // docs/investments-design.md §2
+          args.counters = ops.state.seats.filter((s) => !s.ousted).length;
+        } else if (start) {
           const w = start.capacityOfReady;
           const sizes = getSeat(ops.state, play.seat)
             .minions.filter(
@@ -6734,6 +6783,20 @@ function compileMasterCard(spec: CardSpec): CardHandler {
     /** How many grants this location may make this phase: one, or two
      *  while "if you control a ready baron" holds (Carfax Abbey). */
     const allowance = (state: GameState, seat: SeatId): number => {
+      // "…up to X ready anarchs, where X is the number of NON-DERIVATIVE
+      // hunting grounds controlled by OTHER Methuselahs" (Poacher's). Read
+      // off the table on every ask, so a ground burned mid-phase lowers it.
+      // docs/hunting-ground-variants-design.md §4
+      if (hg.allowanceFromOthersGrounds) {
+        let x = 0;
+        for (const s of state.seats) {
+          if (s.ousted || s.id === seat) continue;
+          for (const p of s.permanents) {
+            if (p.tags.includes("huntingGround") && !p.tags.includes("derivative")) x += 1;
+          }
+        }
+        return x;
+      }
       if (!hg.extraIfControlsTitle) return 1;
       const has = getSeat(state, seat).minions.some(
         (m) =>
@@ -6744,13 +6807,72 @@ function compileMasterCard(spec: CardSpec): CardHandler {
       );
       return has ? 2 : 1;
     };
+    /** Can this vampire take blood from a hunting ground now? The per-vampire
+     *  limit and the futile-option rule, shared by every branch below. */
+    const canFeed = (m: MinionState): boolean =>
+      m.kind === "vampire" && isReady(m) && !m.usedHuntingGroundThisTurn && canGainBlood(m);
+    if (hg.rentForPool !== undefined) handler.abilityAnySeat = true;
+    /** Who HOLDS this location — read off the table, because `useAbility`'s
+     *  `owner.seat` is the DECIDING seat for a seat permanent (§3). */
+    const holderOf = (state: GameState, entry: PermanentInPlay): SeatId | undefined =>
+      entry.controller ??
+      state.seats.find((s) => s.permanents.some((p) => p.card.id === entry.card.id))?.id;
     handler.abilityOptions = (entry, owner, ctx) => {
-      if (ctx.window !== "turn.unlock" || ctx.seat !== owner.seat) return [];
+      if (ctx.window !== "turn.unlock") return [];
+      const controller = holderOf(ctx.state, entry) ?? owner.seat;
+      // "ANY OTHER Methuselah may give you a pool during HIS OR HER unlock
+      // phase to lock this card…" (Kingston Penitentiary) — the renter's own
+      // unlock phase, and the lock is what limits it.
+      // docs/hunting-ground-variants-design.md §3
+      if (hg.rentForPool !== undefined && ctx.seat !== controller) {
+        if (ctx.turnSeat !== ctx.seat || entry.locked) return [];
+        if (getSeat(ctx.state, ctx.seat).pool <= hg.rentForPool) return []; // never oust yourself
+        return getSeat(ctx.state, ctx.seat)
+          .minions.filter(canFeed)
+          .map((m) => ({
+            id: `ability:${spec.name}:${entry.card.id}:rent:${m.id}`,
+            kind: "useAbility" as const,
+            label: `${spec.name}: pay ${controller} ${hg.rentForPool} pool — ${m.name} gains 1 blood`,
+            source: entry.card.id,
+            params: { target: m.id, rent: "1" },
+          }));
+      }
+      if (ctx.seat !== owner.seat) return [];
       // "During YOUR unlock phase" — not every Methuselah's (the window is
       // offered to other seats for Homunculus-style abilities).
       if (ctx.turnSeat !== owner.seat) return [];
       if ((entry.phaseUses ?? 0) >= allowance(ctx.state, owner.seat)) return [];
       const options: LegalOption[] = [];
+      // "…to EACH OF THE TWO OLDEST ready vampires you control" (Gurchon
+      // Hall): ONE use, two FIXED recipients. Oldest is capacity; a tie for
+      // the second place is the controller's to break, so each legal pair is
+      // one option. Offered while at least one of the pair can still feed.
+      // docs/hunting-ground-variants-design.md §2
+      if (hg.twoOldest) {
+        const ready = getSeat(ctx.state, owner.seat)
+          .minions.filter((m) => m.kind === "vampire" && isReady(m))
+          .sort((a, b) => capacityOf(b) - capacityOf(a));
+        if (ready.length === 0) return [];
+        const second = capacityOf(ready[Math.min(1, ready.length - 1)]!);
+        const must = ready.filter((m) => capacityOf(m) > second);
+        const tied = ready.filter((m) => capacityOf(m) === second);
+        const pairs =
+          ready.length === 1
+            ? [[ready[0]!]]
+            : combinations(tied, 2 - must.length).map((rest) => [...must, ...rest]);
+        for (const pair of pairs) {
+          if (!pair.some(canFeed)) continue;
+          const ids = pair.map((m) => m.id);
+          options.push({
+            id: `ability:${spec.name}:${entry.card.id}:${ids.join("+")}`,
+            kind: "useAbility",
+            label: `${spec.name}: ${pair.map((m) => m.name).join(" and ")} gain 1 blood each`,
+            source: entry.card.id,
+            params: { target: ids.join(",") },
+          });
+        }
+        return options;
+      }
       for (const m of getSeat(ctx.state, owner.seat).minions) {
         if (m.kind !== "vampire" || !isReady(m)) continue;
         // "…who follows the Path of <x>" (Burial Site Hunting Ground) — a
@@ -6804,8 +6926,40 @@ function compileMasterCard(spec: CardSpec): CardHandler {
     handler.useAbility = (entry, owner, choice, ops) => {
       const target = choice.params["target"];
       if (!target) throw new Error(`${spec.name}: no hunting-ground target`);
+      // A RENTAL (Kingston Penitentiary): the renter pays the location's
+      // controller, the card locks, and the renter's vampire feeds. It is not
+      // one of the owner's uses, so it leaves `phaseUses` alone. §3
+      if (choice.params["rent"]) {
+        // NOT `owner.seat`: for a seat permanent, `useAbility` is handed the
+        // DECIDING seat as its owner — here the renter — so "pay the owner"
+        // written with it pays the renter back his own pool. The other
+        // any-seat cards pass the seat in `params` for the same reason; this
+        // one reads the holder off the table. The CLAUDE.md "which seat an
+        // ability belongs to" lesson, a sixth time. §3
+        const controller = holderOf(ops.state, entry);
+        const renter = findMinion(ops.state, target)?.controller;
+        if (!renter || !controller) return;
+        ops.emit({ type: "PoolBurned", seat: renter, amount: hg.rentForPool! });
+        ops.emit({ type: "PoolGained", seat: controller, amount: hg.rentForPool! });
+        ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+        ops.emit({ type: "BloodGained", minion: target, amount: 1 });
+        ops.emit({ type: "HuntingGroundUsed", minion: target });
+        return;
+      }
       entry.usedThisPhase = true; // this location is spent for the turn
       entry.phaseUses = (entry.phaseUses ?? 0) + 1;
+      // Two fixed recipients (Gurchon Hall). Each is fed only if it still can:
+      // "a vampire can gain blood from only one hunting ground each turn" binds
+      // each of them separately. §2
+      if (target.includes(",")) {
+        for (const id of target.split(",")) {
+          const m = findMinion(ops.state, id);
+          if (!m || !canFeed(m)) continue;
+          ops.emit({ type: "BloodGained", minion: id, amount: hg.amount });
+          ops.emit({ type: "HuntingGroundUsed", minion: id });
+        }
+        return;
+      }
       if (choice.params["grant"] === "life") {
         // An ally's life lives in the same field as a vampire's blood
         // (p. 11), and `BloodGained` is already clamped by `capacityOf`.
@@ -8444,6 +8598,51 @@ function payEachSeatChoice(
   for (const s of seats) delete getSeat(ops.state, s.id).referendumVampireChoice;
 }
 
+/**
+ * "IN THIS REFERENDUM, …" — apply a political action's own vote riders as its
+ * referendum opens. The ONE implementation: spec-compiled cards reach it through
+ * `referendumSetup`, and the bespoke `titleGrant` (the Justicars, Investiture)
+ * calls it too, so "each <clan> gets +1 vote" is not spelled twice.
+ * docs/in-this-referendum-design.md §2
+ */
+export function applyReferendumRiders(
+  frame: ReferendumFrame,
+  state: GameState,
+  riders: NonNullable<CardSpec["referendumRiders"]>,
+): void {
+  if (riders.voteBanSect !== undefined) frame.voteBan = { sect: riders.voteBanSect };
+  if (riders.edgeVoteBonus !== undefined) {
+    frame.edgeVoteBonus = (frame.edgeVoteBonus ?? 0) + riders.edgeVoteBonus;
+  }
+  if (riders.titledVoteDelta !== undefined) {
+    frame.voteModifiers = [
+      ...(frame.voteModifiers ?? []),
+      { amount: riders.titledVoteDelta, titledOnly: true },
+    ];
+  }
+  // "Each <clan> / each CARDINAL gets +1 vote" — one extra castable vote per
+  // matching READY vampire, credited to its controller (p. 28). A torpid
+  // vampire casts nothing, so it earns its controller nothing either.
+  const clan = riders.voteBonusClan;
+  const title = riders.voteBonusTitle;
+  if (clan === undefined && title === undefined) return;
+  for (const s of state.seats) {
+    if (s.ousted) continue;
+    const n = s.minions.filter(
+      (m) =>
+        m.kind === "vampire" &&
+        isReady(m) &&
+        (clan === undefined || m.clan === clan) &&
+        (title === undefined || m.title === title),
+    ).length;
+    if (n > 0) {
+      const g = (frame.voteGrants[s.id] ??= { any: 0, for: 0, against: 0 });
+      // The rider says only "+1 vote" — each seat aims its own.
+      g.any += n;
+    }
+  }
+}
+
 export function referendumPolarity(primitive: EffectPrimitive | null): ReferendumEffectKind | null {
   if (!primitive) return null;
   // `refPerMinion` is the one primitive whose polarity is a property of
@@ -9089,6 +9288,24 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
                 : {}),
             });
           }
+          // "…and if this vampire is NOT an Assamite, lock all Assamites"
+          // (Praxis Seizure: Istanbul) — every seat's, read after the title
+          // lands; the new prince's own clan is the whole condition.
+          // docs/in-this-referendum-design.md §4
+          const lockClan = primitive.lockAllOfClanUnlessBearer;
+          if (lockClan !== undefined) {
+            const prince = onActor ? findMinion(ops.state, onActor) : null;
+            if (!prince || prince.clan !== lockClan) {
+              for (const s of ops.state.seats) {
+                if (s.ousted) continue;
+                for (const m of s.minions) {
+                  if (m.kind === "vampire" && isReady(m) && !m.locked && m.clan === lockClan) {
+                    ops.emit({ type: "MinionLocked", minion: m.id });
+                  }
+                }
+              }
+            }
+          }
           break;
         }
         case "refExpelMinions": {
@@ -9253,6 +9470,17 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
                   (bonus.atLeast === undefined || capacityOf(m) >= bonus.atLeast),
               );
               if (hit) amount += bonus.extra;
+            }
+            // "…plus 3 additional pool if they control a ready TITLED vampire"
+            // (Eat the Rich) — `capBonus`'s sibling, a different question about
+            // the same ready vampires. docs/in-this-referendum-design.md §3
+            const tb = primitive.titledBonus;
+            if (tb) {
+              const seat = ops.state.seats.find((s) => s.id === seatId);
+              const titled = seat?.minions.some(
+                (m) => m.kind === "vampire" && isReady(m) && m.title !== null,
+              );
+              if (titled) amount += tb.extra;
             }
             ops.emit({ type: "PoolBurned", seat: seatId, amount });
           }
@@ -10511,7 +10739,9 @@ export function compileSpec(spec: CardSpec): CardHandler {
     choiceByKey["searchDiscipline"] = {
       options: (frame, state, registry) => {
         const out: LegalOption[] = [];
-        for (const zone of zones) {
+        // "…from your HAND" (Tumnimos) narrows the three zones to one.
+        const searched = frame.params["zones"] === "hand" ? (["hand"] as const) : zones;
+        for (const zone of searched) {
           for (const c of pileOf(state, frame.seat, zone)) {
             if (!(registry[c.name]?.permanentTags ?? []).includes("discipline")) continue;
             out.push({
@@ -10540,8 +10770,41 @@ export function compileSpec(spec: CardSpec): CardHandler {
           ops.attachFromZone({ seat: frame.seat, cardId: card, zone, attachTo: minion });
         }
         // "If you search your library … you must shuffle it afterwards"
-        // (p. 14) — either way, because the searcher looked at it.
-        ops.shuffleLibrary(frame.seat);
+        // (p. 14) — either way, because the searcher looked at it. A
+        // hand-only put (Tumnimos) never looked, so it never shuffles.
+        if (frame.params["zones"] !== "hand") ops.shuffleLibrary(frame.seat);
+      },
+    };
+    // "Move UP TO N blood from the acting vampire to this new vampire"
+    // (Creation Rites, Third Tradition: Progeny). Asked AFTER the Discipline
+    // master (§4), so the room is read now: a 1-capacity vampire that just
+    // gained a +1-capacity master can take 2. Zero is an answer — "up to".
+    choiceByKey["tokenBlood"] = {
+      options: (frame, state) => {
+        const token = findMinion(state, frame.params["minion"] ?? "");
+        const actor = findMinion(state, frame.params["actor"] ?? "");
+        const max = Number(frame.params["max"] ?? "0");
+        const room = token ? capacityOf(token) - token.blood : 0;
+        const most = Math.max(0, Math.min(max, actor?.blood ?? 0, room));
+        const out: LegalOption[] = [];
+        for (let n = 0; n <= most; n++) {
+          out.push({
+            id: `choice:${spec.name}:${frame.cardId}:tokenBlood:${n}`,
+            kind: "answerChoice" as const,
+            label: n === 0 ? "Move no blood" : `Move ${n} blood to the new vampire`,
+            params: { n: String(n) },
+          });
+        }
+        return out;
+      },
+      apply: (frame, choice, ops) => {
+        const n = Number(choice.params["n"] ?? "0");
+        const token = findMinion(ops.state, frame.params["minion"] ?? "");
+        const actor = findMinion(ops.state, frame.params["actor"] ?? "");
+        if (!token || !actor || n <= 0) return;
+        const moved = Math.min(n, actor.blood);
+        ops.emit({ type: "BloodBurned", minion: actor.id, amount: moved });
+        ops.emit({ type: "BloodGained", minion: token.id, amount: moved });
       },
     };
   }
@@ -10667,21 +10930,44 @@ export function compileSpec(spec: CardSpec): CardHandler {
       frame.voteModifiers = [...(frame.voteModifiers ?? []), rvm];
     };
   }
+  // "IN THIS REFERENDUM, …" (Eat the Rich, Praxis Seizure: Istanbul) — the
+  // card's OWN referendum, so `fromCardInPlay` is the case to skip. Grafted,
+  // not assigned: the Fee Stake setup above claims the same hook.
+  // docs/in-this-referendum-design.md §2
+  const riders = spec.referendumRiders;
+  if (riders) {
+    const priorSetup = handler.referendumSetup?.bind(handler);
+    handler.referendumSetup = (frame, state) => {
+      priorSetup?.(frame, state);
+      if (frame.fromCardInPlay) return;
+      applyReferendumRiders(frame, state, riders);
+    };
+  }
   if (perm?.unlockDrain || perm?.selfBurn?.whenPreyHasNoTorpor) {
     handler.onAnyUnlock = (entry, owner, unlockingSeat, ops) => {
       const controller = entry.controller ?? owner.seat;
       const prey = preyOf(ops.state, controller);
       const d = perm.unlockDrain;
       if (d) {
+        // "Each of your PREDATOR AND PREY" (Arcanum Chapterhouse) — named, not
+        // left to fall through: `whose !== "any"` used to mean "prey", and a
+        // third value reaching that test would have charged the prey alone.
+        // docs/stores-you-fill-design.md §4
+        const whoseOk =
+          d.whose === "any" ||
+          unlockingSeat === prey ||
+          (d.whose === "predatorOrPrey" && unlockingSeat === predatorOf(ops.state, controller));
         const applies =
-          (d.whose === "any" || unlockingSeat === prey) &&
-          drainConditionHolds(ops.state, d.when, unlockingSeat, owner.minion);
+          whoseOk && drainConditionHolds(ops.state, d.when, unlockingSeat, owner.minion);
         if (applies) {
           const seat = getSeat(ops.state, unlockingSeat);
-          // "…for EACH vampire in torpor they control" (Augury of Doom).
+          // "…for EACH vampire in torpor they control" (Augury of Doom), or
+          // "…for EACH HUNTING GROUND he or she controls" (Arcanum).
           const times = d.perTorporVampire
             ? seat.minions.filter((m) => m.kind === "vampire" && m.inTorpor).length
-            : 1;
+            : d.perHuntingGround
+              ? seat.permanents.filter((p) => p.tags.includes("huntingGround")).length
+              : 1;
           const amount = d.amount * times;
           if (amount > 0 && !seat.ousted) {
             ops.emit({ type: "PoolBurned", seat: unlockingSeat, amount });
@@ -11571,6 +11857,7 @@ export function compileSpec(spec: CardSpec): CardHandler {
   }
   addLocationAbilities(spec, handler);
   addAttachedCardBehaviour(spec, handler);
+  addDiscardPhaseUnlock(spec, handler);
   addCombatAttachBehaviour(spec, handler);
   addOpponentAttachBehaviour(spec, handler);
   // "Lock to give a Ravnos you control +1 stealth" on an ALLY (Rom Gypsy)
@@ -15179,6 +15466,38 @@ function burnAtControllerUnlock(handler: CardHandler): void {
   };
 }
 
+/**
+ * "If this vampire is \<clan\>, they unlock during your next discard phase"
+ * (Crusade: Berlin, Crusade: Istanbul).
+ *
+ * Feral Hound's shape, lifted out of the retainer compiler where it lived:
+ * the bearer is REMEMBERED as the card enters play (the clan is read then,
+ * because that is when "this vampire" is named), and the unlock is spent once,
+ * in the card controller's next discard phase. Grafted, never assigned over,
+ * for the `addLocationAbilities` reason. docs/title-riders-design.md §3
+ */
+function addDiscardPhaseUnlock(spec: CardSpec, handler: CardHandler): void {
+  const clan = spec.permanent?.unlockBearerAtNextDiscardIfClan;
+  if (clan === undefined) return;
+  const priorEnter = handler.onEnterPlay?.bind(handler);
+  handler.onEnterPlay = (entry, owner, ops) => {
+    priorEnter?.(entry, owner, ops);
+    const bearer = owner.minion ? findMinion(ops.state, owner.minion) : null;
+    if (bearer && bearer.clan === clan) entry.chosen = bearer.id;
+  };
+  const priorDiscard = handler.onDiscardPhase?.bind(handler);
+  handler.onDiscardPhase = (entry, owner, seat, ops) => {
+    priorDiscard?.(entry, owner, seat, ops);
+    // "YOUR next discard phase" — the card controller's, and only once.
+    if (seat !== (entry.controller ?? owner.seat)) return;
+    const id = entry.chosen;
+    if (id === undefined) return;
+    delete entry.chosen;
+    const m = findMinion(ops.state, id);
+    if (m && m.locked && isReady(m)) ops.emit({ type: "MinionUnlocked", minion: m.id });
+  };
+}
+
 function addAttachedCardBehaviour(spec: CardSpec, handler: CardHandler): void {
   const eff = spec.modes
     .flatMap((m) => m.effects)
@@ -15387,6 +15706,7 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   const perm = spec.permanent;
   const afterBlood = perm?.afterActionBlood;
   const huntBlood = perm?.huntBlood;
+  const lockToLock = perm?.lockToLockMinion;
   const frenzy = perm?.frenzyCancel;
   const exchange = perm?.ashExchange;
   const combatEnd = perm?.combatEndGrant;
@@ -15406,6 +15726,10 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
   const peek = perm?.cryptPeek;
   const ambush = perm?.preReferendumAmbush;
   const store = perm?.bloodStore;
+  /** A blood store that is ALSO a hunting ground (Threestar Cab Company):
+   *  its blood to a vampire obeys "a vampire can gain blood from only one
+   *  hunting ground card each turn". docs/stores-you-fill-design.md §2 */
+  const isHuntingGround = perm?.tags?.includes("huntingGround") === true;
   const offers = store?.offers ?? [];
   if (
     offers.length === 0 &&
@@ -15423,6 +15747,7 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     // the first one is not reading this one — a clause absent here compiles,
     // typechecks and installs no enumerator at all (§5).
     !huntBlood &&
+    !lockToLock &&
     !frenzy &&
     !exchange &&
     !combatEnd &&
@@ -15794,6 +16119,9 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
               : ctx.window === "turn.master" && ctx.seat === ctx.turnSeat;
         if (!inWindow) continue;
         if (o.usesMasterAction && (tf?.kind !== "turn" || tf.masterActionsLeft <= 0)) continue;
+        // "LOCK during … to …" — the lock is the price (Threestar Cab
+        // Company). docs/stores-you-fill-design.md §2
+        if (o.locks && entry.locked) continue;
         const price = o.poolCost ?? 0;
         // A price you cannot pay is not an option, and paying your last
         // pool for a card that pays you back later ousts you now (p. 6).
@@ -15844,6 +16172,51 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
                 },
               });
             }
+          }
+        } else if (o.kind === "cardToVampire") {
+          // "…to a ready vampire you control" (Threestar Cab Company). On a
+          // HUNTING GROUND the one-ground-per-vampire rule binds too.
+          // docs/stores-you-fill-design.md §2
+          if (held <= 0) continue;
+          for (const m of seat.minions) {
+            if (m.kind !== "vampire" || !isReady(m) || !canGainBlood(m)) continue;
+            if (isHuntingGround && m.usedHuntingGroundThisTurn) continue;
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:store:${i}:${m.id}`,
+              kind: "useAbility",
+              label: `${spec.name}: move ${Math.min(o.amount, held)} blood to ${m.name}`,
+              source: entry.card.id,
+              params: { act: "bloodStore", offer: String(i), target: m.id },
+            });
+          }
+        } else if (o.kind === "poolToCard") {
+          // "…move 1 counter from your pool to this card" (Grand Temple of
+          // Set). Never your last pool (p. 6). §3
+          if (seat.pool - price <= o.amount) continue;
+          out.push({
+            id: `ability:${spec.name}:${entry.card.id}:store:${i}`,
+            kind: "useAbility",
+            label: `${spec.name}: move ${o.amount} pool to this card`,
+            source: entry.card.id,
+            params: { act: "bloodStore", offer: String(i) },
+          });
+        } else if (o.kind === "burnToSteal") {
+          // "Lock and burn X counters … to steal a vampire controlled by your
+          // PREY with capacity LESS THAN X" — X = capacity + 1, the smallest
+          // that takes it; more buys nothing. §3
+          const prey = preyOf(ctx.state, controller);
+          const preySeat = ctx.state.seats.find((s) => s.id === prey);
+          for (const m of preySeat?.minions ?? []) {
+            if (m.kind !== "vampire") continue;
+            const x = capacityOf(m) + 1;
+            if (x > held) continue;
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:store:${i}:${m.id}`,
+              kind: "useAbility",
+              label: `${spec.name}: burn ${x} counters to steal ${m.name}`,
+              source: entry.card.id,
+              params: { act: "bloodStore", offer: String(i), target: m.id, amount: String(x) },
+            });
           }
         } else {
           // "Move up to N pool to this card and add 1 blood from the blood
@@ -15902,6 +16275,47 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
           source: entry.card.id,
           params: { act: "huntBlood", target: hunter.id },
         });
+      }
+    }
+    // "You can lock this location to lock a Toreador. If you control the
+    // Prince of Paris, … a minion" (The Louvre). No printed timing, read the
+    // Dreams of the Sphinx way: the controller's own turn phases, plus any
+    // action's impulse windows — its own actions included, because locking a
+    // would-be BLOCKER before blocks are declared is what the card is for
+    // (a locked minion cannot block, p. 25). It locks itself on use, so the
+    // re-offering windows cannot be farmed.
+    // docs/stealable-locations-design.md §3
+    if (lockToLock && !entry.locked && ctx.seat === controller) {
+      const ownTurnPhase =
+        ctx.turnSeat === controller &&
+        (ctx.window === "turn.master" || ctx.window === "turn.minion" || ctx.window === "turn.discard");
+      const inAction = ctx.window === "action.announce" || ctx.window === "action.effects";
+      if (ownTurnPhase || inAction) {
+        const widened =
+          lockToLock.anyMinionIfTitle !== undefined &&
+          getSeat(ctx.state, controller).minions.some(
+            (m) =>
+              m.kind === "vampire" &&
+              isReady(m) &&
+              m.title === lockToLock.anyMinionIfTitle!.title &&
+              m.titleCity === lockToLock.anyMinionIfTitle!.city,
+          );
+        for (const s of ctx.state.seats) {
+          if (s.ousted) continue;
+          for (const m of s.minions) {
+            // Locking a locked or torpid minion changes nothing and costs the
+            // location (docs/futile-options-design.md).
+            if (m.locked || !isReady(m)) continue;
+            if (!widened && m.clan !== lockToLock.clan) continue;
+            out.push({
+              id: `ability:${spec.name}:${entry.card.id}:lockMinion:${m.id}`,
+              kind: "useAbility",
+              label: `${spec.name}: lock ${m.name} (${s.id})`,
+              source: entry.card.id,
+              params: { act: "lockToLockMinion", target: m.id },
+            });
+          }
+        }
       }
     }
     if (afterBlood && ctx.window === "action.afterResolution" && !entry.locked) {
@@ -16337,6 +16751,17 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       ops.emit({ type: "BloodGained", minion: target, amount: afterBlood.amount });
     };
   }
+  if (lockToLock) {
+    extraUse["lockToLockMinion"] = (entry, _owner, choice, ops) => {
+      const target = choice.params["target"];
+      if (!target) throw new Error(`${spec.name}: no minion to lock`);
+      ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+      // TOTAL read: nothing moves between offer and use today, but a lock
+      // that throws on a vanished minion is the bug the next card finds.
+      const m = findMinion(ops.state, target);
+      if (m && !m.locked) ops.emit({ type: "MinionLocked", minion: m.id });
+    };
+  }
   if (huntBlood) {
     extraUse["huntBlood"] = (entry, _owner, choice, ops) => {
       const target = choice.params["target"];
@@ -16383,6 +16808,28 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
           minion: target,
           amount: take,
         });
+      } else if (o.kind === "cardToVampire") {
+        const target = choice.params["target"];
+        const m = target ? findMinion(ops.state, target) : null;
+        const take = Math.min(o.amount, entry.counters ?? 0);
+        if (m && take > 0) {
+          ops.removeCounters(entry.card.id, take);
+          ops.emit({ type: "BloodGained", minion: m.id, amount: take });
+          // A hunting ground's blood uses up the vampire's one ground a turn.
+          if (isHuntingGround) ops.emit({ type: "HuntingGroundUsed", minion: m.id });
+        }
+      } else if (o.kind === "poolToCard") {
+        ops.emit({ type: "PoolBurned", seat: controller, amount: o.amount });
+        ops.addCounters(entry.card.id, o.amount);
+      } else if (o.kind === "burnToSteal") {
+        const target = choice.params["target"];
+        const x = Number(choice.params["amount"] ?? "0");
+        const m = target ? findMinion(ops.state, target) : null;
+        // Read now: the counters and the vampire can both have changed.
+        if (m && x > 0 && (entry.counters ?? 0) >= x) {
+          ops.removeCounters(entry.card.id, x);
+          ops.changeMinionControl(m.id, controller);
+        }
       } else {
         const n = Number(choice.params["amount"] ?? "0");
         ops.emit({ type: "PoolBurned", seat: controller, amount: n });
@@ -16390,6 +16837,8 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         // the bank matches it with — p. 5, they are the same counter.
         ops.addCounters(entry.card.id, n * 2);
       }
+      // "LOCK during … to …" — paid on use (§2).
+      if (o.locks) ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
       settleBloodStore(spec, entry, ops);
     };
   }

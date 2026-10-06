@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-25T18:21:22.647Z",
+ "fetchedAt": "2026-09-27T02:34:12.011Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -688,6 +688,29 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100082": {
+   "card": {
+    "kind": "library",
+    "id": 100082,
+    "name": "Arcanum Chapterhouse, Alexandria",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nEach of your predator and prey burns 1 pool during his or her unlock phase for each Hunting Ground he or she controls. Any minion may burn this card as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/arcanumchapterhousealexandria.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -3317,6 +3340,29 @@
    },
    "supported": true
   },
+  "100441": {
+   "card": {
+    "kind": "library",
+    "id": 100441,
+    "name": "Creation Rites",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+1 stealth action. Requires a ready non-sterile archbishop, priscus, cardinal or regent.\nPut this card in play. It becomes a 1-capacity (non-unique) Sabbat vampire of the same clan as the acting vampire, and cannot perform actions this turn. You can search your library (shuffle afterward), hand, and/or ash heap for a master Discipline card and put it on this new vampire. Move up to 1 blood from the acting vampire to this new vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/creationrites.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "100444": {
    "card": {
     "kind": "library",
@@ -3380,6 +3426,28 @@
     "sets": [
      "Sabbat",
      "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
+  "100455": {
+   "card": {
+    "kind": "library",
+    "id": 100455,
+    "name": "Crusade: Berlin",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Title. Requires a Sabbat vampire.\nSuccessful referendum means this card is put on this vampire to represent the unique Sabbat title of Archbishop of Berlin. If this vampire is Lasombra, they unlock during your next discard phase.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadeberlin.jpg",
+    "sets": [
+     "Gehenna",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -3468,6 +3536,28 @@
     "sets": [
      "Sabbat",
      "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
+  "100463": {
+   "card": {
+    "kind": "library",
+    "id": 100463,
+    "name": "Crusade: Istanbul",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Title. Requires a Sabbat vampire.\nSuccessful referendum means this card is put on this vampire to represent the unique Sabbat title of Archbishop of Istanbul. If this vampire is Tzimisce, they unlock during your next discard phase.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crusadeistanbul.jpg",
+    "sets": [
+     "Gehenna",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -4641,6 +4731,27 @@
    },
    "supported": true
   },
+  "100605": {
+   "card": {
+    "kind": "library",
+    "id": 100605,
+    "name": "Eat the Rich",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires an Anarch.\nChoose one or more Methuselahs. Successful referendum means each chosen Methuselah burns 1 pool, plus 3 additional pool if they control a ready titled vampire. In this referendum, each priscus gets -1 ballot, each non-priscus titled vampire gets -1 vote, and burning the Edge is worth 1 additional vote.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/eattherich.jpg",
+    "sets": [
+     "Anarch Unbound"
+    ]
+   },
+   "supported": true
+  },
   "100609": {
    "card": {
     "kind": "library",
@@ -4919,6 +5030,31 @@
     "sets": [
      "Fifth Edition",
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100633": {
+   "card": {
+    "kind": "library",
+    "id": 100633,
+    "name": "The Embrace",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "+1 stealth action. Requires a non-sterile vampire.\nPut this card in play. It becomes a 1-capacity non-unique vampire of the same clan and sect as the acting vampire, and must hunt this turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/embracethe.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition",
+     "Sabbat Preconstructed"
     ]
    },
    "supported": true
@@ -6669,6 +6805,31 @@
    },
    "supported": true
   },
+  "100848": {
+   "card": {
+    "kind": "library",
+    "id": 100848,
+    "name": "Grand Temple of Set",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Ministry"
+    ],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Unique location.\nDuring your master phase, you can move 1 counter from your pool to this card. Lock and burn X counters from this card during your influence phase to steal a vampire controlled by your prey with capacity less than X. Any vampire can burn this card as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/grandtempleofset.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
   "100852": {
    "card": {
     "kind": "library",
@@ -6826,6 +6987,27 @@
      "Fifth Edition (Anarch)",
      "Fifth Edition (Companion)",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "100871": {
+   "card": {
+    "kind": "library",
+    "id": 100871,
+    "name": "Gurchon Hall",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Requires a ready cardinal or regent. Hunting ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to each of the two oldest ready vampires you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/gurchonhall.jpg",
+    "sets": [
+     "Third Edition"
     ]
    },
    "supported": true
@@ -7523,6 +7705,28 @@
    },
    "supported": true
   },
+  "101003": {
+   "card": {
+    "kind": "library",
+    "id": 101003,
+    "name": "Investiture",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a cardinal or regent. Title.\nIn this referendum, each ready cardinal gets one additional vote. Choose a Sabbat vampire. If this referendum is successful, put this card on the chosen vampire to represent the Sabbat title of priscus. Camarilla vampires cannot cast votes or ballots during this referendum.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/investiture.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War"
+    ]
+   },
+   "supported": true
+  },
   "101007": {
    "card": {
     "kind": "library",
@@ -7986,6 +8190,27 @@
    },
    "supported": true
   },
+  "101060": {
+   "card": {
+    "kind": "library",
+    "id": 101060,
+    "name": "Kingston Penitentiary, Ontario",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 4,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting ground.\nDuring your unlock phase, you may move 1 blood from the blood bank to a ready vampire you control. Any other Methuselah may give you a pool during his or her unlock phase to lock this card to move 1 blood from the blood bank to a ready vampire he or she controls. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/kingstonpenitentiaryontario.jpg",
+    "sets": [
+     "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
   "101063": {
    "card": {
     "kind": "library",
@@ -8340,6 +8565,28 @@
    },
    "supported": true
   },
+  "101110": {
+   "card": {
+    "kind": "library",
+    "id": 101110,
+    "name": "The Line",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique location.\nYou can lock this location to reduce the cost of an action card a vampire you control plays by 1 blood (this location is not locked if that card is canceled as it is played). Vampires can steal this location as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/linethe.jpg",
+    "sets": [
+     "Anthology",
+     "Shadows of Berlin"
+    ]
+   },
+   "supported": true
+  },
   "101114": {
    "card": {
     "kind": "library",
@@ -8430,6 +8677,31 @@
     "image": "https://static.krcg.org/card/lostintranslation.jpg",
     "sets": [
      "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
+  "101127": {
+   "card": {
+    "kind": "library",
+    "id": 101127,
+    "name": "The Louvre, Paris",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Toreador"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique location.\nYou can lock this location to lock a Toreador. If you control the Prince of Paris, you can lock this location to lock a minion. Minions can steal this location as a Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/louvreparisthe.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Camarilla Edition",
+     "Thirtieth Anniversary"
     ]
    },
    "supported": true
@@ -9626,6 +9898,28 @@
    },
    "supported": true
   },
+  "101280": {
+   "card": {
+    "kind": "library",
+    "id": 101280,
+    "name": "New Management",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Do not replace until after this action.\nⒹ Take control of a location that is free or costs 1 blood or pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/newmanagement.jpg",
+    "sets": [
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101288": {
    "card": {
     "kind": "library",
@@ -10401,6 +10695,27 @@
    },
    "supported": true
   },
+  "101404": {
+   "card": {
+    "kind": "library",
+    "id": 101404,
+    "name": "Poacher's Hunting Ground",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master. Location. Hunting ground. Derivative.\nDuring your unlock phase, choose up to X ready anarchs you control who each gain 1 blood, where X is the number of non-derivative hunting grounds controlled by other Methuselahs. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/poachershuntingground.jpg",
+    "sets": [
+     "Twilight Rebellion"
+    ]
+   },
+   "supported": true
+  },
   "101411": {
    "card": {
     "kind": "library",
@@ -10783,6 +11098,27 @@
    },
    "supported": true
   },
+  "101448": {
+   "card": {
+    "kind": "library",
+    "id": 101448,
+    "name": "Praxis Seizure: Athens",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Athens. This could lead to a contested title. If the prince is Tremere, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureathens.jpg",
+    "sets": [
+     "Ancient Hearts"
+    ]
+   },
+   "supported": true
+  },
   "101449": {
    "card": {
     "kind": "library",
@@ -10807,6 +11143,49 @@
    },
    "supported": true
   },
+  "101450": {
+   "card": {
+    "kind": "library",
+    "id": 101450,
+    "name": "Praxis Seizure: Barcelona",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Barcelona. This could lead to a contested title. If the prince is Tremere, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurebarcelona.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
+  "101451": {
+   "card": {
+    "kind": "library",
+    "id": 101451,
+    "name": "Praxis Seizure: Berlin",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Berlin. This could lead to a contested title. If the prince is Ventrue, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureberlin.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
   "101452": {
    "card": {
     "kind": "library",
@@ -10826,6 +11205,48 @@
      "Jyhad",
      "Vampire: The Eternal Struggle",
      "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101453": {
+   "card": {
+    "kind": "library",
+    "id": 101453,
+    "name": "Praxis Seizure: Brussels",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Brussels. This could lead to a contested title. If the prince is Nosferatu, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurebrussels.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101454": {
+   "card": {
+    "kind": "library",
+    "id": 101454,
+    "name": "Praxis Seizure: Cairo",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Cairo. This could lead to a contested title. If the prince is Ventrue, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurecairo.jpg",
+    "sets": [
+     "Ancient Hearts"
     ]
    },
    "supported": true
@@ -10942,6 +11363,48 @@
    },
    "supported": true
   },
+  "101460": {
+   "card": {
+    "kind": "library",
+    "id": 101460,
+    "name": "Praxis Seizure: Geneva",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Geneva. This could lead to a contested title. If the prince is Ventrue, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizuregeneva.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101461": {
+   "card": {
+    "kind": "library",
+    "id": 101461,
+    "name": "Praxis Seizure: Glasgow",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Glasgow. This could lead to a contested title. If the prince is Gangrel, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureglasgow.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
   "101462": {
    "card": {
     "kind": "library",
@@ -10962,6 +11425,28 @@
      "Vampire: The Eternal Struggle",
      "Camarilla Edition",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "101463": {
+   "card": {
+    "kind": "library",
+    "id": 101463,
+    "name": "Praxis Seizure: Istanbul",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Title. Requires a Camarilla vampire.\nSuccessful referendum means this card is put on this vampire to represent the unique Camarilla title of Prince of Istanbul, and if this vampire is not an Assamite, lock all Assamites. In this referendum, each ready Assamite gets +1 vote.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureistanbul.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -11011,6 +11496,70 @@
    },
    "supported": true
   },
+  "101466": {
+   "card": {
+    "kind": "library",
+    "id": 101466,
+    "name": "Praxis Seizure: Monaco",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Monaco. This could lead to a contested title. If the prince is Toreador, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizuremonaco.jpg",
+    "sets": [
+     "Ancient Hearts"
+    ]
+   },
+   "supported": true
+  },
+  "101467": {
+   "card": {
+    "kind": "library",
+    "id": 101467,
+    "name": "Praxis Seizure: Paris",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Paris. This could lead to a contested title. If the prince is Toreador, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizureparis.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101468": {
+   "card": {
+    "kind": "library",
+    "id": 101468,
+    "name": "Praxis Seizure: Rome",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Rome. This could lead to a contested title. If the prince is Brujah, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurerome.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
   "101469": {
    "card": {
     "kind": "library",
@@ -11030,6 +11579,51 @@
      "Jyhad",
      "Vampire: The Eternal Struggle",
      "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101470": {
+   "card": {
+    "kind": "library",
+    "id": 101470,
+    "name": "Praxis Seizure: Stockholm",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Stockholm. This could lead to a contested title. If the prince is Malkavian, his or her capacity increases by 1.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurestockholm.jpg",
+    "sets": [
+     "Dark Sovereigns"
+    ]
+   },
+   "supported": true
+  },
+  "101472": {
+   "card": {
+    "kind": "library",
+    "id": 101472,
+    "name": "Praxis Seizure: Washington, D.C.",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Camarilla vampire. Title.\nIf this referendum is successful, put this card on the acting vampire to represent the unique Camarilla title of Prince of Washington, D.C.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/praxisseizurewashingtondc.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -11313,6 +11907,29 @@
      "New Blood II",
      "Fifth Edition (Companion)",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101502": {
+   "card": {
+    "kind": "library",
+    "id": 101502,
+    "name": "Protracted Investment",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Master. Investment.\nPut this card in play and move 5 blood from the blood bank to this card. You may use a master phase action to move 1 blood from this card to your pool. Burn this card when all blood has been removed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/protractedinvestment.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -12915,6 +13532,33 @@
    },
    "supported": true
   },
+  "101769": {
+   "card": {
+    "kind": "library",
+    "id": 101769,
+    "name": "Short-Term Investment",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master. Investment.\nPut this card in play and move 3 blood from the blood bank to this card. You may use a master phase action to move 1 blood from this card to your blood pool. Burn this card when the last blood counter on it is removed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/shortterminvestment.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat",
+     "Sabbat War",
+     "Final Nights",
+     "Camarilla Edition",
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
   "101772": {
    "card": {
     "kind": "library",
@@ -13189,6 +13833,30 @@
     "image": "https://static.krcg.org/card/slaughteringtheherd.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101802": {
+   "card": {
+    "kind": "library",
+    "id": 101802,
+    "name": "Slave Auction",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Unique master.\nPut this card in play with X blood where X is the number of Methuselahs in the game. You may use a master phase action to move 1 blood from this card to your pool. Burn this card if it has no counters.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/slaveauction.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Kindred Most Wanted",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -14362,6 +15030,31 @@
    },
    "supported": true
   },
+  "101973": {
+   "card": {
+    "kind": "library",
+    "id": 101973,
+    "name": "Third Tradition: Progeny",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "+1 stealth action. Requires a non-sterile prince or justicar.\nPut this card in play. It becomes a 1-capacity (non-unique) Camarilla vampire of the same clan as the acting vampire and cannot perform actions this turn. You can search your library (shuffle afterward), hand and/or ash heap for a Discipline master card and put it on this new vampire. Move up to 2 blood from the acting vampire to this new vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/thirdtraditionprogeny.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition",
+     "Thirtieth Anniversary"
+    ]
+   },
+   "supported": true
+  },
   "101974": {
    "card": {
     "kind": "library",
@@ -14403,6 +15096,27 @@
     "image": "https://static.krcg.org/card/threats.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101980": {
+   "card": {
+    "kind": "library",
+    "id": 101980,
+    "name": "Threestar Cab Company",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Master: unique location. Hunting ground.\nLock during your master phase to move a blood from the blood bank to this card. Lock during your unlock phase to move 1 blood from this card to your pool or to a ready vampire you control. A vampire can gain blood from only one hunting ground card each turn.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/threestarcabcompany.jpg",
+    "sets": [
+     "Kindred Most Wanted"
     ]
    },
    "supported": true
@@ -14787,6 +15501,30 @@
     "image": "https://static.krcg.org/card/truelovesface.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "102046": {
+   "card": {
+    "kind": "library",
+    "id": 102046,
+    "name": "Tumnimos",
+    "types": [
+     "Action"
+    ],
+    "clans": [
+     "Ravnos"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "+1 stealth action. Requires a non-sterile Ravnos with capacity 5 or more.\nPut this card in play; it becomes a 2-capacity (non-unique) Ravnos of the same sect as the acting Ravnos with basic Chimerstry [chi], and must hunt this turn. You can put a master Discipline card from your hand on this new vampire.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/tumnimos.jpg",
+    "sets": [
+     "Kindred Most Wanted",
+     "Print on Demand"
     ]
    },
    "supported": true

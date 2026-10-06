@@ -1,6 +1,6 @@
 # Card status by set
 
-> **Generated 2026-09-25 from `data/vtes-raw.json` and `src/cards/registry.json`** by
+> **Generated 2026-09-27 from `data/vtes-raw.json` and `src/cards/registry.json`** by
 > the script in this doc's footer. Re-run it rather than editing the numbers.
 > A card printed in several sets is counted in each of them; the totals row
 > counts unique cards.
@@ -29,37 +29,37 @@
 
 | Set                                      | Cards | Built |  Built % | Whole, no build | In pool % |   T1 |   T2 |   T3 | §7 gate | §7 build | Imbued |
 | ---------------------------------------- | ----: | ----: | -------: | --------------: | --------: | ---: | ---: | ---: | ------: | -------: | -----: |
-| Jyhad (1994)                             |   437 |   227 |  **52%** |               0 |       52% |   71 |   28 |    0 |      54 |       57 |      0 |
-| Vampire: The Eternal Struggle (1995)     |   436 |   227 |  **52%** |               0 |       52% |   70 |   28 |    0 |      54 |       57 |      0 |
-| Dark Sovereigns (1995)                   |   173 |    41 |  **24%** |               0 |       24% |   57 |    6 |   18 |      11 |       40 |      0 |
+| Jyhad (1994)                             |   437 |   232 |  **53%** |               0 |       53% |   66 |   28 |    0 |      54 |       57 |      0 |
+| Vampire: The Eternal Struggle (1995)     |   436 |   232 |  **53%** |               0 |       53% |   65 |   28 |    0 |      54 |       57 |      0 |
+| Dark Sovereigns (1995)                   |   173 |    50 |  **29%** |               0 |       29% |   48 |    6 |   18 |      11 |       40 |      0 |
 | 1996 Promo (1996)                        |     2 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       1 |        1 |      0 |
-| Ancient Hearts (1996)                    |   179 |    39 |  **22%** |               0 |       22% |   48 |   13 |   24 |      16 |       39 |      0 |
-| Sabbat (1996)                            |   410 |   167 |  **41%** |               0 |       41% |   78 |   26 |   29 |      48 |       62 |      0 |
-| Sabbat War (2000)                        |   437 |   192 |  **44%** |               0 |       44% |   79 |   26 |   41 |      40 |       59 |      0 |
+| Ancient Hearts (1996)                    |   179 |    45 |  **25%** |               0 |       25% |   42 |   13 |   24 |      16 |       39 |      0 |
+| Sabbat (1996)                            |   410 |   171 |  **42%** |               0 |       42% |   74 |   26 |   29 |      48 |       62 |      0 |
+| Sabbat War (2000)                        |   437 |   196 |  **45%** |               0 |       45% |   75 |   26 |   41 |      40 |       59 |      0 |
 | Final Nights promo (2001)                |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
-| Final Nights (2001)                      |   386 |   117 |  **30%** |               0 |       30% |   63 |   21 |   79 |      22 |       84 |      0 |
+| Final Nights (2001)                      |   386 |   120 |  **31%** |               0 |       31% |   60 |   21 |   79 |      22 |       84 |      0 |
 | Bloodlines promo (2001)                  |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Bloodlines (2001)                        |   196 |     4 |   **2%** |               0 |        2% |   33 |    7 |   89 |       4 |       59 |      0 |
 | Winter 2002 Storyline promo (2002)       |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
 | Camarilla Edition promo (2002)           |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Sabbat War promo (2002)                  |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
-| Camarilla Edition (2002)                 |   547 |   255 |  **47%** |               0 |       47% |   89 |   38 |   11 |      46 |      108 |      0 |
+| Camarilla Edition (2002)                 |   547 |   262 |  **48%** |               0 |       48% |   82 |   38 |   11 |      46 |      108 |      0 |
 | Fall 2002 Storyline promo (2002)         |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
 | 2003 Tournament promo (2002)             |     1 |     1 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | Anarchs promo (2003)                     |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Anarchs (2003)                           |   260 |   115 |  **44%** |               0 |       44% |   49 |   13 |    1 |      21 |       61 |      0 |
 | Summer 2003 Storyline promo (2003)       |     2 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        1 |      0 |
 | Black Hand promo (2003)                  |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
-| Black Hand (2003)                        |   286 |    80 |  **28%** |               0 |       28% |   78 |   24 |   14 |      27 |       63 |      0 |
+| Black Hand (2003)                        |   286 |    81 |  **28%** |               0 |       28% |   77 |   24 |   14 |      27 |       63 |      0 |
 | Prophecies league promo (2004)           |     2 |     1 |  **50%** |               0 |       50% |    1 |    0 |    0 |       0 |        0 |      0 |
 | 2004 promo (2004)                        |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
 | Gehenna promo (2004)                     |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
-| Gehenna (2004)                           |   150 |    28 |  **19%** |               0 |       19% |   50 |    6 |   16 |       6 |       44 |      0 |
+| Gehenna (2004)                           |   150 |    30 |  **20%** |               0 |       20% |   48 |    6 |   16 |       6 |       44 |      0 |
 | Fall 2004 Storyline promo (2004)         |     2 |     1 |  **50%** |               0 |       50% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Tenth Anniversary (2004)                 |   190 |    13 |   **7%** |               0 |        7% |   34 |    3 |    4 |      60 |       76 |      0 |
 | Kindred Most Wanted promo (2005)         |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | 2005 Tournament promo (2005)             |     2 |     0 |   **0%** |               0 |        0% |    2 |    0 |    0 |       0 |        0 |      0 |
-| Kindred Most Wanted (2005)               |   314 |    99 |  **32%** |               0 |       32% |   74 |   22 |   36 |      18 |       65 |      0 |
+| Kindred Most Wanted (2005)               |   314 |   105 |  **33%** |               0 |       33% |   68 |   22 |   36 |      18 |       65 |      0 |
 | Legacies of Blood promo (2005)           |     2 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        2 |      0 |
 | 2005 Storyline promo (2005)              |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
 | Legacies of Blood (2005)                 |   461 |    95 |  **21%** |               0 |       21% |  124 |   19 |  124 |      24 |       75 |      0 |
@@ -67,7 +67,7 @@
 | Nights of Reckoning (2006)               |    60 |     0 |   **0%** |               0 |        0% |   14 |    0 |   26 |       0 |        0 |     20 |
 | 2006 Championship promo (2006)           |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Third Edition promo (2006)               |     2 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        2 |      0 |
-| Third Edition (2006)                     |   537 |   219 |  **41%** |               0 |       41% |  118 |   28 |   39 |      48 |       85 |      0 |
+| Third Edition (2006)                     |   537 |   223 |  **42%** |               0 |       42% |  114 |   28 |   39 |      48 |       85 |      0 |
 | 2006 Storyline promo (2006)              |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | 2006 EC Tournament promo (2006)          |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
 | Sword of Caine promo (2007)              |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
@@ -76,9 +76,9 @@
 | Lords of the Night (2007)                |   295 |    88 |  **30%** |               0 |       30% |   54 |   26 |   63 |      16 |       48 |      0 |
 | 2008 Tournament promo (2008)             |    16 |     5 |  **31%** |               0 |       31% |    9 |    1 |    0 |       0 |        1 |      0 |
 | Blood Shadowed Court (2008)              |   100 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |      35 |       65 |      0 |
-| Twilight Rebellion (2008)                |    60 |    11 |  **18%** |               0 |       18% |   19 |    0 |   10 |       3 |       17 |      0 |
+| Twilight Rebellion (2008)                |    60 |    12 |  **20%** |               0 |       20% |   18 |    0 |   10 |       3 |       17 |      0 |
 | 2008 Storyline promo (2008)              |     2 |     0 |   **0%** |               0 |        0% |    2 |    0 |    0 |       0 |        0 |      0 |
-| Keepers of Tradition (2008)              |   457 |   183 |  **40%** |               0 |       40% |  104 |   36 |   10 |      26 |       98 |      0 |
+| Keepers of Tradition (2008)              |   457 |   187 |  **41%** |               0 |       41% |  100 |   36 |   10 |      26 |       98 |      0 |
 | 2009 Tournament / Storyline promo (2009) |    13 |     1 |   **8%** |               0 |        8% |   10 |    0 |    0 |       0 |        2 |      0 |
 | Ebony Kingdom (2009)                     |    62 |     1 |   **2%** |               0 |        2% |   31 |    5 |    5 |       6 |       14 |      0 |
 | Heirs to the Blood (2010)                |   324 |    65 |  **20%** |               0 |       20% |   68 |    9 |   86 |      19 |       77 |      0 |
@@ -86,13 +86,13 @@
 | Danse Macabre (2013)                     |    34 |     3 |   **9%** |               0 |        9% |    5 |    3 |    1 |       4 |       18 |      0 |
 | The Unaligned (2014)                     |    76 |     9 |  **12%** |               0 |       12% |    7 |    0 |   10 |      11 |       39 |      0 |
 | 2015 Storyline Rewards (2015)            |    13 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |       12 |      0 |
-| Anarch Unbound (2016)                    |    42 |     5 |  **12%** |               1 |       14% |    6 |    2 |    6 |       3 |       19 |      0 |
-| Anthology (2017)                         |    65 |     8 |  **12%** |               0 |       12% |   10 |    1 |    3 |      13 |       30 |      0 |
+| Anarch Unbound (2016)                    |    42 |     6 |  **14%** |               1 |       17% |    5 |    2 |    6 |       3 |       19 |      0 |
+| Anthology (2017)                         |    65 |     9 |  **14%** |               0 |       14% |    9 |    1 |    3 |      13 |       30 |      0 |
 | Keepers of Tradition Reprint (2018)      |   166 |    19 |  **11%** |               0 |       11% |   11 |    8 |    2 |      27 |       99 |      0 |
 | Lost Kindred (2018)                      |    41 |     3 |   **7%** |               0 |        7% |    8 |    0 |    7 |       2 |       21 |      0 |
 | Heirs to the Blood Reprint (2018)        |   134 |     5 |   **4%** |               0 |        4% |   30 |    0 |   41 |       4 |       54 |      0 |
 | 2018 Humble Bundle (2018)                |     5 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        5 |      0 |
-| Sabbat Preconstructed (2019)             |   125 |    70 |  **56%** |               0 |       56% |   12 |    1 |   12 |      15 |       15 |      0 |
+| Sabbat Preconstructed (2019)             |   125 |    71 |  **57%** |               0 |       57% |   11 |    1 |   12 |      15 |       15 |      0 |
 | 2019 Promo Pack 1 (2019)                 |    11 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |       11 |      0 |
 | 2019 SAC Promo (2019)                    |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       1 |        0 |      0 |
 | 2019 Promo (2019)                        |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    1 |       0 |        0 |      0 |
@@ -127,27 +127,27 @@
 | 2023 Chapters Promo (2023)               |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | 2023 Andalusian Open Promo (2023)        |     1 |     1 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | Echoes of Gehenna (2023)                 |    30 |    13 |  **43%** |               0 |       43% |   11 |    0 |    0 |       1 |        5 |      0 |
-| Shadows of Berlin (2023)                 |     9 |     2 |  **22%** |               0 |       22% |    2 |    0 |    0 |       2 |        3 |      0 |
+| Shadows of Berlin (2023)                 |     9 |     3 |  **33%** |               0 |       33% |    1 |    0 |    0 |       2 |        3 |      0 |
 | Promo (2023)                             |    24 |     7 |  **29%** |               0 |       29% |    7 |    3 |    2 |       1 |        4 |      0 |
 | 2023 Ropecon Promo (2023)                |     1 |     1 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2023 Zaragosa Promo (2023)               |     1 |     1 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2023 Mineiro Promo (2023)                |     1 |     1 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | ★ Fifth Edition (Companion) (2024)       |   115 |   103 |  **90%** |              12 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
-| Thirtieth Anniversary (2024)             |    55 |    27 |  **49%** |               0 |       49% |   11 |    3 |    0 |       2 |       12 |      0 |
+| Thirtieth Anniversary (2024)             |    55 |    29 |  **53%** |               0 |       53% |    9 |    3 |    0 |       2 |       12 |      0 |
 | ★ New Blood III (2025)                   |   131 |   123 |  **94%** |               8 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2025 CC Promo (2025)                     |     2 |     2 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | ★ Sabbat V5 (2025)                       |   146 |   124 |  **85%** |              22 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2025 European GP Promo (2025)            |     1 |     0 |   **0%** |               0 |        0% |    0 |    1 |    0 |       0 |        0 |      0 |
-| Print on Demand                          |   943 |    56 |   **6%** |               0 |        6% |  146 |    3 |  302 |      88 |      348 |      0 |
-| **All unique cards**                     |  4149 |   930 |  **22%** |             118 |       25% |  883 |  165 |  485 |     386 |     1162 |     20 |
+| Print on Demand                          |   943 |    61 |   **6%** |               0 |        6% |  141 |    3 |  302 |      88 |      348 |      0 |
+| **All unique cards**                     |  4149 |   963 |  **23%** |             118 |       26% |  850 |  165 |  485 |     386 |     1162 |     20 |
 
 ## Totals
 
 |                                            |    Cards |    % |
 | ------------------------------------------ | -------: | ---: |
-| Built                                      |      930 |  22% |
+| Built                                      |      963 |  23% |
 | Whole, no build (V5 crypt)                 |      118 |   3% |
-| Planned T1 (library, no discipline)        |      883 |  21% |
+| Planned T1 (library, no discipline)        |      850 |  20% |
 | Planned T2 (library, pool disciplines)     |      165 |   4% |
 | Planned T3 (library, legacy discipline)    |      485 |  12% |
 | Planned §7 gate (legacy vampire, whole)    |      386 |   9% |
@@ -252,17 +252,17 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Brujah antitribu                | Sabbat War            | 2000 |    12 |      77 |       **72%** | yes         | —                             |
 | Lasombra                        | Sabbat War            | 2000 |    12 |      77 |       **52%** | yes         | —                             |
 | Tzimisce                        | Sabbat War            | 2000 |    12 |      77 |       **55%** | yes         | —                             |
-| Ventrue antitribu               | Sabbat War            | 2000 |    12 |      77 |       **69%** | yes         | —                             |
+| Ventrue antitribu               | Sabbat War            | 2000 |    12 |      77 |       **70%** | yes         | —                             |
 | Brujah                          | Camarilla Edition     | 2002 |    12 |      77 |       **71%** | yes         | —                             |
 | Anarch Barons                   | Anarchs               | 2003 |    12 |      77 |       **69%** | yes         | —                             |
 | Anarch Gang                     | Anarchs               | 2003 |    12 |      77 |       **60%** | yes         | —                             |
 | Gangrel                         | Anarchs               | 2003 |    12 |      77 |       **74%** | yes         | —                             |
 | Malkavian antitribu             | Black Hand            | 2003 |    12 |      77 |       **49%** | yes         | —                             |
 | Nosferatu antitribu             | Black Hand            | 2003 |    12 |      77 |       **63%** | yes         | —                             |
-| Toreador antitribu              | Black Hand            | 2003 |    12 |      77 |       **57%** | yes         | —                             |
+| Toreador antitribu              | Black Hand            | 2003 |    12 |      77 |       **60%** | yes         | —                             |
 | Tremere antitribu               | Black Hand            | 2003 |    12 |      77 |       **62%** | yes         | —                             |
-| Alastors                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **62%** | yes         | —                             |
-| Anathema                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **63%** | yes         | —                             |
+| Alastors                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **65%** | yes         | —                             |
+| Anathema                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **64%** | yes         | —                             |
 | Baali                           | Kindred Most Wanted   | 2005 |    12 |      77 |       **44%** | yes         | —                             |
 | Gangrel antitribu               | Kindred Most Wanted   | 2005 |    12 |      77 |       **58%** | yes         | —                             |
 | Akunanse                        | Legacies of Blood     | 2005 |    12 |      77 |       **51%** | yes         | —                             |
@@ -283,14 +283,14 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Ravnos                          | Lords of the Night    | 2007 |    12 |      77 |       **42%** | yes         | —                             |
 | Brujah                          | Keepers of Tradition  | 2008 |    12 |      77 |       **57%** | yes         | —                             |
 | Malkavian                       | Keepers of Tradition  | 2008 |    12 |      77 |       **46%** | yes         | —                             |
-| Toreador                        | Keepers of Tradition  | 2008 |    12 |      77 |       **65%** | yes         | —                             |
+| Toreador                        | Keepers of Tradition  | 2008 |    12 |      77 |       **66%** | yes         | —                             |
 | Ventrue                         | Keepers of Tradition  | 2008 |    12 |      77 |       **60%** | yes         | —                             |
 | Gargoyles                       | Heirs to the Blood    | 2010 |    12 |      77 |       **48%** | yes         | —                             |
 | Kiasyd                          | Heirs to the Blood    | 2010 |    12 |      77 |       **33%** | yes         | —                             |
 | Salubri antitribu               | Heirs to the Blood    | 2010 |    12 |      77 |       **58%** | yes         | —                             |
 | Samedi                          | Heirs to the Blood    | 2010 |    12 |      77 |       **49%** | yes         | —                             |
 | Den of Fiends                   | Sabbat Preconstructed | 2019 |    12 |      77 |       **58%** | yes         | —                             |
-| Libertine Ball                  | Sabbat Preconstructed | 2019 |    12 |      77 |       **69%** | yes         | —                             |
+| Libertine Ball                  | Sabbat Preconstructed | 2019 |    12 |      77 |       **79%** | yes         | —                             |
 | Pact with Nephandi              | Sabbat Preconstructed | 2019 |    12 |      77 |       **69%** | yes         | —                             |
 | Parliament of Shadows           | Sabbat Preconstructed | 2019 |    12 |      77 |       **57%** | yes         | —                             |
 | Malkavian                       | First Blood           | 2019 |     6 |      49 |       **51%** | no          | crypt 6 < 12; library 49 < 60 |

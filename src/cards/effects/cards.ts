@@ -10,6 +10,7 @@ import type { CardHandler, ConditionalStatic, EngineOps, GameState, HandlerRegis
 import { blockEligibleSeats, canAct, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
 import {
   allocToParams,
+  applyReferendumRiders,
   compileSpec,
   enumerateAllocations,
   parseAlloc,
@@ -127,7 +128,15 @@ function huntingGround(krcgId: number, name: string): CardSpec {
  * play is a contest rather than an illegal state, and the engine already
  * models exactly that (docs/contested-design.md).
  */
-function praxisSeizure(krcgId: number, city: string): CardSpec {
+function praxisSeizure(
+  krcgId: number,
+  city: string,
+  capacityIfClan?: string,
+  /** "…and if this vampire is not a <clan>, lock all <clan>. In this
+   *  referendum, each ready <clan> gets +1 vote" (Istanbul) — the REGISTRY's
+   *  clan name (docs/in-this-referendum-design.md §4). */
+  clanRider?: string,
+): CardSpec {
   return {
     krcgId,
     name: `Praxis Seizure: ${city}`,
@@ -136,7 +145,17 @@ function praxisSeizure(krcgId: number, city: string): CardSpec {
     poolCost: 0,
     unique: true,
     requiresSect: ["camarilla"],
-    permanent: { where: "bearer", statics: {}, tags: [`Prince of ${city}`] },
+    ...(clanRider !== undefined ? { referendumRiders: { voteBonusClan: clanRider } } : {}),
+    permanent: {
+      where: "bearer",
+      // "If the prince is <clan>, his or her capacity increases by 1" — the
+      // rider eleven cities add (docs/title-riders-design.md §2).
+      statics:
+        capacityIfClan !== undefined
+          ? { capacityBonusIfClan: { clan: capacityIfClan, amount: 1 } }
+          : {},
+      tags: [`Prince of ${city}`],
+    },
     usable: [],
     modes: [
       {
@@ -152,6 +171,7 @@ function praxisSeizure(krcgId: number, city: string): CardSpec {
             // the city ALONE — answered null for every card-granted
             // title. See the Crusade factory below.
             grantsTitleCity: city,
+            ...(clanRider !== undefined ? { lockAllOfClanUnlessBearer: clanRider } : {}),
           },
         ],
       },
@@ -238,7 +258,7 @@ function feeStake(krcgId: number, city: string, voteClan?: string[]): CardSpec {
  * built identically: that sentence is reminder text for a rule on p. 39,
  * not a clause, and the rule applies whether or not a printing repeats it.
  */
-function crusade(krcgId: number, city: string): CardSpec {
+function crusade(krcgId: number, city: string, unlockIfClan?: string): CardSpec {
   return {
     krcgId,
     name: `Crusade: ${city}`,
@@ -247,7 +267,14 @@ function crusade(krcgId: number, city: string): CardSpec {
     poolCost: 0,
     unique: true,
     requiresSect: ["sabbat"],
-    permanent: { where: "bearer", statics: {}, tags: [`Archbishop of ${city}`] },
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [`Archbishop of ${city}`],
+      // "If this vampire is <clan>, they unlock during your next discard
+      // phase" (docs/title-riders-design.md §3).
+      ...(unlockIfClan !== undefined ? { unlockBearerAtNextDiscardIfClan: unlockIfClan } : {}),
+    },
     usable: [],
     modes: [
       {
@@ -287,8 +314,14 @@ const CRUSADES: CardSpec[] = (
     [100469, "Philadelphia"],
     [100470, "Pittsburgh"],
     [100472, "Toronto"],
-  ] as Array<[number, string]>
-).map(([id, city]) => crusade(id, city));
+    // WAVE 93: two of the "other eleven" name a clan the V5 crypt NOW HAS —
+    // the recorded reason for leaving them out was a claim about the pool as
+    // it was (docs/title-riders-design.md §3). The remaining nine name an
+    // ANTITRIBU clan or Lucita, which it still does not.
+    [100455, "Berlin", "Lasombra"],
+    [100463, "Istanbul", "Tzimisce"],
+  ] as Array<[number, string, string?]>
+).map(([id, city, clan]) => crusade(id, city, clan));
 
 const PRAXIS_SEIZURES: CardSpec[] = (
   [
@@ -305,8 +338,34 @@ const PRAXIS_SEIZURES: CardSpec[] = (
     [101465, "Miami"],
     [101469, "Seattle"],
     [102307, "York"],
-  ] as Array<[number, string]>
-).map(([id, city]) => praxisSeizure(id, city));
+    // WAVE 93: the plain shape, and never implemented — "Washington, D.C."
+    // puts a full stop inside the city name, so whatever split the printed
+    // text into sentences read "C." as a rider (docs/title-riders-design.md §1).
+    [101472, "Washington, D.C."],
+    // WAVE 93: "If the prince is <clan>, his or her capacity increases by 1."
+    // Excluded until now for the rider, not for any clan the pool lacks —
+    // every clan named here is in the V5 crypt (§2).
+    [101448, "Athens", "Tremere"],
+    [101450, "Barcelona", "Tremere"],
+    [101451, "Berlin", "Ventrue"],
+    [101453, "Brussels", "Nosferatu"],
+    [101454, "Cairo", "Ventrue"],
+    [101460, "Geneva", "Ventrue"],
+    [101461, "Glasgow", "Gangrel"],
+    [101466, "Monaco", "Toreador"],
+    [101467, "Paris", "Toreador"],
+    [101468, "Rome", "Brujah"],
+    [101470, "Stockholm", "Malkavian"],
+  ] as Array<[number, string, string?]>
+).map(([id, city, clan]) => praxisSeizure(id, city, clan)).concat([
+  // WAVE 94: "…and if this vampire is not an Assamite, lock all Assamites.
+  // In this referendum, each ready Assamite gets +1 vote." Assamite is BANU
+  // HAQIM in the registry — the clan-name lesson — and V5 has them.
+  // Venice prints the same rider for Giovanni and stays out: whether the V5
+  // Hecata answer to "Giovanni" is the owner's call
+  // (docs/in-this-referendum-design.md §4).
+  praxisSeizure(101463, "Istanbul", undefined, "Banu Haqim"),
+]);
 
 // Three of the six print a clan clause; the other three are the plain
 // title (docs/fee-stake-design.md §4).
@@ -10904,6 +10963,512 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
 
+  // --- New vampires (docs/new-vampires-design.md) ---
+  // Four actions whose card becomes a vampire — `becomesVampire`, which Waters
+  // of Duat and Childe of the Revolution built. They differ in the knobs worth
+  // asserting against each other: whose sect, whether it may act, how much
+  // blood it is given, and where its Discipline master may come from.
+  {
+    // "+1 stealth action. Requires a non-sterile vampire. Put this card in
+    //  play. It becomes a 1-capacity non-unique vampire of the same clan and
+    //  sect as the acting vampire, and must hunt this turn."
+    //
+    // "Must hunt this turn" is not a clause: it arrives at 0 blood, and a
+    // ready vampire with no blood must hunt (p. 21).
+    krcgId: 100633,
+    name: "The Embrace",
+    cardType: "action",
+    bloodCost: 2,
+    requiresNonSterile: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "becomesVampire", capacity: 1, clanFromActor: true, sectFromActor: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a non-sterile prince or justicar. Put this
+    //  card in play. It becomes a 1-capacity (non-unique) Camarilla vampire of
+    //  the same clan as the acting vampire and cannot perform actions this
+    //  turn. You can search your library (shuffle afterward), hand and/or ash
+    //  heap for a Discipline master card and put it on this new vampire. Move
+    //  up to 2 blood from the acting vampire to this new vampire."
+    krcgId: 101973,
+    name: "Third Tradition: Progeny",
+    cardType: "action",
+    bloodCost: 1,
+    requiresTitle: ["prince", "justicar"],
+    requiresNonSterile: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "becomesVampire",
+            capacity: 1,
+            clanFromActor: true,
+            sect: "camarilla",
+            cannotActThisTurn: true,
+            searchDisciplineMaster: true,
+            bloodFromActor: 2,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a ready non-sterile archbishop, priscus,
+    //  cardinal or regent. Put this card in play. It becomes a 1-capacity
+    //  (non-unique) Sabbat vampire of the same clan as the acting vampire, and
+    //  cannot perform actions this turn. You can search your library (shuffle
+    //  afterward), hand, and/or ash heap for a master Discipline card and put
+    //  it on this new vampire. Move up to 1 blood from the acting vampire to
+    //  this new vampire."
+    //
+    // Third Tradition's Sabbat twin: the same sentences, "up to 1" blood
+    // where Progeny gives "up to 2".
+    krcgId: 100441,
+    name: "Creation Rites",
+    cardType: "action",
+    bloodCost: 1,
+    requiresTitle: ["archbishop", "priscus", "cardinal", "regent"],
+    requiresNonSterile: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "becomesVampire",
+            capacity: 1,
+            clanFromActor: true,
+            sect: "sabbat",
+            cannotActThisTurn: true,
+            searchDisciplineMaster: true,
+            bloodFromActor: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a non-sterile Ravnos with capacity 5 or
+    //  more. Put this card in play; it becomes a 2-capacity (non-unique) Ravnos
+    //  of the same sect as the acting Ravnos with basic Chimerstry [chi], and
+    //  must hunt this turn. You can put a master Discipline card from your hand
+    //  on this new vampire."
+    //
+    // The Ravnos icon on an ACTION card is a requirement (p. 10). "From your
+    // hand" only — so, unlike the searches, no library shuffle (§5).
+    krcgId: 102046,
+    name: "Tumnimos",
+    cardType: "action",
+    bloodCost: 2,
+    requiresClan: ["Ravnos"],
+    requiresCapacity: 5,
+    requiresNonSterile: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "becomesVampire",
+            capacity: 2,
+            clan: "Ravnos",
+            sectFromActor: true,
+            disciplines: { chi: "basic" },
+            disciplineMasterFromHand: true,
+          },
+        ],
+      },
+    ],
+  },
+
+  // --- Stores you fill yourself (docs/stores-you-fill-design.md) ---
+  // Two locations you build up and then spend — on blood, or on buying a
+  // vampire — and the tax on every hunting ground your neighbours hold, which
+  // the first of them is.
+  {
+    // "Master: unique location. Hunting ground. Lock during your master phase
+    //  to move a blood from the blood bank to this card. Lock during your
+    //  unlock phase to move 1 blood from this card to your pool or to a ready
+    //  vampire you control. A vampire can gain blood from only one hunting
+    //  ground card each turn."
+    //
+    // A hunting ground by TAG only: it has no "a vampire gains 1 blood" grant
+    // of its own, but it counts for Arcanum Chapterhouse and Poacher's, and its
+    // blood to a vampire obeys the one-ground rule.
+    krcgId: 101980,
+    name: "Threestar Cab Company",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location", "huntingGround"],
+      bloodStore: {
+        offers: [
+          { window: "master", locks: true, kind: "bankToCard", amount: 1 },
+          { window: "unlock", locks: true, kind: "cardToPool", amount: 1 },
+          { window: "unlock", locks: true, kind: "cardToVampire", amount: 1 },
+        ],
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique location. During your master phase, you can move 1 counter from
+    //  your pool to this card. Lock and burn X counters from this card during
+    //  your influence phase to steal a vampire controlled by your prey with
+    //  capacity less than X. Any vampire can burn this card as a Ⓓ action."
+    //
+    // The Ministry icon is on a MASTER, so it is not a requirement (p. 10).
+    krcgId: 100848,
+    name: "Grand Temple of Set",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 2,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      bloodStore: {
+        offers: [
+          { window: "master", kind: "poolToCard", amount: 1 },
+          { window: "influence", locks: true, kind: "burnToSteal" },
+        ],
+      },
+      vulnerableTo: { who: { kind: "vampire" } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. Each of your predator and prey burns 1 pool
+    //  during his or her unlock phase for each Hunting Ground he or she
+    //  controls. Any minion may burn this card as a Ⓓ action."
+    krcgId: 100082,
+    name: "Arcanum Chapterhouse, Alexandria",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      unlockDrain: { whose: "predatorOrPrey", amount: 1, perHuntingGround: true },
+      vulnerableTo: { who: {} },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- The investments (docs/investments-design.md) ---
+  // Pool paid in advance and drawn back one master action at a time. Every one
+  // carries the `investment` tag, which is what Wall Street Night — in the pool
+  // since before any investment was — has been waiting to read.
+  {
+    // "Master. Investment. Put this card in play and move 5 blood from the
+    //  blood bank to this card. You may use a master phase action to move 1
+    //  blood from this card to your pool. Burn this card when all blood has
+    //  been removed."
+    krcgId: 101502,
+    name: "Protracted Investment",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 2,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["investment"],
+      bloodStore: {
+        start: 5,
+        offers: [{ window: "master", usesMasterAction: true, kind: "cardToPool", amount: 1 }],
+        burnWhenEmpty: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Investment. Put this card in play and move 3 blood from the
+    //  blood bank to this card. You may use a master phase action to move 1
+    //  blood from this card to your blood pool. Burn this card when the last
+    //  blood counter on it is removed."
+    //
+    // Protracted Investment's twin: 3 for 1 against 5 for 2. "When the last
+    // blood counter is removed" and "when all blood has been removed" are the
+    // one `burnWhenEmpty` rule (the New York note on the field).
+    krcgId: 101769,
+    name: "Short-Term Investment",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["investment"],
+      bloodStore: {
+        start: 3,
+        offers: [{ window: "master", usesMasterAction: true, kind: "cardToPool", amount: 1 }],
+        burnWhenEmpty: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique master. Put this card in play with X blood where X is the number
+    //  of Methuselahs in the game. You may use a master phase action to move 1
+    //  blood from this card to your pool. Burn this card if it has no counters."
+    //
+    // Not printed "Investment": it pays out like one but carries no such type,
+    // so Wall Street Night cannot raid it — the negative space of the tag.
+    krcgId: 101802,
+    name: "Slave Auction",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: [],
+      bloodStore: {
+        start: { perMethuselah: true },
+        offers: [{ window: "master", usesMasterAction: true, kind: "cardToPool", amount: 1 }],
+        burnWhenEmpty: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- Hunting-ground variants (docs/hunting-ground-variants-design.md) ---
+  // Three hunting grounds that each bend a different part of the p. 21 rule:
+  // WHO it feeds (the two oldest), WHO may use it (a rival, for rent), and HOW
+  // MANY times (as many as the other seats have grounds).
+  {
+    // "Master: unique location. Requires a ready cardinal or regent. Hunting
+    //  ground. During your unlock phase, you may move 1 blood from the blood
+    //  bank to each of the two oldest ready vampires you control. A vampire
+    //  can gain blood from only one hunting ground card each turn."
+    krcgId: 100871,
+    name: "Gurchon Hall",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    requiresControlledTitle: ["cardinal", "regent"],
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location", "huntingGround"],
+      huntingGround: { amount: 1, twoOldest: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: unique location. Hunting ground. During your unlock phase, you
+    //  may move 1 blood from the blood bank to a ready vampire you control.
+    //  Any other Methuselah may give you a pool during his or her unlock phase
+    //  to lock this card to move 1 blood from the blood bank to a ready
+    //  vampire he or she controls. A vampire can gain blood from only one
+    //  hunting ground card each turn."
+    krcgId: 101060,
+    name: "Kingston Penitentiary, Ontario",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 4,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location", "huntingGround"],
+      huntingGround: { amount: 1, rentForPool: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Location. Hunting ground. Derivative. During your unlock phase,
+    //  choose up to X ready anarchs you control who each gain 1 blood, where X
+    //  is the number of non-derivative hunting grounds controlled by other
+    //  Methuselahs. A vampire can gain blood from only one hunting ground card
+    //  each turn."
+    //
+    // "Derivative" is a TAG the count reads — a Poacher's never counts another
+    // Poacher's, so two players cannot feed each other's poaching.
+    krcgId: 101404,
+    name: "Poacher's Hunting Ground",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location", "huntingGround", "derivative"],
+      huntingGround: { amount: 1, sect: "anarch", allowanceFromOthersGrounds: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- In this referendum (docs/in-this-referendum-design.md) ---
+  // Political actions whose OWN referendum changes who votes and how much.
+  // Praxis Seizure: Istanbul rides the Praxis factory; Investiture's title
+  // grant is the bespoke `titleGrant` the Justicars use.
+  {
+    // "Requires an Anarch.
+    //  Choose one or more Methuselahs. Successful referendum means each chosen
+    //  Methuselah burns 1 pool, plus 3 additional pool if they control a ready
+    //  titled vampire. In this referendum, each priscus gets -1 ballot, each
+    //  non-priscus titled vampire gets -1 vote, and burning the Edge is worth
+    //  1 additional vote."
+    //
+    // The two title clauses are ONE rule in this engine: a priscus's ballot is
+    // counted through the vote machinery (docs/ballots-design.md), so every
+    // titled vampire's count simply drops by one (§3).
+    krcgId: 100605,
+    name: "Eat the Rich",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    poolCost: 0,
+    requiresSect: ["anarch"],
+    referendumRiders: { titledVoteDelta: -1, edgeVoteBonus: 1 },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refChooseSeatsBurn", base: 1, titledBonus: { extra: 3 } }],
+      },
+    ],
+  },
+  {
+    // "Requires a cardinal or regent. Title.
+    //  In this referendum, each ready cardinal gets one additional vote.
+    //  Choose a Sabbat vampire. If this referendum is successful, put this card
+    //  on the chosen vampire to represent the Sabbat title of priscus. Camarilla
+    //  vampires cannot cast votes or ballots during this referendum."
+    //
+    // NOT unique: "the Sabbat title of priscus" names no city and claims no
+    // uniqueness, unlike the Justicars. The grant itself is `titleGrant`
+    // (below, beside the Justicars' handlers).
+    krcgId: 101003,
+    name: "Investiture",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    referendumEffect: "other",
+    requiresTitle: ["cardinal", "regent"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
+  // --- Stealable locations (docs/stealable-locations-design.md) ---
+  // Two locations whose own text invites theft, and the action that steals any
+  // cheap location. The cost filter on the thief is what separates them: both
+  // locations are FREE, so New Management can take either — and the pool's
+  // expensive locations are exactly what it cannot.
+  {
+    // "Do not replace until after this action.
+    //  Ⓓ Take control of a location that is free or costs 1 blood or pool."
+    //
+    // Directed at the location's CONTROLLER, who alone may block (p. 25) —
+    // the permanent-target shape. The cost is the PRINTED one, pool or blood.
+    krcgId: 101280,
+    name: "New Management",
+    cardType: "action",
+    bloodCost: 0,
+    delayedReplace: "afterAction",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionOnPermanent", what: "location", outcome: "steal", maxCost: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "Unique location.
+    //  You can lock this location to reduce the cost of an action card a
+    //  vampire you control plays by 1 blood (this location is not locked if
+    //  that card is canceled as it is played). Vampires can steal this location
+    //  as a Ⓓ action."
+    //
+    // A cost source that pays from NOWHERE (`flat`), where every other one pays
+    // from counters. The parenthetical asks for nothing: an action card's cost
+    // is paid at RESOLUTION (p. 27), so a card canceled as it is played never
+    // reaches the spend, and the location is never locked (§2).
+    krcgId: 101110,
+    name: "The Line",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      costSource: { pays: ["blood"], for: "action", locks: true, flat: 1 },
+      vulnerableTo: { who: { kind: "vampire" }, outcome: "steal" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique location.
+    //  You can lock this location to lock a Toreador. If you control the
+    //  Prince of Paris, you can lock this location to lock a minion. Minions
+    //  can steal this location as a Ⓓ action."
+    //
+    // "MINIONS can steal" where The Line says "VAMPIRES": an ally may take this
+    // one and not the other, which is the pair's negative space. The Toreador
+    // icon is on a MASTER, so it is not a requirement (p. 10's rule is about
+    // minion cards).
+    krcgId: 101127,
+    name: "The Louvre, Paris",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      lockToLockMinion: {
+        clan: "Toreador",
+        anyMinionIfTitle: { title: "prince", city: "Paris" },
+      },
+      vulnerableTo: { who: {}, outcome: "steal" },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+
   // --- Borrowed minions (docs/borrowed-minions-design.md) ---
   // Three masters that take a minion off another Methuselah. One mechanism, and
   // the family differs along two axes worth asserting against each other: HOW
@@ -19827,7 +20392,13 @@ function titleGrant(opts: {
   title: VampireTitle;
   eligible: (m: MinionState) => boolean;
   voteBonusClan?: string;
+  /** "In this referendum, each ready CARDINAL gets one additional vote"
+   *  (Investiture). */
+  voteBonusTitle?: VampireTitle;
   restrictSect?: "camarilla" | "anarch" | "sabbat" | "independent";
+  /** "CAMARILLA vampires cannot cast votes or ballots during this
+   *  referendum" (Investiture) — the inverse of `restrictSect`. */
+  banSect?: "camarilla" | "anarch" | "sabbat" | "independent";
 }): CardHandler {
   return {
     ...compileSpec(specByName(opts.name)),
@@ -19851,20 +20422,14 @@ function titleGrant(opts: {
     referendumSetup(frame, state) {
       // "During this referendum, non-<sect> vampires cannot cast votes."
       if (opts.restrictSect) frame.voteRestriction = { sect: opts.restrictSect };
-      if (!opts.voteBonusClan) return;
-      // "Each <clan> gets +1 vote" — one extra castable vote per matching
-      // ready vampire, credited to its controller (p. 28).
-      for (const s of state.seats) {
-        if (s.ousted) continue;
-        const n = s.minions.filter(
-          (m) => m.kind === "vampire" && isReady(m) && m.clan === opts.voteBonusClan,
-        ).length;
-        if (n > 0) {
-          const g = (frame.voteGrants[s.id] ??= { any: 0, for: 0, against: 0 });
-          // The rider says only "+1 vote" — each seat aims its own.
-          g.any += n;
-        }
-      }
+      // Every "in this referendum" vote rider goes through the ONE helper the
+      // spec-compiled cards use, so the Justicars' clan bonus and a Praxis
+      // Seizure's are the same code (docs/in-this-referendum-design.md §2).
+      applyReferendumRiders(frame, state, {
+        ...(opts.voteBonusClan !== undefined ? { voteBonusClan: opts.voteBonusClan } : {}),
+        ...(opts.voteBonusTitle !== undefined ? { voteBonusTitle: opts.voteBonusTitle } : {}),
+        ...(opts.banSect !== undefined ? { voteBanSect: opts.banSect } : {}),
+      });
     },
     applyReferendum(frame, ops) {
       const target = frame.terms["target"];
@@ -19895,6 +20460,22 @@ function titleGrant(opts: {
  * vampire of the clan, the title lands on a pass, and every vampire of
  * that clan votes one louder while the referendum runs.
  */
+/**
+ * Investiture (101003) — the Justicars' `titleGrant` shape for a Sabbat title,
+ * with the two riders `titleGrant` gained for it: every ready CARDINAL votes
+ * one louder, and CAMARILLA vampires may not vote at all. Both go through
+ * `applyReferendumRiders`, the helper the spec-compiled cards use.
+ * docs/in-this-referendum-design.md §2
+ */
+const investiture: CardHandler = titleGrant({
+  name: "Investiture",
+  title: "priscus",
+  // "Choose a Sabbat vampire" — ready is re-checked when the title lands.
+  eligible: (m) => m.sect === "sabbat",
+  voteBonusTitle: "cardinal",
+  banSect: "camarilla",
+});
+
 const JUSTICAR_HANDLERS: CardHandler[] = JUSTICAR_CLANS.map(([, clan, camarillaOnly]) =>
   titleGrant({
     name: `${clan} Justicar`,
@@ -23158,6 +23739,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     openWar,
     diaDeLosMuertos,
     ...JUSTICAR_HANDLERS,
+    investiture,
     cardinalBenediction,
     dreamsOfTheSphinx,
     doggedPursuit,

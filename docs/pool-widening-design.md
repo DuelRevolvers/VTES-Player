@@ -1006,6 +1006,200 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 98 — new vampires (4 cards), 2026-09-26
+
+The Embrace, Third Tradition: Progeny, Creation Rites, Tumnimos — actions
+whose card becomes a vampire (`new-vampires-design.md`). `becomesVampire`
+gained `sectFromActor`, `cannotActThisTurn`, `disciplines`,
+`bloodFromActor` and `disciplineMasterFromHand`. **Found:** choice frames are
+a STACK, and the first draft raised the master search and the blood gift in
+printed order under a comment claiming that was the asking order — so the
+blood was offered before the +1-capacity master had made room. Also pinned:
+a 0-blood childe that cannot act is not forced into p. 21's hunt. Library
+864 / crypt 217 / total 1081.
+
+### Wave 97 — stores you fill yourself (3 cards), 2026-09-26
+
+Library **857 → 860**. Threestar Cab Company, Grand Temple of Set, Arcanum
+Chapterhouse. Write-up: `docs/stores-you-fill-design.md`.
+
+Two locations you build up and then spend (blood, or a stolen prey vampire at
+capacity + 1 counters) and the tax on every hunting ground your neighbours hold.
+Four blood-store additions (`locks`, `cardToVampire`, `poolToCard`,
+`burnToSteal`) and two `unlockDrain` siblings (`predatorOrPrey`,
+`perHuntingGround`).
+
+**No engine defect; every mutation caught first time.** Two things recorded that
+would have failed silently: (1) **a card can be a hunting ground by TAG alone** —
+Threestar prints "Hunting ground" but has no feeding grant; the word makes it
+COUNT (Arcanum, Poacher's X) and binds its blood-to-vampire to the one-ground
+rule, which the blood store had never heard of until now; (2) **a two-valued test
+with a third value added falls through** — `whose === "any" || … === prey` meant
+"not any is prey", so `"predatorOrPrey"` would have charged the prey alone
+without the branch being named.
+
+### Wave 96 — the investments (3 cards), 2026-09-26
+
+Library **854 → 857**. Protracted Investment, Short-Term Investment, Slave
+Auction. Write-up: `docs/investments-design.md`.
+
+Pool paid in advance and drawn back one master action at a time — data on the
+existing `bloodStore` clause, plus one start value (`perMethuselah`, for Slave
+Auction: the Methuselahs still in the game).
+
+**What it found: a clause that has never been able to fire.** Wall Street Night
+has long been in the pool, and its "move a counter from an INVESTMENT card"
+action had no target — its own comment said it "starts working the day one
+exists", and its test raided a hand-built stand-in. The investments are that day,
+and the whole of it rests on one word: the `investment` TAG. Leave it off and
+everything compiles, passes and plays, and the old clause stays dead with nothing
+failing. So the wave's test raids a REAL investment played from hand, and Slave
+Auction — which pays out like one but is not printed "Investment" — is asserted
+unraidable.
+
+**And a test that passed for the wrong reason:** "a draw costs the master action"
+was first asserted as "no second draw is offered", which the store's own
+once-per-phase limit also produces. A mutation making the draw FREE passed it; the
+case now reads `masterActionsLeft`.
+
+### Wave 95 — hunting-ground variants (3 cards), 2026-09-26
+
+Library **851 → 854**. Gurchon Hall, Kingston Penitentiary Ontario, Poacher's
+Hunting Ground. Write-up: `docs/hunting-ground-variants-design.md`.
+
+Three hunting grounds that each bend a different part of p. 21 — WHO it feeds
+(Gurchon: the two oldest, fixed, in one use), WHO may use it (Kingston: a rival
+rents it for 1 pool in their own unlock phase), HOW MANY times (Poacher's: X =
+other seats' non-derivative grounds). All extend the one `huntingGround` clause.
+
+**What it found:**
+
+1. **For a seat permanent, `useAbility`'s `owner.seat` is the DECIDING seat.** The
+   engine corrects `owner` only for attached cards. Kingston is the first ground a
+   RIVAL uses, and "pay the owner" written with `owner.seat` paid the renter back
+   his own pool — a free rental that still locked the card. Fixed with a
+   `holderOf` read off the table; the engine's contract is left alone because the
+   other any-seat cards already work around it by passing the seat in `params`.
+   The "which seat an ability belongs to" lesson, a sixth time — caught only
+   because the test checked the OWNER's pool as well as the renter's.
+2. **A fixture flag the engine resets is a silent skip.** Setting
+   `usedHuntingGroundThisTurn` in the fixture does nothing — the unlock sweep
+   clears it first — so the "already fed" case tested a vampire that had not
+   fed. It now feeds from a real second ground in the same phase.
+3. A stale comment on `huntingGround.path` ("MinionState has no path") corrected;
+   the enumerator was already right.
+
+Mutation-checked three ways, including restoring the `owner.seat` bug.
+
+### Wave 94 — in this referendum (3 cards), 2026-09-26
+
+Library **848 → 851**. Eat the Rich, Investiture, Praxis Seizure: Istanbul.
+Write-up: `docs/in-this-referendum-design.md`.
+
+Three political actions whose OWN referendum changes who votes and how much:
+titled vampires quieter and the Edge louder; cardinals louder and the Camarilla
+silenced; Banu Haqim louder, then locked unless one of them is the new prince.
+
+**What it found:**
+
+1. **The machinery existed in three places.** `voteModifiers` (Absolute Tyranny,
+   Fee Stake), the Justicars' inline `voteBonusClan` in a bespoke helper, and
+   `voteRestriction`. The wave added ONE declaration (`CardSpec.referendumRiders`)
+   and ONE helper (`applyReferendumRiders`), and **re-pointed the Justicars at
+   it**, so "each <clan> gets +1 vote" is no longer written twice. On spec cards
+   the riders are GRAFTED onto `referendumSetup`: the Fee Stake claims the same
+   hook with assign-if-absent, and a second assignment would have silently
+   replaced it.
+2. **Wave 93 understated Istanbul's blocker.** Its note said "a clan-vote rider";
+   the card also prints "and if this vampire is not an Assamite, lock all
+   Assamites" — swallowed by the regex that listed the riders, because it shares a
+   sentence with the city. Re-reading the whole text found it; wave 93's doc is
+   corrected in place.
+3. **Two sentences, one rule.** "Each priscus −1 ballot, each non-priscus titled
+   vampire −1 vote" is one modifier here, because `ballots-design.md` counts a
+   priscus's ballot through the vote machinery.
+
+Asserted at the POLLING STEP, where a vote rider is observable, against a control
+(Empires Fall: same shape, no riders). Four mutations, each failing only its own
+case — one caught only by a "no cardinal, no grant" assertion added for it.
+`simulate:politics` clean.
+
+Deferred with blockers: Free States Rant (Eat the Rich's twin in the vote clause,
+but it allocates among VAMPIRES and `refAllocateBurn` allocates among seats);
+Praxis Venice (the Giovanni/Hecata question).
+
+### Wave 93 — the title riders (14 cards), 2026-09-26
+
+Library **834 → 848**. Praxis Seizure: Washington D.C.; Praxis Seizures Athens,
+Barcelona, Berlin, Brussels, Cairo, Geneva, Glasgow, Monaco, Paris, Rome,
+Stockholm; Crusades Berlin and Istanbul. Write-up: `docs/title-riders-design.md`.
+
+Fourteen title cards the earlier waves left out — **and none for the reason that
+was written down.** Two riders on the existing factories paid for all of them:
+`capacityBonusIfClan` ("if the prince is <clan>, capacity +1", read in
+`capacityOf` against the bearer) and a discard-phase unlock for the bearer (Feral
+Hound's shape, lifted out of the retainer compiler into the generic tail).
+
+**What it found — three stale reasons:**
+
+1. **Praxis Seizure: Washington, D.C. has no rider.** It is the plain shape, and
+   was missed because the full stop INSIDE "D.C." split off a fake "C." sentence
+   when the family was sorted. A card excluded by a parsing artefact has no ledger
+   entry saying why.
+2. **The Crusade exclusion note was about the pool as it was.** "A clan rider
+   naming a clan the pool does not have" stopped being true for Berlin (Lasombra)
+   and Istanbul (Tzimisce) when the V5 Sabbat crypt arrived.
+3. **The Praxis riders were never about absent clans** — all eleven name a V5
+   clan (asserted against the real registry). They waited for a rider, and the
+   test pinning `length === 13` failed the moment one was built; it now pins the
+   REASON instead (the two still out print an unbuilt clan-vote rider).
+
+Checked rather than claimed: a FULL prince who loses the +1 to a contest is not
+left over capacity — `settle()`'s `drainOverCapacity`, written for Discipline
+masters leaving play, already drains it. Also confirmed: `onEnterPlay` fires for a
+card a referendum puts in play.
+
+**Left for the owner:** the eight antitribu Crusades and Aragon (Lucita) were
+recorded "inert by §0", which sits awkwardly beside wave 8's Path-master ruling
+("a clause matching nothing today is fine under §0 because the card does
+everything it prints"). Their titles work in this pool; only the rider cannot
+fire. Deferred with blockers: Praxis Istanbul and Venice (a per-referendum
+clan-vote rider; and whether Hecata answer to "Giovanni").
+
+### Wave 92 — stealable locations (3 cards), 2026-09-26
+
+Library **831 → 834**. New Management, The Line, The Louvre Paris. Write-up:
+`docs/stealable-locations-design.md`.
+
+Two locations whose own text invites theft, and the action that steals any
+location costing 1 or less. The cost filter separates them (both locations are
+free; a 2-pool location is exactly what New Management may not take), and the two
+locations differ in who may steal them — "vampires" against "minions".
+
+**What it found: four of the first six cards were inert.** The wave was first
+planned from a text search for "take control of" — Legend of the Leopard (an
+OSEBO clan icon, a requirement on a minion card, and the V5 crypt has no Osebo),
+Puppeteer (Necromancy), Lure of the Serpent (Serpentis), Restructure
+(Dementation). The V5 crypt's disciplines are exactly `ani aus cel dom for obf obl
+pot pre pro tha`. Three engine extensions had been written for the first plan;
+all three were REVERTED, because a field with no writer claims a capability the
+pool never exercises and the next reader would build on it — the dual of wave
+88's "spec field with no reader". Filter candidates by the crypt's clans and
+disciplines BEFORE reading card text.
+
+The Line is a cost source that pays from NOWHERE — one field (`flat`) and one read
+(`costSourceAvailable`), where the offer and the spend had each read the counters
+separately. Its parenthetical ("not locked if that card is canceled as it is
+played") is already true, since action cards pay at resolution. The Louvre's
+untimed lock follows the Dreams of the Sphinx reading already on record. One
+behaviour change outside the wave: the spend now skips a locking source locked
+since announcement — the card text supports it, and a flat source would otherwise
+pay from nothing every time.
+
+Deferred with blockers named: The Shard (discounts "a card you play", and cost
+sources are wired only into action and equipment payments) and High Museum of Art
+(a rules question on whether winning back a contested copy is "gaining control").
+
 ### Wave 91 — borrowed minions (3 cards), 2026-09-25
 
 Library **828 → 831**. The Art of Love, Malkavian Dementia, From a Sinking Ship.

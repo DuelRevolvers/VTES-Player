@@ -473,6 +473,25 @@ export type EffectPrimitive =
       clan?: string;
       clanFromActor?: boolean;
       sect?: Sect;
+      /** "…of the same clan AND SECT as the acting vampire" (The Embrace,
+       *  Tumnimos) — read once, at creation, like `clanFromActor`.
+       *  docs/new-vampires-design.md §2 */
+      sectFromActor?: boolean;
+      /** "…and CANNOT PERFORM ACTIONS this turn" (Creation Rites, Third
+       *  Tradition: Progeny) — where the others "must hunt this turn", which
+       *  is not a clause at all: a vampire arriving at 0 blood must hunt
+       *  (p. 21). §3 */
+      cannotActThisTurn?: boolean;
+      /** "…with basic Chimerstry [chi]" (Tumnimos). */
+      disciplines?: Record<string, "basic" | "superior">;
+      /** "MOVE UP TO N BLOOD from the acting vampire to this new vampire"
+       *  (Creation Rites 1, Third Tradition 2) — the player's choice of how
+       *  much, after the action's own cost is paid. §4 */
+      bloodFromActor?: number;
+      /** "You can put a master Discipline card FROM YOUR HAND on this new
+       *  vampire" (Tumnimos) — the search's hand-only sibling, and so NO
+       *  library shuffle: nobody looked at the library (p. 14). §5 */
+      disciplineMasterFromHand?: boolean;
       /** "You can search your library (shuffle afterward), hand, and/or
        *  ash heap for a Discipline master card and put it on this new
        *  vampire" — optional, and finding nothing is always legal
@@ -1743,6 +1762,10 @@ export type EffectPrimitive =
        *  capacity is `atMost` (Neonate Breach) or `atLeast` (Empires
        *  Fall) the bound. */
       capBonus?: { atMost?: number; atLeast?: number; extra: number };
+      /** "…plus N additional pool if they control a ready TITLED vampire"
+       *  (Eat the Rich) — `capBonus`'s sibling, asked of the same ready
+       *  vampires. docs/in-this-referendum-design.md §3 */
+      titledBonus?: { extra: number };
       /** "Choose A Methuselah" (Screw the Masquerade!) — exactly one,
        *  where the primitive's default is any non-empty subset. The terms
        *  are the legal-move generator's answer to "who may this name", so
@@ -1776,6 +1799,11 @@ export type EffectPrimitive =
       onActor?: boolean;
       grantsTitle?: VampireTitle;
       grantsTitleCity?: string;
+      /** "…and if this vampire is not an Assamite, lock all Assamites"
+       *  (Praxis Seizure: Istanbul) — every seat's ready vampires of the clan,
+       *  unless the new title-holder is one. The REGISTRY's clan name
+       *  (Assamite is Banu Haqim). docs/in-this-referendum-design.md §4 */
+      lockAllOfClanUnlessBearer?: string;
     }
   /** "Successful referendum means YOU steal 1 pool from each Methuselah
    *  who \<condition\>" (Transfer of Power, Tithings).
@@ -1997,6 +2025,11 @@ export type EffectPrimitive =
       what: "location" | "equipment";
       outcome: "burn" | "steal";
       poolFromController?: number;
+      /** "…a location that is FREE OR COSTS 1 blood or pool" (New Management)
+       *  — the printed cost, pool or blood alike, read off the registry.
+       *  INCLUSIVE, like the referendum primitives' `maxCapacity`.
+       *  docs/taking-by-force-design.md §3 */
+      maxCost?: number;
     }
   /** "Ⓓ Steal an ally controlled by another Methuselah" (Entrancement) —
    *  control moves on a successful action; the target is fixed at
@@ -2037,6 +2070,12 @@ export type BloodStoreOffer = {
   usesMasterAction?: boolean;
   /** "…burn 1 pool to…" — a price, paid on use, not a cost of the card. */
   poolCost?: number;
+  /** "LOCK during your master phase to …" (Threestar Cab Company) — the lock
+   *  is the price, so a locked card offers nothing, and the lock outlasts the
+   *  phase: it is what stops a card that locks in the unlock phase being used
+   *  again in the master phase of the same turn.
+   *  docs/stores-you-fill-design.md §2 */
+  locks?: boolean;
 } & (
   /** "Move N blood from the blood bank to this card." The bank is
    *  unbounded (p. 5), so this is a gain, not a transfer. */
@@ -2053,6 +2092,20 @@ export type BloodStoreOffer = {
    *  counters would drain off for nothing (p. 6).
    *  docs/uncontrolled-graduation-design.md §6 */
   | { kind: "cardToUncontrolled"; clan?: string }
+  /** "…move 1 blood from this card … TO A READY VAMPIRE YOU CONTROL"
+   *  (Threestar Cab Company). On a card that is also a HUNTING GROUND, the
+   *  one-ground-per-vampire rule binds it: the recipient must not have fed
+   *  from a ground this turn, and now has. §2 */
+  | { kind: "cardToVampire"; amount: number }
+  /** "…move 1 counter FROM YOUR POOL to this card" (Grand Temple of Set) —
+   *  pool in, one for one; no bank match (compare `poolToCardMatched`). §3 */
+  | { kind: "poolToCard"; amount: number }
+  /** "LOCK AND BURN X counters from this card … to STEAL a vampire controlled
+   *  by your PREY with capacity LESS THAN X" (Grand Temple of Set). One option
+   *  per stealable vampire, at the SMALLEST X that takes it: burning more buys
+   *  nothing, so a larger X is a futile option (docs/futile-options-design.md).
+   *  §3 */
+  | { kind: "burnToSteal" }
 );
 
 /**
@@ -2633,8 +2686,9 @@ export interface CardSpec {
      *  standing tax this whole family is built around
      *  (docs/pool-drain-design.md §3). */
     unlockDrain?: {
-      /** Whose unlock phase fires it: anyone's, or the controller's prey. */
-      whose: "any" | "prey";
+      /** Whose unlock phase fires it: anyone's, the controller's prey, or
+       *  "each of your PREDATOR AND PREY" (Arcanum Chapterhouse). */
+      whose: "any" | "prey" | "predatorOrPrey";
       amount: number;
       /** What must hold for the drain to apply. Absent = unconditional. */
       when?:
@@ -2644,6 +2698,10 @@ export interface CardSpec {
       /** "…for EACH vampire in torpor they control" (Augury of Doom):
        *  charged once per matching vampire rather than once. */
       perTorporVampire?: boolean;
+      /** "…for EACH HUNTING GROUND he or she controls" (Arcanum
+       *  Chapterhouse) — `perTorporVampire`'s sibling, counting cards in play
+       *  by their `huntingGround` tag. docs/stores-you-fill-design.md §4 */
+      perHuntingGround?: boolean;
     };
     /** "For each counter on this card, that Methuselah burns 1 pool OR
      *  \<something else\>" — a toll of X units where the PAYER chooses how
@@ -2696,7 +2754,12 @@ export interface CardSpec {
        *  than stealing the blood, so more counters is strictly better in
        *  every line of play and the question has exactly one answer. A
        *  frame here would only ask it. */
-      start?: number | { capacityOfReady: { sect?: Sect; clan?: string } };
+      start?:
+        | number
+        | { capacityOfReady: { sect?: Sect; clan?: string } }
+        /** "…with X blood where X is the number of Methuselahs in the game"
+         *  (Slave Auction) — the standing ones, at play. */
+        | { perMethuselah: true };
       /** What the controller may do with the store, and in which window. */
       offers?: BloodStoreOffer[];
       /** "During each of your unlock phases, move N blood from this card
@@ -3006,6 +3069,29 @@ export interface CardSpec {
      *  (Hunger Moon) — any vampire's hunt, not just the controller's.
      *  docs/events-design.md §2 */
     huntTax?: { blood: number; burnAt: number };
+    /**
+     * "If this vampire is \<clan\>, they unlock during your next discard
+     * phase" (Crusade: Berlin, Crusade: Istanbul) — the bearer locked to call
+     * the referendum that put this card on them. The Feral Hound shape:
+     * remembered as the card enters play, spent in its controller's next
+     * discard phase. docs/title-riders-design.md §3
+     */
+    unlockBearerAtNextDiscardIfClan?: string;
+    /**
+     * "You can lock this location to lock a TOREADOR. If you control the
+     * PRINCE OF PARIS, you can lock this location to lock a MINION" (The
+     * Louvre, Paris) — any seat's, and any time the controller has an impulse:
+     * the card prints no timing, which this project reads the way Dreams of
+     * the Sphinx does (docs/temporary-hand-size-design.md, citing The Barrens
+     * ruling). docs/stealable-locations-design.md §3
+     */
+    lockToLockMinion?: {
+      /** The base filter: "…to lock a \<clan\>". */
+      clan: string;
+      /** "If you control the \<title\> of \<city\>, …a MINION" — the filter
+       *  lifts entirely while a ready vampire you control holds it. */
+      anyMinionIfTitle?: { title: VampireTitle; city: string };
+    };
     /**
      * "LOCK to give a vampire who successfully hunts an additional blood from
      * the blood bank" (Inbase Discotek, Frankfurt) / "LOCK WHEN an anarch
@@ -3367,12 +3453,29 @@ export interface CardSpec {
        *  docs/wraith-zombie-design.md §6 */
       undeadAllyLife?: number;
       /** "a ready vampire you control WHO FOLLOWS THE PATH OF \<x\>"
-       *  (Burial Site Hunting Ground). Paths are out of scope per the
-       *  scope lock, so this filter is recorded and correctly matches no
-       *  vampire: `MinionState` has no path, and nothing sets one. Stated
-       *  rather than omitted so the clause is visible to the next reader
-       *  instead of looking like an oversight. */
+       *  (Burial Site Hunting Ground) — filtered on `MinionState.path` like
+       *  clan and sect. (This comment used to say paths were out of scope
+       *  and `MinionState` had no path; both stopped being true when the
+       *  Path cards were unblocked, and the enumerator was fixed then — only
+       *  the comment was left behind. Corrected in wave 95.) */
       path?: string;
+      /** "…move 1 blood from the blood bank to EACH OF THE TWO OLDEST ready
+       *  vampires you control" (Gurchon Hall) — one use that feeds two FIXED
+       *  vampires, where every other hunting ground feeds one of your choice.
+       *  Ties for "oldest" are the controller's to break, so a tie is one
+       *  option per legal pair. docs/hunting-ground-variants-design.md §2 */
+      twoOldest?: boolean;
+      /** "ANY OTHER Methuselah may give you a pool during his or her unlock
+       *  phase to LOCK this card to move 1 blood from the blood bank to a
+       *  ready vampire he or she controls" (Kingston Penitentiary) — a rival
+       *  RENTS it. The owner's own use does not lock it; the rental does, so
+       *  one rental per round. §3 */
+      rentForPool?: number;
+      /** "…choose up to X ready anarchs you control who each gain 1 blood,
+       *  where X is the number of NON-DERIVATIVE hunting grounds controlled
+       *  by OTHER Methuselahs" (Poacher's Hunting Ground) — the per-phase
+       *  allowance read off the rest of the table. §4 */
+      allowanceFromOthersGrounds?: boolean;
     };
     /** "After a ZOMBIE (ally or retainer) you control is burned, you can
      *  add 1 counter to this location" (Cursed Abattoir). Both halves are
@@ -3617,7 +3720,12 @@ export interface CardSpec {
       lockedOnly?: boolean;
       /** `burnBlood`: "…with a capacity LESS THAN N" (Young Bloods).
        *  Exclusive, which is what the card prints; read through
-       *  `capacityOf` so a granted +1 capacity counts. */
+       *  `capacityOf` so a granted +1 capacity counts.
+       *
+       *  **EXCLUSIVE here, INCLUSIVE on the referendum primitives** ("below
+       *  7" is `maxCapacity: 6` there, and `7` here). Same name, opposite
+       *  boundary — read the field's own doc, never a sibling's
+       *  (docs/stealable-locations-design.md §5). */
       maxCapacity?: number;
     };
     /** A SECOND (and third) granted action on the same card — "Gregory can
@@ -4207,6 +4315,32 @@ export interface CardSpec {
    *  nothing to forget to serialize.
    *  docs/table-pool-swings-design.md §4 */
   oncePerGameByName?: boolean;
+  /**
+   * "IN THIS REFERENDUM, …" — what a political action's own referendum does to
+   * who votes and how much, applied as the referendum opens. One declaration
+   * and ONE helper (`applyReferendumRiders`), which the Justicars' bespoke
+   * `titleGrant` also calls, so a clan bonus cannot be spelled two ways.
+   * docs/in-this-referendum-design.md §2
+   */
+  referendumRiders?: {
+    /** "Each ready \<clan\> gets +1 vote" — one extra castable vote per
+     *  matching ready vampire, credited to its controller (the Justicar
+     *  mechanism, p. 28). */
+    voteBonusClan?: string;
+    /** "Each ready CARDINAL gets one additional vote" (Investiture) — the
+     *  same grant, keyed on a title. */
+    voteBonusTitle?: VampireTitle;
+    /** "Each non-priscus titled vampire gets -1 vote, each priscus -1
+     *  ballot" (Eat the Rich) — ONE rule here, because this engine counts a
+     *  priscus's ballot through the vote machinery (docs/ballots-design.md):
+     *  every titled vampire's count drops by this much, clamped at zero. */
+    titledVoteDelta?: number;
+    /** "…and burning the Edge is worth N additional vote(s)". */
+    edgeVoteBonus?: number;
+    /** "\<Sect\> vampires cannot cast votes or ballots during this
+     *  referendum" (Investiture). */
+    voteBanSect?: Sect;
+  };
   /** "Only usable if your prey controls the Edge OR THE EDGE IS
    *  UNCONTROLLED" (Instability) — a gate on where the token sits, read
    *  at play time. docs/the-edge-design.md §4 */

@@ -39,7 +39,16 @@ import { findMinion, getSeat, isReady } from "./state.ts";
  */
 export function capacityOf(m: MinionState): number {
   let capacity = m.capacity;
-  for (const p of m.attached) capacity += p.statics.capacityBonus ?? 0;
+  for (const p of m.attached) {
+    capacity += p.statics.capacityBonus ?? 0;
+    // "If the prince is Tremere, his or her capacity increases by 1" (the
+    // Praxis Seizure riders) — conditional on the BEARER, so it is read here
+    // where the bearer is in hand, never folded at entry. A contested title
+    // card leaves `attached` entirely (p. 17), so a contest switches this off
+    // with no code of its own. docs/title-riders-design.md §2
+    const ifClan = p.statics.capacityBonusIfClan;
+    if (ifClan !== undefined && m.clan === ifClan.clan) capacity += ifClan.amount;
+  }
   return capacity;
 }
 
@@ -605,6 +614,21 @@ export function auraBonus(
  * Coyote). The bonus is a TRAIT of the minion, not of the action, so it
  * applies to every hunt they make. docs/blood-locations-design.md §4
  */
+/**
+ * How much a cost source can pay right now: its counters, or — for a FLAT
+ * source (The Line) — its fixed amount, which no counter count limits.
+ *
+ * ONE read for the OFFER (`paymentSplits`) and the SPEND
+ * (`spendCostCounters`): the two used to read `entry.counters` separately, and
+ * a flat source makes that a question with two answers.
+ * docs/stealable-locations-design.md §2
+ */
+export function costSourceAvailable(entry: PermanentInPlay): number {
+  const src = entry.costSource;
+  if (!src) return 0;
+  return src.flat ?? entry.counters ?? 0;
+}
+
 export function huntAmountFor(state: GameState, minion: MinionState): number {
   // "…gain enough blood from the blood bank to reach FULL CAPACITY" (Festivo
   // dello Estinto). It answers the same question with a different shape, so

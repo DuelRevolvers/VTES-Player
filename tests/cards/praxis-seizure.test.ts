@@ -141,15 +141,24 @@ describe("the admission path (§6)", () => {
     expect(wrong.map(([id, , full]) => `${full} (${id})`)).toEqual([]);
   });
 
-  it("the other fourteen Praxis Seizures stayed OUT — they print riders", () => {
-    // Athens raises a Tremere prince's capacity, Berlin and the rest each
-    // add a clause. §0: a card comes in when ALL of it is built, so the
-    // ones with riders wait for a wave that builds the rider.
+  it("the Praxis Seizures still OUT are exactly the ones whose rider is unbuilt", () => {
+    // Pinned on the REASON, not a count: this assertion used to be
+    // `length === 13`, a hostage to the wave that built the capacity rider
+    // (docs/title-riders-design.md). §0 still holds — a card comes in when
+    // ALL of it is built. Istanbul's clan-vote and lock-all riders were built
+    // in wave 94 (docs/in-this-referendum-design.md); Venice prints the same
+    // riders for GIOVANNI, and whether the V5 Hecata answer to that name is
+    // the owner's call — so Venice alone stays out.
     const inPool = Object.values(reg.entries).filter((e) =>
       e.card.name.startsWith("Praxis Seizure:"),
     );
-    expect(inPool.length).toBe(13);
     expect(inPool.every((e) => e.supported)).toBe(true);
+    const names = new Set(inPool.map((e) => e.card.name));
+    expect(names.has("Praxis Seizure: Istanbul")).toBe(true);
+    expect(names.has("Praxis Seizure: Venice")).toBe(false);
+    // …and the capacity-rider cities are in.
+    expect(names.has("Praxis Seizure: Athens")).toBe(true);
+    expect(names.has("Praxis Seizure: Washington, D.C.")).toBe(true);
   });
 });
 

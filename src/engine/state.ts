@@ -930,6 +930,12 @@ export interface PermanentStatics {
   /** "+1 capacity" (the Discipline master cards) — read through
    *  capacityOf(), never off the printed MinionState.capacity. */
   capacityBonus?: number;
+  /** "If the prince is \<clan\>, his or her capacity increases by 1" (the
+   *  Praxis Seizure riders) — `capacityBonus` with a condition on the
+   *  BEARER's clan, read in `capacityOf` rather than folded at entry, since
+   *  the card goes on whichever vampire called it.
+   *  docs/title-riders-design.md §2 */
+  capacityBonusIfClan?: { clan: string; amount: number };
   /** "+1 level of Celerity [cel]" (the Discipline master cards) — the
    *  3-letter code; read through disciplinesOf(). */
   disciplineBoost?: string;
@@ -1119,6 +1125,12 @@ export interface PermanentCostSource {
   locks?: boolean;
   /** "If this location has no counters, burn it." */
   burnWhenEmpty?: boolean;
+  /** "You can lock this location to reduce the cost of an action card … by
+   *  1 blood" (The Line) — a source that pays a FIXED amount from nowhere
+   *  rather than from counters. Present means "this much, every use"; the
+   *  counters are neither read nor spent, and `locks` is what limits it.
+   *  docs/stealable-locations-design.md §2 */
+  flat?: number;
 }
 
 /** Statics a card in play radiates onto *other* minions rather than its
@@ -1816,7 +1828,20 @@ export type GameEvent =
    *  It enters with 0 blood, so p. 21's mandatory hunt produces the
    *  printed "must hunt this turn" with no code.
    *  docs/token-vampire-design.md §§2–3 */
-  | { type: "VampireTokenEnteredPlay"; seat: SeatId; minion: MinionId; cardId: CardInstanceId; name: string; capacity: number; clan: string | null; sect: Sect | null }
+  | {
+      type: "VampireTokenEnteredPlay";
+      seat: SeatId;
+      minion: MinionId;
+      cardId: CardInstanceId;
+      name: string;
+      capacity: number;
+      clan: string | null;
+      sect: Sect | null;
+      /** "…with basic Chimerstry" (Tumnimos). docs/new-vampires-design.md §2 */
+      disciplines?: Record<string, "basic" | "superior">;
+      /** "…and cannot perform actions this turn" (Creation Rites). §3 */
+      cannotActThisTurn?: boolean;
+    }
   | { type: "MinionBurned"; minion: MinionId }
   /** "Remove a vampire from the game" (Golconda: Inner Peace) — p. 16
    *  names this as a distinct fate from burning, and a card keyed on
@@ -3370,6 +3395,16 @@ export interface ReferendumFrame {
    *  (Closed Session, Private Audience, Cardinal Benediction) — restricts
    *  the per-vampire title vote sources to this sect. */
   voteRestriction?: { sect: Sect };
+  /** "CAMARILLA vampires cannot cast votes or ballots during this referendum"
+   *  (Investiture) — the inverse of `voteRestriction`: one sect is barred and
+   *  everyone else votes. Two fields rather than a sign on one, because
+   *  "only X may vote" and "X may not" are different tables.
+   *  docs/in-this-referendum-design.md §2 */
+  voteBan?: { sect: Sect };
+  /** "…and burning the Edge is worth 1 ADDITIONAL vote" (Eat the Rich) —
+   *  added to the Edge's own 1 where the Edge's vote is offered.
+   *  docs/in-this-referendum-design.md §2 */
+  edgeVoteBonus?: number;
   /** "Force a vampire to abstain (this cancels their votes and ballots)"
    *  (Scalpel Tongue, Telepathic Vote Counting). Distinct from
    *  `usedSources`, which means "already spent" — a vampire who never

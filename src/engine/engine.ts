@@ -25,6 +25,7 @@ import {
   rescueDiscountFor,
   blockWouldSucceed,
   capacityOf,
+  costSourceAvailable,
   huntAmountFor,
   huntGain,
   libraryBlockToll,
@@ -1178,7 +1179,7 @@ export class VtesEngine implements EngineOps {
           locked: false,
           awake: false,
           inTorpor: false,
-          disciplines: {},
+          disciplines: { ...(ev.disciplines ?? {}) },
           bledThisTurn: false,
           calledPoliticalThisTurn: false,
           title: null,
@@ -1189,7 +1190,11 @@ export class VtesEngine implements EngineOps {
           nonUnique: true,
           clan: ev.clan,
           sect: ev.sect,
-          cannotActThisTurn: false,
+          // "…and cannot perform actions this turn" (Creation Rites) — the
+          // flag recruited allies already use, cleared at the end of the turn.
+          // Absent, the 0-blood vampire must hunt (p. 21), which is what the
+          // other cards' "must hunt this turn" describes.
+          cannotActThisTurn: ev.cannotActThisTurn === true,
           playedSinceUnlock: [],
           attached: [],
         });
@@ -3133,6 +3138,11 @@ export class VtesEngine implements EngineOps {
       }
       // "Non-<sect> vampires cannot cast votes or ballots" (p. 28).
       if (rf.voteRestriction && m.sect !== rf.voteRestriction.sect) continue;
+      // "CAMARILLA vampires cannot cast votes or ballots during this
+      // referendum" (Investiture) — the inverse gate, beside its sibling.
+      // Like it, it bars VAMPIRES casting; the Edge, the calling card and
+      // granted votes are Methuselah sources and are untouched.
+      if (rf.voteBan && m.sect === rf.voteBan.sect) continue;
       // "+2 votes when casting votes AGAINST blood hunt referendums"
       // (Jason Newberry) — the only vote static that depends on which WAY
       // the vote goes, so it is applied per option rather than folded
@@ -3148,7 +3158,10 @@ export class VtesEngine implements EngineOps {
       both(m.id, votes, `${m.name} (${m.title ?? "titled by a card"})`, m, bonus);
     }
     if (this.state.edge === seat && !rf.usedSources.includes("edge")) {
-      both("edge", 1, "Burn the Edge");
+      // "…burning the Edge is worth 1 ADDITIONAL vote" (Eat the Rich) — the
+      // count is the option's, so the tally reads it without knowing why.
+      // docs/in-this-referendum-design.md §2
+      both("edge", 1 + (rf.edgeVoteBonus ?? 0), "Burn the Edge");
     }
     // Bonus votes granted by cards played this polling step (§3). Three
     // sources, not one: a grant printed with a DIRECTION ("+3 votes against
@@ -7747,6 +7760,8 @@ export class VtesEngine implements EngineOps {
           capacity: token.capacity,
           clan: token.clan,
           sect: token.sect,
+          ...(token.disciplines ? { disciplines: token.disciplines } : {}),
+          ...(token.cannotActThisTurn ? { cannotActThisTurn: true } : {}),
         });
         this.emit({
           type: "PermanentEnteredPlay",
@@ -8059,14 +8074,19 @@ export class VtesEngine implements EngineOps {
     for (const want of af.costFromCards ?? []) {
       const entry = this.findEntry(want.cardId);
       if (!entry?.costSource) continue;
-      const available = entry.counters ?? 0;
+      // A LOCKING source that is already locked has nothing to give: it was
+      // chosen at play time, and something since (another use, a card) has
+      // locked it. The offer skipped it for the same reason.
+      if (entry.costSource.locks && entry.locked) continue;
+      const available = costSourceAvailable(entry);
       const spend = Math.min(available, want.blood + want.pool);
       if (spend <= 0) continue;
       // Blood first: no card in the pool pays both at once, and the split
       // only matters for which side of the cost it reduces.
       paid.blood += Math.min(spend, want.blood);
       paid.pool += Math.max(0, spend - want.blood);
-      this.addCounters(want.cardId, -spend);
+      // A FLAT source pays from nowhere, so there are no counters to take.
+      if (entry.costSource.flat === undefined) this.addCounters(want.cardId, -spend);
       // "…can lock this location to use those counters" (Ravnos Cache).
       if (entry.costSource.locks && !entry.locked) this.lockPermanent(want.cardId);
       // "If this location has no counters, burn it" (Ravnos Carnival).

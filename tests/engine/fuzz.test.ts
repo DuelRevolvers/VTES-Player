@@ -606,6 +606,11 @@ function fourSeatGame(seed: number): GameState {
     // The token-vampire gate (docs/token-vampire-design.md).
     "Waters of Duat",
     "Childe of the Revolution",
+    // New vampires (docs/new-vampires-design.md).
+    "The Embrace",
+    "Third Tradition: Progeny",
+    "Creation Rites",
+    "Tumnimos",
     // The Path cards (docs/path-cards-design.md) — all four, now that a
     // Path is known to be a printed CRYPT trait. The minions below carry
     // one each, or none of these would ever be dealt a legal player.
@@ -899,6 +904,49 @@ function fourSeatGame(seed: number): GameState {
     "The Art of Love",
     "Malkavian Dementia",
     "From a Sinking Ship",
+    // Stealable locations (docs/stealable-locations-design.md, wave 92). The
+    // fuzz is the only place a FLAT cost source meets every action card in the
+    // decks, locked and unlocked, stolen mid-game with its lock state — and
+    // where The Louvre's untimed lock is offered in every impulse window.
+    "New Management",
+    "The Line",
+    "The Louvre, Paris",
+    // The title riders (docs/title-riders-design.md, wave 93). A capacity
+    // bonus that CONTESTS away — a second Prince of Athens parks the first
+    // card face down and the capacity drops mid-game, which the blood-within-
+    // capacity invariant has to survive — and a discard-phase unlock.
+    "Praxis Seizure: Athens",
+    "Praxis Seizure: Paris",
+    "Praxis Seizure: Washington, D.C.",
+    "Crusade: Berlin",
+    "Crusade: Istanbul",
+    // In this referendum (docs/in-this-referendum-design.md, wave 94). Vote
+    // riders the random agent casts through: votes CLAMPED at zero for titled
+    // vampires, an Edge worth 2, a sect barred from voting, and a lock sweep
+    // across every seat's Banu Haqim on a pass.
+    "Eat the Rich",
+    "Investiture",
+    "Praxis Seizure: Istanbul",
+    // Hunting-ground variants (docs/hunting-ground-variants-design.md, wave
+    // 95). A rental moves pool BETWEEN seats in the renter's unlock phase —
+    // the conservation replay's first hunting ground that does — and a use
+    // that feeds two vampires at once.
+    "Gurchon Hall",
+    "Kingston Penitentiary, Ontario",
+    "Poacher's Hunting Ground",
+    // The investments (docs/investments-design.md, wave 96). The first real
+    // targets Wall Street Night — already in these decks — has ever had, so
+    // its raid action becomes reachable in a fuzz game for the first time.
+    "Protracted Investment",
+    "Short-Term Investment",
+    "Slave Auction",
+    // Stores you fill yourself (docs/stores-you-fill-design.md, wave 97). A
+    // theft paid for in counters (a control change in the influence phase),
+    // a hunting ground by tag only, and a drain that rises with the table's
+    // grounds — the conservation replay sees pool leave three ways here.
+    "Threestar Cab Company",
+    "Grand Temple of Set",
+    "Arcanum Chapterhouse, Alexandria",
     // Choosing a minion (docs/choosing-a-minion-design.md, wave 87). Each picks
     // a minion at announcement, and the fuzz is what walks the gap between the
     // choice and the resolution: the named minion can be burned, torpored or

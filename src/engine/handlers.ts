@@ -1388,7 +1388,13 @@ export interface CardHandler {
   becomesVampireOnSuccess?(
     mode: DisciplineLevel | null,
     actor: MinionState | null,
-  ): { capacity: number; clan: string | null; sect: Sect | null } | null;
+  ): {
+    capacity: number;
+    clan: string | null;
+    sect: Sect | null;
+    disciplines?: Record<string, "basic" | "superior">;
+    cannotActThisTurn?: boolean;
+  } | null;
   /** Automatic (non-optional) card text that runs during the controller's
    *  unlock phase ("If Double Deuce has 2 or fewer life…, he gains 1
    *  life") — no decision, so it is a hook, not an ability. */

@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 302 test files, 3226 tests**, with `npm run typecheck`,
+**Green baseline: 309 test files, 3309 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -466,12 +466,20 @@ doc named beside it.
   borrowed control already existed as `controlRevertsTo`, filed under a doc
   about ACTIONS, and a second model was three edits in before the first was
   found (`borrowed-minions-design.md` §1). Grep for the VERB the rule uses,
-  not for the noun you would have named it.
+  not for the noun you would have named it. **And a card can be left out
+  with no recorded reason at all** — Praxis Seizure: Washington, D.C. was
+  the plain shape, missed because the full stop in "D.C." read as a rider
+  (`title-riders-design.md` §1). Re-derive a family's exclusions from the
+  TEXT, not from the ledger.
 - **A card can be WHOLE and still be INERT, and the pool wants neither.**
   Before implementing a card that filters on a clan, title, sect, card
   type or DISCIPLINE, check the pool actually contains one (Tradition
   Upheld needs a Caitiff; Gangrel Justicar a Camarilla Gangrel; Mokolé
-  Blood a Serpentis card — the V5 pool has none of the three).
+  Blood a Serpentis card — the V5 pool has none of the three). **Filter the
+  candidate list FIRST**, before reading any card text: the V5 crypt's
+  disciplines are exactly `ani aus cel dom for obf obl pot pre pro tha`, and
+  a text search knows nothing about clan icons — four of wave 92's first six
+  cards were inert (`stealable-locations-design.md` §1).
 - **A CLAN ICON on a minion card is a REQUIREMENT (p. 10)** and KRCG's
   text does not repeat it. Registry `clans` non-empty on a minion-type
   card ⇒ `requiresClans()` non-empty. Masters are the exception.
@@ -590,6 +598,9 @@ doc named beside it.
 - **A derived read must be TOTAL.** A minion can leave play at any point —
   an ally's life IS its blood. Use `findMinion`, never `getMinion`, in
   derived code and option enumerators.
+- **CHOICE FRAMES ARE A STACK — the last raised is asked first.** Two
+  choices from one resolution are raised in REVERSE printed order
+  (`new-vampires-design.md` §4).
 - **A strike is CHOSEN in one window and RESOLVED in another**, and a
   combatant can leave the table in between. Same family: prevention costs,
   and any target list chosen at announcement.
@@ -617,7 +628,10 @@ doc named beside it.
   stored.** A combat ends four different ways; a flag cleared at all of
   them will one day survive one.
 - **Which seat an ability belongs to is a per-card question**, and getting
-  it backwards offers the card to nobody, silently. Bitten five times.
+  it backwards offers the card to nobody, silently. Bitten six times. **For
+  a SEAT permanent, `useAbility`'s `owner.seat` is the DECIDING seat**, not
+  the holder — invisible until a rival uses the card, when "pay the owner"
+  pays the renter (`hunting-ground-variants-design.md` §1).
 - **Restoring a widget after a repaint means restoring everything the
   repaint threw away** — inline style is the easy one to forget, because
   nothing in the markup shows it was there
@@ -901,7 +915,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-210 files under `docs/`, one per mechanic that took a decision. **Read the
+217 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -926,18 +940,18 @@ rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pa
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
-choosing-a-minion, hunt-payouts.
+choosing-a-minion, hunt-payouts, stealable-locations.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,
 acting-minion-reactions, politics, abstain-gate, politics-followups,
 polling-votes, ballots, politics-locations, referendum-terms, blood-hunt-answers,
-once-in-a-game, borrowed-minions,
+once-in-a-game, borrowed-minions, title-riders, in-this-referendum,
 referendum-margin.
 
 **Cards and economies:** blood-bank-actions, blood-banking-locations,
 the-edge, ash-heap-resource, before-range-attachments,
-vehicles-and-havens, burn-the-equipment, discipline-granting-equipment,
+vehicles-and-havens, hunting-ground-variants, investments, stores-you-fill, burn-the-equipment, discipline-granting-equipment,
 events, gehenna-events, gehenna-unlock, counter-clock-events,
 table-rule-events, gehenna-taxes, discipline-masters, clan-sect,
 on-vampire-statics, conditional-statics, opposing-statics, counters,
@@ -946,7 +960,7 @@ library-search, store-plays, ash-heap, pool-drain, unlock-tolls, stun,
 transfer-currency, uncontrolled-graduation, temporary-hand-size, allies-retainers, destroyer-allies,
 vozhd-allies,
 retainer-wave, retainer-prices, retainer-upkeep, archetypes,
-combat-retainers, wraith-zombie, token-vampire, path-cards, diablerie,
+combat-retainers, wraith-zombie, token-vampire, new-vampires, path-cards, diablerie,
 plus the lock-grant, attachment and location docs.
 
 **Planning and audits:** crypt-plan, crypt-wave-1…-7,
