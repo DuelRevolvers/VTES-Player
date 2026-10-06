@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 309 test files, 3309 tests**, with `npm run typecheck`,
+**Green baseline: 310 test files, 3331 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -584,6 +584,10 @@ doc named beside it.
   by hand instead of going through the shared helper.
 - **A new call beside an existing one should copy its GUARDS before its
   shape.** The guards around a line are part of what that line means.
+- **AN EVENT NO REDUCER READS IS A LOG LINE, NOT A STATE CHANGE.**
+  `CardCanceled` was emitted and the cancelled card was filed nowhere, so
+  it left the game, and every cancel since V5 did it
+  (`out-of-turn-cancels-design.md` §5).
 - **AN ENUMERATOR IN A WINDOW THAT RE-OFFERS NEEDS ITS OWN LATCH.** The
   unlock and master windows are asked until they are empty, so "you can
   do X" that consumes nothing observable is offered again the moment it
@@ -940,7 +944,7 @@ rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pa
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
-choosing-a-minion, hunt-payouts, stealable-locations.
+choosing-a-minion, hunt-payouts, stealable-locations, out-of-turn-cancels.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

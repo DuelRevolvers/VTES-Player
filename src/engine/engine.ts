@@ -58,6 +58,7 @@ import type {
   HandlerRegistry,
   PlayContext,
 } from "./handlers.ts";
+import { isGehennaCard, isMinionCardPlay } from "./handlers.ts";
 import type { DecisionPoint, LegalOption, WindowId } from "./options.ts";
 import { passOption } from "./options.ts";
 import type {
@@ -66,6 +67,7 @@ import type {
   BlockAttemptFrame,
   CardInstance,
   DelayedDrawCondition,
+  HeldReplacement,
   CardInstanceId,
   CardPlayFrame,
   AfterCombatRider,
@@ -218,6 +220,9 @@ export class VtesEngine implements EngineOps {
    *  frame with it (docs/choice-frames-design.md §3). Transient — never
    *  part of the serializable state, because it is always empty between
    *  decisions. */
+  /** The card whose `resolve` is running, if any — transient, never state.
+   *  docs/out-of-turn-cancels-design.md §4 */
+  private resolvingPlay: CardPlayFrame | null = null;
   private deferChoices = false;
   private deferredChoices: Array<Parameters<VtesEngine["raiseChoice"]>[0]> = [];
 
@@ -2245,6 +2250,17 @@ export class VtesEngine implements EngineOps {
         tf.masterActionsLeft = seat.outOfTurnMasterUsed ? 0 : 1;
         seat.outOfTurnMasterUsed = false;
         tf.trifleGained = false;
+        // Actions booked for THIS phase while it was somebody else's turn:
+        // "at the start of their next master phase" (Wash), and an
+        // out-of-turn trifle's gain, which is this phase's one trifle gain
+        // (p. 9). docs/out-of-turn-cancels-design.md §5–§6
+        tf.masterActionsLeft += seat.masterActionsNext ?? 0;
+        delete seat.masterActionsNext;
+        if (seat.trifleNextMaster) {
+          tf.masterActionsLeft += 1;
+          tf.trifleGained = true;
+          delete seat.trifleNextMaster;
+        }
         // "During each Methuselah's master phase, that Methuselah …"
         // (Brujah Debate) — every card in play sees the phase begin.
         //
@@ -3211,7 +3227,15 @@ export class VtesEngine implements EngineOps {
     const parent = this.top();
     const handler = this.handler(cp.card.name);
     if (!cp.canceled) {
-      handler.resolve(cp, this);
+      // Held for `cancelPendingCard`'s check that a card cancelling
+      // another declared that it does (docs/out-of-turn-cancels-design.md §4).
+      const outer = this.resolvingPlay;
+      this.resolvingPlay = cp;
+      try {
+        handler.resolve(cp, this);
+      } finally {
+        this.resolvingPlay = outer;
+      }
       this.emit({ type: "CardResolved", cardId: cp.card.id, name: cp.card.name });
       // "A card is played by … placing it from the hand in the ash heap
       // UPON RESOLUTION" (p. 8) — but only if it did not go INTO PLAY
@@ -3235,11 +3259,22 @@ export class VtesEngine implements EngineOps {
       if (handler.delayedReplace === "afterResolve") this.drawUpToHandSize(cp.seat);
       // "When a Methuselah successfully plays a trifle, they gain an
       // additional master phase action" — once per master phase (p. 10).
-      if (
+      //
+      // An OUT-OF-TURN trifle gains its action "in their next master phase"
+      // (p. 9). The only branch here used to be the in-phase one, which an
+      // out-of-turn trifle never reaches (it resolves inside another card's
+      // as-played window, or on another seat's turn) — so its gain was
+      // silently lost. Dormant until Wash, the pool's first out-of-turn
+      // trifle. The in-phase branch now also names the seat: THEIR master
+      // phase, not whoever's turn it is. docs/out-of-turn-cancels-design.md §5
+      if (handler.isTrifle && handler.isOutOfTurnMaster) {
+        getSeat(this.state, cp.seat).trifleNextMaster = true;
+      } else if (
         handler.isTrifle &&
         parent &&
         parent.kind === "turn" &&
         parent.phase === "master" &&
+        parent.seat === cp.seat &&
         !parent.trifleGained
       ) {
         parent.masterActionsLeft += 1;
@@ -3249,6 +3284,20 @@ export class VtesEngine implements EngineOps {
       // A canceled action card never locked its minion and may be played
       // again (p. 16); nothing to undo because everything was deferred.
       this.emit({ type: "CardCanceled", cardId: cp.card.id, name: cp.card.name });
+      // "A cancelled card has no effect, but it is STILL CONSIDERED PLAYED"
+      // (p. 16) — so it goes where a played card goes. This branch used to
+      // file it nowhere: the card left the hand at play and simply ceased
+      // to exist. An action card too; "can play the same action card
+      // again" means another copy. docs/out-of-turn-cancels-design.md §5
+      if (!this.allEntries().some((e) => e.entry.card.id === cp.card.id)) {
+        this.toAshHeap(cp.seat, cp.card);
+      }
+      // "If the canceled card had a 'do not replace until' clause, that
+      // clause is canceled as well and the card is replaced normally"
+      // [LSJ 20080630].
+      if (cp.heldReplacement && this.releaseHeldReplacement(cp.seat, cp.card.id, cp.heldReplacement)) {
+        this.drawToReplace(cp.seat);
+      }
     }
     // Playing an effect hands the impulse back to the acting Methuselah in
     // the enclosing window (p. 8). During damage resolution the live cycle
@@ -3600,7 +3649,9 @@ export class VtesEngine implements EngineOps {
    */
   private payToCancelOptions(cp: CardPlayFrame, seat: SeatId): LegalOption[] {
     const p = cp.payToCancel;
-    if (!p || cp.canceled || seat !== p.seat) return [];
+    // "ANY Methuselah can cancel this card" (Personal Involvement) — the
+    // as-played window already cycles every seat, so each is offered it.
+    if (!p || cp.canceled || (p.seat !== "any" && seat !== p.seat)) return [];
     // "They can DISCARD TWO COMBAT CARDS to cancel this card as it is
     // played" (Target Vitals) — the same gate with a different currency,
     // one option per pair (docs/round-end-design.md §3).
@@ -3644,6 +3695,7 @@ export class VtesEngine implements EngineOps {
         kind: "payToCancel",
         label: `Burn ${p.pool} pool to cancel ${cp.card.name}`,
         pool: p.pool,
+        ...(p.harms ? { harms: p.harms } : {}),
       },
     ];
   }
@@ -6404,6 +6456,21 @@ export class VtesEngine implements EngineOps {
     if (!top || top.kind !== "cardPlay") {
       throw new Error("no pending card play to cancel");
     }
+    // A CARD that cancels must say so, or Dark Influences' shield cannot see
+    // it — enforced here rather than trusted, so every cancel card's own
+    // scenario test fails if its handler forgets `cancelsAsPlayed`. An
+    // ability or a pool payment is not a card and is not asked.
+    // docs/out-of-turn-cancels-design.md §4
+    const by = this.resolvingPlay;
+    if (by && !by.cancels) {
+      throw new Error(`${by.card.name} cancels a card but does not declare cancelsAsPlayed`);
+    }
+    this.markCanceled(top, refundCost);
+  }
+
+  /** The cancel itself, with no question about who asked for it — the
+   *  engine's own cancels (Dark Influences' shield) come straight here. */
+  private markCanceled(top: CardPlayFrame, refundCost: boolean): void {
     top.canceled = true;
     if (refundCost) {
       // Refund what was PAID, not what was printed — a surcharge was real
@@ -6424,7 +6491,81 @@ export class VtesEngine implements EngineOps {
   addDiscardPhaseActions(n: number): void {
     const tf = this.state.frames.find((f) => f.kind === "turn");
     if (tf?.kind !== "turn") return;
-    tf.discardActionsLeft = (tf.discardActionsLeft ?? 1) + n;
+    tf.discardActionsLeft = Math.max(0, (tf.discardActionsLeft ?? 1) + n);
+  }
+
+  gainMasterActions(seat: SeatId, n: number, when: "now" | "next"): void {
+    if (when === "next") {
+      const s = getSeat(this.state, seat);
+      s.masterActionsNext = (s.masterActionsNext ?? 0) + n;
+      return;
+    }
+    // "Immediately" means the master phase that is running, and it is only
+    // that seat's to use if it is that seat's turn.
+    const tf = this.state.frames.find((f) => f.kind === "turn");
+    if (tf?.kind === "turn" && tf.seat === seat) tf.masterActionsLeft += n;
+  }
+
+  /** Take back the draw a cancelled card's own "do not replace until …"
+   *  clause was holding. True when the hold was still there to take — false
+   *  means it had already been released, and drawing again would draw
+   *  twice. docs/out-of-turn-cancels-design.md §5 */
+  private releaseHeldReplacement(
+    seatId: SeatId,
+    cardId: CardInstanceId,
+    held: HeldReplacement,
+  ): boolean {
+    const seat = getSeat(this.state, seatId);
+    const dropOne = (list: SeatId[] | undefined): boolean => {
+      const i = list?.indexOf(seatId) ?? -1;
+      if (!list || i < 0) return false;
+      list.splice(i, 1);
+      return true;
+    };
+    switch (held.kind) {
+      case "afterResolve":
+        // Drawn by `resolveCardPlay` on the resolved path only — a cancelled
+        // card never reaches that line, so nothing is held anywhere.
+        return true;
+      case "afterCombat": {
+        const cf = this.combatFrame();
+        return dropOne(cf?.drawAfterCombat);
+      }
+      case "turn": {
+        const tf = [...this.state.frames].reverse().find((f) => f.kind === "turn");
+        return tf?.kind === "turn" ? dropOne(tf.drawAfterTurn) : false;
+      }
+      case "unlock":
+        if (seat.delayedDraws <= 0) return false;
+        seat.delayedDraws -= 1;
+        return true;
+      case "discard":
+        if ((seat.delayedDrawsDiscard ?? 0) <= 0) return false;
+        seat.delayedDrawsDiscard = (seat.delayedDrawsDiscard ?? 0) - 1;
+        return true;
+      case "condition": {
+        const list = this.state.drawWhenCondition ?? [];
+        const i = list.findIndex((d) => d.seat === seatId && d.until === held.until);
+        if (i < 0) return false;
+        list.splice(i, 1);
+        return true;
+      }
+      case "whileInPlay": {
+        // Keyed by the card, which never entered play — so without this it
+        // would have waited for ever.
+        const list = this.state.drawWhenLeavesPlay ?? [];
+        const i = list.findIndex((d) => d.cardId === cardId);
+        if (i < 0) return false;
+        list.splice(i, 1);
+        return true;
+      }
+      case "afterAction": {
+        const af = this.state.frames.find(
+          (f) => f.kind === "action" && f.actionId === held.actionId,
+        );
+        return af?.kind === "action" ? dropOne(af.drawAfter) : false;
+      }
+    }
   }
 
   /** `direction` is what the GRANTING CARD printed, not what the seat wants:
@@ -9387,9 +9528,15 @@ export class VtesEngine implements EngineOps {
     const boonsBarred = this.state.seats.some((s) =>
       s.permanents.some((p) => p.statics.barsBoons),
     );
+    // "That card cannot be played again this turn" (Dark Influences) — by
+    // NAME and for everyone, here for the same reason as the boon bar.
+    // docs/out-of-turn-cancels-design.md §4
+    const turnFrame = this.state.frames[0];
+    const barred = turnFrame?.kind === "turn" ? (turnFrame.barredNames ?? []) : [];
     for (const card of getSeat(this.state, seat).hand) {
       const handler = this.registry[card.name];
       if (!handler) continue;
+      if (barred.includes(card.name)) continue;
       if (boonsBarred && (handler.cardKeywords?.() ?? []).includes("boon")) continue;
       // "Only one X may be played in a game" — a query over the log, not a
       // latch: nothing to reset, nothing to serialize, and no gap between
@@ -9420,6 +9567,7 @@ export class VtesEngine implements EngineOps {
       for (const c of entry.stored ?? []) {
         const handler = this.registry[c.name];
         if (!handler) continue;
+        if (barred.includes(c.name)) continue;
         for (const opt of handler.options(c, ctx)) {
           if (opt.kind !== "playCard") continue;
           if (sp.bearerOnly && opt.minion !== owner.minion) continue;
@@ -9960,8 +10108,10 @@ export class VtesEngine implements EngineOps {
         // Held BEFORE the payment: discarding the price replaces the card
         // (p. 7), and that draw can push a frame of its own.
         const cp = top;
-        const payer = top.payToCancel?.seat;
-        if (!payer) throw new Error("payToCancel with no payer");
+        const ptc = top.payToCancel;
+        if (!ptc) throw new Error("payToCancel with no payer");
+        // "ANY Methuselah can cancel this card" — whoever took the option.
+        const payer = ptc.seat === "any" ? this.currentSeatOfTop() : ptc.seat;
         if (option.pool > 0) {
           this.emit({ type: "PoolBurned", seat: payer, amount: option.pool });
         }
@@ -9973,8 +10123,9 @@ export class VtesEngine implements EngineOps {
         }
         // "Cancel this card as it is played". The cost is NOT refunded:
         // Sudden Reversal prints "its cost is not paid" and Golconda
-        // prints nothing of the kind (§2, reading 1).
-        this.cancelPendingCard(false, cp);
+        // prints nothing of the kind (§2, reading 1) — unless the card
+        // says so itself, as Personal Involvement does.
+        this.cancelPendingCard(ptc.refundsCost === true, cp);
         return;
       }
       case "cancelBlock": {
@@ -11058,7 +11209,7 @@ export class VtesEngine implements EngineOps {
      *  to Oblivion superior) — read off the ACTION rather than the card,
      *  so the caller that knows the cost types decides it. */
     delayedByAction?: boolean;
-  }): void {
+  }): HeldReplacement | undefined {
     const seat = getSeat(this.state, args.seat);
     const handler = args.handler;
     const afForDraw = this.action();
@@ -11068,20 +11219,24 @@ export class VtesEngine implements EngineOps {
     } else if (handler.delayedReplace === "afterResolve") {
       // Drawn in `resolveCardPlay` instead, once this card's own effect is
       // done (docs/hand-churn-design.md §2).
+      return { kind: "afterResolve" };
     } else if (handler.delayedReplace === "afterCombat" && cfForDraw) {
       // "Do not replace until AFTER COMBAT" (Dodge, Fake Out, Boxed In).
       // Held on the combat frame, not the action's, because combat ends
       // first — and if there is no combat at all the card replaces
       // normally, since the clause has nothing to wait for.
       (cfForDraw.drawAfterCombat ??= []).push(seat.id);
+      return { kind: "afterCombat" };
     } else if (handler.delayedReplace === "turn") {
       // "Do not replace until after the CURRENT turn" (Sonar) — held on the
       // turn frame that is running, which is whose turn it is now, not the
       // player's own. §3
       const tfNow = [...this.state.frames].reverse().find((f) => f.kind === "turn");
       if (tfNow?.kind === "turn") (tfNow.drawAfterTurn ??= []).push(seat.id);
+      return { kind: "turn" };
     } else if (handler.delayedReplace === "unlock") {
       seat.delayedDraws += 1;
+      return { kind: "unlock" };
     } else if (handler.delayedReplaceUntil) {
       // "Do not replace until a vampire commits diablerie" and its
       // siblings. Held on the GAME, because "it is not replaced until the
@@ -11090,21 +11245,29 @@ export class VtesEngine implements EngineOps {
         seat: seat.id,
         until: handler.delayedReplaceUntil,
       });
+      return { kind: "condition", until: handler.delayedReplaceUntil };
     } else if (handler.delayedReplace === "whileInPlay") {
       // "Do not replace AS LONG AS THIS CARD IS IN PLAY" (Dragonbound).
       // The wait has no phase and no action to hang off, so it is keyed
       // by the card and released wherever a permanent leaves play.
       (this.state.drawWhenLeavesPlay ??= []).push({ seat: seat.id, cardId: args.cardId });
+      return { kind: "whileInPlay" };
     } else if (handler.delayedReplace === "discard") {
       // "Do not replace until your next DISCARD phase" (Mirror Walk).
       seat.delayedDrawsDiscard = (seat.delayedDrawsDiscard ?? 0) + 1;
+      return { kind: "discard" };
     } else if (args.delayedByAction && afForDraw) {
+      // NOT returned: "those cards are not replaced until the end of the
+      // action" is the ACTION's rule (Consign to Oblivion), not the card's
+      // own clause, and a cancelled card was still played into the action.
       afForDraw.drawAfter.push(seat.id);
     } else if (handler.delayedReplace === "afterAction" && afForDraw) {
       afForDraw.drawAfter.push(seat.id);
+      return { kind: "afterAction", actionId: afForDraw.actionId };
     } else {
       this.drawToReplace(seat.id);
     }
+    return undefined;
   }
 
   /** "Whenever you play a card from your hand, you draw another from your
@@ -11310,7 +11473,7 @@ export class VtesEngine implements EngineOps {
       // "…until a GEHENNA EVENT is played" (The Slow Withering) ends every
       // diablerist's exemption, whoever played the event and whatever it
       // does.
-      if ((handler.permanentTags ?? []).includes("gehenna")) {
+      if (isGehennaCard(handler)) {
         for (const s of this.state.seats) {
           for (const m of s.minions) m.ignoresGehennaTax = false;
         }
@@ -11362,7 +11525,7 @@ export class VtesEngine implements EngineOps {
       );
     // A card played out of a store is NOT replaced: replacement refills a
     // HAND ("draw a replacement card", p. 8), and this card never left one.
-    this.scheduleReplacement({
+    const heldReplacement = this.scheduleReplacement({
       seat: seat.id,
       cardId: card.id,
       handler,
@@ -11379,7 +11542,10 @@ export class VtesEngine implements EngineOps {
     const order = af
       ? sequencingOrder(this.state, af.actingSeat, defendersFor(this.state, af))
       : sequencingOrder(this.state, baseSeat, []);
-    this.state.frames.push({
+    // The play this card is played INTO, if it is being played in another
+    // card's as-played window — what a cancel cancels.
+    const beneath = this.top();
+    const frame: CardPlayFrame = {
       kind: "cardPlay",
       card,
       seat: seat.id,
@@ -11388,6 +11554,14 @@ export class VtesEngine implements EngineOps {
       params: option.params,
       asAction,
       isMaster,
+      // docs/out-of-turn-cancels-design.md §2
+      ...(handler.isEventCard ? { isEvent: true } : {}),
+      ...(isGehennaCard(handler) ? { isGehenna: true } : {}),
+      ...(handler.isOutOfTurnMaster ? { isOutOfTurnMaster: true } : {}),
+      ...(beneath?.kind === "cardPlay" && handler.cancelsAsPlayed?.(option.mode)
+        ? { cancels: true }
+        : {}),
+      ...(heldReplacement ? { heldReplacement } : {}),
       isCombat: !!this.handler(card.name).isCombatCard,
       isReaction: !!this.handler(card.name).isReactionCard,
       isFrenzy: !!this.handler(card.name).isFrenzy,
@@ -11438,7 +11612,27 @@ export class VtesEngine implements EngineOps {
         ) ?? [],
       canceled: false,
       cycle: newCycle(order),
-    });
+    };
+    this.state.frames.push(frame);
+    if (beneath?.kind === "cardPlay") this.applyCancelShields(frame, beneath);
+  }
+
+  /** "The next card played that would cancel ANOTHER METHUSELAH'S MINION
+   *  CARD as it is played is canceled, its cost is not paid, and this card
+   *  is burned instead" (Dark Influences). Answered as the cancelling card
+   *  is PUSHED — before anyone can answer it — because a Sudden Reversal on
+   *  the cancel would otherwise pre-empt the shield and leave it in play.
+   *  ONE shield answers it — the first in play order — and the rest stay
+   *  for the next cancel (§4, reading 2, owner ruling 2026-10-06).
+   *  docs/out-of-turn-cancels-design.md §4 */
+  private applyCancelShields(cancel: CardPlayFrame, target: CardPlayFrame): void {
+    if (!cancel.cancels || !isMinionCardPlay(target) || target.seat === cancel.seat) return;
+    const shield = this.allEntries().find(
+      ({ entry }) => this.registry[entry.card.name]?.cancelShield === true,
+    );
+    if (!shield) return;
+    this.markCanceled(cancel, true);
+    this.burnPermanent(shield.entry.card.id);
   }
 
   private currentSeatOfTop(): SeatId {

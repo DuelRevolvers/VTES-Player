@@ -1006,6 +1006,33 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 99 — out-of-turn cancels (6 cards), 2026-10-06
+
+Library **864 → 870**. Direct Intervention, Dark Influences, Not to Be, Wash,
+Emergency Preparations, Personal Involvement. Write-up:
+`docs/out-of-turn-cancels-design.md`.
+
+One factory (`outOfTurnCancel`) now builds every out-of-turn master that
+cancels a card as it is played, Sudden Reversal included, so the p. 9 budget
+and the never-oust-yourself price are spelled once. New engine surface: the
+card-play frame now carries `isEvent` / `isGehenna` / `isOutOfTurnMaster` /
+`cancels`; there is a handler declaration `cancelsAsPlayed`, enforced with a
+throw in `cancelPendingCard` and caught by every existing cancel card's own
+test under mutation; `gainMasterActions`; pay-to-cancel by **any**
+Methuselah, with a refund and a `harms` seat; and `PlayerView.pendingCard`.
+
+**Found — three engine defects, all in the cancel path every earlier cancel
+card used:** (1) **a cancelled card vanished.** The cancelled branch filed
+it nowhere, but p. 16 says it is still played. It now goes to the ash
+heap. (2) **A cancelled card's held replacement was never released**
+[LSJ 20080630]. A cancelled `whileInPlay` Gehenna event waited for ever for a
+card that never entered play. (3) **An out-of-turn trifle's master action
+(p. 9) was lost.** The only trifle branch wanted a running master phase as
+the parent frame, and Wash resolves inside another card's window. Also: the
+bots could not tell whose card was on the stack, so Hide the Mind could
+already have cancelled its own player's card. Two readings are flagged for
+the owner (Dark Influences, §4 of the write-up).
+
 ### Wave 98 — new vampires (4 cards), 2026-09-26
 
 The Embrace, Third Tradition: Progeny, Creation Rites, Tumnimos — actions

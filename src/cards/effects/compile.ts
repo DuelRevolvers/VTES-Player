@@ -6614,6 +6614,16 @@ function compileMasterCard(spec: CardSpec): CardHandler {
             }
             break;
           }
+          case "preyBurnsPoolIfRicher": {
+            // "If your prey has more pool than you (after paying the cost of
+            // this card), your prey burns 3 pool" — both read now, the cost
+            // having been paid when the card was played.
+            const prey = preyOf(ops.state, play.seat);
+            if (getSeat(ops.state, prey).pool > getSeat(ops.state, play.seat).pool) {
+              ops.emit({ type: "PoolBurned", seat: prey, amount: e.amount });
+            }
+            break;
+          }
           case "gainPoolThreshold": {
             // "If you have 5 OR FEWER pool, gain 3 pool. Otherwise, gain 1."
             // The pool is read here, at resolution, and nothing else in the
@@ -9595,6 +9605,14 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // inferior only adds stealth must not report the same summary for both.
   handler.playEffects = (mode, variant) =>
     summariseMode(spec, spec.modes.length === 0 ? [] : modeOf(spec, mode, variant).effects);
+  // A mode that cancels the card it is played against (Anticipation's
+  // superior, Death Seeker, Disengage) — per MODE, since Anticipation's
+  // basic does not. docs/out-of-turn-cancels-design.md §4
+  const cancelKinds = new Set(["cancelStrikeCard", "cancelCombatCard"]);
+  if (spec.modes.some((m) => m.effects.some((e) => cancelKinds.has(e.kind)))) {
+    handler.cancelsAsPlayed = (mode) =>
+      modeOf(spec, mode, undefined).effects.some((e) => cancelKinds.has(e.kind));
+  }
   // "The blocking minion's controller can burn 1 pool to cancel this card
   // as it is played" (True Love's Face). Computed from the STATE, not the
   // option's params: "the blocking minion" is a fact about the live block
@@ -9602,9 +9620,21 @@ export function compileSpec(spec: CardSpec): CardHandler {
   if (spec.payToCancel) {
     const ptc = spec.payToCancel;
     handler.payToCancelFor = (state, seat) => {
-      const extra = ptc.discardCombatCards
-        ? { discardCombatCards: ptc.discardCombatCards }
-        : {};
+      const extra = {
+        ...(ptc.discardCombatCards ? { discardCombatCards: ptc.discardCombatCards } : {}),
+        ...(ptc.refundsCost ? { refundsCost: true } : {}),
+      };
+      if (ptc.who === "anyMethuselah") {
+        // Who the card would hurt, read off the board as it is played (the
+        // cost already paid) — the one effect that names a victim. Absent
+        // means it would hurt nobody as things stand, which is the bot's
+        // cue not to pay. docs/out-of-turn-cancels-design.md §6
+        const burn = (spec.modes[0]?.effects ?? []).find((e) => e.kind === "preyBurnsPoolIfRicher");
+        const prey = preyOf(state, seat);
+        const harms =
+          burn && getSeat(state, prey).pool > getSeat(state, seat).pool ? { harms: prey } : {};
+        return { seat: "any" as const, pool: ptc.pool, ...extra, ...harms };
+      }
       if (ptc.who === "opposingMinion") {
         // "THEY can discard…" on a combat card is the other combatant's
         // controller — the seat playing the card is the one side, so the

@@ -611,6 +611,16 @@ function fourSeatGame(seed: number): GameState {
     "Third Tradition: Progeny",
     "Creation Rites",
     "Tumnimos",
+    // Out-of-turn cancels (docs/out-of-turn-cancels-design.md) — a cancel
+    // now files the cancelled card and releases its held draw, which the
+    // conservation replay has to agree with; Dark Influences' shield
+    // cancels a card as it is pushed.
+    "Direct Intervention",
+    "Dark Influences",
+    "Not to Be",
+    "Wash",
+    "Emergency Preparations",
+    "Personal Involvement",
     // The Path cards (docs/path-cards-design.md) — all four, now that a
     // Path is known to be a printed CRYPT trait. The minions below carry
     // one each, or none of these would ever be dealt a legal player.

@@ -289,6 +289,10 @@ export type LegalOption =
       /** Which cards the payment discards, when the currency is cards
        *  rather than pool (Target Vitals). */
       params?: Record<string, string>;
+      /** The seat the card would hurt, when it names one — so an agent can
+       *  tell paying for itself from paying for somebody else
+       *  (docs/out-of-turn-cancels-design.md §7). */
+      harms?: SeatId;
     }
   /** Referendum terms — the caller's choices, made only on success
    *  (p. 25 exception, p. 27). */

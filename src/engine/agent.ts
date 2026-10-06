@@ -194,6 +194,20 @@ export interface PlayerView {
    * `src/ui/render.ts` already draws it for the human sitting there. The
    * bot was strictly worse informed than the person beside it.
    */
+  /**
+   * The card being played right now, while its as-played window is open
+   * (p. 7) — what a cancel would cancel. Open information: the card is
+   * face up on the table as it is played. Without it nothing in the policy
+   * could tell whose card was on the stack, so a bot could cancel its own.
+   * docs/out-of-turn-cancels-design.md §7
+   */
+  pendingCard?: {
+    name: string;
+    seat: SeatId;
+    minion: MinionId | null;
+    isMaster: boolean;
+    isEvent: boolean;
+  };
   referendum?: {
     /** Who called it — the question the vote weights are named for. */
     caller: SeatId;
@@ -494,6 +508,17 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
   // The count/array split has to agree with the masking above, so it asks
   // the same helper rather than deriving the answer a second time.
   const openHands = openHandsFor(state, seat);
+  const top = state.frames[state.frames.length - 1];
+  const pendingCard =
+    top?.kind === "cardPlay" && !top.canceled
+      ? {
+          name: top.card.name,
+          seat: top.seat,
+          minion: top.minion,
+          isMaster: top.isMaster,
+          isEvent: top.isEvent === true,
+        }
+      : null;
   return {
     you: seat,
     edge: redacted.edge,
@@ -529,6 +554,7 @@ export function viewFor(state: GameState, seat: SeatId): PlayerView {
     })),
     ...(action ? { action } : {}),
     ...(combat ? { combat } : {}),
+    ...(pendingCard ? { pendingCard } : {}),
     ...(referendum ? { referendum } : {}),
   };
 }

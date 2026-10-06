@@ -1915,6 +1915,11 @@ export type EffectPrimitive =
    *  (King's Rising) — the pool is read BEFORE anything is gained, and the
    *  card is played, so the master-phase action is spent either way. */
   | { kind: "gainPoolThreshold"; atOrBelow: number; ifAtOrBelow: number; otherwise: number }
+  /** "If your prey has more pool than you (AFTER PAYING THE COST of this
+   *  card), your prey burns N pool" (Personal Involvement) — read at
+   *  resolution, when the cost is long paid.
+   *  docs/out-of-turn-cancels-design.md */
+  | { kind: "preyBurnsPoolIfRicher"; amount: number }
   /** "Choose a vampire in your ash heap. Gain X pool, where X is HALF OF
    *  THE CAPACITY of that vampire (round down). Remove that vampire from
    *  the game" (Redeem the Lost Soul). The capacity is read off the ash
@@ -2402,8 +2407,11 @@ export interface CardSpec {
     pool: number;
     /** `blocker` — the blocking minion's controller (True Love's Face).
      *  `opposingMinion` — the other combatant's controller, which is who
-     *  "they" is on a combat card (Target Vitals). */
-    who: "blocker" | "opposingMinion";
+     *  "they" is on a combat card (Target Vitals). `anyMethuselah` — "ANY
+     *  Methuselah can cancel this card" (Personal Involvement). */
+    who: "blocker" | "opposingMinion" | "anyMethuselah";
+    /** "(the cost of this card is not paid in that case)". */
+    refundsCost?: boolean;
     /** The card currency: "discard two COMBAT cards to cancel this card
      *  as it is played" (Target Vitals). docs/round-end-design.md §3 */
     discardCombatCards?: number;

@@ -319,6 +319,11 @@ export interface EngineOps {
   addCombatStrengthTo(minion: MinionId | null, amount: number): void;
   /** "You get +N discard phase actions" (Sreelekha). */
   addDiscardPhaseActions(n: number): void;
+  /** "+1 master phase action" — `now` adds to the running master phase if
+   *  it is `seat`'s turn (a master cancelled during it, Wash; Not to Be from
+   *  `onMasterPhase`); `next` books it for that seat's next master phase.
+   *  docs/out-of-turn-cancels-design.md §6 */
+  gainMasterActions(seat: SeatId, n: number, when: "now" | "next"): void;
   /** "Look at and reorder the top N cards of your library" (Eulogio) —
    *  move one card to a position within the library. */
   moveLibraryCardTo(seatId: SeatId, cardId: CardInstanceId, position: number): void;
@@ -1190,7 +1195,17 @@ export interface CardHandler {
     state: GameState,
     seat: SeatId,
     params: Record<string, string>,
-  ): { seat: SeatId; pool: number } | null;
+  ): NonNullable<CardPlayFrame["payToCancel"]> | null;
+  /** This mode, played, is a card that CANCELS the card whose as-played
+   *  window it is played in (p. 7 — the only other thing allowed there is a
+   *  wake). Stamped on the frame as `cancels`; Dark Influences' shield reads
+   *  it, and `cancelPendingCard` throws for a resolving card that cancels
+   *  without declaring it. docs/out-of-turn-cancels-design.md §4 */
+  cancelsAsPlayed?(mode: DisciplineLevel | null): boolean;
+  /** "The next card played that would cancel another Methuselah's minion
+   *  card as it is played is canceled … and this card is burned instead"
+   *  (Dark Influences) — answered by the engine as that card is pushed. */
+  cancelShield?: boolean;
   /** Frenzy keyword (p. 32) — a hook for cancel/immunity effects. */
   isFrenzy?: boolean;
   /** KRCG abbreviations of the Disciplines the given mode requires —
@@ -1781,6 +1796,20 @@ export interface CardHandler {
 export type HandlerRegistry = Record<string, CardHandler>;
 
 /** Helper for handlers: stable, self-describing option ids. */
+/** "Minion Card: any library card that is not a master, or event card"
+ *  (p. 43) — asked of a play on the stack, off the frame's denormalized
+ *  flags. docs/out-of-turn-cancels-design.md §2 */
+export function isMinionCardPlay(cp: CardPlayFrame): boolean {
+  return !cp.isMaster && cp.isEvent !== true;
+}
+
+/** A Gehenna card: the one spelling of the question, read where a Gehenna
+ *  card is played (The Slow Withering, Servitor of Irad) and where it is
+ *  stamped for a cancel (Emergency Preparations). */
+export function isGehennaCard(handler: CardHandler): boolean {
+  return (handler.permanentTags ?? []).includes("gehenna");
+}
+
 export function playOptionId(
   name: string,
   mode: string | null,

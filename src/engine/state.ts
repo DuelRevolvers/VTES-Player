@@ -398,6 +398,19 @@ export type DelayedDrawCondition =
   | "preyOusted"
   | "titledVampireTorpor";
 
+/** Where a card's own "do not replace until …" clause held its draw — one
+ *  case per branch of `scheduleReplacement`, so a cancel can take exactly
+ *  that hold back. docs/out-of-turn-cancels-design.md §5 */
+export type HeldReplacement =
+  | { kind: "afterResolve" }
+  | { kind: "afterCombat" }
+  | { kind: "turn" }
+  | { kind: "unlock" }
+  | { kind: "condition"; until: DelayedDrawCondition }
+  | { kind: "whileInPlay" }
+  | { kind: "discard" }
+  | { kind: "afterAction"; actionId: string };
+
 export interface PlayCostMod {
   amount: number;
   /** Which resource the modifier moves. `bloodOrLife` is the
@@ -1412,6 +1425,14 @@ export interface SeatState {
   /** An out-of-turn master card was played; it consumes a master phase
    *  action from this seat's next master phase (p. 8). */
   outOfTurnMasterUsed: boolean;
+  /** Master phase actions booked for this seat's NEXT master phase ("at
+   *  the start of their next master phase", Wash). Read and cleared as it
+   *  opens. docs/out-of-turn-cancels-design.md §6 */
+  masterActionsNext?: number;
+  /** An out-of-turn TRIFLE resolved: "they gain a master phase action in
+   *  their next master phase" (p. 9) — and that gain is the phase's one
+   *  trifle gain. */
+  trifleNextMaster?: boolean;
   /** "Each Methuselah CAN CHOOSE a ready vampire they control" (Ancient
    *  Influence, Reins of Power) — this seat's answer, held only between the
    *  choices and the payout that reads them ALL, then deleted. `null` is the
@@ -2057,6 +2078,11 @@ export interface TurnFrame {
   /** Only one master phase action may be gained from trifles per master
    *  phase (p. 10). */
   trifleGained: boolean;
+  /** Card names nobody may play for the rest of this turn ("That card
+   *  cannot be played again this turn", Dark Influences). On the turn
+   *  frame, so the next turn starts clean.
+   *  docs/out-of-turn-cancels-design.md §4 */
+  barredNames?: string[];
   /** Contests settled for this unlock phase (p. 17–18): wins collected,
    *  and every remaining contest paid for or yielded. Optional so old
    *  fixtures and saved logs are untouched. */
@@ -3637,13 +3663,43 @@ export interface CardPlayFrame {
    *  is therefore already being asked — the Dawn Operation ruling.
    *  docs/cross-table-masters-design.md §2 */
   payToCancel?: {
-    seat: SeatId;
+    /** `"any"` — "ANY Methuselah can cancel this card as it is played by
+     *  burning 2 pool" (Personal Involvement); the payer is then whoever
+     *  takes the option. docs/out-of-turn-cancels-design.md §6 */
+    seat: SeatId | "any";
     pool: number;
     /** "They can DISCARD TWO COMBAT CARDS to cancel this card as it is
      *  played" (Target Vitals) — the same gate, a different currency.
      *  docs/round-end-design.md §3 */
     discardCombatCards?: number;
+    /** "(the cost of this card is not paid in that case)" — Personal
+     *  Involvement. Golconda prints nothing of the kind, so the default
+     *  stays the general rule: a cancelled non-action card's cost is paid. */
+    refundsCost?: boolean;
+    /** The seat this card would hurt, if it would hurt one — open
+     *  information read off the board, so a bot can tell whether paying is
+     *  for itself or for somebody else. */
+    harms?: SeatId;
   };
+  /** An EVENT card (p. 37) — denormalized like `isMaster`, because "a
+   *  minion card" is "any library card that is not a master, or event
+   *  card" (p. 43) and Not to Be cancels events.
+   *  docs/out-of-turn-cancels-design.md §2 */
+  isEvent?: boolean;
+  /** A Gehenna card (Emergency Preparations cancels one). */
+  isGehenna?: boolean;
+  /** An out-of-turn master (Wash refunds the master phase action NEXT
+   *  master phase for one of these, now for any other). */
+  isOutOfTurnMaster?: boolean;
+  /** This play is itself a card CANCELLING the play beneath it — what
+   *  Dark Influences' shield answers, and what `cancelPendingCard` checks a
+   *  resolving card declared. docs/out-of-turn-cancels-design.md §4 */
+  cancels?: boolean;
+  /** Where this card's replacement draw was HELD by its own "do not
+   *  replace until …" clause, so a cancel can release it: the clause is
+   *  cancelled with the card and the card is replaced normally
+   *  [LSJ 20080630]. docs/out-of-turn-cancels-design.md §5 */
+  heldReplacement?: HeldReplacement;
   /** KRCG abbreviations of the Disciplines this card's chosen mode
    *  requires, denormalized when the frame is pushed so a
    *  cancel-as-played effect can filter by them ("cancel a combat card

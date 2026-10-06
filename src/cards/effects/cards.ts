@@ -6,8 +6,8 @@
  * in config/supported.json (CLAUDE.md registry rules).
  */
 
-import type { CardHandler, ConditionalStatic, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, canAct, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
+import type { CardHandler, CardPlayFrame, ConditionalStatic, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
+import { blockEligibleSeats, canAct, isMinionCardPlay, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -13925,6 +13925,30 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
+    // "Master. If your prey has more pool than you (after paying the cost of
+    //  this card), your prey burns 3 pool. Any Methuselah can cancel this
+    //  card as it is played by burning 2 pool (the cost of this card is not
+    //  paid in that case)."
+    //
+    // The pay-to-cancel gate, opened to the whole table: "any" Methuselah,
+    // including the player, each asked as the as-played window cycles.
+    // docs/out-of-turn-cancels-design.md
+    krcgId: 101394,
+    name: "Personal Involvement",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 3,
+    payToCancel: { pool: 2, who: "anyMethuselah", refundsCost: true },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "preyBurnsPoolIfRicher", amount: 3 }],
+      },
+    ],
+  },
+  {
     // "Unique Master. Put this card in play. Every Nosferatu burns 1
     //  additional blood to unlock during his or her controller's unlock
     //  phase. Any Methuselah can burn this card by burning 1 pool and
@@ -19277,7 +19301,7 @@ const absolutionOfTheDiabolist: CardHandler = {
     // uses — but NOT Sudden Reversal's "another Methuselah's turn only":
     // "this card is playable during your minion phase" is the card buying
     // itself out of exactly that restriction.
-    if (seat.outOfTurnMasterUsed) return [];
+    if (!outOfTurnOpen(ctx, { ownTurn: true })) return [];
     // "Requires a ready justicar or Inner Circle member" — one you control,
     // and READY: the requirement is about who can grant absolution, not about
     // who is being burned, so it is never the victim.
@@ -19347,37 +19371,255 @@ const layLow: CardHandler = {
   },
 };
 
-const suddenReversal: CardHandler = {
+// ---------------------------------------------------------------------------
+// Out-of-turn cancels (docs/out-of-turn-cancels-design.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * The out-of-turn master budget (p. 9): one between master phases, and
+ * never on your own turn unless the card buys itself out of that ("you may
+ * play this card during your minion phase", Emergency Preparations;
+ * Absolution of the Diabolist). One gate, so the cards cannot disagree.
+ */
+function outOfTurnOpen(ctx: PlayContext, opts: { ownTurn?: boolean } = {}): boolean {
+  if (getSeat(ctx.state, ctx.seat).outOfTurnMasterUsed) return false;
+  if (opts.ownTurn) return true;
+  const turn = ctx.state.frames[0];
+  return !(turn && turn.kind === "turn" && turn.seat === ctx.seat);
+}
+
+interface OutOfTurnCancel {
+  name: string;
+  poolCost: number;
+  trifle?: boolean;
+  delayedReplace?: CardHandler["delayedReplace"];
+  /** Which play this card may cancel — a cancelled play is already out. */
+  cancels(pending: CardPlayFrame, ctx: PlayContext): boolean;
+  /** "BURN 1 POOL to cancel …" — part of the effect, not the card's cost. */
+  burnPool?: number;
+  /** "…and its cost is not paid". */
+  refund: boolean;
+  /** What the card does once the cancel has landed, given the play it hit. */
+  after?(play: CardPlayFrame, canceled: CardPlayFrame, ops: EngineOps): void;
+}
+
+/**
+ * The out-of-turn masters that cancel a card as it is played — Sudden
+ * Reversal and the five of wave 99. Hand-rolled because the window, inside
+ * another card's as-played period, fits no spec shape; built by one factory
+ * so the p. 9 budget, the never-oust-yourself price and the `canceled` check
+ * are spelled once for all of them.
+ */
+function outOfTurnCancel(d: OutOfTurnCancel): CardHandler {
+  return {
+    name: d.name,
+    bloodCost: 0,
+    poolCost: d.poolCost,
+    isMasterCard: true,
+    isOutOfTurnMaster: true,
+    ...(d.trifle ? { isTrifle: true } : {}),
+    ...(d.delayedReplace ? { delayedReplace: d.delayedReplace } : {}),
+    playEffects: () => [{ tag: "deny" }],
+    cancelsAsPlayed: () => true,
+    options(card, ctx) {
+      if (ctx.window !== "card.asPlayed") return [];
+      const pending = ctx.pendingCard;
+      if (!pending || pending.canceled || !d.cancels(pending, ctx)) return [];
+      if (!outOfTurnOpen(ctx)) return [];
+      // Never oust yourself: the pool must survive the card AND the burn.
+      if (getSeat(ctx.state, ctx.seat).pool <= d.poolCost + (d.burnPool ?? 0)) return [];
+      return [
+        {
+          id: playOptionId(d.name, null, card.id),
+          kind: "playCard",
+          label: `${d.name} — cancel ${pending.card.name}`,
+          card: card.id,
+          name: d.name,
+          minion: null,
+          mode: null,
+          params: {},
+        },
+      ];
+    },
+    resolve(play, ops) {
+      // This card's own frame is popped: the play it cancels is on top.
+      const top = ops.state.frames[ops.state.frames.length - 1];
+      if (top?.kind !== "cardPlay") throw new Error(`${d.name}: nothing to cancel`);
+      ops.cancelPendingCard(d.refund);
+      if (d.burnPool) ops.emit({ type: "PoolBurned", seat: play.seat, amount: d.burnPool });
+      d.after?.(play, top, ops);
+    },
+  };
+}
+
+/** Sudden Reversal (101896): "Cancel a master card as it is played by
+ *  another Methuselah", refunding its cost. */
+const suddenReversal = outOfTurnCancel({
   name: "Sudden Reversal",
-  playEffects: () => [{ tag: "deny" }],
-  bloodCost: 0,
-  isMasterCard: true,
-  isOutOfTurnMaster: true,
-  options(card, ctx) {
-    if (ctx.window !== "card.asPlayed") return [];
-    const pending = ctx.pendingCard;
-    // "Cancel a master card as it is played by another Methuselah."
-    if (!pending || !pending.isMaster || pending.canceled) return [];
-    if (pending.seat === ctx.seat) return [];
-    if (getSeat(ctx.state, ctx.seat).outOfTurnMasterUsed) return [];
-    // Out-of-turn: only during another Methuselah's turn (p. 8).
-    const turn = ctx.state.frames[0];
-    if (turn && turn.kind === "turn" && turn.seat === ctx.seat) return [];
-    return [
-      {
-        id: playOptionId(this.name, null, card.id),
-        kind: "playCard",
-        label: `Sudden Reversal — cancel ${pending.card.name}`,
-        card: card.id,
-        name: this.name,
-        minion: null,
-        mode: null,
-        params: {},
-      },
-    ];
+  poolCost: 0,
+  cancels: (p, ctx) => p.isMaster && p.seat !== ctx.seat,
+  refund: true,
+});
+
+/** Direct Intervention (100545): "Out-of-turn. Cancel a minion card as it is
+ *  played, and its cost is not paid. (If it was an action card, the acting
+ *  minion does not lock. If it was a strike card, the minion chooses another
+ *  strike.)" — the parenthesis DESCRIBES p. 16, which the engine already
+ *  does: an action card's lock and cost are deferred to announcement, and a
+ *  cancelled strike never fills its slot, so the settle loop asks again. */
+const directIntervention = outOfTurnCancel({
+  name: "Direct Intervention",
+  poolCost: 1,
+  cancels: (p) => isMinionCardPlay(p),
+  refund: true,
+});
+
+/** Dark Influences (100493): "Out-of-turn. Cancel a minion card as it is
+ *  played, its cost is not paid, and put this card in play. That card cannot
+ *  be played again this turn. The next card played that would cancel another
+ *  Methuselah's minion card as it is played is canceled, its cost is not
+ *  paid, and this card is burned instead." The shield is the engine's
+ *  (`applyCancelShields`, §4), answered as the cancelling card is pushed. */
+const darkInfluences: CardHandler = {
+  ...outOfTurnCancel({
+    name: "Dark Influences",
+    poolCost: 2,
+    cancels: (p) => isMinionCardPlay(p),
+    refund: true,
+    after(play, canceled, ops) {
+      ops.putPermanentInPlay({
+        card: play.card,
+        seat: play.seat,
+        attachTo: null,
+        statics: {},
+        tags: [],
+      });
+      // By NAME, for everyone, for the rest of the turn (§4, reading 1).
+      const tf = ops.state.frames[0];
+      if (tf?.kind === "turn") (tf.barredNames ??= []).push(canceled.card.name);
+    },
+  }),
+  cancelShield: true,
+};
+
+/** Not to Be (101303): "Master: out-of-turn. Cancel an event card as it is
+ *  played (no cost is paid). Put this card in play. During your master
+ *  phase, you get one additional master phase action. During your discard
+ *  phase, you get one fewer discard phase action, and this card is burned."
+ *  Events are played in the discard phase (p. 37), always on somebody
+ *  else's turn here, so both of "your" phases are still to come. */
+const notToBe: CardHandler = {
+  ...outOfTurnCancel({
+    name: "Not to Be",
+    poolCost: 1,
+    cancels: (p) => p.isEvent === true,
+    refund: true,
+    after(play, _canceled, ops) {
+      ops.putPermanentInPlay({
+        card: play.card,
+        seat: play.seat,
+        attachTo: null,
+        statics: {},
+        tags: [],
+      });
+    },
+  }),
+  onMasterPhase(entry, owner, turnSeat, ops) {
+    const mine = entry.controller ?? owner.seat;
+    if (turnSeat === mine) ops.gainMasterActions(mine, 1, "now");
   },
-  resolve(_play, ops) {
-    ops.cancelPendingCard(true); // "its cost is not paid"
+  onDiscardPhase(entry, owner, turnSeat, ops) {
+    const mine = entry.controller ?? owner.seat;
+    if (turnSeat !== mine) return;
+    ops.addDiscardPhaseActions(-1);
+    ops.burnPermanent(entry.card.id);
+  },
+};
+
+/** Wash (102151): "Out-of-turn. Trifle. Do not replace until your unlock
+ *  phase. Cancel a master card played by your predator or prey as it is
+ *  played, and its cost is not paid. That Methuselah gets +1 master phase
+ *  action immediately, or at the start of their next master phase if the
+ *  canceled card is an out-of-turn master." The +1 is not a trifle bonus
+ *  [ANK 20170124], and an out-of-turn master cancelled still spent that
+ *  seat's out-of-turn budget [LSJ 20070309-2] — neither is touched here. */
+const wash = outOfTurnCancel({
+  name: "Wash",
+  poolCost: 0,
+  trifle: true,
+  delayedReplace: "unlock",
+  cancels: (p, ctx) =>
+    p.isMaster &&
+    p.seat !== ctx.seat &&
+    (p.seat === preyOf(ctx.state, ctx.seat) || p.seat === predatorOf(ctx.state, ctx.seat)),
+  refund: true,
+  after(_play, canceled, ops) {
+    ops.gainMasterActions(canceled.seat, 1, canceled.isOutOfTurnMaster ? "next" : "now");
+  },
+});
+
+/** Gehenna cards in play, anywhere at the table. */
+function gehennaCardsInPlay(state: GameState): number {
+  let n = 0;
+  for (const s of state.seats) {
+    for (const p of s.permanents) if (p.tags.includes("gehenna")) n++;
+    for (const m of s.minions) for (const p of m.attached) if (p.tags.includes("gehenna")) n++;
+  }
+  return n;
+}
+
+/** Emergency Preparations (100636): "Master: out-of-turn. Burn 1 pool to
+ *  cancel a Gehenna card as it is played. Alternatively, if there are at
+ *  least two Gehenna cards in play, you may play this card during your
+ *  minion phase to unlock a vampire with a capacity above 7." The second
+ *  mode is the card buying itself out of p. 9's own-turn bar; it is still an
+ *  out-of-turn master, so it still spends the budget (§1). */
+const emergencyPreparationsCancel = outOfTurnCancel({
+  name: "Emergency Preparations",
+  poolCost: 0,
+  burnPool: 1,
+  cancels: (p) => p.isGehenna === true,
+  // No "its cost is not paid": the general rule, a cancelled non-action
+  // card's cost is still paid (p. 16).
+  refund: false,
+});
+const emergencyPreparations: CardHandler = {
+  ...emergencyPreparationsCancel,
+  // The unlock is a GIFT when the vampire is somebody else's — "unlock", not
+  // "deny", so a bot's give-nothing-away guard sees it as one.
+  playEffects: (_mode, variant) => [{ tag: variant === "unlock" ? "unlock" : "deny" }],
+  options(card, ctx) {
+    const out = emergencyPreparationsCancel.options(card, ctx);
+    if (ctx.window !== "turn.minion" || ctx.turnSeat !== ctx.seat) return out;
+    if (!outOfTurnOpen(ctx, { ownTurn: true })) return out;
+    if (gehennaCardsInPlay(ctx.state) < 2) return out;
+    for (const s of ctx.state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        // "A vampire" — anyone's, ready or in torpor; an unlocked one would
+        // be a futile option.
+        if (m.kind !== "vampire" || !m.locked || capacityOf(m) <= 7) continue;
+        out.push({
+          id: playOptionId("Emergency Preparations", null, "unlock", m.id, card.id),
+          kind: "playCard",
+          label: `Emergency Preparations — unlock ${m.name}`,
+          card: card.id,
+          name: "Emergency Preparations",
+          minion: null,
+          mode: null,
+          params: { variant: "unlock", target: m.id },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    if (play.params["variant"] !== "unlock") {
+      emergencyPreparationsCancel.resolve(play, ops);
+      return;
+    }
+    const m = findMinion(ops.state, play.params["target"] ?? "");
+    if (m?.locked) ops.emit({ type: "MinionUnlocked", minion: m.id });
   },
 };
 
@@ -19404,6 +19646,8 @@ const hideTheMind: CardHandler = {
   // is hand-rolled, and a card that answers no type is invisible to every
   // play-cost modifier and every card that filters by type.
   costTypes: () => ["actionModifier", "combat"],
+  // Both modes cancel (docs/out-of-turn-cancels-design.md §4).
+  cancelsAsPlayed: () => true,
   options(card, ctx) {
     if (ctx.window !== "card.asPlayed") return [];
     const pending = ctx.pendingCard;
@@ -23710,6 +23954,11 @@ export function buildHandlerRegistry(): HandlerRegistry {
     anarchTroublemaker,
     theCoven,
     suddenReversal,
+    directIntervention,
+    darkInfluences,
+    notToBe,
+    wash,
+    emergencyPreparations,
     absolutionOfTheDiabolist,
     layLow,
     hideTheMind,
@@ -23817,4 +24066,10 @@ export const implementedIds: number[] = [
   100921, // Hide the Mind (bespoke — cancel by required discipline)
   100012, // Absolution of the Diabolist (bespoke — referendum after-resolution)
   101075, // Lay Low (bespoke — referendum after-resolution)
+  // Wave 99 — out-of-turn cancels (docs/out-of-turn-cancels-design.md)
+  100545, // Direct Intervention (bespoke — out-of-turn cancel)
+  100493, // Dark Influences (bespoke — out-of-turn cancel + shield)
+  101303, // Not to Be (bespoke — out-of-turn cancel of an event)
+  102151, // Wash (bespoke — out-of-turn trifle cancel)
+  100636, // Emergency Preparations (bespoke — Gehenna cancel / unlock)
 ];

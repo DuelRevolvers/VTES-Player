@@ -88,6 +88,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   // Tranche 3 wave 7 — the one-shot masters.
   gainPool: "poolGain",
   gainPoolThreshold: "poolGain",
+  preyBurnsPoolIfRicher: "poolDrain",
   // Diablerie is a board swing the summary vocabulary has no word for, and
   // so is a table-wide blood burn: both report as board effects.
   actionDiablerize: "board",

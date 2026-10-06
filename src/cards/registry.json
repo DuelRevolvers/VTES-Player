@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-09-27T02:34:12.011Z",
+ "fetchedAt": "2026-10-06T23:39:57.869Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -3809,6 +3809,28 @@
    },
    "supported": true
   },
+  "100493": {
+   "card": {
+    "kind": "library",
+    "id": 100493,
+    "name": "Dark Influences",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 2,
+    "bloodCost": null,
+    "cardText": "Out-of-turn.\nCancel a minion card as it is played, its cost is not paid, and put this card in play. That card cannot be played again this turn. The next card played that would cancel another Methuselah's minion card as it is played is canceled, its cost is not paid, and this card is burned instead.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/darkinfluences.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100494": {
    "card": {
     "kind": "library",
@@ -4131,6 +4153,30 @@
     "image": "https://static.krcg.org/card/diadelosmuertos.jpg",
     "sets": [
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "100545": {
+   "card": {
+    "kind": "library",
+    "id": 100545,
+    "name": "Direct Intervention",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Out-of-turn.\nCancel a minion card as it is played, and its cost is not paid. (If it was an action card, the acting minion does not lock. If it was a strike card, the minion chooses another strike.)",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/directintervention.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -5055,6 +5101,27 @@
      "Camarilla Edition",
      "Keepers of Tradition",
      "Sabbat Preconstructed"
+    ]
+   },
+   "supported": true
+  },
+  "100636": {
+   "card": {
+    "kind": "library",
+    "id": 100636,
+    "name": "Emergency Preparations",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nBurn 1 pool to cancel a Gehenna card as it is played. Alternatively, if there are at least two Gehenna cards in play, you may play this card during your minion phase to unlock a vampire with a capacity above 7.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/emergencypreparations.jpg",
+    "sets": [
+     "Gehenna"
     ]
    },
    "supported": true
@@ -10017,6 +10084,27 @@
    },
    "supported": true
   },
+  "101303": {
+   "card": {
+    "kind": "library",
+    "id": 101303,
+    "name": "Not to Be",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nCancel an event card as it is played (no cost is paid). Put this card in play. During your master phase, you get one additional master phase action. During your discard phase, you get one fewer discard phase action, and this card is burned.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/nottobe.jpg",
+    "sets": [
+     "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
   "101305": {
    "card": {
     "kind": "library",
@@ -10669,6 +10757,27 @@
     "image": "https://static.krcg.org/card/perpetualcare.jpg",
     "sets": [
      "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101394": {
+   "card": {
+    "kind": "library",
+    "id": 101394,
+    "name": "Personal Involvement",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Master.\nIf your prey has more pool than you (after paying the cost of this card), your prey burns 3 pool. Any Methuselah can cancel this card as it is played by burning 2 pool (the cost of this card is not paid in that case).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/personalinvolvement.jpg",
+    "sets": [
+     "Gehenna"
     ]
    },
    "supported": true
@@ -16397,6 +16506,30 @@
     "image": "https://static.krcg.org/card/warzonehuntingground.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "102151": {
+   "card": {
+    "kind": "library",
+    "id": 102151,
+    "name": "Wash",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Out-of-turn. Trifle. Do not replace until your unlock phase.\nCancel a master card played by your predator or prey as it is played, and its cost is not paid. That Methuselah gets +1 master phase action immediately, or at the start of their next master phase if the canceled card is an out-of-turn master.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/wash.jpg",
+    "sets": [
+     "Third Edition",
+     "Lords of the Night",
+     "Keepers of Tradition",
+     "Sabbat Preconstructed"
     ]
    },
    "supported": true

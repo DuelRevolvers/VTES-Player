@@ -768,6 +768,12 @@ export class HeuristicAgent implements Agent {
         return w.playCard;
 
       case "payToCancel":
+        // Never pay to cancel your own card, and when the card names a
+        // victim, pay only if it is you — "ANY Methuselah can cancel this
+        // card" (Personal Involvement) otherwise has every bot with spare
+        // pool buying somebody else out (docs/out-of-turn-cancels-design.md §7).
+        if (view.pendingCard?.seat === me) return w.selfOustGuard;
+        if (o.harms !== undefined && o.harms !== me) return w.selfOustGuard;
         // Only worth it if the pool is genuinely spare — two clear of the
         // floor, which was a hard-coded 4 and is now whatever this style
         // calls safe.
@@ -1495,6 +1501,18 @@ export class HeuristicAgent implements Agent {
     // vampire at 0 blood must hunt and can do nothing else (p. 21).
     const payer = o.minion === null ? null : findMinion(view, o.minion)?.m;
     if (payer && cost.blood > 0 && payer.blood - cost.blood <= 0) return w.selfOustGuard;
+
+    // NEVER CANCEL YOUR OWN CARD. Inside another card's as-played window a
+    // "deny" play is a cancel of that card (p. 7), and Direct Intervention
+    // or Hide the Mind will happily name one of this seat's own.
+    // docs/out-of-turn-cancels-design.md §7
+    if (
+      dp.window === "card.asPlayed" &&
+      view.pendingCard?.seat === me &&
+      (o.effects ?? []).some((e) => e.tag === "deny")
+    ) {
+      return w.selfOustGuard;
+    }
 
     // DO NOT GIVE CARDS AWAY. Several cards read "put this card on a
     // vampire" and enumerate EVERY seat's minions, because the card says
