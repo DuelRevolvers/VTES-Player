@@ -14532,6 +14532,39 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
+    // "[dom] [ACTION MODIFIER] Only usable during a bleed action. +1 bleed
+    //  (limited).
+    //  [DOM] [REACTION] Only usable if a younger vampire is bleeding you,
+    //  after blocks are declined. Lock this reacting vampire. Change the
+    //  target of the bleed to another Methuselah other than the acting
+    //  vampire's controller (that Methuselah can attempt to block)."
+    // The two halves go to different minions (`role`), and only the
+    // reaction half is a card that changes the target of a bleed — what
+    // Narrow Minds, Two Wrongs and Contingency Planning read per mode.
+    // docs/bleed-redirects-design.md §4
+    krcgId: 101256,
+    name: "Murmur of the False Will",
+    cardType: "modifierOrReaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "dom",
+        role: "modifier",
+        usable: ["onlyDuringBleed"],
+        effects: [{ kind: "modifyBleed", amount: 1, limited: true }],
+      },
+      {
+        level: "superior",
+        discipline: "dom",
+        role: "reaction",
+        usable: ["bleedTargetsYou", "afterBlocksDeclined"],
+        effects: [{ kind: "redirectBleed", lockSelf: true, youngerOnly: true }],
+      },
+    ],
+  },
+  {
     // "Requires a baron. Only usable if a minion is bleeding you, after
     //  blocks are declined. Lock this reacting vampire. Change the target
     //  of the bleed to another Methuselah other than the acting minion's
@@ -19392,6 +19425,9 @@ interface OutOfTurnCancel {
   name: string;
   poolCost: number;
   trifle?: boolean;
+  /** "You may play this card during your turn" (Contingency Planning) —
+   *  still an out-of-turn master, so it still spends the p. 9 budget. */
+  ownTurn?: boolean;
   delayedReplace?: CardHandler["delayedReplace"];
   /** Which play this card may cancel — a cancelled play is already out. */
   cancels(pending: CardPlayFrame, ctx: PlayContext): boolean;
@@ -19425,7 +19461,7 @@ function outOfTurnCancel(d: OutOfTurnCancel): CardHandler {
       if (ctx.window !== "card.asPlayed") return [];
       const pending = ctx.pendingCard;
       if (!pending || pending.canceled || !d.cancels(pending, ctx)) return [];
-      if (!outOfTurnOpen(ctx)) return [];
+      if (!outOfTurnOpen(ctx, { ownTurn: d.ownTurn === true })) return [];
       // Never oust yourself: the pool must survive the card AND the burn.
       if (getSeat(ctx.state, ctx.seat).pool <= d.poolCost + (d.burnPool ?? 0)) return [];
       return [
@@ -19620,6 +19656,87 @@ const emergencyPreparations: CardHandler = {
     }
     const m = findMinion(ops.state, play.params["target"] ?? "");
     if (m?.locked) ops.emit({ type: "MinionUnlocked", minion: m.id });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Bleed redirects (docs/bleed-redirects-design.md)
+// ---------------------------------------------------------------------------
+
+/** Contingency Planning (100419): "Master: out-of-turn. Only usable when a
+ *  minion you control is bleeding. You may play this card during your turn.
+ *  Cancel a minion card that would change the target of the bleed as it is
+ *  played (no cost is paid). If more than 1 pool is bled in this action,
+ *  ignore the excess." The cap is the price of the cancel, so it lands only
+ *  with it (§3). */
+const contingencyPlanning = outOfTurnCancel({
+  name: "Contingency Planning",
+  poolCost: 1,
+  ownTurn: true,
+  cancels: (p, ctx) =>
+    isMinionCardPlay(p) &&
+    p.redirectsBleed === true &&
+    ctx.action?.actionKind === "bleed" &&
+    ctx.action.actingSeat === ctx.seat,
+  refund: true,
+  after(_play, _canceled, ops) {
+    const af = ops.action();
+    if (af) af.bleedPoolCap = Math.min(af.bleedPoolCap ?? Infinity, 1);
+  },
+});
+
+/**
+ * Two Wrongs (102052): "Master: out-of-turn. Trifle. Play when a minion
+ * controlled by a Methuselah other than your predator is bleeding you after
+ * blocks are declined. That minion is now bleeding his or her prey. The next
+ * card that would change the target of this bleed is canceled as it is
+ * played."
+ *
+ * The shield is the engine's (`applyRedirectShield`), answered as the next
+ * redirect is pushed; with no "no cost is paid", that card's cost stays paid
+ * [RBK cancel-a-card]. A change of target reopens blocks (p. 26), which the
+ * `TargetChanged` reducer already does. docs/bleed-redirects-design.md §2
+ */
+const twoWrongs: CardHandler = {
+  name: "Two Wrongs",
+  bloodCost: 0,
+  poolCost: 0,
+  isMasterCard: true,
+  isOutOfTurnMaster: true,
+  isTrifle: true,
+  playEffects: () => [{ tag: "deny" }],
+  redirectsBleed: () => true,
+  options(card, ctx) {
+    if (ctx.window !== "action.effects") return [];
+    const af = ctx.action;
+    if (!af || af.actionKind !== "bleed" || af.target !== ctx.seat) return [];
+    // "…after blocks are declined": state C, no attempt underway.
+    if (af.step !== "C") return [];
+    if (af.actingSeat === predatorOf(ctx.state, ctx.seat)) return [];
+    if (!outOfTurnOpen(ctx)) return [];
+    const to = preyOf(ctx.state, af.actingSeat);
+    if (to === ctx.seat || to === af.actingSeat) return [];
+    return [
+      {
+        id: playOptionId(this.name, null, card.id),
+        kind: "playCard",
+        label: `Two Wrongs — the bleed goes to ${to}`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: {},
+      },
+    ];
+  },
+  resolve(play, ops) {
+    const af = ops.action();
+    if (!af || af.target !== play.seat) return;
+    // Re-derived at resolution: the ring can have moved since enumeration.
+    const to = preyOf(ops.state, af.actingSeat);
+    if (to === play.seat || to === af.actingSeat) return;
+    ops.emit({ type: "TargetChanged", actionId: af.actionId, from: play.seat, to });
+    af.redirectShield = true;
   },
 };
 
@@ -23959,6 +24076,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     notToBe,
     wash,
     emergencyPreparations,
+    contingencyPlanning,
+    twoWrongs,
     absolutionOfTheDiabolist,
     layLow,
     hideTheMind,
@@ -24072,4 +24191,7 @@ export const implementedIds: number[] = [
   101303, // Not to Be (bespoke — out-of-turn cancel of an event)
   102151, // Wash (bespoke — out-of-turn trifle cancel)
   100636, // Emergency Preparations (bespoke — Gehenna cancel / unlock)
+  // Wave 100 — bleed redirects (docs/bleed-redirects-design.md)
+  100419, // Contingency Planning (bespoke — cancel a redirect, cap the bleed)
+  102052, // Two Wrongs (bespoke — out-of-turn trifle redirect + shield)
 ];

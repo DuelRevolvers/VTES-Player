@@ -1006,6 +1006,29 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 100 — bleed redirects (3 cards), 2026-10-06
+
+Library **870 → 873**. Two Wrongs, Contingency Planning, Murmur of the False
+Will. Write-up: `docs/bleed-redirects-design.md`. Determine (imbued) and
+Spirit Marionette (Obeah modes) were filtered out first as inert.
+
+The family is "a card that changes the target of a bleed", which the engine
+already knew as `CardHandler.redirectsBleed` — but as a per-CARD boolean,
+read only by Narrow Minds. New: it is now **per mode**
+(`redirectsBleed(mode, variant)`), stamped on the card-play frame; a
+redirect **shield** on the action frame, answered at push (Two Wrongs); and
+`bleedPoolCap`, a ceiling on the pool a bleed BURNS rather than on its amount
+(Contingency Planning). `outOfTurnCancel` gained `ownTurn`.
+
+**Found — three defects:** (1) **the redirect flag was per card where the
+question is per mode.** Murmur's +1 bleed half would have paid Narrow Minds'
+tax and been cancellable as a redirect. (2) **Narrow Minds taxes MINION
+cards**, but its filter read only the effect. The first master that
+redirects (Two Wrongs) would have been charged blood with no minion to pay
+it; `minionCardRedirects` now asks both questions. (3) **`youngerOnly` let an
+ALLY count as "a younger vampire"**: an ally's capacity reads 0. That made
+Redirection's basic mode legal against every ally bleed since it landed.
+
 ### Wave 99 — out-of-turn cancels (6 cards), 2026-10-06
 
 Library **864 → 870**. Direct Intervention, Dark Influences, Not to Be, Wash,

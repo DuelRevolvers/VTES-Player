@@ -1059,9 +1059,12 @@ export interface CardHandler {
   /** An EVENT card: put into play with a discard phase action, once each
    *  game (p. 37). docs/events-design.md §1 */
   isEventCard?: boolean;
-  /** This card can CHANGE THE TARGET OF A BLEED (Deflection and its
-   *  family) — what Narrow Minds taxes. docs/events-design.md §3 */
-  redirectsBleed?: boolean;
+  /** This card CHANGES THE TARGET OF A BLEED in this mode (Deflection and
+   *  its family) — what Narrow Minds taxes (minion cards only), Two Wrongs
+   *  shields against and Contingency Planning cancels. Per MODE, because
+   *  Murmur of the False Will's modifier half does not.
+   *  docs/events-design.md §3, docs/bleed-redirects-design.md §1 */
+  redirectsBleed?(mode: DisciplineLevel | null, variant?: string): boolean;
   /** Trifles refund one master phase action per phase (p. 10). */
   isTrifle?: boolean;
   /** Out-of-turn masters: playable during another Methuselah's turn,
@@ -1801,6 +1804,18 @@ export type HandlerRegistry = Record<string, CardHandler>;
  *  flags. docs/out-of-turn-cancels-design.md §2 */
 export function isMinionCardPlay(cp: CardPlayFrame): boolean {
   return !cp.isMaster && cp.isEvent !== true;
+}
+
+/** "MINION cards that change the target of a bleed action" (Narrow Minds) —
+ *  what a play-cost modifier filtering on `redirectsBleed` may charge. Two
+ *  Wrongs redirects too, and is a master. docs/bleed-redirects-design.md §1 */
+export function minionCardRedirects(
+  handler: CardHandler,
+  mode: DisciplineLevel | null,
+  variant: string | undefined,
+): boolean {
+  if (handler.isMasterCard || handler.isEventCard) return false;
+  return handler.redirectsBleed?.(mode, variant) === true;
 }
 
 /** A Gehenna card: the one spelling of the question, read where a Gehenna

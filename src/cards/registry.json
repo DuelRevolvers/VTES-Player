@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-06T23:39:57.869Z",
+ "fetchedAt": "2026-10-07T00:19:48.869Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -3245,6 +3245,28 @@
     "sets": [
      "Fifth Edition (Anarch)",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "100419": {
+   "card": {
+    "kind": "library",
+    "id": 100419,
+    "name": "Contingency Planning",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nOnly usable when a minion you control is bleeding. You may play this card during your turn. Cancel a minion card that would change the target of the bleed as it is played (no cost is paid). If more than 1 pool is bled in this action, ignore the excess.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/contingencyplanning.jpg",
+    "sets": [
+     "Final Nights",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -9804,6 +9826,34 @@
    },
    "supported": true
   },
+  "101256": {
+   "card": {
+    "kind": "library",
+    "id": 101256,
+    "name": "Murmur of the False Will",
+    "types": [
+     "Action Modifier",
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "dom"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[dom] [ACTION MODIFIER] Only usable during a bleed action. +1 bleed (limited).\n[DOM] [REACTION] Only usable if a younger vampire is bleeding you, after blocks are declined. Lock this reacting vampire. Change the target of the bleed to another Methuselah other than the acting vampire's controller (that Methuselah can attempt to block).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/murmurofthefalsewill.jpg",
+    "sets": [
+     "Lords of the Night",
+     "Keepers of Tradition",
+     "Heirs to the Blood",
+     "Twenty-Fifth Anniversary",
+     "2020 Promo Pack 2"
+    ]
+   },
+   "supported": true
+  },
   "101259": {
    "card": {
     "kind": "library",
@@ -15659,6 +15709,27 @@
      "Final Nights",
      "Lords of the Night",
      "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "102052": {
+   "card": {
+    "kind": "library",
+    "id": 102052,
+    "name": "Two Wrongs",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn. Trifle.\nPlay when a minion controlled by a Methuselah other than your predator is bleeding you after blocks are declined. That minion is now bleeding his or her prey. The next card that would change the target of this bleed is canceled as it is played.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/twowrongs.jpg",
+    "sets": [
+     "2008 Tournament promo"
     ]
    },
    "supported": true

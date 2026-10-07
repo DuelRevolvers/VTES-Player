@@ -58,7 +58,7 @@ import type {
   HandlerRegistry,
   PlayContext,
 } from "./handlers.ts";
-import { isGehennaCard, isMinionCardPlay } from "./handlers.ts";
+import { isGehennaCard, isMinionCardPlay, minionCardRedirects } from "./handlers.ts";
 import type { DecisionPoint, LegalOption, WindowId } from "./options.ts";
 import { passOption } from "./options.ts";
 import type {
@@ -6381,7 +6381,7 @@ export class VtesEngine implements EngineOps {
         requires: handler.requiresDisciplines?.(mode, variant) ?? [],
         requiresClans: handler.requiresClans?.() ?? [],
         tags: handler.permanentTags ?? [],
-        ...(handler.redirectsBleed ? { redirectsBleed: true } : {}),
+        ...(minionCardRedirects(handler, mode, variant) ? { redirectsBleed: true } : {}),
         ...(handler.requiresSuperiorDiscipline?.(mode, variant)
           ? { requiresSuperior: true }
           : {}),
@@ -6413,7 +6413,7 @@ export class VtesEngine implements EngineOps {
       requires: handler.requiresDisciplines?.(mode, variant) ?? [],
       requiresClans: handler.requiresClans?.() ?? [],
       tags: handler.permanentTags ?? [],
-      ...(handler.redirectsBleed ? { redirectsBleed: true } : {}),
+      ...(minionCardRedirects(handler, mode, variant) ? { redirectsBleed: true } : {}),
       ...(handler.requiresSuperiorDiscipline?.(mode, variant) ? { requiresSuperior: true } : {}),
     };
     for (const frame of [this.action(), this.combatFrame()]) {
@@ -8282,7 +8282,10 @@ export class VtesEngine implements EngineOps {
         }
       }
       if (af.actionKind === "bleed" && af.target !== null) {
-        const bleed = currentBleed(this.state, af);
+        // "If more than 1 pool is bled in this action, ignore the excess"
+        // (Contingency Planning): what is BLED is capped, so every reader
+        // below — the burn and the success hooks — sees the capped figure.
+        const bleed = Math.min(currentBleed(this.state, af), af.bleedPoolCap ?? Infinity);
         if (bleed > 0) {
           this.emit({ type: "PoolBurned", seat: af.target, amount: bleed });
         }
@@ -11561,6 +11564,10 @@ export class VtesEngine implements EngineOps {
       ...(beneath?.kind === "cardPlay" && handler.cancelsAsPlayed?.(option.mode)
         ? { cancels: true }
         : {}),
+      // docs/bleed-redirects-design.md §1
+      ...(handler.redirectsBleed?.(option.mode, option.params["variant"])
+        ? { redirectsBleed: true }
+        : {}),
       ...(heldReplacement ? { heldReplacement } : {}),
       isCombat: !!this.handler(card.name).isCombatCard,
       isReaction: !!this.handler(card.name).isReactionCard,
@@ -11615,6 +11622,20 @@ export class VtesEngine implements EngineOps {
     };
     this.state.frames.push(frame);
     if (beneath?.kind === "cardPlay") this.applyCancelShields(frame, beneath);
+    this.applyRedirectShield(frame);
+  }
+
+  /** "The next card that would change the target of this bleed is canceled
+   *  as it is played" (Two Wrongs) — any card, master or minion, answered as
+   *  it is PUSHED for the reason `applyCancelShields` is. No "its cost is not
+   *  paid", so the cost stays paid [RBK cancel-a-card].
+   *  docs/bleed-redirects-design.md §2 */
+  private applyRedirectShield(frame: CardPlayFrame): void {
+    if (!frame.redirectsBleed) return;
+    const af = this.action();
+    if (!af?.redirectShield) return;
+    af.redirectShield = false;
+    this.markCanceled(frame, false);
   }
 
   /** "The next card played that would cancel ANOTHER METHUSELAH'S MINION

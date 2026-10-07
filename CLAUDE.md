@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 310 test files, 3331 tests**, with `npm run typecheck`,
+**Green baseline: 311 test files, 3343 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -623,7 +623,8 @@ doc named beside it.
   the mode's.
 - **A handler lookup cannot answer a question whose answer differs by
   mode.** Denormalize onto the frame or the entry (the `isMaster`
-  treatment).
+  treatment). `redirectsBleed` was a per-card boolean until Murmur of the
+  False Will's +1-bleed half read as a redirect (`bleed-redirects-design.md`).
 - **A ZONE RECORDS WHAT TODAY'S READERS NEED, AND IS WRONG FOR
   TOMORROW'S.** Write the answer down as the thing leaves play; the tell
   is a card interrogating something already filed away
@@ -944,7 +945,8 @@ rush-outcome, granted-actions, granted-rush, block-restrictions, block-taxes, pa
 block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
-choosing-a-minion, hunt-payouts, stealable-locations, out-of-turn-cancels.
+choosing-a-minion, hunt-payouts, stealable-locations, out-of-turn-cancels,
+bleed-redirects.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

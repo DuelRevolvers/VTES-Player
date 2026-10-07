@@ -2206,6 +2206,16 @@ export interface ActionFrame {
    *  is this same action's.
    *  docs/the-edge-design.md §3 */
   edgeBurnedInsteadOfTaken?: boolean;
+  /** "The next card that would change the target of this bleed is
+   *  canceled as it is played" (Two Wrongs) — spent by the first play
+   *  whose frame says `redirectsBleed`. Lives and dies with the action.
+   *  docs/bleed-redirects-design.md §2 */
+  redirectShield?: boolean;
+  /** "If more than 1 pool is bled in this action, ignore the excess"
+   *  (Contingency Planning) — a ceiling on the pool BURNED, not on the
+   *  bleed amount, so a card reading the amount still sees it.
+   *  docs/bleed-redirects-design.md §3 */
+  bleedPoolCap?: number;
   /** "This vampire burns 1 blood to continue the action AS IF UNBLOCKED"
    *  (Go-getter superior) — set in the `action.afterResolution` window and
    *  consumed the moment that window closes, which is the only point at
@@ -3695,6 +3705,10 @@ export interface CardPlayFrame {
    *  Dark Influences' shield answers, and what `cancelPendingCard` checks a
    *  resolving card declared. docs/out-of-turn-cancels-design.md §4 */
   cancels?: boolean;
+  /** This play CHANGES THE TARGET OF A BLEED, in the mode chosen — what Two
+   *  Wrongs' shield and Contingency Planning answer. Per mode: Murmur of the
+   *  False Will's modifier half does not. docs/bleed-redirects-design.md §1 */
+  redirectsBleed?: boolean;
   /** Where this card's replacement draw was HELD by its own "do not
    *  replace until …" clause, so a cancel can release it: the clause is
    *  cancelled with the card and the card is replaced normally

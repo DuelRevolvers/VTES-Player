@@ -4396,9 +4396,13 @@ function effectsLegal(
         // "Only usable if a YOUNGER vampire is bleeding you"
         // (Redirection basic) — capacity on both sides, so a granted
         // point counts (docs/bleed-answers-design.md §2).
+        // A younger VAMPIRE: an ally's capacity reads 0, which made every
+        // ally bleed "younger" until Murmur of the False Will's wave
+        // (docs/bleed-redirects-design.md §4).
         if (e.youngerOnly) {
           const actor = findMinion(ctx.state, af.acting);
-          if (!actor || capacityOf(actor) >= capacityOf(minion)) return false;
+          if (!actor || actor.kind !== "vampire") return false;
+          if (capacityOf(actor) >= capacityOf(minion)) return false;
         }
         // "…an ALLY OR younger vampire is bleeding you" (Lost in
         // Translation): an ally has no capacity to compare and always
@@ -4437,9 +4441,13 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
     poolCost: spec.poolCost ?? 0,
     // "Cards that change the target of a bleed" (what Narrow Minds
     // taxes) — declared by the handler so the price reads a fact about
-    // the card rather than re-deriving its effects.
+    // the card rather than re-deriving its effects. Per mode: Murmur of the
+    // False Will's modifier half bleeds, only its reaction half redirects.
     ...(spec.modes.some((m) => m.effects.some((e) => e.kind === "redirectBleed"))
-      ? { redirectsBleed: true }
+      ? {
+          redirectsBleed: (mode: DisciplineLevel | null, variant?: string) =>
+            modeOf(spec, mode, variant).effects.some((e) => e.kind === "redirectBleed"),
+        }
       : {}),
     // "Put this card into play; it represents an ally" (Blood Brother
     // Ambush) — a MODIFIER that becomes a minion, so it answers the same

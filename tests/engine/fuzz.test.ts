@@ -621,6 +621,12 @@ function fourSeatGame(seed: number): GameState {
     "Wash",
     "Emergency Preparations",
     "Personal Involvement",
+    // Bleed redirects (docs/bleed-redirects-design.md) — a redirect shield
+    // cancels a card as it is pushed, and a capped bleed burns less than
+    // its amount, which the conservation replay has to agree with.
+    "Two Wrongs",
+    "Contingency Planning",
+    "Murmur of the False Will",
     // The Path cards (docs/path-cards-design.md) — all four, now that a
     // Path is known to be a printed CRYPT trait. The minions below carry
     // one each, or none of these would ever be dealt a legal player.
