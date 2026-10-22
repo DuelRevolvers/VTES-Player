@@ -17711,6 +17711,75 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  // --- Victory points (docs/victory-points-design.md) ---
+  {
+    // "Unique master. Only usable if you have one or more victory points.
+    //  Put this card in play. You may lock this card during your unlock
+    //  phase to gain 1 pool."
+    // The play gate and the lock are the bespoke `momentumsEdge`. §3
+    krcgId: 101237,
+    name: "Momentum's Edge",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Only usable if you have at least 1 victory point. Lose 1
+    //  victory point and put this card in play. During your unlock phase,
+    //  move 1 pool from your prey's pool to your pool. If you are ousted,
+    //  your predator gains an additional victory point. At the end of the
+    //  game, if you have not been ousted, you gain an additional victory
+    //  point."
+    // Not unique, so every copy in play answers. The bespoke `gambitAccepted`.
+    // §3
+    krcgId: 100799,
+    name: "Gambit Accepted",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Choose a Methuselah who has received a victory point since your last
+    //  turn. Successful referendum means the Methuselah must immediately
+    //  lock all of his or her minions; the minions do not unlock as normal
+    //  during the Methuselah's next unlock phase." §6
+    krcgId: 101099,
+    name: "Lextalionis",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refLockSeatMinions", chosen: "receivedVictoryPointSinceYourLastTurn" }],
+      },
+    ],
+  },
+  {
+    // "Out-of-turn. Boon. Give pool to a Methuselah with no pool to keep
+    //  them in the game, and put this card in play. During each of their
+    //  unlock phases, you can steal 1 pool from that Methuselah. You gain
+    //  any victory point gained by that Methuselah instead of them, until
+    //  you are being ousted or until you have gained 1 victory point from
+    //  this card. Burn this card after you have gained 1 victory point from
+    //  this card."
+    // A Boon, so Blood Trade's "no more boons" bars it. The play, the steal
+    // and the claim are the bespoke `lifeBoon`. §4
+    krcgId: 101103,
+    name: "Life Boon",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    keywords: ["boon"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // --- The token-vampire gate (docs/token-vampire-design.md). Unblocked
   //     by the owner 2026-09-03. Two cards, and they are the same card
   //     twice: a LIBRARY card that becomes a 1-capacity vampire, which is
@@ -20191,6 +20260,276 @@ const taintedVitae: CardHandler = {
       tags: [this.name],
       controller: play.seat,
     });
+  },
+};
+
+// --- Victory points (docs/victory-points-design.md) ---
+
+/** A master put in play with nothing else to do as it lands. */
+function putMasterInPlay(play: CardPlayFrame, ops: EngineOps): void {
+  ops.putPermanentInPlay({
+    card: play.card,
+    seat: play.seat,
+    attachTo: null,
+    statics: {},
+    tags: [play.card.name],
+  });
+}
+
+/** The one master-phase play option a VP-gated master offers. */
+function vpMasterOption(name: string, card: { id: string }, label: string): LegalOption {
+  return {
+    id: playOptionId(name, null, card.id),
+    kind: "playCard",
+    label,
+    card: card.id,
+    name,
+    minion: null,
+    mode: null,
+    params: {},
+  };
+}
+
+/**
+ * Momentum's Edge (101237) — "Unique master. Only usable if you have one or
+ * more victory points. Put this card in play. You may lock this card during
+ * your unlock phase to gain 1 pool."
+ *
+ * The gate is read at PLAY only: a Methuselah who later spends the point
+ * (Gambit Accepted) keeps the card. The lock is its own once-a-turn latch —
+ * the card unlocks in the sweep at the start of the phase and the ability
+ * is offered after it. §3
+ */
+const momentumsEdge: CardHandler = {
+  ...compileSpec(specByName("Momentum's Edge")),
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    if (getSeat(ctx.state, ctx.seat).victoryPoints < 1) return [];
+    if (seatControlsCopy(ctx.state, ctx.seat, this.name)) return [];
+    return [vpMasterOption(this.name, card, this.name)];
+  },
+  resolve(play, ops) {
+    putMasterInPlay(play, ops);
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.unlock") return [];
+    const controller = entry.controller ?? owner.seat;
+    // "During YOUR unlock phase" — the window is offered to every seat.
+    if (ctx.seat !== controller || ctx.turnSeat !== controller) return [];
+    if (entry.locked) return [];
+    return [
+      {
+        id: `ability:${this.name}:${entry.card.id}:lock`,
+        kind: "useAbility",
+        label: `${this.name}: lock to gain 1 pool`,
+        source: entry.card.id,
+        params: {},
+      },
+    ];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    const controller = entry.controller ?? owner.seat;
+    ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
+    ops.emit({ type: "PoolGained", seat: controller, amount: 1 });
+  },
+};
+
+/**
+ * Gambit Accepted (100799) — "Only usable if you have at least 1 victory
+ * point. Lose 1 victory point and put this card in play. During your unlock
+ * phase, move 1 pool from your prey's pool to your pool. If you are ousted,
+ * your predator gains an additional victory point. At the end of the game,
+ * if you have not been ousted, you gain an additional victory point."
+ *
+ * The point is lost on RESOLUTION, not paid as a cost: a Gambit cancelled
+ * as played (p. 16) never resolves and keeps it. Withdrawing counts as the
+ * oust for the predator's point — "the Methuselah who withdraws still gets
+ * a VP for withdrawing, of course" [RTR 20040501] — and a withdrawn seat is
+ * never one that "has not been ousted" at the end, because it is gone. §3
+ */
+const gambitAccepted: CardHandler = {
+  ...compileSpec(specByName("Gambit Accepted")),
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    if (getSeat(ctx.state, ctx.seat).victoryPoints < 1) return [];
+    return [vpMasterOption(this.name, card, `${this.name} — lose 1 victory point`)];
+  },
+  resolve(play, ops) {
+    if (getSeat(ops.state, play.seat).victoryPoints < 1) return;
+    ops.emit({ type: "VictoryPointLost", seat: play.seat });
+    putMasterInPlay(play, ops);
+  },
+  onControllerUnlock(entry, owner, ops) {
+    // Not optional — "move", with no "you may".
+    const controller = entry.controller ?? owner.seat;
+    if (controller !== owner.seat) return;
+    const prey = preyOf(ops.state, controller);
+    if (prey === controller || getSeat(ops.state, prey).pool < 1) return;
+    ops.emit({ type: "PoolBurned", seat: prey, amount: 1 });
+    ops.emit({ type: "PoolGained", seat: controller, amount: 1 });
+  },
+  onSeatOusted(entry, owner, oustedSeat, ops) {
+    // Before the `Ousted` event, so "your predator" is still the seat
+    // that takes the ordinary point — even one going out in the same oust
+    // (p. 46).
+    const controller = entry.controller ?? owner.seat;
+    if (oustedSeat !== controller) return;
+    const predator = predatorOf(ops.state, controller);
+    if (predator !== controller) ops.gainVictoryPoint(predator);
+  },
+  onSeatWithdrew(entry, owner, withdrawingSeat, ops) {
+    const controller = entry.controller ?? owner.seat;
+    if (withdrawingSeat !== controller) return;
+    const predator = predatorOf(ops.state, controller);
+    if (predator !== controller) ops.gainVictoryPoint(predator);
+  },
+  onGameEnd(entry, owner, ops) {
+    const controller = entry.controller ?? owner.seat;
+    if (getSeat(ops.state, controller).ousted) return;
+    ops.gainVictoryPoint(controller);
+  },
+};
+
+/** "Give pool to a Methuselah with no pool to keep them in the game" — the
+ *  least that does it. "If a player has gone to negative pool … the Life
+ *  Boon player must give her enough pool to compensate for that"
+ *  [RTR 19970630], so it is 1 − pool, not 1. */
+function lifeBoonLeast(pool: number): number {
+  return 1 - pool;
+}
+
+/** The most a Life Boon may give: all but one of the giver's pool. Giving
+ *  the last would oust the giver, the line Archon Investigation draws. */
+function lifeBoonMost(state: GameState, giver: SeatId): number {
+  return getSeat(state, giver).pool - 1;
+}
+
+/** "Give pool": it moves, so the giver loses what the debtor gains — and a
+ *  WITHDRAWING giver has lost pool (p. 38). */
+function giveLifeBoonPool(ops: EngineOps, from: SeatId, to: SeatId, amount: number): void {
+  ops.emit({ type: "PoolBurned", seat: from, amount });
+  ops.emit({ type: "PoolGained", seat: to, amount });
+}
+
+/**
+ * Life Boon (101103) — "Out-of-turn. Boon. Give pool to a Methuselah with no
+ * pool to keep them in the game, and put this card in play. During each of
+ * their unlock phases, you can steal 1 pool from that Methuselah. You gain
+ * any victory point gained by that Methuselah instead of them, until you
+ * are being ousted or until you have gained 1 victory point from this card.
+ * Burn this card after you have gained 1 victory point from this card."
+ *
+ * Played into the `oust` window, which exists for it. The amount is a
+ * follow-up choice when more than one amount is legal; the point is taken
+ * by `claimsVictoryPoint`, asked by the engine's one award, which burns the
+ * card. Several boons on one Methuselah take a series of points, oldest
+ * first [RTR 19951017]. §4
+ */
+const lifeBoon: CardHandler = {
+  ...compileSpec(specByName("Life Boon")),
+  isOutOfTurnMaster: true,
+  options(card, ctx) {
+    if (ctx.window !== "oust") return [];
+    // Out-of-turn: only during another Methuselah's turn (p. 8).
+    if (ctx.turnSeat === ctx.seat) return [];
+    const seat = getSeat(ctx.state, ctx.seat);
+    if (seat.outOfTurnMasterUsed) return [];
+    const out: LegalOption[] = [];
+    for (const v of ctx.state.seats) {
+      if (v.ousted || v.pool > 0 || v.id === ctx.seat) continue;
+      if (lifeBoonMost(ctx.state, ctx.seat) < lifeBoonLeast(v.pool)) continue;
+      out.push({
+        id: playOptionId(this.name, null, v.id, card.id),
+        kind: "playCard",
+        label: `${this.name} — keep ${v.id} in the game`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: { seat: v.id },
+      });
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["seat"];
+    if (!target) return;
+    const debtor = getSeat(ops.state, target);
+    // Only "a Methuselah with no pool": one already kept in has pool.
+    if (debtor.ousted || debtor.pool > 0) return;
+    const least = lifeBoonLeast(debtor.pool);
+    const most = lifeBoonMost(ops.state, play.seat);
+    if (most < least) return;
+    putMasterInPlay(play, ops);
+    const entry = getSeat(ops.state, play.seat).permanents.find((p) => p.card.id === play.card.id);
+    if (entry) entry.boonTarget = target;
+    if (most === least) {
+      giveLifeBoonPool(ops, play.seat, target, least);
+      return;
+    }
+    ops.raiseChoice({
+      seat: play.seat,
+      cardName: this.name,
+      cardId: play.card.id,
+      key: "amount",
+      params: { seat: target },
+    });
+  },
+  choiceOptions(frame, state) {
+    const target = frame.params["seat"];
+    if (!target) return [];
+    const least = lifeBoonLeast(getSeat(state, target).pool);
+    const most = lifeBoonMost(state, frame.seat);
+    const out: LegalOption[] = [];
+    for (let n = least; n <= most; n++) {
+      out.push({
+        id: `choice:Life Boon:${frame.cardId}:amount:${n}`,
+        kind: "answerChoice",
+        label: `Life Boon: give ${target} ${n} pool`,
+        params: { amount: String(n) },
+      });
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    const target = frame.params["seat"];
+    const amount = Number(choice.params["amount"]);
+    if (target && amount > 0) giveLifeBoonPool(ops, frame.seat, target, amount);
+  },
+  abilityOptions(entry, owner, ctx) {
+    // "During each of THEIR unlock phases, you can steal 1 pool from that
+    // Methuselah" — the holder's offer in the debtor's unlock phase, once.
+    if (ctx.window !== "turn.unlock") return [];
+    const controller = entry.controller ?? owner.seat;
+    const debtor = entry.boonTarget;
+    if (!debtor || ctx.seat !== controller || ctx.turnSeat !== debtor) return [];
+    if (entry.usedThisPhase) return [];
+    if (getSeat(ctx.state, debtor).pool < 1) return [];
+    return [
+      {
+        id: `ability:${this.name}:${entry.card.id}:steal`,
+        kind: "useAbility",
+        label: `${this.name}: steal 1 pool from ${debtor}`,
+        source: entry.card.id,
+        params: {},
+      },
+    ];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    const controller = entry.controller ?? owner.seat;
+    const debtor = entry.boonTarget;
+    entry.usedThisPhase = true;
+    if (!debtor || getSeat(ops.state, debtor).pool < 1) return;
+    ops.emit({ type: "PoolBurned", seat: debtor, amount: 1 });
+    ops.emit({ type: "PoolGained", seat: controller, amount: 1 });
+  },
+  claimsVictoryPoint(entry, owner, gainer, beingOusted, state) {
+    if (entry.boonTarget !== gainer) return false;
+    // "…until you are being ousted": a holder leaving in the oust that
+    // earned the point takes nothing, and neither does one already gone —
+    // a withdrawn seat's cards stay on the table (p. 38).
+    if (beingOusted.includes(owner.seat)) return false;
+    return !getSeat(state, owner.seat).ousted;
   },
 };
 
@@ -24664,6 +25003,9 @@ export function buildHandlerRegistry(): HandlerRegistry {
     masqueradeEndangered,
     xtcLacedBlood,
     taintedVitae,
+    momentumsEdge,
+    gambitAccepted,
+    lifeBoon,
     absolutionOfTheDiabolist,
     layLow,
     hideTheMind,

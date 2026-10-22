@@ -666,6 +666,12 @@ export interface EngineOps {
   }): void;
   /** Ask one Methuselah a question as part of this card's resolution
    *  (docs/choice-frames-design.md). Optional questions get a decline. */
+  /** Award one victory point — THE one place a point is given (p. 37:
+   *  an oust, the last Methuselah standing; p. 38: a withdrawal; and any
+   *  card). A card in play may take it instead (Life Boon), and the
+   *  receipt is stamped for "has received a victory point since your last
+   *  turn" (Lextalionis). docs/victory-points-design.md §2 */
+  gainVictoryPoint(seat: SeatId): void;
   raiseChoice(args: {
     seat: SeatId;
     cardName: string;
@@ -1460,6 +1466,39 @@ export interface CardHandler {
     oustedSeat: SeatId,
     ops: EngineOps,
   ): void;
+  /** A Methuselah successfully WITHDREW (p. 38) — not an oust, so
+   *  `onSeatOusted` does not fire and "after your prey is ousted" stays
+   *  silent. Gambit Accepted is the reader: "if the controller of a Gambit
+   *  in play withdraws, his or her predator gets a VP from the Gambit"
+   *  [RTR 20040501]. Fired before the `Withdrew` event, while "your
+   *  predator" still names a neighbour. docs/victory-points-design.md §3 */
+  onSeatWithdrew?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    withdrawingSeat: SeatId,
+    ops: EngineOps,
+  ): void;
+  /** "At the end of the game, if you have not been ousted, …" (Gambit
+   *  Accepted) — fired once for every card in play before `GameEnded`,
+   *  however the game ends. docs/victory-points-design.md §3 */
+  onGameEnd?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    ops: EngineOps,
+  ): void;
+  /** "You gain any victory point gained by that Methuselah instead of
+   *  them" (Life Boon). Asked by `gainVictoryPoint`, the one place a point
+   *  is awarded, for every card in play; a card answering true has taken
+   *  the point, and the award is made to its controller instead.
+   *  `beingOusted` is the set of seats leaving in the oust that earned the
+   *  point — "until you are BEING ousted". docs/victory-points-design.md §4 */
+  claimsVictoryPoint?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    gainer: SeatId,
+    beingOusted: readonly SeatId[],
+    state: GameState,
+  ): boolean;
   /** Automatic card text triggered by a successful bleed (Alamut: "after an
    *  Assamite you control successfully bleeds a Methuselah, put the pool
    *  lost on this card"). Fired for every in-play card after a bleed of 1+. */

@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 313 test files, 3376 tests**, with `npm run typecheck`,
+**Green baseline: 315 test files, 3408 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -923,7 +923,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-221 files under `docs/`, one per mechanic that took a decision. **Read the
+222 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -934,7 +934,8 @@ list — names are `<mechanic>-design.md`.
 card wave, newest first).
 
 **Kernel / sequencing:** impulse, choice-frames, control-change,
-derived-traits, contested, old-gaps-closeout.
+derived-traits, contested, old-gaps-closeout, victory-points (the oust
+window and the one VP award).
 
 **Combat:** cancel-in-combat, armed-mid-combat, one-each-round,
 conditional-weapons, basic-combat, first-strike, first-strike-cards,

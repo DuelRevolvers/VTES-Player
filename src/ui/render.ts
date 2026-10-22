@@ -293,6 +293,13 @@ function storeOverlay(n: number): string {
   return `<div class="store-overlay" title="${n} card(s) set aside">${pips(n, "counters")}</div>`;
 }
 
+/** Who owes this boon (Life Boon) — otherwise invisible on the table, and a
+ *  feature that cannot be seen reads as one that is absent. */
+function boonOverlay(debtor: string | undefined): string {
+  if (!debtor) return "";
+  return `<div class="store-overlay" title="Owed by ${esc(debtor)}">→ ${esc(debtor)}</div>`;
+}
+
 /** Blood/life as pips, with the number for anything above a handful. */
 function pips(n: number, extra = ""): string {
   const cls = extra ? `pips ${extra}` : "pips";
@@ -410,6 +417,7 @@ function permanentTile(p: PermanentInPlay, ctx: TableCtx | null): string {
     ${cardImage(p.card.name, "small", p.locked)}
     ${counterOverlay(p.counters)}
     ${storeOverlay((p.stored ?? []).length)}
+    ${boonOverlay(p.boonTarget)}
     ${mark.body}
   </div>`;
 }

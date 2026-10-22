@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-22T03:22:52.630Z",
+ "fetchedAt": "2026-10-22T23:28:12.779Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -6639,6 +6639,28 @@
    },
    "supported": true
   },
+  "100799": {
+   "card": {
+    "kind": "library",
+    "id": 100799,
+    "name": "Gambit Accepted",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nOnly usable if you have at least 1 victory point. Lose 1 victory point and put this card in play. During your unlock phase, move 1 pool from your prey's pool to your pool. If you are ousted, your predator gains an additional victory point. At the end of the game, if you have not been ousted, you gain an additional victory point.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/gambitaccepted.jpg",
+    "sets": [
+     "Anarchs",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100807": {
    "card": {
     "kind": "library",
@@ -8608,6 +8630,29 @@
    },
    "supported": true
   },
+  "101099": {
+   "card": {
+    "kind": "library",
+    "id": 101099,
+    "name": "Lextalionis",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Choose a Methuselah who has received a victory point since your last turn. Successful referendum means the Methuselah must immediately lock all of his or her minions; the minions do not unlock as normal during the Methuselah's next unlock phase.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/lextalionis.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "101100": {
    "card": {
     "kind": "library",
@@ -8648,6 +8693,31 @@
     "image": "https://static.krcg.org/card/libraryhuntingground.jpg",
     "sets": [
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "101103": {
+   "card": {
+    "kind": "library",
+    "id": 101103,
+    "name": "Life Boon",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Out-of-turn. Boon.\nGive pool to a Methuselah with no pool to keep them in the game, and put this card in play. During each of their unlock phases, you can steal 1 pool from that Methuselah. You gain any victory point gained by that Methuselah instead of them, until you are being ousted or until you have gained 1 victory point from this card. Burn this card after you have gained 1 victory point from this card.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/lifeboon.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Sabbat War",
+     "Camarilla Edition",
+     "Twenty-Fifth Anniversary"
     ]
    },
    "supported": true
@@ -9672,6 +9742,28 @@
     "sets": [
      "Anarchs",
      "Sabbat Preconstructed"
+    ]
+   },
+   "supported": true
+  },
+  "101237": {
+   "card": {
+    "kind": "library",
+    "id": 101237,
+    "name": "Momentum's Edge",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique master. Only usable if you have one or more victory points.\nPut this card in play. You may lock this card during your unlock phase to gain 1 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/momentumsedge.jpg",
+    "sets": [
+     "Gehenna",
+     "Keepers of Tradition"
     ]
    },
    "supported": true

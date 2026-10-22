@@ -46,6 +46,9 @@ export type WindowId =
    *  the stack (docs/referendum-margin-design.md §2). */
   | "referendum.afterResolution"
   | "diablerie.offer"
+  /** A Methuselah has no pool and is about to be ousted (Life Boon) —
+   *  docs/victory-points-design.md §1. */
+  | "oust"
   /** A card asking one Methuselah a question (docs/choice-frames-design.md). */
   | "choice";
 

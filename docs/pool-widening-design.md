@@ -1006,6 +1006,30 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 103 — victory points (4 cards), 2026-10-22
+
+Library **881 → 885**. Momentum's Edge, Gambit Accepted, Lextalionis, Life
+Boon. Write-up: `docs/victory-points-design.md`. The first cards that read,
+spend, move or date a VP. The other boons (Lesser, Major, Minor, Extremis)
+are the next family: Extremis Boon shares this wave's oust window and adds
+an auction.
+
+New: `OustFrame` and the `oust` window, the moment between running out of
+pool and leaving the game, opened only when some seat can use it.
+`gainVictoryPoint` is the one award (oust, last standing, withdrawal, cards),
+and it asks `claimsVictoryPoint` first. Also new: `VictoryPointLost`, the
+`lastVictoryPointTurn` and `lastTurnEnded` stamps, the `onSeatWithdrew` and
+`onGameEnd` hooks, `endGame` on both end paths, `refLockSeatMinions`, and a
+bot guard against saving its own prey.
+
+**Found, two defects fixed:** (1) **two Methuselahs ousted at once were
+scored one at a time.** A predator at 0 pool could be paid 6 pool for its
+prey and survive, and a point could pass to the wrong seat round the ring
+(p. 46). `oustBatch` reads every predator before anybody leaves. (2) **A seat
+card used in another Methuselah's unlock window was credited to the turn
+seat**, because `currentSeatOfTop` read the turn frame. Life Boon's steal
+gave the debtor back its own pool. `choose` now records the deciding seat.
+
 ### Wave 102 — a successful hunt (4 cards), 2026-10-21
 
 Library **877 → 881**. Masquerade Endangered, XTC-Laced Blood, Tainted

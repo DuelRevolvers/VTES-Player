@@ -610,13 +610,14 @@ export class VtesEngine implements EngineOps {
         getSeat(this.state, ev.seat).withdrawing = true;
         break;
       case "Withdrew": {
-        // 1 victory point, and the seat leaves the game. The PREDATOR gets
-        // nothing — no victory point and no pool — which is what makes
-        // withdrawing different from being ousted (p. 38).
+        // The seat leaves the game. The PREDATOR gets nothing — no victory
+        // point and no pool — which is what makes withdrawing different
+        // from being ousted (p. 38). The withdrawer's own point is awarded
+        // after this event by `gainVictoryPoint`, the one place a point is
+        // given, so a Life Boon on the withdrawer can take it.
         const seat = getSeat(this.state, ev.seat);
         seat.withdrawing = false;
         seat.ousted = true;
-        seat.victoryPoints += 1;
         break;
       }
       case "PoolGained":
@@ -638,8 +639,17 @@ export class VtesEngine implements EngineOps {
           gained.disciplines[ev.discipline] === undefined ? "basic" : "superior";
         break;
       }
-      case "VictoryPointGained":
-        getSeat(this.state, ev.seat).victoryPoints += 1;
+      case "VictoryPointGained": {
+        const seat = getSeat(this.state, ev.seat);
+        seat.victoryPoints += 1;
+        // The receipt, for "has received a victory point since your last
+        // turn" (Lextalionis) — stamped here so a replayed log stamps it too.
+        const turn = this.state.frames[0];
+        if (turn?.kind === "turn") seat.lastVictoryPointTurn = turn.turnNumber;
+        break;
+      }
+      case "VictoryPointLost":
+        getSeat(this.state, ev.seat).victoryPoints -= 1;
         break;
       case "Ousted": {
         // "If you are ousted, all the cards you control are removed from
@@ -1408,6 +1418,14 @@ export class VtesEngine implements EngineOps {
         continue;
       }
 
+      // Everyone who could keep a Methuselah in the game has passed: the
+      // oust happens now, to whoever still has no pool.
+      if (top.kind === "oust" && cycleQuiescent(top.cycle)) {
+        this.pop();
+        this.oustBatch(this.oustVictims());
+        continue;
+      }
+
       if (top.kind === "blockAttempt" && cycleQuiescent(top.cycle)) {
         this.resolveBlockAttempt(top);
         continue;
@@ -1919,7 +1937,44 @@ export class VtesEngine implements EngineOps {
     const seat = getSeat(this.state, seatId);
     if (!seat.withdrawing || seat.ousted) return;
     seat.withdrawing = false;
+    // Before the event, while "your predator" still names a neighbour
+    // (Gambit Accepted, [RTR 20040501]).
+    for (const { entry, owner } of this.allEntries()) {
+      this.registry[entry.card.name]?.onSeatWithdrew?.(entry, owner, seatId, this);
+    }
     this.emit({ type: "Withdrew", seat: seatId });
+    // "If you successfully withdraw, you receive 1 victory point" (p. 38).
+    this.gainVictoryPoint(seatId);
+  }
+
+  /** The seats leaving in the oust being processed — "until you are BEING
+   *  ousted" (Life Boon). Set and cleared inside one synchronous
+   *  `oustBatch`, so it is never part of the saved state. */
+  private beingOusted: SeatId[] = [];
+
+  gainVictoryPoint(seatId: SeatId): void {
+    // "You gain any victory point gained by that Methuselah instead of
+    // them" (Life Boon). Asked of every card in play, in the order the
+    // cards were PLAYED, because several boons on one Methuselah "reserve
+    // a series of victory points, rather than competing with each other
+    // for a single victory point" [RTR 19951017] — the first one played
+    // takes the first point. docs/victory-points-design.md §4
+    const playedAt = (id: string): number =>
+      this.state.eventLog.findIndex((ev) => ev.type === "CardPlayed" && ev.cardId === id);
+    const claimants = this.allEntries()
+      .filter(({ entry }) => this.registry[entry.card.name]?.claimsVictoryPoint !== undefined)
+      .sort((a, b) => playedAt(a.entry.card.id) - playedAt(b.entry.card.id));
+    for (const { entry, owner } of claimants) {
+      const h = this.registry[entry.card.name];
+      if (h?.claimsVictoryPoint?.(entry, owner, seatId, this.beingOusted, this.state)) {
+        this.emit({ type: "VictoryPointGained", seat: owner.seat });
+        // "Burn this card after you have gained 1 victory point from this
+        // card" — every claimant so far takes exactly one.
+        this.burnPermanent(entry.card.id);
+        return;
+      }
+    }
+    this.emit({ type: "VictoryPointGained", seat: seatId });
   }
 
   commitDiablerie(diablerist: MinionId, victim: MinionId): void {
@@ -2300,41 +2355,91 @@ export class VtesEngine implements EngineOps {
     return null;
   }
 
+  /** The standing seats with no pool — the ones about to be ousted. */
+  private oustVictims(): SeatId[] {
+    return this.state.seats.filter((s) => !s.ousted && s.pool <= 0).map((s) => s.id);
+  }
+
   private processOusts(): boolean {
     let changed = false;
-    for (;;) {
-      const victim = this.state.seats.find((s) => !s.ousted && s.pool <= 0);
-      if (!victim) break;
+    const victims = this.oustVictims();
+    if (victims.length > 0) {
       changed = true;
-      // Identify the predator before the oust changes adjacency.
-      const predator = predatorOf(this.state, victim.id);
-      // "After your prey is ousted, burn this card and gain 3 pool" (War
-      // of Ages) — fired BEFORE the event for the same reason the predator
-      // is read before it: the oust rewrites adjacency, and this is the
-      // last moment "your prey" still names this seat.
-      for (const { entry, owner } of this.allEntries()) {
-        this.registry[entry.card.name]?.onSeatOusted?.(entry, owner, victim.id, this);
+      // "Only usable when you are BEING ousted" / "give pool to a
+      // Methuselah with no pool to keep them in the game" (Life Boon) —
+      // the window between running out of pool and leaving the game. It
+      // opens only when some seat can play into it (the OustFrame
+      // deviation); its resolution performs the oust, so it cannot reopen.
+      const order = sequencingOrder(this.state, this.turnSeat(), []).filter(
+        (s) => this.handlerOptions(s, "oust").length > 0,
+      );
+      if (order.length > 0) {
+        this.state.frames.push({ kind: "oust", cycle: newCycle(order) });
+        return true;
       }
-      this.emit({ type: "Ousted", seat: victim.id });
-      if (predator !== victim.id && !getSeat(this.state, predator).ousted) {
-        // "You receive 1 victory point when your prey is ousted" (p. 44);
-        // the surviving predator also gains 6 pool (p. 36).
-        this.emit({ type: "VictoryPointGained", seat: predator });
-        this.emit({ type: "PoolGained", seat: predator, amount: 6 });
-      }
+      this.oustBatch(victims);
     }
     const standing = standingSeats(this.state);
     if (standing.length <= 1 && this.state.frames.length > 0) {
       const winner = standing[0]?.id ?? null;
       if (winner !== null) {
         // "…and for being the last Methuselah in the game" (p. 44).
-        this.emit({ type: "VictoryPointGained", seat: winner });
+        this.gainVictoryPoint(winner);
       }
-      this.emit({ type: "GameEnded", winner });
-      this.state.frames.length = 0;
+      this.endGame(winner);
       changed = true;
     }
     return changed;
+  }
+
+  /**
+   * Oust every seat in `victims` AT THE SAME TIME (p. 46): "Every
+   * Methuselah whose prey is ousted (even if they are themselves ousted)
+   * gain 1 victory point, but only those Methuselahs that survive the
+   * action will gain pool for their prey being ousted."
+   *
+   * This used to oust one seat at a time, re-reading the ring after each.
+   * Two seats out at once then scored wrongly both ways round: a predator
+   * at 0 pool processed SECOND had already been paid 6 pool for the first
+   * and survived, and a predator processed FIRST was gone when its prey
+   * went, so the point passed to the next seat round. Every predator is
+   * now read before anybody leaves. docs/victory-points-design.md §5
+   */
+  private oustBatch(victims: SeatId[]): void {
+    const predators = victims.map((v) => predatorOf(this.state, v));
+    this.beingOusted = [...victims];
+    // "After your prey is ousted, burn this card and gain 3 pool" (War
+    // of Ages) — fired BEFORE the event for the same reason the predator
+    // is read before it: the oust rewrites adjacency, and this is the
+    // last moment "your prey" still names this seat.
+    for (const v of victims) {
+      for (const { entry, owner } of this.allEntries()) {
+        this.registry[entry.card.name]?.onSeatOusted?.(entry, owner, v, this);
+      }
+    }
+    for (const v of victims) this.emit({ type: "Ousted", seat: v });
+    victims.forEach((v, i) => {
+      const predator = predators[i]!;
+      if (predator === v) return;
+      // "You receive 1 victory point when your prey is ousted" (p. 44) —
+      // even a predator going out in the same oust (p. 46).
+      this.gainVictoryPoint(predator);
+      // …and the 6 pool only to a predator who survives it (p. 37).
+      if (!victims.includes(predator)) {
+        this.emit({ type: "PoolGained", seat: predator, amount: 6 });
+      }
+    });
+    this.beingOusted = [];
+  }
+
+  /** The game is over: "at the end of the game" cards answer (Gambit
+   *  Accepted), then it ends — whichever way it ended. */
+  private endGame(winner: SeatId | null): void {
+    for (const { entry, owner } of this.allEntries()) {
+      this.registry[entry.card.name]?.onGameEnd?.(entry, owner, this);
+    }
+    this.emit({ type: "GameEnded", winner });
+    this.state.frames.length = 0;
   }
 
   private endTurn(tf: TurnFrame): void {
@@ -2361,12 +2466,14 @@ export class VtesEngine implements EngineOps {
     // instead (docs/borrowed-minions-design.md §2), which is why this names its
     // moment rather than sweeping every loan it can see.
     this.returnBorrowedMinions(null, "endOfTurn");
+    // "Since your last turn means between the END of your last turn and
+    // now" [LSJ 20020429] (Lextalionis).
+    getSeat(this.state, tf.seat).lastTurnEnded = tf.turnNumber;
     const next = preyOf(this.state, tf.seat);
     const turnNumber = tf.turnNumber + 1;
     if (this.state.maxTurns !== null && turnNumber > this.state.maxTurns) {
       // Engine safeguard, not a game rule: stop with no winner.
-      this.emit({ type: "GameEnded", winner: null });
-      this.state.frames.length = 0;
+      this.endGame(null);
       return;
     }
     this.emit({ type: "TurnBegan", seat: next, turnNumber });
@@ -9000,6 +9107,14 @@ export class VtesEngine implements EngineOps {
           ...(top.optional ? [passOption("Decline")] : []),
         ]);
       }
+      case "oust": {
+        const seat = cycleSeat(top.cycle);
+        const who = this.oustVictims().join(", ");
+        return this.dp(seat, "oust", [
+          passOption(`Let ${who} be ousted`),
+          ...this.handlerOptions(seat, "oust"),
+        ]);
+      }
       case "diablerieOffer": {
         const victim = getMinion(this.state, top.victim);
         const diablerist = getMinion(this.state, top.diablerist);
@@ -9999,11 +10114,28 @@ export class VtesEngine implements EngineOps {
       option: option.id,
     });
     this.state.decisionSeq += 1;
-    this.applyOption(option);
+    this.chooser = dp.seat;
+    try {
+      this.applyOption(option);
+    } finally {
+      this.chooser = null;
+    }
     // Settle immediately so callers observe a stable state after every
     // choice (resolutions, ousting, game end) — decision() stays idempotent.
     this.settle();
   }
+
+  /**
+   * The seat answering the decision being applied, set by `choose` around
+   * `applyOption` — so `currentSeatOfTop` is, by definition, the seat that
+   * chose. It read the FRAME instead, and the turn frame answers with the
+   * turn seat even in the window it hands to OTHER Methuselahs ("during
+   * any Methuselah's unlock phase"): a seat card used there was credited to
+   * the turn seat, and Life Boon's steal paid the debtor back its own pool.
+   * Never saved — it lives only inside one `choose`.
+   * docs/victory-points-design.md §5
+   */
+  private chooser: SeatId | null = null;
 
   private applyOption(option: LegalOption): void {
     const top = this.top();
@@ -10579,6 +10711,7 @@ export class VtesEngine implements EngineOps {
       case "blockAttempt":
       case "cardPlay":
       case "referendum":
+      case "oust":
         cyclePass(top.cycle);
         return;
       case "choice":
@@ -11765,6 +11898,7 @@ export class VtesEngine implements EngineOps {
   }
 
   private currentSeatOfTop(): SeatId {
+    if (this.chooser !== null) return this.chooser;
     const top = this.top();
     if (!top) throw new Error("no frame");
     switch (top.kind) {

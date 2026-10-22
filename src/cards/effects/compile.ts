@@ -35,6 +35,7 @@ import type {
   WindowId,
 } from "../../engine/index.ts";
 import {
+  receivedVictoryPointSinceLastTurn,
   blockEligibleSeats,
   auraBlocksPolitical,
   bleedAnnounceTax,
@@ -8517,6 +8518,7 @@ const REFERENDUM_POLARITY: Record<ReferendumPrimitive["kind"], ReferendumEffectK
   refGiveEdge: "other",
   refLockAndAllocate: "other",
   refLockClan: "other",
+  refLockSeatMinions: "other",
   refMoveLocation: "other",
   refPerSeatCards: "other",
   refPutInPlay: "other",
@@ -8736,6 +8738,18 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
       // a political action reaches this enumerator by its own path.
       // docs/hand-churn-design.md §4
       const seat = getSeat(ctx.state, ctx.seat);
+      // "Cannot be used or played if the conditions for the terms of the
+      // referendum cannot be met (e.g. no legal selection)" [LSJ 20100129]
+      // — asked through the same helper the terms use, so the gate and the
+      // choice cannot disagree (Lextalionis).
+      if (
+        primitive?.kind === "refLockSeatMinions" &&
+        !ctx.state.seats.some(
+          (s) => !s.ousted && receivedVictoryPointSinceLastTurn(ctx.state, s.id, ctx.seat),
+        )
+      ) {
+        return [];
+      }
       const options: LegalOption[] = [];
       for (const m of seat.minions) {
         if (m.kind !== "vampire") continue;
@@ -8815,6 +8829,18 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
             kind: "chooseTerms",
             label: `Choose ${clan}`,
             params: { clan },
+          });
+        }
+      } else if (primitive.kind === "refLockSeatMinions") {
+        // "Choose a Methuselah who has received a victory point since your
+        // last turn" — the caller included, if they qualify.
+        for (const s of standing) {
+          if (!receivedVictoryPointSinceLastTurn(state, s, frame.caller)) continue;
+          options.push({
+            id: `terms:${s}`,
+            kind: "chooseTerms",
+            label: `${s} locks every minion, which do not unlock next turn`,
+            params: { seat: s },
           });
         }
       } else if (primitive.kind === "refBurnSeatOrLocation") {
@@ -9244,6 +9270,21 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
                 ops.emit({ type: "MinionLocked", minion: m.id });
               }
             }
+          }
+          break;
+        }
+        case "refLockSeatMinions": {
+          const seat = frame.terms["seat"];
+          if (!seat || getSeat(ops.state, seat).ousted) break;
+          // "…must immediately lock ALL of his or her minions" — a vampire
+          // or ally (p. 43), in torpor too, the `refLockClan` reading;
+          // "the minions do not unlock as normal during the Methuselah's
+          // next unlock phase" is the one-shot `skipNextUnlock`, set on an
+          // already-locked minion as well, since it is about the next
+          // unlock and not about this lock.
+          for (const m of getSeat(ops.state, seat).minions) {
+            if (!m.locked) ops.emit({ type: "MinionLocked", minion: m.id });
+            m.skipNextUnlock = true;
           }
           break;
         }

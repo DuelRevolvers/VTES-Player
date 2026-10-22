@@ -1340,6 +1340,11 @@ export interface PermanentInPlay {
    *  the seat the action that placed this card was directed at.
    *  docs/after-resolution-design.md §5 */
   againstSeat?: SeatId;
+  /** "Give pool to a Methuselah with no pool to keep them in the game"
+   *  (Life Boon) — the Methuselah who owes this card's controller: whose
+   *  unlock phases it may steal from, and whose next victory point it
+   *  takes. docs/victory-points-design.md §4 */
+  boonTarget?: SeatId;
   /** A minion this card is ABOUT but is not attached to (Slaughtering the
    *  Herd sits on the predator's vampire and feeds — and dies with — the
    *  vampire that played it). docs/taking-actions-design.md §6 */
@@ -1448,6 +1453,15 @@ export interface SeatState {
   withdrawing?: boolean;
   ousted: boolean;
   victoryPoints: number;
+  /** The turn number on which this seat last RECEIVED a victory point —
+   *  "a Methuselah who has received a victory point since your last turn"
+   *  (Lextalionis). A receipt, not a balance: a point later spent on
+   *  Gambit Accepted was still received. docs/victory-points-design.md §2 */
+  lastVictoryPointTurn?: number;
+  /** The turn number of this seat's most recent turn that has ENDED —
+   *  "since your last turn means between the end of your last turn and
+   *  now" [LSJ 20020429]. Absent until the seat's first turn ends. */
+  lastTurnEnded?: number;
   /** Cards awaiting "do not replace until your next unlock phase". */
   delayedDraws: number;
   /** "Do not replace until your next DISCARD phase" (Mirror Walk) —
@@ -1718,6 +1732,9 @@ export type GameEvent =
   | { type: "CombatCancelled"; acting: MinionId; opposing: MinionId }
   | { type: "Ousted"; seat: SeatId }
   | { type: "VictoryPointGained"; seat: SeatId }
+  /** "Lose 1 victory point" (Gambit Accepted) — the first card that spends
+   *  one. docs/victory-points-design.md §3 */
+  | { type: "VictoryPointLost"; seat: SeatId }
   | { type: "GameEnded"; winner: SeatId | null }
   /** A Methuselah announced their intent to withdraw (p. 38). */
   | { type: "WithdrawalAnnounced"; seat: SeatId }
@@ -3634,6 +3651,22 @@ export interface ReferendumFrame {
   cycle: ImpulseCycle;
 }
 
+/**
+ * One or more Methuselahs have no pool and are about to be ousted (p. 37) —
+ * "only usable when you are BEING ousted" / "give pool to a Methuselah with
+ * no pool to keep them in the game" (Life Boon). The window between running
+ * out of pool and leaving the game.
+ *
+ * RECORDED DEVIATION, the `combat.damageResolution` one: the frame is
+ * pushed only when some seat can play into it, and its cycle carries only
+ * those seats, so an ordinary oust asks nobody anything.
+ * docs/victory-points-design.md §1
+ */
+export interface OustFrame {
+  kind: "oust";
+  cycle: ImpulseCycle;
+}
+
 /** After a leave-torpor action is blocked by a vampire (p. 24), that
  *  blocker's controller may diablerise the acting torpor vampire or
  *  decline; either way the leave-torpor action then fails. */
@@ -3795,7 +3828,8 @@ export type Frame =
   | CardPlayFrame
   | ReferendumFrame
   | DiablerieOfferFrame
-  | ChoiceFrame;
+  | ChoiceFrame
+  | OustFrame;
 
 // ---------------------------------------------------------------------------
 // Game state

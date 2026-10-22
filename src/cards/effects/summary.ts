@@ -114,6 +114,9 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   refStealPerSeat: "poolDrain",
   refClanDiversity: "poolGain",
   refLockClan: null,
+  // One CHOSEN Methuselah's minions, the `lockAllMatching` reading — unlike
+  // `refLockClan`, which locks the caller's own as readily as anyone's.
+  refLockSeatMinions: "deny",
   refRemoveChosenMinion: null,
   refBurnAllKeepable: null,
   refEachSeatChoosesVampire: null,

@@ -1843,6 +1843,14 @@ export type EffectPrimitive =
    *  already locked. Terms range over the clans in the POOL, the
    *  `refClanBoon` rule (p. 49). */
   | { kind: "refLockClan" }
+  /** "Choose a Methuselah who has received a victory point since your last
+   *  turn. Successful referendum means the Methuselah must immediately lock
+   *  all of his or her minions; the minions do not unlock as normal during
+   *  the Methuselah's next unlock phase" (Lextalionis). `chosen` names the
+   *  condition on the seat, read through `receivedVictoryPointSinceLastTurn`
+   *  both by the terms and by the play gate [LSJ 20100129].
+   *  docs/victory-points-design.md §6 */
+  | { kind: "refLockSeatMinions"; chosen: "receivedVictoryPointSinceYourLastTurn" }
   /** "Choose a ready \<filter\>. Successful referendum means it \<outcome\>"
    *  — Command of the Harpies, Excommunication, Tradition Upheld,
    *  Permanent Vacation. One primitive, four filters, three outcomes

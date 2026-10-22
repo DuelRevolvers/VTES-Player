@@ -1502,6 +1502,17 @@ export class HeuristicAgent implements Agent {
     const payer = o.minion === null ? null : findMinion(view, o.minion)?.m;
     if (payer && cost.blood > 0 && payer.blood - cost.blood <= 0) return w.selfOustGuard;
 
+    // NEVER KEEP YOUR OWN PREY IN THE GAME. In the oust window a play saves
+    // the Methuselah it names (Life Boon), and when that is our prey it
+    // throws away our own victory point and 6 pool. The price is a pool
+    // gift the option does not carry as a cost, so a seat near its floor
+    // keeps it too. docs/victory-points-design.md §7
+    if (dp.window === "oust") {
+      const saved = o.params["seat"];
+      if (saved === undefined || saved === preyOf(view, me)) return w.selfOustGuard;
+      if (pool - 1 <= w.poolFloor) return w.selfOustGuard;
+    }
+
     // NEVER CANCEL YOUR OWN CARD. Inside another card's as-played window a
     // "deny" play is a cancel of that card (p. 7), and Direct Intervention
     // or Hide the Mind will happily name one of this seat's own.

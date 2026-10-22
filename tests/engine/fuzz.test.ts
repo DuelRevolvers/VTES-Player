@@ -642,6 +642,14 @@ function fourSeatGame(seed: number): GameState {
     "XTC-Laced Blood",
     "Tainted Vitae",
     "Restricted Vitae",
+    // Victory points (docs/victory-points-design.md) — an oust that opens a
+    // window, a point that changes hands, a point spent, and a referendum
+    // that reads when a point was received. Fuzz games rarely oust, so the
+    // window is pinned by scenario tests; these exercise the rest.
+    "Momentum's Edge",
+    "Gambit Accepted",
+    "Lextalionis",
+    "Life Boon",
     // The Path cards (docs/path-cards-design.md) — all four, now that a
     // Path is known to be a printed CRYPT trait. The minions below carry
     // one each, or none of these would ever be dealt a legal player.

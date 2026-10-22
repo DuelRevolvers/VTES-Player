@@ -157,6 +157,25 @@ export function seatIndex(state: GameState, seat: SeatId): number {
   return i;
 }
 
+/**
+ * "A Methuselah who has received a victory point since your last turn"
+ * (Lextalionis). "Since your last turn means between the end of your last
+ * turn and now. Your last turn does not qualify, your current turn does"
+ * [LSJ 20020429] — so a point stamped on a turn later than `since`'s last
+ * ENDED turn counts, and before `since` has finished a turn, any point does.
+ * One helper for the terms and the play gate. docs/victory-points-design.md §6
+ */
+export function receivedVictoryPointSinceLastTurn(
+  state: GameState,
+  seat: SeatId,
+  since: SeatId,
+): boolean {
+  const got = getSeat(state, seat).lastVictoryPointTurn;
+  if (got === undefined) return false;
+  const last = getSeat(state, since).lastTurnEnded;
+  return last === undefined || got > last;
+}
+
 /** Next standing seat clockwise — "when your prey is ousted, the next
  *  Methuselah to your left becomes your new prey" (p. 15). */
 export function preyOf(state: GameState, seat: SeatId): SeatId {
