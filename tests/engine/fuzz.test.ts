@@ -627,6 +627,21 @@ function fourSeatGame(seed: number): GameState {
     "Two Wrongs",
     "Contingency Planning",
     "Murmur of the False Will",
+    // Intercept from masters (docs/master-intercept-design.md) — a forced
+    // block now passes every bar a declared one does, a pool-paid grant
+    // spends pool mid-attempt, and a choice is raised from the unlock sweep.
+    "Special Report",
+    "Warning Sirens",
+    "Club Zombie",
+    "Guard Duty",
+    // A successful hunt (docs/hunt-success-design.md) — a mandatory hunt
+    // that is not about blood, a Ⓓ hunt that moves blood between seats, a
+    // strip that leaves an action successful and its hunt not, and a bleed
+    // whose price depends on who it is aimed at.
+    "Masquerade Endangered",
+    "XTC-Laced Blood",
+    "Tainted Vitae",
+    "Restricted Vitae",
     // The Path cards (docs/path-cards-design.md) — all four, now that a
     // Path is known to be a printed CRYPT trait. The minions below carry
     // one each, or none of these would ever be dealt a legal player.

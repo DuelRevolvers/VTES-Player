@@ -1006,6 +1006,59 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 102 — a successful hunt (4 cards), 2026-10-21
+
+Library **877 → 881**. Masquerade Endangered, XTC-Laced Blood, Tainted
+Vitae, Restricted Vitae. Write-up: `docs/hunt-success-design.md`. Six
+"successful hunt" cards were filtered out first as inert: Earth-Feeder,
+Follow the Blood, Ghost-Eater, The Guruhi Are the Land, Ravager and
+Wanderer's Counsel. Each needs a clan or sect the V5 crypt doesn't have.
+Enhanced Coagulant waits for a weapon wave.
+
+New: `payHunt`, the one place hunt blood is paid. Success is decided there:
+a hunt is successful only if it gains blood [LSJ 20050720-2]. Also new:
+`mustHunt(m)` for p. 19 plus XTC-Laced Blood, the Ⓓ steal hunt
+(`hunt:<m>:steal:<v>`), `bleedAnnounceTax` across all three bleed
+announcements, and the `vampireHunts` replacement condition.
+
+**Found, one defect fixed and one filed:** (1) **a hunt action card wasn't a
+hunt.** Psychophagia prints "+1 stealth hunt action" but announced a
+`cardEffect`, so Thirst, Festivo's −1 stealth and the mandatory hunt never saw
+it. The `huntAction` flag fixes it. (2) **Kaymakli Barrier's directed-action
+tax reaches only basic actions** and is emitted between the lock and the
+announcement. It's filed as its own task, because it's a sibling of this
+wave's tax rather than a member of the family. The first draft of this
+wave's own tax broke the same lock invariant, and fuzz seed 140 caught it.
+
+### Wave 101 — intercept from masters and locations (4 cards), 2026-10-21
+
+Library **873 → 877**. Special Report, Warning Sirens, Club Zombie, Guard
+Duty. Write-up: `docs/master-intercept-design.md`. Trophy: Domain prints the
+same unlock-and-block, but a trophy only reaches a vampire through the
+unmodelled Red List award (p. 41), so it waits for that family. The
+out-of-turn masters that need a clan, sect or imbued the V5 crypt lacks
+(Battle Frenzy, Gangrel Conspiracy, Ebony Fox Hunt, Angel of Berlin) were
+filtered out first as inert.
+
+The machinery was mostly there: `unlockAndAttemptBlock`, `lockGrant`,
+`grantedStrikes` with `roundOnly`, `raiseChoice`. New: the shared
+`mayAttemptBlock` predicate; `interceptBurnGrants` became a record with a
+currency and a once-only flag (Special Report's pool, beside Eyes of the
+Wild's blood); `lockGrant.vampireOnly`; and two entry fields,
+`unlockedAtTurnStart` (written by the unlock sweep before it unlocks
+anything) and `chosenCard`.
+
+**Found — two defects:** (1) **a forced block skipped every bar a declared
+one honours.** The per-minion bars (Pentex™ Subversion's "cannot block",
+Libertas, Rexton, Clan Loyalty, "X cannot block this action") lived inside
+`blockOptions` alone, and `startAutoBlock` asked only about the toll. So
+Eluding the Arms of Morpheus, Under Siege and every other "unlock and attempt
+to block" could push a minion that cannot block into an attempt, against
+[LSJ 20010714-2]. Both doors now call one predicate. (2) **An unlock-and-block
+"unlocked" a minion that was already unlocked**, firing an unlock and charging
+Burden the Mind's unlock tax on a vampire nothing had unlocked. It now
+unlocks only a locked minion.
+
 ### Wave 100 — bleed redirects (3 cards), 2026-10-06
 
 Library **870 → 873**. Two Wrongs, Contingency Planning, Murmur of the False

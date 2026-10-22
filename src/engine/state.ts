@@ -32,6 +32,19 @@ export type StrikeKind = "hand" | "combatEnds" | "burnEquipment" | "dodge" | "st
 /** A specified strike a card has granted, with whatever number it
  *  carries ("strike, ranged: steal 2 blood", Hunger of Marduk superior).
  *  docs/last-combat-design.md §3 */
+/** One "burn for +1 intercept" grant on an action (`interceptBurnGrants`). */
+export interface InterceptBurnGrant {
+  minion: MinionId;
+  /** Blood from the blocker, or pool from `payer`. */
+  currency: "blood" | "pool";
+  /** The Methuselah who pays a pool grant. */
+  payer?: SeatId;
+  /** "Once this action" — removed when used. */
+  once: boolean;
+  /** The card that granted it, for the event log. */
+  source: string;
+}
+
 export interface GrantedStrike {
   kind: StrikeKind;
   amount?: number;
@@ -396,7 +409,11 @@ export type DelayedDrawCondition =
   | "vampireLeavesTorpor"
   | "diablerie"
   | "preyOusted"
-  | "titledVampireTorpor";
+  | "titledVampireTorpor"
+  /** "…until a vampire SUCCESSFULLY HUNTS" (Restricted Vitae) — released by
+   *  `payHunt`, the one place a hunt is known to have gained blood.
+   *  docs/hunt-success-design.md §5 */
+  | "vampireHunts";
 
 /** Where a card's own "do not replace until …" clause held its draw — one
  *  case per branch of `scheduleReplacement`, so a cancel can take exactly
@@ -981,6 +998,20 @@ export interface PermanentStatics {
    *  announcement beside the torpor tax, which is the one existing tax of
    *  this shape. §4 */
   directedActionBloodTax?: number;
+  /** "The attached vampire must burn 1 additional blood to announce a bleed
+   *  action (if it is not canceled as played) AGAINST YOU" (Tainted Vitae)
+   *  — "you" is this card's CONTROLLER, not the bearer's. Read through
+   *  `bleedAnnounceTax` at every bleed announcement and every bleed's
+   *  affordability gate. docs/hunt-success-design.md §3 */
+  bleedAgainstControllerBloodTax?: number;
+  /** "During this vampire's minion phase, he or she MUST HUNT, even if at
+   *  capacity" (XTC-Laced Blood) — read through `mustHunt`, beside p. 19's
+   *  hungry vampire. §4 */
+  mustHunt?: boolean;
+  /** "Vampires cannot hunt unless they must hunt. Vampires who must hunt can
+   *  steal 1 blood from a younger vampire as a Ⓓ hunt action" (Restricted
+   *  Vitae) — both clauses, table-wide, from one play area. §5 */
+  huntingRestricted?: boolean;
   /** "While it is not this minion's turn, using an effect to unlock this
    *  minion or to allow this minion to block as if unlocked costs an
    *  additional pool" (Burden the Mind) — paid by whoever USES the effect,
@@ -1278,6 +1309,13 @@ export interface PermanentInPlay {
   /** "The chosen vampire" — an answer to a ChoiceFrame that a later
    *  clause on the same card reads back (The Rack). */
   chosen?: MinionId;
+  /** "Choose a location" — the CARD answer of the same kind (Guard Duty).
+   *  docs/master-intercept-design.md §4 */
+  chosenCard?: CardInstanceId;
+  /** Whether this card was unlocked when its controller's turn began —
+   *  written by the unlock sweep before it unlocks anything ("if Club
+   *  Zombie is unlocked at the start of your turn"). */
+  unlockedAtTurnStart?: boolean;
   /** Retainers only: life counters from the blood bank (p. 22). A retainer
    *  whose life reaches 0 is burned (p. 31–32). */
   life?: number;
@@ -2314,6 +2352,21 @@ export interface ActionFrame {
    *  nothing, which is the price the card prints.
    *  docs/hunt-payouts-design.md §2 */
   huntBonusBlood?: Array<{ minion: MinionId; amount: number }>;
+  /** "The hunting vampire gets +2 HUNT this action" (Tainted Vitae) — a
+   *  hunt VALUE, so it rides into `payHunt` with the minion's own "+N hunt"
+   *  and, on a steal hunt, is taken from the target [RTR 20030519].
+   *  docs/hunt-success-design.md §3 */
+  huntBonus?: number;
+  /** "This vampire does not gain any blood from the hunt" (Masquerade
+   *  Endangered) — and a hunt that gains no blood is not successful
+   *  [LSJ 20050720-2], so nothing keyed to success fires either. §2 */
+  huntGainsNoBlood?: boolean;
+  /** Written by `payHunt`: the hunt GAINED blood, which is what "successfully
+   *  hunts" means [LSJ 20050720-2] — a different question from
+   *  `resolvedSuccess`, which a hunt that steals nothing still answers yes
+   *  to. Read by "only usable when a vampire successfully hunts" (XTC-Laced
+   *  Blood) after resolution. §1 */
+  huntSucceeded?: boolean;
   /** Seats whose card replacement waits "until after this action". */
   drawAfter: SeatId[];
   /** "Reaction cards cost +1 blood or life" (Consign to Oblivion), "the
@@ -2395,10 +2448,14 @@ export interface ActionFrame {
     | { minion: MinionId; kind: "lock" }
     | { minion: MinionId; kind: "attach"; cardId: CardInstanceId; cardName: string }
   >;
-  /** Minions that may "burn 1 blood for +1 intercept during this action"
-   *  (Eyes of the Wild) — a repeatable built-in offered in block attempts;
-   *  action-scoped, so it clears when the action frame pops. */
-  interceptBurnGrants: MinionId[];
+  /** Minions that may burn for +1 intercept during this action — a built-in
+   *  offered in their block attempts; action-scoped, so it clears when the
+   *  action frame pops. "During this action, this vampire can burn 1 blood
+   *  to get +1 intercept" (Eyes of the Wild) is repeatable and paid in the
+   *  blocker's blood; "once this action you may burn 1 pool to give that
+   *  vampire +1 intercept" (Special Report) is spent after one use and paid
+   *  from the granting Methuselah's pool. docs/master-intercept-design.md §2 */
+  interceptBurnGrants: InterceptBurnGrant[];
   /** "If this vampire blocks, put this card on the acting minion; you still
    *  control it" (Melange) — attached (as a seat-level permanent of the
    *  blocker, tagged with the actor) when this blocker's block succeeds. */
@@ -3899,8 +3956,26 @@ export function canAct(m: MinionState): boolean {
   // can perform NO action at all. Gated here rather than at each
   // enumerator so a card action cannot slip past it.
   // docs/end-action-design.md §4
-  if (m.kind === "vampire" && m.blood === 0 && (m.cannotRepeat ?? []).includes("hunt")) {
+  if (mustHunt(m) && (m.cannotRepeat ?? []).includes("hunt")) {
     return false;
   }
   return true;
+}
+
+/**
+ * Does this vampire owe a MANDATORY hunt: "a ready vampire with no blood
+ * must hunt" (p. 19), or "during this vampire's minion phase, he or she
+ * must hunt, even if at capacity" (XTC-Laced Blood).
+ *
+ * The card's obligation is one hunt per minion phase, so announcing one
+ * discharges it — `huntedThisPhase` is set at announcement, the Thirst
+ * reading [LSJ 20050727]. The hungry vampire's is not: still at 0 blood,
+ * they still must hunt. One question for the option list, the stuck-vampire
+ * gate above, Uncontrolled Impulse's count and Restricted Vitae, which
+ * would otherwise each spell it. docs/hunt-success-design.md §4
+ */
+export function mustHunt(m: MinionState): boolean {
+  if (m.kind !== "vampire") return false;
+  if (m.blood === 0) return true;
+  return m.huntedThisPhase !== true && m.attached.some((p) => p.statics.mustHunt === true);
 }

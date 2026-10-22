@@ -15,8 +15,8 @@
  */
 
 import {
-  actionUnblockable,
   auraBonus,
+  mayAttemptBlock,
   conditionalStaticNoAction,
   opposingGrantedStrength,
   uncontrolledCanTakeCounters,
@@ -26,8 +26,12 @@ import {
   blockWouldSucceed,
   capacityOf,
   costSourceAvailable,
-  huntAmountFor,
+  auraFillsHunt,
+  bleedAnnounceTax,
+  huntBonusOf,
   huntGain,
+  huntingRestricted,
+  stealHuntTargets,
   libraryBlockToll,
   currentBleed,
   currentIntercept,
@@ -117,6 +121,7 @@ import {
   getMinion,
   getSeat,
   isReady,
+  mustHunt,
   newCycle,
   standingSeats,
   turnSeatOf,
@@ -2169,11 +2174,16 @@ export class VtesEngine implements EngineOps {
           m.usedHuntingGroundThisTurn = false;
           m.playedSinceUnlock = [];
           for (const p of m.attached) {
+            p.unlockedAtTurnStart = !p.locked;
             if (p.locked) this.emit({ type: "PermanentUnlocked", cardId: p.card.id });
           }
         }
-        // "Unlock all of your cards" includes permanents (p. 17).
+        // "Unlock all of your cards" includes permanents (p. 17). "If Club
+        // Zombie is unlocked AT THE START OF YOUR TURN" asks about the card
+        // before this sweep, so the answer is written down first
+        // (docs/master-intercept-design.md §3).
         for (const p of seat.permanents) {
+          p.unlockedAtTurnStart = !p.locked;
           if (p.locked) this.emit({ type: "PermanentUnlocked", cardId: p.card.id });
         }
         // "During X, do Y" is once per phase (p. 16), and an unlock phase
@@ -3331,6 +3341,9 @@ export class VtesEngine implements EngineOps {
       target = preyOf(this.state, seat);
       directed = true;
     }
+    // A hunt action card is a hunt (Thirst's "who did not hunt") — read at
+    // announcement like the basic hunt. docs/hunt-success-design.md §1
+    if (params.actionKind === "hunt") m.huntedThisPhase = true;
     if (params.targetMinion && !params.targetNotDirecting) {
       // Rush: directed iff the target minion belongs to another
       // Methuselah (p. 25; Warrens ruling p. 52) — unless the card names a
@@ -3388,6 +3401,9 @@ export class VtesEngine implements EngineOps {
       ...(announcedTypes.length > 0 ? { cardTypes: announcedTypes } : {}),
       ...(announcedTags.length > 0 ? { cardTags: announcedTags } : {}),
     });
+    // Reached only once the card has survived its as-played window, which
+    // is Tainted Vitae's "(if it is not canceled as played)".
+    if (params.actionKind === "bleed") this.chargeBleedAnnounceTax(m, target);
     const frame: ActionFrame = {
       kind: "action",
       actionId,
@@ -3492,10 +3508,12 @@ export class VtesEngine implements EngineOps {
     // forced block simply does not happen.
     if (!isReady(blocker) || af.step !== "A") return;
     // A forced block is still an attempt to block, so it pays the action's
-    // toll — and does not happen if the vampire cannot (block-tax design).
+    // toll — and does not happen if the vampire cannot attempt at all: the
+    // toll, or any bar a declared block honours [LSJ 20010714-2]
+    // (docs/master-intercept-design.md §1).
+    if (!mayAttemptBlock(this.state, af, blocker)) return;
     const actor = findMinion(this.state, af.acting);
-    const toll = blockTollFor(af, blocker, actor, this.state);
-    if (toll === null) return;
+    const toll = blockTollFor(af, blocker, actor, this.state)!;
     if (toll > 0) this.emit({ type: "BloodBurned", minion: blocker.id, amount: toll });
     this.payLibraryBlockToll(blocker, actor);
     if (pending.interceptBonus !== 0) {
@@ -3546,8 +3564,13 @@ export class VtesEngine implements EngineOps {
     if (opts.bloodCost) {
       this.emit({ type: "BloodBurned", minion, amount: opts.bloodCost });
     }
-    this.chargeUnlockEffectTax(minion);
-    this.emit({ type: "MinionUnlocked", minion });
+    // An unlocked vampire is not unlocked by this, so it pays no unlock tax
+    // and fires no unlock — it only attempts to block (Special Report on a
+    // vampire already free to block, docs/master-intercept-design.md §2).
+    if (findMinion(this.state, minion)?.locked) {
+      this.chargeUnlockEffectTax(minion);
+      this.emit({ type: "MinionUnlocked", minion });
+    }
     af.pendingAutoBlock = { minion, interceptBonus: opts.interceptBonus ?? 0 };
     // "If this vampire does not block this action, lock/attach it after
     // action resolution" (Dogged Pursuit).
@@ -3622,10 +3645,20 @@ export class VtesEngine implements EngineOps {
 
   /** "During this action, this vampire can burn 1 blood to get +1
    *  intercept" (Eyes of the Wild) — a repeatable, action-scoped grant. */
-  grantBurnForIntercept(minion: MinionId): void {
+  grantBurnForIntercept(minion: MinionId, pool?: { payer: SeatId; source: string }): void {
     const af = this.action();
     if (!af) throw new Error("grantBurnForIntercept outside an action");
-    if (!af.interceptBurnGrants.includes(minion)) af.interceptBurnGrants.push(minion);
+    const currency = pool ? "pool" : "blood";
+    // A repeatable blood grant held twice is the same grant; each "once"
+    // pool grant is its own use (two Special Reports, two uses).
+    if (!pool && af.interceptBurnGrants.some((g) => g.minion === minion && g.currency === "blood")) {
+      return;
+    }
+    af.interceptBurnGrants.push(
+      pool
+        ? { minion, currency, payer: pool.payer, once: true, source: pool.source }
+        : { minion, currency, once: false, source: "Eyes of the Wild" },
+    );
   }
 
   /**
@@ -3717,27 +3750,43 @@ export class VtesEngine implements EngineOps {
   /** Built-in "burn 1 for +1 intercept" options during a block attempt, for
    *  a granted blocker whose intercept still falls short (p. 26). */
   private burnForInterceptOptions(ba: BlockAttemptFrame, seat: SeatId): LegalOption[] {
-    if (seat !== ba.blockerSeat) return [];
     const af = this.action();
-    if (!af || !af.interceptBurnGrants.includes(ba.blocker)) return [];
+    if (!af) return [];
     // The blocker can have left play since the attempt began (an ally that
     // paid its last life), and an option enumerator must be total.
     const m = findMinion(this.state, ba.blocker);
-    if (!m || m.blood < 1) return [];
+    if (!m) return [];
     if (
       currentIntercept(this.state, ba.actionId, ba.blocker) >=
       currentStealth(this.state, ba.actionId)
     ) {
       return [];
     }
-    return [
-      {
+    const out: LegalOption[] = [];
+    const grants = af.interceptBurnGrants.filter((g) => g.minion === ba.blocker);
+    // Blood: the blocker's own, so asked of the blocking seat.
+    if (seat === ba.blockerSeat && m.blood >= 1 && grants.some((g) => g.currency === "blood")) {
+      out.push({
         id: `burn:intercept:${ba.blocker}`,
         kind: "burnForIntercept",
         label: `${m.name}: burn 1 blood for +1 intercept`,
         minion: ba.blocker,
-      },
-    ];
+      });
+    }
+    // Pool: the granting Methuselah's, who must survive paying it.
+    if (
+      grants.some((g) => g.currency === "pool" && g.payer === seat) &&
+      getSeat(this.state, seat).pool > 1
+    ) {
+      out.push({
+        id: `burn:intercept:${ba.blocker}:pool`,
+        kind: "burnForIntercept",
+        label: `Burn 1 pool for +1 intercept to ${m.name}`,
+        minion: ba.blocker,
+        currency: "pool",
+      });
+    }
+    return out;
   }
 
   /** The card in play, controlled by `seat`, that holds `cardId` in its
@@ -5589,6 +5638,7 @@ export class VtesEngine implements EngineOps {
       cardName: entry.card.name,
       ...(targetMinion !== null ? { targetMinion } : {}),
     });
+    if (actionKind === "bleed") this.chargeBleedAnnounceTax(m, target);
     const frame: ActionFrame = {
       kind: "action",
       actionId,
@@ -5971,6 +6021,9 @@ export class VtesEngine implements EngineOps {
     const met = (w: { seat: SeatId; until: DelayedDrawCondition }): boolean => {
       if (w.until === "diablerie") return ev.type === "DiablerieCommitted";
       if (w.until === "vampireLeavesTorpor") return ev.type === "LeftTorpor";
+      // No event answers it: a hunt's success is decided in `payHunt`,
+      // which releases these itself.
+      if (w.until === "vampireHunts") return false;
       // "…until a TITLED vampire goes to torpor" (The New Inquisition).
       // Read here, before the event is applied, which is also the ruling:
       // *"when a vampire goes to torpor, the card is replaced before any
@@ -5990,6 +6043,94 @@ export class VtesEngine implements EngineOps {
     if (due.length === 0) return;
     this.state.drawWhenCondition = waiting.filter((w) => !met(w));
     for (const w of due) this.drawToReplace(w.seat);
+  }
+
+  /**
+   * Pay out a successful hunt action — the ONE place hunt blood is gained,
+   * for the basic hunt, a hunt action card (Psychophagia) and Restricted
+   * Vitae's Ⓓ steal hunt alike, so every hunt rule is asked once.
+   *
+   * "A hunt is not successful if no blood is gained, even if the hunt action
+   * is still successful" [LSJ 20050720-2]: a hunt Masquerade Endangered
+   * stripped, or a steal from a vampire with none, returns here with the
+   * action still successful and the HUNT not — no Hospital Food payout, no
+   * `onHuntSuccess`, no `huntSucceeded`, no Restricted Vitae replacement.
+   * Blood gained by a full vampire drains (p. 6), and that hunt still
+   * succeeded: it gained the blood, the bank took the excess
+   * (docs/futile-options-design.md). docs/hunt-success-design.md §1
+   */
+  /** "The attached vampire must burn 1 additional blood to announce a bleed
+   *  action against you" (Tainted Vitae) — charged by all three bleed
+   *  announcements, and in full: every bleed's gate already asked
+   *  `bleedAnnounceTax`, so this never charges more than the vampire has.
+   *
+   *  Emitted just AFTER `ActionAnnounced`, never between it and the lock:
+   *  "the announcement is immediately preceded by the actor's lock" is a
+   *  fuzz invariant, and seed 140 of a 150-seed run caught the first draft
+   *  breaking it. docs/hunt-success-design.md §3 */
+  private chargeBleedAnnounceTax(m: MinionState, target: SeatId | null): void {
+    const tax = bleedAnnounceTax(m, target);
+    if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
+  }
+
+  payHunt(af: ActionFrame, printed: number): void {
+    const hunter = findMinion(this.state, af.acting);
+    if (!hunter || af.huntGainsNoBlood) return;
+    // "The hunt bonus applies to non-standard hunt actions, blood comes from
+    // the target of the hunt" [RTR 20030519] — the printed amount plus the
+    // minion's "+N hunt" plus this action's (Tainted Vitae).
+    const value = printed + huntBonusOf(this.state, hunter) + (af.huntBonus ?? 0);
+    let gained = value;
+    const victim = af.targetMinion ? findMinion(this.state, af.targetMinion) : null;
+    if (af.targetMinion) {
+      // "Cannot steal more blood than the target has" [LSJ 20100915].
+      gained = victim ? Math.min(value, victim.blood) : 0;
+    }
+    if (gained <= 0) return;
+    if (victim) this.emit({ type: "BloodBurned", minion: victim.id, amount: gained });
+    // "The blood stolen goes to the blood bank if it cannot be gained"
+    // [LSJ 20010809-1] — which is what BloodGained over capacity does.
+    this.emit({ type: "BloodGained", minion: hunter.id, amount: gained });
+    // "Sabbat vampires successfully hunting gain enough blood FROM THE BLOOD
+    // BANK to reach full capacity" (Festivo dello Estinto) — "not blood gained
+    // from the hunt" [RTR 20180511], so a steal hunt takes only its value from
+    // the target and the rest comes from the bank. For the basic hunt this is
+    // `huntAmountFor`'s larger-wins, in two steps.
+    const after = findMinion(this.state, hunter.id);
+    if (after && auraFillsHunt(this.state, after) && after.blood < capacityOf(after)) {
+      this.emit({
+        type: "BloodGained",
+        minion: after.id,
+        amount: capacityOf(after) - after.blood,
+      });
+    }
+    // "…gains an additional blood" bought at ANNOUNCEMENT (Hospital Food):
+    // registered when the location locked, paid only here, which is what
+    // makes the lock a commitment rather than a purchase.
+    // docs/hunt-payouts-design.md §2
+    for (const bonus of af.huntBonusBlood ?? []) {
+      this.emit({ type: "BloodGained", minion: bonus.minion, amount: bonus.amount });
+    }
+    af.huntSucceeded = true;
+    // Cards triggered by a successful hunt (The Anarch Free Press). The
+    // mirror of onBleedSuccess.
+    //
+    // `allEntries()`, NOT `seat.permanents`: this loop read seat-level cards
+    // only, one line below a sibling that reads both, so an ATTACHED hunt
+    // trigger (Harvest Rites, and every crypt ability) never fired.
+    // docs/hunt-payouts-design.md §5
+    const huntInfo = { actingMinion: af.acting, actingSeat: af.actingSeat };
+    for (const { entry, owner } of this.allEntries()) {
+      this.registry[entry.card.name]?.onHuntSuccess?.(entry, owner, huntInfo, this);
+    }
+    // "Do not replace until a vampire successfully hunts" (Restricted Vitae).
+    // The wait is on the SEAT, so a burned copy still waits [LSJ 20080805].
+    const waiting = this.state.drawWhenCondition ?? [];
+    const due = waiting.filter((w) => w.until === "vampireHunts");
+    if (due.length > 0) {
+      this.state.drawWhenCondition = waiting.filter((w) => w.until !== "vampireHunts");
+      for (const w of due) this.drawToReplace(w.seat);
+    }
   }
 
   /** "Do not replace as long as this card is in play" (Dragonbound) comes
@@ -8327,34 +8468,10 @@ export class VtesEngine implements EngineOps {
             this.registry[entry.card.name]?.onBleedSuccess?.(entry, owner, info, this);
           }
         }
-      } else if (af.actionKind === "hunt") {
-        // Hunt amount 1 by default (p. 21), plus any "+N hunt" aura (The
-        // Hungry Coyote); excess over capacity drains.
-        const hunter = findMinion(this.state, af.acting);
-        this.emit({
-          type: "BloodGained",
-          minion: af.acting,
-          amount: hunter ? huntAmountFor(this.state, hunter) : 1,
-        });
-        // "…gains an additional blood" bought at ANNOUNCEMENT (Hospital
-        // Food): registered when the location locked, paid only here, which
-        // is what makes the lock a commitment rather than a purchase.
-        // docs/hunt-payouts-design.md §2
-        for (const bonus of af.huntBonusBlood ?? []) {
-          this.emit({ type: "BloodGained", minion: bonus.minion, amount: bonus.amount });
-        }
-        // Cards triggered by a successful hunt (The Anarch Free Press).
-        // The mirror of onBleedSuccess above; reaching this branch IS the
-        // success, since a blocked hunt never resolves.
-        //
-        // `allEntries()`, NOT `seat.permanents`: this loop read seat-level
-        // cards only, one line below a sibling that reads both, so an
-        // ATTACHED hunt trigger (Harvest Rites, and every crypt ability)
-        // never fired. docs/hunt-payouts-design.md §5
-        const huntInfo = { actingMinion: af.acting, actingSeat: af.actingSeat };
-        for (const { entry, owner } of this.allEntries()) {
-          this.registry[entry.card.name]?.onHuntSuccess?.(entry, owner, huntInfo, this);
-        }
+      } else if (af.actionKind === "hunt" && !af.card) {
+        // The basic hunt prints 1 blood (p. 21). A hunt ACTION CARD pays its
+        // own printed number from its own effect, through the same funnel.
+        this.payHunt(af, 1);
       } else if (af.actionKind === "leaveTorpor") {
         // Cost (2 blood) is paid at resolution, only on success (p. 24,
         // p. 27); the vampire is no longer wounded.
@@ -9239,10 +9356,11 @@ export class VtesEngine implements EngineOps {
     // Target, Obedience). A 0-blood vampire barred from hunting is the
     // rulebook's "stuck" vampire (p. 47): unlocked, with no legal action.
     // A stuck vampire is already out of `actors`, because `canAct` returns
-    // false for one — so this is every 0-blood vampire that can still hunt.
-    const mustHunt = actors.filter((m) => m.kind === "vampire" && m.blood === 0);
-    if (mustHunt.length > 0) {
-      for (const m of mustHunt) {
+    // false for one — so this is every vampire owing a hunt that can still
+    // make one (a 0-blood vampire, or one under XTC-Laced Blood).
+    const hungry = actors.filter((m) => mustHunt(m));
+    if (hungry.length > 0) {
+      for (const m of hungry) {
         options.push({
           id: `hunt:${m.id}`,
           kind: "takeAction",
@@ -9251,6 +9369,30 @@ export class VtesEngine implements EngineOps {
           action: "hunt",
           gain: huntGain(this.state, m),
         });
+        // "Vampires who must hunt can steal 1 blood from a younger vampire
+        // as a Ⓓ hunt action" (Restricted Vitae) — a second way to make
+        // the same mandatory hunt. docs/hunt-success-design.md §5
+        for (const v of stealHuntTargets(this.state, m)) {
+          options.push({
+            id: `hunt:${m.id}:steal:${v.id}`,
+            kind: "takeAction",
+            label: `${m.name}: hunt — steal blood from ${v.name} (Restricted Vitae)`,
+            minion: m.id,
+            action: "hunt",
+            targetMinion: v.id,
+            gain: Math.min(v.blood, huntGain(this.state, m)),
+          });
+        }
+      }
+      // A HUNT ACTION CARD is a hunt (Psychophagia), so it discharges the
+      // obligation too — offered to the hungry minion only.
+      // docs/hunt-success-design.md §1
+      const hungryIds = new Set(hungry.map((m) => m.id));
+      for (const o of this.handlerOptions(tf.seat, "turn.minion")) {
+        if (o.kind === "playCard" && o.minion !== null && hungryIds.has(o.minion) &&
+            this.registry[o.name]?.huntAction === true) {
+          options.push(o);
+        }
       }
       return options;
     }
@@ -9289,7 +9431,13 @@ export class VtesEngine implements EngineOps {
       return options;
     }
     for (const m of actors) {
-      if (!m.bledThisTurn && canRepeatAction(this.state, m, "bleed")) {
+      // "…must burn 1 additional blood to announce a bleed action against
+      // you" (Tainted Vitae): a bleed it cannot pay for is not offered.
+      if (
+        !m.bledThisTurn &&
+        canRepeatAction(this.state, m, "bleed") &&
+        m.blood >= bleedAnnounceTax(m, preySeat)
+      ) {
         const amount = bleedValue(m);
         options.push({
           id: `bleed:${m.id}`,
@@ -9303,10 +9451,13 @@ export class VtesEngine implements EngineOps {
       // Hunting is legal for any ready vampire, even at full capacity
       // (the excess just drains, p. 21) — the generator states the rules,
       // not tactics. Allies cannot hunt (p. 19).
-      // "…and do not hunt as normal" (Week of Nightmares).
+      // "…and do not hunt as normal" (Week of Nightmares). "Vampires cannot
+      // hunt unless they must hunt" (Restricted Vitae) — and a vampire who
+      // must hunt never reaches this branch.
       if (
         m.kind === "vampire" &&
         !auraBlocksHunt(this.state, m) &&
+        !huntingRestricted(this.state) &&
         canRepeatAction(this.state, m, "hunt")
       ) {
         options.push({
@@ -9319,8 +9470,15 @@ export class VtesEngine implements EngineOps {
         });
       }
     }
-    // Action cards: their handlers enumerate legal announcements here.
-    options.push(...this.handlerOptions(tf.seat, "turn.minion"));
+    // Action cards: their handlers enumerate legal announcements here. A
+    // hunt action card is a hunt, so Restricted Vitae bars it like the
+    // basic one (docs/hunt-success-design.md §5).
+    const restricted = huntingRestricted(this.state);
+    options.push(
+      ...this.handlerOptions(tf.seat, "turn.minion").filter(
+        (o) => !(restricted && o.kind === "playCard" && this.registry[o.name]?.huntAction === true),
+      ),
+    );
     // Actions granted by cards in play (rush design §2.5) and in-play
     // abilities usable in the minion phase (The Barrens, ruling p. 47).
     options.push(...this.entryActionOptionsFor(tf.seat));
@@ -9395,93 +9553,15 @@ export class VtesEngine implements EngineOps {
 
   private blockOptions(af: ActionFrame, seat: SeatId): LegalOption[] {
     if (af.step !== "A") return [];
-    // "That Toreador's non-bleed actions cannot be blocked" (Toreador
-    // Grand Ball) — nobody is offered a block at all.
-    if (actionUnblockable(this.state, af)) return [];
     if (!blockEligibleSeats(this.state, af).includes(seat)) return [];
     if (af.declinedBlocks.includes(seat)) return [];
-    const br = af.blockRestrictions;
-    // "Allies cannot block this Anarch" (Libertas) — the persistent form
-    // of br.noAllies, carried by a card on the ACTING minion, so it holds
-    // for every action they take rather than for one (play-cost §5).
-    const actor = findMinion(this.state, af.acting);
-    const noAllies =
-      br.noAllies || !!actor?.attached.some((p) => p.statics.alliesCannotBlock);
     const options: LegalOption[] = [];
     for (const m of getSeat(this.state, seat).minions) {
       if (!canReact(m)) continue;
-      // "This minion cannot block" — a persistent restriction from an
-      // attached card (Pentex™ Subversion), not action-scoped.
-      if (m.attached.some((p) => p.statics.cannotBlock)) continue;
-      // "…cannot block VAMPIRES" (Vagabond Mystic) — the same restriction
-      // keyed on the acting minion's kind (docs/cheap-tail-design.md §2).
-      if (
-        actor &&
-        m.attached.some((p) => p.statics.cannotBlockKind === actor.kind)
-      ) {
-        continue;
-      }
-      // "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier) —
-      // keyed on the ACTION, the third member of this family: unconditional,
-      // by actor kind, and now by what the action is aimed at
-      // (docs/block-taxes-design.md §4).
-      if (!af.directed && m.attached.some((p) => p.statics.cannotBlockUndirected)) {
-        continue;
-      }
-      // "Allies AND vampires with capacity 3 or less cannot block this
-      // vampire" (Rexton) — a persistent bar carried by the ACTING
-      // minion's own crypt card, naming a union of groups. `blockToll`
-      // beside it is a price; this is a bar (docs/crypt-wave-1.md §3).
-      if (
-        actor &&
-        actor.attached.some((p) => {
-          const bar = p.statics.cannotBeBlockedBy;
-          if (!bar) return false;
-          if ((bar.kinds ?? []).includes(m.kind)) return true;
-          // "Toreador and Toreador antitribu cannot block this minion"
-          // (Cloak of the Abalone).
-          // An ALLY has no clan (`clan` is null), which is why this reads
-          // the field rather than assuming a string.
-          if (m.clan !== null && (bar.clans ?? []).includes(m.clan)) return true;
-          if (
-            bar.minCapacity !== undefined &&
-            m.kind === "vampire" &&
-            capacityOf(m) >= bar.minCapacity
-          ) {
-            return true;
-          }
-          return (
-            bar.maxCapacity !== undefined &&
-            m.kind === "vampire" &&
-            capacityOf(m) <= bar.maxCapacity
-          );
-        })
-      ) {
-        continue;
-      }
-      // "X cannot block this action" (p. 26).
-      if (noAllies && m.kind === "ally") continue;
-      if (br.noVampires && m.kind === "vampire") continue;
-      if (br.noTitled && m.kind === "vampire" && m.title !== null) continue;
-      if (br.cannotBlock.includes(m.id)) continue;
-      // "No vampires of that CLAN may block the acting vampire for the
-      // remainder of the TURN" (Clan Loyalty) — a bar that outlives the
-      // action it was played in, so it is read off the turn frame.
-      if (
-        m.kind === "vampire" &&
-        m.clan !== null &&
-        ((this.state.frames.find((f) => f.kind === "turn") as TurnFrame | undefined)
-          ?.clanBlockBars ?? []).some(
-          (b: { acting: MinionId; clan: string }) => b.acting === af.acting && b.clan === m.clan,
-        )
-      ) {
-        continue;
-      }
-      // "Minions must burn 1 blood to attempt to block this action" — a
-      // minion that cannot pay the toll cannot attempt at all
-      // (docs/block-tax-design.md).
-      const toll = blockTollFor(af, m, findMinion(this.state, af.acting), this.state);
-      if (toll === null) continue;
+      // Every per-minion bar, shared with the forced block an "unlock and
+      // attempt to block" queues (docs/master-intercept-design.md §1).
+      if (!mayAttemptBlock(this.state, af, m)) continue;
+      const toll = blockTollFor(af, m, findMinion(this.state, af.acting), this.state)!;
       // The numbers this decision turns on. They are computed here anyway
       // (the toll to know the minion may attempt at all), so reporting
       // them costs nothing and saves both the UI and an agent from
@@ -10143,17 +10223,33 @@ export class VtesEngine implements EngineOps {
       }
       case "burnForIntercept": {
         if (top.kind !== "blockAttempt") throw new Error("burnForIntercept outside a block");
-        this.emit({ type: "BloodBurned", minion: option.minion, amount: 1 });
+        const af = this.action()!;
+        const seat = cycleSeat(top.cycle);
+        const currency = option.currency ?? "blood";
+        const i = af.interceptBurnGrants.findIndex(
+          (g) =>
+            g.minion === option.minion &&
+            g.currency === currency &&
+            (currency === "blood" || g.payer === seat),
+        );
+        const grant = af.interceptBurnGrants[i]!;
+        if (currency === "pool") {
+          this.emit({ type: "PoolBurned", seat, amount: 1 });
+        } else {
+          this.emit({ type: "BloodBurned", minion: option.minion, amount: 1 });
+        }
+        // "Once this action" is spent; a repeatable grant stays.
+        if (grant.once) af.interceptBurnGrants.splice(i, 1);
         this.emit({
           type: "InterceptModified",
           actionId: top.actionId,
           minion: option.minion,
           delta: 1,
-          source: "Eyes of the Wild",
+          source: grant.source,
         });
         // An effect hands the impulse back to the acting Methuselah (p. 8);
-        // the grant is repeatable, so the blocker may burn again on its
-        // next turn in the cycle.
+        // a repeatable grant may be burned again on the blocker's next turn
+        // in the cycle.
         cycleRewind(top.cycle);
         return;
       }
@@ -10909,7 +11005,7 @@ export class VtesEngine implements EngineOps {
     // because a hunt by a vampire with no blood is MANDATORY (p. 21) and a
     // count taken later could not tell the two apart.
     // docs/avoiding-the-block-design.md §2
-    if (!(kind === "hunt" && m.blood === 0)) {
+    if (!(kind === "hunt" && mustHunt(m))) {
       tf.nonMandatoryActions = (tf.nonMandatoryActions ?? 0) + 1;
     }
     // "Taking an action locks the acting minion" (p. 19); all details are
@@ -10925,6 +11021,17 @@ export class VtesEngine implements EngineOps {
       m.bledThisTurn = true; // one bleed per minion per turn (p. 20)
       target = preyOf(this.state, tf.seat); // default target: your prey
       directed = true;
+    } else if (kind === "hunt" && opts.targetMinion) {
+      // "…can steal 1 blood from a younger vampire as a Ⓓ HUNT action"
+      // (Restricted Vitae): a hunt, so every hunt rule asks about it, but
+      // directed at the target's controller, and with no stealth printed —
+      // the basic hunt's +1 is the basic hunt's (p. 21). Once per turn
+      // [RBK action-card-or-card-in-play]. docs/hunt-success-design.md §5
+      targetMinion = opts.targetMinion;
+      target = getMinion(this.state, targetMinion).controller;
+      directed = true;
+      m.huntedThisPhase = true;
+      (m.cannotRepeat ??= []).push("stealHunt");
     } else if (kind === "hunt" || kind === "leaveTorpor") {
       inherentStealth = 1; // +1 inherent stealth (p. 21, p. 24)
       // "…who did not hunt during that minion phase" (Thirst) is answered
@@ -10980,6 +11087,7 @@ export class VtesEngine implements EngineOps {
       directed,
       ...(targetMinion !== null ? { targetMinion } : {}),
     });
+    if (kind === "bleed") this.chargeBleedAnnounceTax(m, target);
     const frame: ActionFrame = {
       kind: "action",
       actionId,

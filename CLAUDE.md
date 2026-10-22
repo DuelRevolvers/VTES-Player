@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 311 test files, 3343 tests**, with `npm run typecheck`,
+**Green baseline: 313 test files, 3376 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -539,7 +539,8 @@ doc named beside it.
 
 - **One question asked in two places will drift.** Funnel through one
   helper. And when you add a RICHER record, re-point the readers of the
-  poorer one.
+  poorer one. The block bars lived in `blockOptions` alone, so every FORCED
+  block skipped them (`master-intercept-design.md` §1).
 - **A TARGET OFFERED IS NOT A TARGET DELIVERED.** `targetRider` builds the
   options; a separate hand-written switch turns the chosen param into
   `params.targetMinion`. Teach only the first and every option enumerates
@@ -581,7 +582,9 @@ doc named beside it.
   cards; `onActionAnnounced` fired one step early for its whole life;
   `onEnterPlay` never fired for a card that puts ITSELF in play on a
   successful action. The tell each time: that path emits the entry event
-  by hand instead of going through the shared helper.
+  by hand instead of going through the shared helper. **A printed action
+  TYPE is the same trap:** Psychophagia printed "hunt action" and announced
+  a `cardEffect`, so no hunt rule ever saw it (`hunt-success-design.md` §1).
 - **A new call beside an existing one should copy its GUARDS before its
   shape.** The guards around a line are part of what that line means.
 - **AN EVENT NO REDUCER READS IS A LOG LINE, NOT A STATE CHANGE.**
@@ -920,7 +923,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-217 files under `docs/`, one per mechanic that took a decision. **Read the
+221 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -946,7 +949,7 @@ block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
 choosing-a-minion, hunt-payouts, stealable-locations, out-of-turn-cancels,
-bleed-redirects.
+bleed-redirects, master-intercept, hunt-success.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

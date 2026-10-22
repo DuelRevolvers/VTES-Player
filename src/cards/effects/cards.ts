@@ -6,8 +6,8 @@
  * in config/supported.json (CLAUDE.md registry rules).
  */
 
-import type { CardHandler, CardPlayFrame, ConditionalStatic, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, canAct, isMinionCardPlay, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
+import type { ActionFrame, CardHandler, CardPlayFrame, ConditionalStatic, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
+import { blockEligibleSeats, bleedAnnounceTax, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -13629,6 +13629,52 @@ export const cardSpecs: CardSpec[] = [
       },
     ],
   },
+  {
+    // "+2 stealth action. Put this card on the acting minion and choose a
+    //  location. If the chosen location is the target of a directed action
+    //  (and you control the location), this minion can burn 1 blood or burn
+    //  this card to unlock and attempt to block with +1 intercept."
+    // The choice and the block are the bespoke `guardDuty` handler
+    // (docs/master-intercept-design.md §4).
+    krcgId: 100864,
+    name: "Guard Duty",
+    cardType: "action",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: { where: "bearer", statics: {}, tags: ["Guard Duty"] },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 2 },
+          { kind: "attachSelf" },
+        ],
+      },
+    ],
+  },
+  {
+    // "Master: unique location. Lock to give a vampire you control +1
+    //  intercept for the current action. If Club Zombie is unlocked at the
+    //  start of your turn, a ready vampire you control gains 1 blood during
+    //  your unlock phase." The blood is the bespoke `clubZombie` handler
+    //  (docs/master-intercept-design.md §3).
+    krcgId: 100367,
+    name: "Club Zombie",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 4,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      lockGrant: { grant: "intercept", amount: 1, ownOnly: true, vampireOnly: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
 
   // --- Taxing and barring a block from a card in play
   //     (docs/block-taxes-design.md) ---
@@ -17426,11 +17472,14 @@ export const cardSpecs: CardSpec[] = [
     // "+1 stealth HUNT action. Remove an ally in any Methuselah's ash heap
     //  from the game to gain 3 blood or to gain 2 blood and unlock."
     // A hunt, not a cardEffect — the action kind is printed and matters.
+    // It was not, until `huntAction`: the card announced a cardEffect, so no
+    // rule about hunting ever saw it (docs/hunt-success-design.md §1).
     krcgId: 102302,
     name: "Psychophagia",
     requiresClan: ["Hecata"],
     cardType: "action",
     bloodCost: 0,
+    huntAction: true,
     usable: [],
     modes: [
       {
@@ -17449,6 +17498,46 @@ export const cardSpecs: CardSpec[] = [
         ],
       },
     ],
+  },
+  // --- A successful hunt (docs/hunt-success-design.md) ---
+  {
+    // "Gehenna. Do not replace until a vampire successfully hunts.
+    //  Vampires cannot hunt unless they must hunt. Vampires who must hunt
+    //  can steal 1 blood from a younger vampire as a Ⓓ hunt action."
+    //
+    // "Is not replaced until the condition is met, even if it is burned"
+    // [LSJ 20080805] — the wait is on the SEAT. The bar and the steal hunt
+    // are the engine's, read off `huntingRestricted`. §5
+    krcgId: 101614,
+    name: "Restricted Vitae",
+    cardType: "event",
+    bloodCost: 0,
+    poolCost: 0,
+    delayedReplaceUntil: "vampireHunts",
+    permanent: { where: "seat", statics: { huntingRestricted: true }, tags: ["event", "gehenna"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: out-of-turn. Only usable when a vampire successfully hunts.
+    //  Put this card on that vampire. During this vampire's minion phase,
+    //  he or she must hunt, even if at capacity. Any vampire may burn this
+    //  card as a +1 stealth Ⓓ action."
+    // The play is the bespoke `xtcLacedBlood` handler; the spec carries the
+    // card in play. §4
+    krcgId: 102198,
+    name: "XTC-Laced Blood",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { mustHunt: true },
+      tags: ["XTC-Laced Blood"],
+      vulnerableTo: { who: { kind: "vampire" }, stealth: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // "+1 stealth action.
@@ -19739,6 +19828,494 @@ const twoWrongs: CardHandler = {
     af.redirectShield = true;
   },
 };
+
+// ---------------------------------------------------------------------------
+// Intercept from masters and locations (docs/master-intercept-design.md)
+// ---------------------------------------------------------------------------
+
+/** Can this seat put `m` into a block attempt against this action: the
+ *  seat may block it at all (prey, predator, target — [ANK 20180623]),
+ *  has not given up blocking it (p. 25, "that decision is final"), and
+ *  the minion is ready and clear of every per-minion bar
+ *  [LSJ 20010714-2]. Lock state aside — unlocking is the card's job. */
+function canForceBlock(ctx: PlayContext, af: ActionFrame, seat: SeatId, m: MinionState): boolean {
+  return (
+    isReady(m) &&
+    blockEligibleSeats(ctx.state, af).includes(seat) &&
+    !af.declinedBlocks.includes(seat) &&
+    mayAttemptBlock(ctx.state, af, m)
+  );
+}
+
+/**
+ * Special Report (101841): "Master: out-of-turn. Choose a ready vampire you
+ * control. That vampire unlocks and attempts to block. Once this action you
+ * may burn 1 pool to give that vampire +1 intercept."
+ *
+ * Two moments: in state A it starts an attempt (an unlocked vampire simply
+ * attempts); during an attempt it names the vampire ALREADY attempting
+ * [ANK 20181122-2], so its only effect there is the pool. The pool is the
+ * engine's once-per-action grant, offered when intercept is needed (p. 26).
+ * docs/master-intercept-design.md §2
+ */
+const specialReport: CardHandler = {
+  name: "Special Report",
+  bloodCost: 0,
+  poolCost: 0,
+  isMasterCard: true,
+  isOutOfTurnMaster: true,
+  playEffects: () => [{ tag: "intercept", amount: 1 }],
+  options(card, ctx) {
+    if (ctx.window !== "action.effects") return [];
+    const af = ctx.action;
+    if (!af || !outOfTurnOpen(ctx)) return [];
+    const mk = (m: MinionState): LegalOption => ({
+      id: playOptionId(this.name, null, m.id, card.id),
+      kind: "playCard",
+      label: `Special Report — ${m.name} attempts to block`,
+      card: card.id,
+      name: this.name,
+      minion: null,
+      mode: null,
+      params: { target: m.id },
+    });
+    const ba = ctx.blockAttempt;
+    if (ba) {
+      const m = findMinion(ctx.state, ba.blocker);
+      if (!m || m.kind !== "vampire" || m.controller !== ctx.seat) return [];
+      return [mk(m)];
+    }
+    if (af.step !== "A" || af.pendingAutoBlock) return [];
+    return getSeat(ctx.state, ctx.seat)
+      .minions.filter((m) => m.kind === "vampire" && canForceBlock(ctx, af, ctx.seat, m))
+      .map(mk);
+  },
+  resolve(play, ops) {
+    const af = ops.action();
+    const m = findMinion(ops.state, play.params["target"] ?? "");
+    if (!af || !m || m.controller !== play.seat || !isReady(m)) return;
+    // This card's own frame is popped: an attempt in progress is on top.
+    const top = ops.state.frames[ops.state.frames.length - 1];
+    const attempting = top?.kind === "blockAttempt" && top.blocker === m.id;
+    if (!attempting) {
+      // Re-derived at resolution: the action can have moved on.
+      if (af.step !== "A" || top?.kind !== "action" || af.pendingAutoBlock) return;
+      if (!mayAttemptBlock(ops.state, af, m)) return;
+      ops.unlockAndAttemptBlock(m.id, {});
+    }
+    ops.grantBurnForIntercept(m.id, { payer: play.seat, source: this.name });
+  },
+};
+
+/**
+ * Warning Sirens (102147): "Master: out-of-turn. Play on a minion targeted
+ * by a directed action to give that minion +1 intercept. Alternatively,
+ * play on a minion in combat. That minion gets an optional strike: dodge
+ * this round."
+ *
+ * Intercept only when needed (p. 26), so the first mode waits for the
+ * targeted minion's own block attempt. The second is a round-only granted
+ * strike, offered before strikes are chosen.
+ * docs/master-intercept-design.md §5
+ */
+const warningSirens: CardHandler = {
+  name: "Warning Sirens",
+  bloodCost: 0,
+  poolCost: 0,
+  isMasterCard: true,
+  isOutOfTurnMaster: true,
+  playEffects: (_mode, variant) =>
+    variant === "dodge" ? [{ tag: "combat" }] : [{ tag: "intercept", amount: 1 }],
+  options(card, ctx) {
+    if (!outOfTurnOpen(ctx)) return [];
+    const mk = (m: MinionState, variant: "intercept" | "dodge"): LegalOption => ({
+      id: playOptionId(this.name, null, variant, m.id, card.id),
+      kind: "playCard",
+      label:
+        variant === "intercept"
+          ? `Warning Sirens — +1 intercept to ${m.name}`
+          : `Warning Sirens — ${m.name} may strike: dodge this round`,
+      card: card.id,
+      name: this.name,
+      minion: null,
+      mode: null,
+      params: { variant, target: m.id },
+    });
+    if (ctx.window === "action.effects") {
+      const af = ctx.action;
+      const ba = ctx.blockAttempt;
+      if (!af || !ba || !af.directed || af.targetMinion !== ba.blocker) return [];
+      const m = findMinion(ctx.state, ba.blocker);
+      if (!m) return [];
+      if (currentIntercept(ctx.state, af.actionId, m.id) >= currentStealth(ctx.state, af.actionId)) {
+        return [];
+      }
+      return [mk(m, "intercept")];
+    }
+    if (ctx.window !== "combat.beforeRange" && ctx.window !== "combat.beforeStrikes") return [];
+    const cf = ctx.combat;
+    if (!cf) return [];
+    const out: LegalOption[] = [];
+    for (const side of ["acting", "opposing"] as const) {
+      const m = findMinion(ctx.state, cf[side]);
+      // A second copy on the same minion this round adds nothing.
+      if (!m || (cf.grantedStrikes?.[side] ?? []).some((g) => g.kind === "dodge" && g.roundOnly)) {
+        continue;
+      }
+      out.push(mk(m, "dodge"));
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"] ?? "";
+    if (play.params["variant"] === "dodge") {
+      const cf = ops.state.frames.filter((f) => f.kind === "combat").pop();
+      if (!cf || cf.kind !== "combat" || (cf.acting !== target && cf.opposing !== target)) return;
+      ops.grantStrikeToMinion(target, { kind: "dodge", roundOnly: true });
+      return;
+    }
+    const af = ops.action();
+    if (!af || !findMinion(ops.state, target)) return;
+    ops.emit({
+      type: "InterceptModified",
+      actionId: af.actionId,
+      minion: target,
+      delta: 1,
+      source: this.name,
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// A successful hunt (docs/hunt-success-design.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * Will this hunt GAIN blood if it resolves now? "A hunt is not successful if
+ * no blood is gained, even if the hunt action is still successful"
+ * [LSJ 20050720-2]. A steal hunt from a vampire with none gains nothing;
+ * every other hunt gains at least what it prints (a full vampire's drains,
+ * and that hunt still succeeded — docs/futile-options-design.md).
+ *
+ * Masquerade Endangered's own strip is NOT asked here: "multiple copies may
+ * be played by different Methuselahs after a single action" [TOM 19950921].
+ * Tainted Vitae asks it separately. §1
+ */
+function huntWouldSucceed(state: GameState, af: ActionFrame): boolean {
+  if (af.actionKind !== "hunt") return false;
+  const hunter = findMinion(state, af.acting);
+  if (!hunter || hunter.kind !== "vampire") return false;
+  if (af.targetMinion) return (findMinion(state, af.targetMinion)?.blood ?? 0) > 0;
+  return true;
+}
+
+/**
+ * Masquerade Endangered (101183): "Master: out-of-turn. Put this card on a
+ * vampire who successfully hunts. This vampire does not gain any blood from
+ * the hunt. This vampire doesn't unlock as normal during his or her unlock
+ * phase. During this vampire's next unlock phase, burn this card."
+ *
+ * Played in state C, where the hunt is known to be going through and has not
+ * yet paid — the only moment "does not gain any blood from the hunt" can be
+ * true. The strip also unmakes the success, so nothing keyed to a successful
+ * hunt fires. The unlock sweep runs before the unlock hooks, so the card
+ * holds the vampire for one sweep and then burns. §2
+ */
+const masqueradeEndangered: CardHandler = {
+  name: "Masquerade Endangered",
+  bloodCost: 0,
+  poolCost: 0,
+  isMasterCard: true,
+  isOutOfTurnMaster: true,
+  playEffects: () => [{ tag: "deny" }],
+  options(card, ctx) {
+    if (ctx.window !== "action.effects" || ctx.blockAttempt) return [];
+    const af = ctx.action;
+    if (!af || af.step !== "C" || !huntWouldSucceed(ctx.state, af)) return [];
+    if (!outOfTurnOpen(ctx)) return [];
+    const hunter = findMinion(ctx.state, af.acting);
+    if (!hunter) return [];
+    return [
+      {
+        id: playOptionId(this.name, null, hunter.id, card.id),
+        kind: "playCard",
+        label: `Masquerade Endangered — ${hunter.name} gains no blood and stays locked`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: { target: hunter.id },
+      },
+    ];
+  },
+  resolve(play, ops) {
+    const af = ops.action();
+    const hunter = findMinion(ops.state, play.params["target"] ?? "");
+    if (!af || !hunter || af.acting !== hunter.id || !huntWouldSucceed(ops.state, af)) return;
+    af.huntGainsNoBlood = true;
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: hunter.controller,
+      attachTo: hunter.id,
+      statics: { bearerDoesNotUnlock: true },
+      tags: [this.name],
+      controller: play.seat,
+    });
+  },
+  onControllerUnlock(entry, _owner, ops) {
+    ops.burnPermanent(entry.card.id);
+  },
+};
+
+/**
+ * XTC-Laced Blood (102198): "Master: out-of-turn. Only usable when a vampire
+ * successfully hunts. Put this card on that vampire. …he or she must hunt…
+ * Any vampire may burn this card as a +1 stealth Ⓓ action."
+ *
+ * Played after resolution, when the hunt is known to have GAINED blood
+ * (`huntSucceeded`) — so not after a hunt Masquerade Endangered stripped, nor
+ * a steal that took nothing. The obligation is `mustHunt`; the burn action is
+ * the compiled `vulnerableTo`, directed at the card's controller (p. 16). §4
+ */
+const xtcLacedBlood: CardHandler = {
+  ...compileSpec(specByName("XTC-Laced Blood")),
+  isMasterCard: true,
+  isOutOfTurnMaster: true,
+  playEffects: () => [{ tag: "deny" }],
+  options(card, ctx) {
+    if (ctx.window !== "action.afterResolution") return [];
+    const af = ctx.action;
+    if (!af || af.actionKind !== "hunt" || af.huntSucceeded !== true) return [];
+    if (!outOfTurnOpen(ctx)) return [];
+    const hunter = findMinion(ctx.state, af.acting);
+    if (!hunter || hunter.kind !== "vampire") return [];
+    return [
+      {
+        id: playOptionId("XTC-Laced Blood", null, hunter.id, card.id),
+        kind: "playCard",
+        label: `XTC-Laced Blood — ${hunter.name} must hunt each minion phase`,
+        card: card.id,
+        name: "XTC-Laced Blood",
+        minion: null,
+        mode: null,
+        params: { target: hunter.id },
+      },
+    ];
+  },
+  resolve(play, ops) {
+    const hunter = findMinion(ops.state, play.params["target"] ?? "");
+    if (!hunter) return;
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: hunter.controller,
+      attachTo: hunter.id,
+      statics: { mustHunt: true },
+      tags: ["XTC-Laced Blood"],
+      controller: play.seat,
+    });
+  },
+};
+
+/**
+ * Tainted Vitae (101926): "Only usable if a vampire controlled by your
+ * predator is about to successfully hunt. The hunting vampire gets +2 hunt
+ * this action and put this card on them; you still control this card. The
+ * attached vampire must burn 1 additional blood to announce a bleed action
+ * (if it is not canceled as played) against you." Ministry, 2 blood.
+ *
+ * "About to": state C, before the hunt pays. +2 hunt is a hunt VALUE — on a
+ * steal hunt it comes from the target [RTR 20030519]. The tax is
+ * `bleedAgainstControllerBloodTax`, keyed to this card's controller. §3
+ */
+const taintedVitae: CardHandler = {
+  name: "Tainted Vitae",
+  bloodCost: 2,
+  // Printed Reaction; hand-rolled, so it says so itself.
+  isReactionCard: true,
+  costTypes: () => ["reaction"],
+  requiresClans: () => ["Ministry"],
+  playEffects: () => [{ tag: "deny" }],
+  options(card, ctx) {
+    if (ctx.window !== "action.effects" || ctx.blockAttempt) return [];
+    const af = ctx.action;
+    if (!af || af.step !== "C" || af.huntGainsNoBlood || !huntWouldSucceed(ctx.state, af)) {
+      return [];
+    }
+    // "…a vampire controlled by YOUR PREDATOR".
+    if (predatorOf(ctx.state, ctx.seat) !== af.actingSeat || ctx.seat === af.actingSeat) return [];
+    const out: LegalOption[] = [];
+    for (const m of getSeat(ctx.state, ctx.seat).minions) {
+      if (m.kind !== "vampire" || m.clan !== "Ministry" || !canReact(m)) continue;
+      if (af.noReactionsFrom.includes(m.id)) continue;
+      const price = playCostFor(
+        ctx.state,
+        {
+          name: this.name,
+          bloodCost: this.bloodCost,
+          poolCost: 0,
+          types: ["reaction"],
+          requires: [],
+          requiresClans: ["Ministry"],
+        },
+        m,
+        af,
+        ctx.combat,
+        null,
+        ctx.seat,
+      );
+      if (m.blood < price.blood) continue;
+      out.push({
+        id: playOptionId(this.name, null, m.id, card.id),
+        kind: "playCard",
+        label: `Tainted Vitae — +2 hunt, and bleeding you costs them 1 blood`,
+        card: card.id,
+        name: this.name,
+        minion: m.id,
+        mode: null,
+        params: {},
+      });
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const af = ops.action();
+    if (!af || af.actionKind !== "hunt") return;
+    const hunter = findMinion(ops.state, af.acting);
+    if (!hunter) return;
+    af.huntBonus = (af.huntBonus ?? 0) + 2;
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: hunter.controller,
+      attachTo: hunter.id,
+      statics: { bleedAgainstControllerBloodTax: 1 },
+      tags: [this.name],
+      controller: play.seat,
+    });
+  },
+};
+
+/** Club Zombie (100367) — the compiled location (its lock is a
+ *  `lockGrant`) plus "if Club Zombie is unlocked at the start of your turn,
+ *  a ready vampire you control gains 1 blood during your unlock phase".
+ *  The sweep records `unlockedAtTurnStart` before it unlocks anything; the
+ *  gain is mandatory, so it is a choice frame, not an ability.
+ *  docs/master-intercept-design.md §3 */
+const clubZombie: CardHandler = {
+  ...compileSpec(specByName("Club Zombie")),
+  onControllerUnlock(entry, owner, ops) {
+    if (!entry.unlockedAtTurnStart) return;
+    const any = getSeat(ops.state, owner.seat).minions.some(
+      (m) => m.kind === "vampire" && isReady(m),
+    );
+    if (!any) return;
+    ops.raiseChoice({
+      seat: owner.seat,
+      cardName: "Club Zombie",
+      cardId: entry.card.id,
+      key: "gainBlood",
+    });
+  },
+  choiceOptions(frame, state) {
+    return getSeat(state, frame.seat)
+      .minions.filter((m) => m.kind === "vampire" && isReady(m))
+      .map((m) => ({
+        id: `choice:Club Zombie:${frame.cardId}:gainBlood:${m.id}`,
+        kind: "answerChoice" as const,
+        label: `Club Zombie: ${m.name} gains 1 blood`,
+        params: { minion: m.id },
+      }));
+  },
+  applyChoice(_frame, choice, ops) {
+    const m = findMinion(ops.state, choice.params["minion"] ?? "");
+    if (m && isReady(m)) ops.emit({ type: "BloodGained", minion: m.id, amount: 1 });
+  },
+};
+
+/**
+ * Guard Duty (100864) — the compiled action (+2 stealth, attaches to the
+ * acting minion) plus "choose a location" on success, recorded as
+ * `entry.chosenCard`, and the block: "if the chosen location is the target
+ * of a directed action (and you control the location), this minion can
+ * burn 1 blood or burn this card to unlock and attempt to block with +1
+ * intercept". Any location may be chosen; control is asked when the block
+ * is offered, so a location stolen later still answers to it once won back.
+ * docs/master-intercept-design.md §4
+ */
+const guardDutyCompiled = compileSpec(specByName("Guard Duty"));
+const guardDuty: CardHandler = {
+  ...guardDutyCompiled,
+  resolveCardAction(af, ops) {
+    guardDutyCompiled.resolveCardAction?.(af, ops);
+    const cardId = af.card?.instance.id;
+    if (!cardId || locationsInPlay(ops.state).length === 0) return;
+    ops.raiseChoice({ seat: af.actingSeat, cardName: "Guard Duty", cardId, key: "chooseLocation" });
+  },
+  choiceOptions(frame, state) {
+    return locationsInPlay(state).map(({ entry, controller }) => ({
+      id: `choice:Guard Duty:${frame.cardId}:chooseLocation:${entry.card.id}`,
+      kind: "answerChoice" as const,
+      label: `Guard Duty: guard ${entry.card.name} (${controller})`,
+      params: { location: entry.card.id },
+    }));
+  },
+  applyChoice(frame, choice, ops) {
+    const location = choice.params["location"];
+    const entry = ops.state.seats
+      .flatMap((s) => s.minions.flatMap((m) => m.attached))
+      .find((p) => p.card.id === frame.cardId);
+    if (entry && location) entry.chosenCard = location;
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "action.effects" || !owner.minion) return [];
+    const af = ctx.action;
+    if (!af || af.step !== "A" || ctx.blockAttempt || af.pendingAutoBlock) return [];
+    if (!af.directed || !entry.chosenCard || af.targetPermanent !== entry.chosenCard) return [];
+    const m = findMinion(ctx.state, owner.minion);
+    if (!m || ctx.seat !== m.controller) return [];
+    const loc = locationsInPlay(ctx.state).find((l) => l.entry.card.id === entry.chosenCard);
+    if (!loc || loc.controller !== m.controller) return [];
+    if (!canForceBlock(ctx, af, m.controller, m)) return [];
+    const out: LegalOption[] = [];
+    if (m.blood >= 1) {
+      out.push({
+        id: `ability:Guard Duty:${entry.card.id}:blood`,
+        kind: "useAbility",
+        label: `Guard Duty: ${m.name} burns 1 blood to block (+1 intercept)`,
+        source: entry.card.id,
+        params: { pay: "blood" },
+      });
+    }
+    out.push({
+      id: `ability:Guard Duty:${entry.card.id}:burn`,
+      kind: "useAbility",
+      label: `Guard Duty: burn it so ${m.name} blocks (+1 intercept)`,
+      source: entry.card.id,
+      params: { pay: "card" },
+    });
+    return out;
+  },
+  useAbility(entry, owner, choice, ops) {
+    if (!owner.minion) return;
+    if (choice.params["pay"] === "card") {
+      ops.burnPermanent(entry.card.id);
+      ops.unlockAndAttemptBlock(owner.minion, { interceptBonus: 1 });
+    } else {
+      ops.unlockAndAttemptBlock(owner.minion, { interceptBonus: 1, bloodCost: 1 });
+    }
+  },
+};
+
+/** Every location in play with the Methuselah who controls it — a seat
+ *  permanent's `controller` when it was stolen, its holder otherwise. */
+function locationsInPlay(
+  state: GameState,
+): Array<{ entry: PermanentInPlay; controller: SeatId }> {
+  return state.seats.flatMap((s) =>
+    s.permanents
+      .filter((p) => p.tags.includes("location"))
+      .map((entry) => ({ entry, controller: entry.controller ?? s.id })),
+  );
+}
 
 /**
  * Hide the Mind (100921) — bespoke, for the same reason Sudden Reversal
@@ -22772,6 +23349,8 @@ const platinumProtocol: CardHandler = {
     const opts: LegalOption[] = [];
     for (const m of seat.minions) {
       if (m.kind !== "vampire" || !canAct(m) || m.bledThisTurn || m.sect !== "anarch") continue;
+      // Tainted Vitae's announcement tax (docs/hunt-success-design.md §3).
+      if (m.blood < bleedAnnounceTax(m, prey.id)) continue;
       const mk = (params: Record<string, string>): LegalOption => ({
         id: playOptionId("The Platinum Protocol", "basic", m.id, ...Object.values(params), card.id),
         kind: "playCard",
@@ -24078,6 +24657,13 @@ export function buildHandlerRegistry(): HandlerRegistry {
     emergencyPreparations,
     contingencyPlanning,
     twoWrongs,
+    specialReport,
+    warningSirens,
+    clubZombie,
+    guardDuty,
+    masqueradeEndangered,
+    xtcLacedBlood,
+    taintedVitae,
     absolutionOfTheDiabolist,
     layLow,
     hideTheMind,
@@ -24194,4 +24780,9 @@ export const implementedIds: number[] = [
   // Wave 100 — bleed redirects (docs/bleed-redirects-design.md)
   100419, // Contingency Planning (bespoke — cancel a redirect, cap the bleed)
   102052, // Two Wrongs (bespoke — out-of-turn trifle redirect + shield)
+  // Wave 101 — intercept from masters (docs/master-intercept-design.md)
+  101841, // Special Report (bespoke — out-of-turn unlock-and-block + pool grant)
+  102147, // Warning Sirens (bespoke — out-of-turn intercept / round dodge)
+  101183, // Masquerade Endangered (bespoke — out-of-turn hunt strip)
+  101926, // Tainted Vitae (bespoke — reaction to a predator's hunt)
 ];

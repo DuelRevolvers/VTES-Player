@@ -37,6 +37,7 @@ import type {
 import {
   blockEligibleSeats,
   auraBlocksPolitical,
+  bleedAnnounceTax,
   canAct,
   canReact,
   canRepeatAction,
@@ -396,7 +397,15 @@ function costOf(
 ): { blood: number; pool: number } {
   const types = [...COST_TYPES_BY_CARD_TYPE[spec.cardType]];
   if (mode && combatWindowFor(mode) === "combat.chooseStrike") types.push("strike");
-  return playCostFor(
+  // A bleed action card's announcement costs Tainted Vitae's blood on top
+  // of the card's own, which is paid later, at resolution (p. 27) — so the
+  // GATE asks for both and the payment sites each charge their own.
+  // docs/hunt-success-design.md §3
+  const announceTax =
+    minion && mode?.effects.some((e) => e.kind === "actionBleed")
+      ? bleedAnnounceTax(minion, preyOf(ctx.state, minion.controller))
+      : 0;
+  const price = playCostFor(
     ctx.state,
     {
       name: spec.name,
@@ -413,6 +422,7 @@ function costOf(
     target,
     ctx.seat,
   );
+  return { blood: price.blood + announceTax, pool: price.pool };
 }
 
 /**
@@ -1753,7 +1763,7 @@ function compileActionCard(spec: CardSpec): CardHandler {
         spec.multiDiscipline && play.minion
           ? combinedMode(spec, getMinion(ops.state, play.minion))
           : modeOf(spec, play.mode, play.params["variant"]);
-      const params: CardActionParams = { actionKind: "cardEffect" };
+      const params: CardActionParams = { actionKind: spec.huntAction ? "hunt" : "cardEffect" };
       // "During that combat" credits ACCUMULATE: a multi-Discipline card
       // hangs one off each Discipline (Make the Misere), and both
       // spellings — `actionEnterCombat.riders` and the standalone
@@ -2367,15 +2377,18 @@ function compileActionCard(spec: CardSpec): CardHandler {
             }
             const payoff = af.card?.params["payoff"];
             const actor = findMinion(ops.state, af.acting);
-            if (actor && payoff === "gain" && e.gainBlood) {
-              ops.emit({ type: "BloodGained", minion: actor.id, amount: e.gainBlood });
-            }
+            // On a HUNT action (Psychophagia) the blood is the hunt's: it
+            // takes "+N hunt", Masquerade Endangered can strip it, and only
+            // gaining it makes the hunt successful.
+            // docs/hunt-success-design.md §1
+            const gain = (amount: number): void => {
+              if (!actor) return;
+              if (af.actionKind === "hunt") ops.payHunt(af, amount);
+              else ops.emit({ type: "BloodGained", minion: actor.id, amount });
+            };
+            if (actor && payoff === "gain" && e.gainBlood) gain(e.gainBlood);
             if (actor && payoff === "unlock" && e.unlockInstead) {
-              ops.emit({
-                type: "BloodGained",
-                minion: actor.id,
-                amount: e.unlockInstead.blood,
-              });
+              gain(e.unlockInstead.blood);
               ops.emit({ type: "MinionUnlocked", minion: actor.id });
             }
             // "…or to add N life to a zombie ally you control". The
@@ -5826,6 +5839,7 @@ function addLockGrant(spec: CardSpec, handler: CardHandler): void {
   const grantList = lg0.grants ?? [lg0.grant];
   const lg = lg0;
     const matches = (m: MinionState): boolean =>
+      (!lg.vampireOnly || m.kind === "vampire") &&
       (lg.clan === undefined || m.clan === lg.clan) &&
       (lg.sect === undefined || m.sect === lg.sect) &&
       // "…each TITLED Camarilla vampire you control" (Elysium).
@@ -7145,7 +7159,11 @@ export function permanentBleedGrant(
         if (m.bledThisTurn) continue;
         if (g.who.clan !== undefined && m.clan !== g.who.clan) continue;
         if (g.who.sect !== undefined && m.sect !== g.who.sect) continue;
-        if (m.blood < (g.cost?.blood ?? 0)) continue;
+        // The grant's cost is paid at resolution (p. 27); Tainted Vitae's
+        // is paid at announcement — the gate asks for both.
+        // docs/hunt-success-design.md §3
+        const tax = bleedAnnounceTax(m, preyOf(ctx.state, m.controller));
+        if (m.blood < (g.cost?.blood ?? 0) + tax) continue;
         if (getSeat(ctx.state, ctx.seat).pool < (g.cost?.pool ?? 0)) continue;
         // Per minion, per action, per copy (p. 20).
         if ((entry.grantedActionUses ?? []).some((u) => u.minion === m.id && u.key === "bleed")) {
@@ -9566,6 +9584,7 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // simply wrong.
   if (spec.delayedReplace) handler.delayedReplace = spec.delayedReplace;
   if (spec.delayedReplaceUntil) handler.delayedReplaceUntil = spec.delayedReplaceUntil;
+  if (spec.huntAction) handler.huntAction = true;
   // The printed type line, for cancel-as-played effects that name a type.
   // A dual-typed Action Modifier/Reaction really is a reaction card, so it
   // counts as one however this particular play is being made.

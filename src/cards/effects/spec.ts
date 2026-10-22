@@ -2450,6 +2450,10 @@ export interface CardSpec {
       sect?: Sect;
       /** "…you control" vs any (Anarch Railroad). */
       ownOnly?: boolean;
+      /** "…to give a VAMPIRE you control +1 intercept" (Club Zombie) — with
+       *  no clan or sect named, nothing else keeps an ally blocker out.
+       *  docs/master-intercept-design.md §3 */
+      vampireOnly?: boolean;
       /** "During an undirected action, …" (Wall Street Night) — the
        *  intercept is only on offer against an undirected action (p. 25). */
       undirectedOnly?: boolean;
@@ -4374,6 +4378,10 @@ export interface CardSpec {
    *  CONDITION form of the clause above, which waits on an event rather
    *  than a phase. docs/gehenna-taxes-design.md §1 */
   delayedReplaceUntil?: DelayedDrawCondition;
+  /** "+1 stealth HUNT action" (Psychophagia) — the action card announces a
+   *  hunt, and its blood is the hunt's, paid through `payHunt`.
+   *  docs/hunt-success-design.md §1 */
+  huntAction?: true;
   /** "Not usable by a vampire with more than 0 intercept" (Legwork) — a
    *  gate on the REACTING minion, which is why it cannot be a
    *  `UsabilityRule`: those are asked once per card play, and this has to

@@ -438,8 +438,19 @@ export interface EngineOps {
    *  block through the normal flow. */
   unlockReactingMinion(minion: MinionId): void;
   /** "During this action, this vampire can burn 1 blood for +1 intercept"
-   *  (Eyes of the Wild) — a repeatable, action-scoped grant. */
-  grantBurnForIntercept(minion: MinionId): void;
+   *  (Eyes of the Wild) — a repeatable, action-scoped grant. With `pool`,
+   *  "once this action you may burn 1 pool to give that vampire +1
+   *  intercept" (Special Report): paid by `pool.payer`, spent after one use. */
+  grantBurnForIntercept(
+    minion: MinionId,
+    pool?: { payer: SeatId; source: string },
+  ): void;
+  /** Pay out a successful HUNT action: `printed` blood (1 for the basic
+   *  hunt, the card's number for a hunt action card) plus every "+N hunt",
+   *  stolen from the target on a Ⓓ hunt, and — only if blood was gained —
+   *  mark the hunt successful and fire what keys to that
+   *  [LSJ 20050720-2]. docs/hunt-success-design.md §1 */
+  payHunt(af: ActionFrame, printed: number): void;
   /** Mark a card-in-play's "once each action" ability as used (Under
    *  Siege) — action-scoped. */
   markInPlayAbilityUsed(cardId: CardInstanceId): void;
@@ -961,7 +972,10 @@ export interface CardStrikeParams {
 /** Parameters an action-card handler passes back to the engine to
  *  announce the action its card describes. */
 export interface CardActionParams {
-  actionKind: "bleed" | "cardEffect";
+  /** `hunt` is a HUNT ACTION CARD ("+1 stealth hunt action", Psychophagia):
+   *  a hunt to every rule that asks, paying its own printed blood through
+   *  `payHunt` rather than the basic hunt's 1. docs/hunt-success-design.md §1 */
+  actionKind: "bleed" | "cardEffect" | "hunt";
   /** "Bleed with +N bleed" — folded into the bleed amount, not counted
    *  against the "(limited)" modifier rule (p. 20). */
   bleedBonus?: number;
@@ -1025,6 +1039,10 @@ export interface CardHandler {
   bloodCost: number;
   /** True for action cards: playing the card announces an action. */
   isActionCard?: boolean;
+  /** The card prints "HUNT action" (Psychophagia): it announces a hunt, so
+   *  a vampire who must hunt may play it and Restricted Vitae's bar reaches
+   *  it. docs/hunt-success-design.md §1 */
+  huntAction?: boolean;
   /** "Do not replace until …" — defer the replacement draw (p. 7 default
    *  is immediate replacement). */
   /** `"afterResolve"` is "do not replace this card until AFTER you discard

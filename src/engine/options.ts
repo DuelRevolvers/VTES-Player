@@ -267,7 +267,15 @@ export type LegalOption =
   | { id: string; kind: "preventCredit"; label: string }
   /** "Burn 1 blood for +1 intercept during this action" (Eyes of the
    *  Wild) — a repeatable grant recorded on the action frame. */
-  | { id: string; kind: "burnForIntercept"; label: string; minion: MinionId }
+  | {
+      id: string;
+      kind: "burnForIntercept";
+      label: string;
+      minion: MinionId;
+      /** Pool from the deciding Methuselah (Special Report); blood from
+       *  the blocker when absent (Eyes of the Wild). */
+      currency?: "pool";
+    }
   /** "…can burn 1 blood during your next discard phase to unlock"
    *  (Fiendish Tongue) — a permission recorded on the MINION, because the
    *  action card that granted it was burnt at resolution.

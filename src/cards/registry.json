@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-07T00:19:48.869Z",
+ "fetchedAt": "2026-10-22T03:22:52.630Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -2924,6 +2924,28 @@
      "Fifth Edition (Anarch)",
      "Fifth Edition (Companion)",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "100367": {
+   "card": {
+    "kind": "library",
+    "id": 100367,
+    "name": "Club Zombie",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 4,
+    "bloodCost": null,
+    "cardText": "Master: unique location.\nLock to give a vampire you control +1 intercept for the current action. If Club Zombie is unlocked at the start of your turn, a ready vampire you control gains 1 blood during your unlock phase.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/clubzombie.jpg",
+    "sets": [
+     "Final Nights",
+     "Third Edition"
     ]
    },
    "supported": true
@@ -7056,6 +7078,27 @@
    },
    "supported": true
   },
+  "100864": {
+   "card": {
+    "kind": "library",
+    "id": 100864,
+    "name": "Guard Duty",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+2 stealth action.\nPut this card on the acting minion and choose a location. If the chosen location is the target of a directed action (and you control the location), this minion can burn 1 blood or burn this card to unlock and attempt to block with +1 intercept.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/guardduty.jpg",
+    "sets": [
+     "Final Nights"
+    ]
+   },
+   "supported": true
+  },
   "100866": {
    "card": {
     "kind": "library",
@@ -9236,6 +9279,29 @@
     "image": "https://static.krcg.org/card/martyrsresilience.jpg",
     "sets": [
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101183": {
+   "card": {
+    "kind": "library",
+    "id": 101183,
+    "name": "Masquerade Endangered",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nPut this card on a vampire who successfully hunts. This vampire does not gain any blood from the hunt. This vampire doesn't unlock as normal during his or her unlock phase. During this vampire's next unlock phase, burn this card.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/masqueradeendangered.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -12871,6 +12937,29 @@
    },
    "supported": true
   },
+  "101614": {
+   "card": {
+    "kind": "library",
+    "id": 101614,
+    "name": "Restricted Vitae",
+    "types": [
+     "Event"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Gehenna. Do not replace until a vampire successfully hunts.\nVampires cannot hunt unless they must hunt. Vampires who must hunt can steal 1 blood from a younger vampire as a Ⓓ hunt action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/restrictedvitae.jpg",
+    "sets": [
+     "Gehenna",
+     "Kindred Most Wanted",
+     "Echoes of Gehenna"
+    ]
+   },
+   "supported": true
+  },
   "101627": {
    "card": {
     "kind": "library",
@@ -14371,6 +14460,29 @@
    },
    "supported": true
   },
+  "101841": {
+   "card": {
+    "kind": "library",
+    "id": 101841,
+    "name": "Special Report",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nChoose a ready vampire you control. That vampire unlocks and attempts to block. Once this action you may burn 1 pool to give that vampire +1 intercept.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/specialreport.jpg",
+    "sets": [
+     "Camarilla Edition",
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101842": {
    "card": {
     "kind": "library",
@@ -14763,6 +14875,31 @@
      "New Blood",
      "New Blood II",
      "Fifth Edition (Companion)"
+    ]
+   },
+   "supported": true
+  },
+  "101926": {
+   "card": {
+    "kind": "library",
+    "id": 101926,
+    "name": "Tainted Vitae",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [
+     "Ministry"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 2,
+    "cardText": "Only usable if a vampire controlled by your predator is about to successfully hunt.\nThe hunting vampire gets +2 hunt this action and put this card on them; you still control this card. The attached vampire must burn 1 additional blood to announce a bleed action (if it is not canceled as played) against you.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/taintedvitae.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Tenth Anniversary",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -16535,6 +16672,27 @@
    },
    "supported": true
   },
+  "102147": {
+   "card": {
+    "kind": "library",
+    "id": 102147,
+    "name": "Warning Sirens",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nPlay on a minion targeted by a directed action to give that minion +1 intercept. Alternatively, play on a minion in combat. That minion gets an optional strike: dodge this round.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/warningsirens.jpg",
+    "sets": [
+     "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
   "102149": {
    "card": {
     "kind": "library",
@@ -16917,6 +17075,30 @@
     "image": "https://static.krcg.org/card/wolfclaws.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "102198": {
+   "card": {
+    "kind": "library",
+    "id": 102198,
+    "name": "XTC-Laced Blood",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nOnly usable when a vampire successfully hunts. Put this card on that vampire. During this vampire's minion phase, he or she must hunt, even if at capacity. Any vampire may burn this card as a +1 stealth Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/xtclacedblood.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true

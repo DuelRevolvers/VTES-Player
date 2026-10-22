@@ -26,7 +26,7 @@ import type {
 // in this module is asked about a minion that may have left play mid-action
 // or mid-combat, and a throw from here surfaces as a game that cannot be
 // answered rather than as an error anyone can act on.
-import { findMinion, getSeat, isReady } from "./state.ts";
+import { findMinion, getSeat, isReady, mustHunt } from "./state.ts";
 
 /**
  * A vampire's capacity, including cards that raise it (the Discipline
@@ -642,14 +642,71 @@ export function huntAmountFor(state: GameState, minion: MinionState): number {
   // while a STATIC sits on a card attached to this minion and applies to it
   // alone (Aaron's Feeding Razor). Equipment cannot use the aura — an
   // unfiltered one would feed every minion at the table.
-  const attached = minion.attached.reduce((n, p) => n + (p.statics.hunt ?? 0), 0);
-  const base = 1 + auraBonus(state, minion, "hunt") + attached;
+  const base = 1 + huntBonusOf(state, minion);
   // The fill and a "+N hunt" are two effects both saying "gains blood", so
   // the LARGER wins rather than one silently replacing the other.
   if (auraFillsHunt(state, minion)) {
     return Math.max(base, capacityOf(minion) - minion.blood);
   }
   return base;
+}
+
+/**
+ * The minion's own "+N hunt" — aura plus attached statics — WITHOUT the
+ * printed 1 and without Festivo's fill. `payHunt` adds it to whatever the
+ * hunt prints (1 for the basic hunt, 3 for Psychophagia), because "the hunt
+ * bonus applies to non-standard hunt actions" [RTR 20030519].
+ * docs/hunt-success-design.md §1
+ */
+export function huntBonusOf(state: GameState, minion: MinionState): number {
+  const attached = minion.attached.reduce((n, p) => n + (p.statics.hunt ?? 0), 0);
+  return auraBonus(state, minion, "hunt") + attached;
+}
+
+/** "Vampires cannot hunt unless they must hunt" (Restricted Vitae) is in
+ *  force — one Gehenna event, any play area. docs/hunt-success-design.md §5 */
+export function huntingRestricted(state: GameState): boolean {
+  return state.seats.some((s) => s.permanents.some((p) => p.statics.huntingRestricted === true));
+}
+
+/**
+ * "Vampires who must hunt can steal 1 blood from a YOUNGER vampire as a Ⓓ
+ * hunt action" (Restricted Vitae): who `m` may aim that hunt at.
+ *
+ * Ⓓ, so the target belongs to another Methuselah (p. 25); "a vampire", so
+ * torpor does not exclude one; and "it can target a vampire with no blood"
+ * [LSJ 20050720-2] — such a hunt simply steals nothing and fails. Once per
+ * turn, as an action granted by a card in play [RBK]. §5
+ */
+export function stealHuntTargets(state: GameState, m: MinionState): MinionState[] {
+  if (!huntingRestricted(state) || !mustHunt(m)) return [];
+  if (!canRepeatAction(state, m, "stealHunt")) return [];
+  return state.seats
+    .filter((s) => s.id !== m.controller && !s.ousted)
+    .flatMap((s) => s.minions)
+    .filter(
+      (v) =>
+        v.kind === "vampire" &&
+        capacityOf(v) < capacityOf(m) &&
+        !untargetableBy(v, m.controller, m),
+    );
+}
+
+/**
+ * What announcing a bleed against `target` costs `m` in blood: "the attached
+ * vampire must burn 1 additional blood to announce a bleed action against
+ * you" (Tainted Vitae), where "you" is that card's controller. Charged at all
+ * three announcements (basic, action card, granted) and asked by every
+ * bleed's gate, so a vampire cannot announce a bleed it cannot pay for.
+ * docs/hunt-success-design.md §3
+ */
+export function bleedAnnounceTax(m: MinionState, target: SeatId | null): number {
+  if (target === null) return 0;
+  return m.attached.reduce(
+    (n, p) =>
+      p.controller === target ? n + (p.statics.bleedAgainstControllerBloodTax ?? 0) : n,
+    0,
+  );
 }
 
 /**
@@ -1569,4 +1626,71 @@ export function actionUnblockable(state: GameState, af: ActionFrame): boolean {
     }
   }
   return false;
+}
+
+/**
+ * May this minion attempt to block this action, its lock state aside?
+ * Every per-minion bar — the minion's own "cannot block", the action's
+ * "X cannot block this action" (p. 26), the acting minion's "cannot be
+ * blocked by", a turn-long clan bar, and a toll it cannot pay.
+ *
+ * ONE predicate, because two doors open a block attempt: the declared
+ * block (`blockOptions`) and the forced one an "unlock and attempt to
+ * block" queues. The forced one read only the toll, so Under Siege could
+ * push a minion that "cannot block" into an attempt. An unlock-and-block
+ * "cannot be used if the vampire cannot attempt to block the action"
+ * [LSJ 20010714-2]. Seat eligibility (prey, predator, target) is
+ * `blockEligibleSeats`, asked separately. docs/master-intercept-design.md §1
+ */
+export function mayAttemptBlock(state: GameState, af: ActionFrame, m: MinionState): boolean {
+  if (actionUnblockable(state, af)) return false;
+  const actor = findMinion(state, af.acting);
+  const br = af.blockRestrictions;
+  // "Allies cannot block this Anarch" (Libertas) — the persistent form of
+  // br.noAllies, carried by a card on the ACTING minion.
+  const noAllies = br.noAllies || !!actor?.attached.some((p) => p.statics.alliesCannotBlock);
+  // "This minion cannot block" (Pentex™ Subversion).
+  if (m.attached.some((p) => p.statics.cannotBlock)) return false;
+  // "…cannot block VAMPIRES" (Vagabond Mystic).
+  if (actor && m.attached.some((p) => p.statics.cannotBlockKind === actor.kind)) return false;
+  // "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier).
+  if (!af.directed && m.attached.some((p) => p.statics.cannotBlockUndirected)) return false;
+  // "Allies AND vampires with capacity 3 or less cannot block this vampire"
+  // (Rexton), "Toreador and Toreador antitribu cannot block this minion"
+  // (Cloak of the Abalone) — a bar carried by the ACTING minion. An ally
+  // has no clan (`clan` is null), hence the field read.
+  if (
+    actor &&
+    actor.attached.some((p) => {
+      const bar = p.statics.cannotBeBlockedBy;
+      if (!bar) return false;
+      if ((bar.kinds ?? []).includes(m.kind)) return true;
+      if (m.clan !== null && (bar.clans ?? []).includes(m.clan)) return true;
+      if (bar.minCapacity !== undefined && m.kind === "vampire" && capacityOf(m) >= bar.minCapacity) {
+        return true;
+      }
+      return bar.maxCapacity !== undefined && m.kind === "vampire" && capacityOf(m) <= bar.maxCapacity;
+    })
+  ) {
+    return false;
+  }
+  if (noAllies && m.kind === "ally") return false;
+  if (br.noVampires && m.kind === "vampire") return false;
+  if (br.noTitled && m.kind === "vampire" && m.title !== null) return false;
+  if (br.cannotBlock.includes(m.id)) return false;
+  // "No vampires of that CLAN may block the acting vampire for the
+  // remainder of the TURN" (Clan Loyalty) — read off the turn frame.
+  const turn = state.frames.find((f) => f.kind === "turn") as
+    | { clanBlockBars?: Array<{ acting: MinionId; clan: string }> }
+    | undefined;
+  if (
+    m.kind === "vampire" &&
+    m.clan !== null &&
+    (turn?.clanBlockBars ?? []).some((b) => b.acting === af.acting && b.clan === m.clan)
+  ) {
+    return false;
+  }
+  // "Minions must burn 1 blood to attempt to block this action" — a minion
+  // that cannot pay the toll cannot attempt at all (block-tax design).
+  return blockTollFor(af, m, actor, state) !== null;
 }
