@@ -626,8 +626,18 @@ export class VtesEngine implements EngineOps {
       case "EdgeTaken":
         this.state.edge = ev.seat;
         break;
-      case "WentToTorpor":
-        getMinion(this.state, ev.minion).inTorpor = true;
+      case "WentToTorpor": {
+        const m = getMinion(this.state, ev.minion);
+        m.inTorpor = true;
+        // Arrived: no longer merely going (Minor Boon's window).
+        delete m.torporPending;
+        break;
+      }
+      case "TorporPending":
+        getMinion(this.state, ev.minion).torporPending = { other: ev.other };
+        break;
+      case "TorporPrevented":
+        delete getMinion(this.state, ev.minion).torporPending;
         break;
       case "DisciplineGained": {
         // "Gain ONE LEVEL": absent → basic, basic → superior, and superior is
@@ -651,6 +661,12 @@ export class VtesEngine implements EngineOps {
       case "VictoryPointLost":
         getSeat(this.state, ev.seat).victoryPoints -= 1;
         break;
+      case "PoolDebtChanged": {
+        const s = getSeat(this.state, ev.seat);
+        if (ev.debt > 0) s.poolDebt = ev.debt;
+        else delete s.poolDebt;
+        break;
+      }
       case "Ousted": {
         // "If you are ousted, all the cards you control are removed from
         // the game" (p. 43) — minions and cards in play alike, including
@@ -1278,6 +1294,18 @@ export class VtesEngine implements EngineOps {
           const idx = from.minions.findIndex((m) => m.id === ev.id);
           if (idx < 0) throw new Error(`no minion to move: ${ev.id}`);
           const [m] = from.minions.splice(idx, 1);
+          // Except a MASTER on it: "a master card in play is controlled by
+          // the Methuselah who played it" (p. 9), where "a minion card in
+          // play is controlled by the controller of the minion it is on"
+          // (p. 10). One played on its player's own minion never had a
+          // controller written down, so it would travel with the minion.
+          // Pin it to the seat losing the minion first. (A trophy follows
+          // the vampire, p. 9; no trophy is in the pool.)
+          // docs/auctions-design.md §5
+          for (const a of m!.attached) {
+            if (a.card.id === m!.id || a.controller !== undefined) continue;
+            if (this.registry[a.card.name]?.isMasterCard === true) a.controller = ev.from;
+          }
           m!.controller = ev.to;
           getSeat(this.state, ev.to).minions.push(m!);
         } else {
@@ -1403,6 +1431,16 @@ export class VtesEngine implements EngineOps {
       // it becomes false, however the card got there.
       if (this.settleContests()) continue;
 
+      // "Burn this card … when this minion's controller has less than 6
+      // pool" (Lesser Boon) — a sweep for the same reason as the three
+      // above: it holds however the pool fell. docs/boons-design.md §2
+      if (this.burnLapsedBoons()) continue;
+
+      // A vampire GOING to torpor waits for the window a Minor Boon is
+      // played in — "after the combat ends" [RTR 19950509-2], so not while
+      // one is underway. docs/boons-design.md §4
+      if (this.openTorporWindow()) continue;
+
       // A question with no legal answer is no question at all: pop it
       // rather than offer an empty decision (docs/choice-frames-design.md
       // — an optional choice always has its Decline, so only a mandatory
@@ -1423,6 +1461,14 @@ export class VtesEngine implements EngineOps {
       if (top.kind === "oust" && cycleQuiescent(top.cycle)) {
         this.pop();
         this.oustBatch(this.oustVictims());
+        continue;
+      }
+
+      // Nobody else will keep them out: the vampires still going to torpor
+      // arrive now.
+      if (top.kind === "torpor" && cycleQuiescent(top.cycle)) {
+        this.pop();
+        this.sendPendingToTorpor();
         continue;
       }
 
@@ -2514,6 +2560,24 @@ export class VtesEngine implements EngineOps {
   }
 
   private settleCombat(cf: CombatFrame): boolean {
+    // "If one or both of the combatants are no longer ready … then the
+    // round and the combat end immediately. This is true AT ANY POINT
+    // DURING COMBAT, not just during strike resolution" (p. 30). Damage
+    // resolution has its own exit, below, which also runs a first strike's
+    // second half; every other step had none, so an ally burning its last
+    // life for a press before range (Underbridge Stray) left a combat with
+    // one combatant. End of Round still occurs (p. 32).
+    // docs/auctions-design.md §5
+    if (
+      cf.step !== "damageResolution" &&
+      cf.step !== "endOfRound" &&
+      (!this.combatantReady(cf.acting) || !this.combatantReady(cf.opposing))
+    ) {
+      cf.endedPrematurely = true;
+      cf.step = "endOfRound";
+      cf.cycle = newCycle(cf.cycle.order);
+      return true;
+    }
     switch (cf.step) {
       case "beforeRange":
         if (cycleQuiescent(cf.cycle)) {
@@ -2903,7 +2967,18 @@ export class VtesEngine implements EngineOps {
       // A failed title-granting referendum burns its held card — it was
       // set aside at action resolution rather than burned (p. 27). Guard on
       // cardInstanceId first: a blood hunt has no calling card.
-      if (rf.cardInstanceId && this.handler(rf.cardName).holdsCardForReferendum) {
+      //
+      // NOT a referendum called FROM the card in play ("any vampire may call
+      // a referendum to burn this card", Camarilla Threat): that one holds
+      // nothing, and its `cardInstanceId` is the card still in play. Failing
+      // it used to file a copy in the CALLER's ash heap and leave the card
+      // in play, so a second failure made a duplicate.
+      // docs/auctions-design.md §5
+      if (
+        rf.cardInstanceId &&
+        !rf.fromCardInPlay &&
+        this.handler(rf.cardName).holdsCardForReferendum
+      ) {
         this.emit({ type: "CardBurned", cardId: rf.cardInstanceId, name: rf.cardName, seat: rf.caller });
       }
       // The calling card's own failure clause ("If this referendum fails,
@@ -4259,10 +4334,23 @@ export class VtesEngine implements EngineOps {
   /** Notify in-play cards that a combatant left the ready region (Dead
    *  Pool) — `other` is the surviving combatant, if this combat has one. */
   private notifyCombatLeave(minion: MinionId): void {
-    const cf = this.combatFrame();
-    if (!cf) return;
-    const other = cf.acting === minion ? cf.opposing : cf.opposing === minion ? cf.acting : null;
+    const other = this.combatOpponentOf(minion);
     if (other === null) return;
+    this.fireCombatLeave(minion, other);
+  }
+
+  /** The other combatant, if `minion` is fighting right now. */
+  private combatOpponentOf(minion: MinionId): MinionId | null {
+    const cf = this.combatFrame();
+    if (!cf) return null;
+    return cf.acting === minion ? cf.opposing : cf.opposing === minion ? cf.acting : null;
+  }
+
+  /** The combat-leave hooks themselves, apart from reading the combat —
+   *  a vampire that was GOING to torpor arrives after its combat is over,
+   *  and the opponent it left was captured when it went (Minor Boon's
+   *  window, docs/boons-design.md §4). */
+  private fireCombatLeave(minion: MinionId, other: MinionId): void {
     const info = { leaver: minion, other };
     for (const s of this.state.seats) {
       for (const p of [...s.permanents]) {
@@ -4288,6 +4376,20 @@ export class VtesEngine implements EngineOps {
       if (af.step === "blocked") return;
       af.step = "A";
       cycleRewind(af.cycle);
+      return;
+    }
+    if (ba.asIfUnblocked) {
+      // "The action resolves as if unblocked INSTEAD" (Lesser Boon): not a
+      // success and not a failure. No `BlockSucceeded`, so nothing reading
+      // a successful block sees one [RTR 20080808]; the blocker is not
+      // locked, since that lock is a consequence of the success (p. 27).
+      // "Resolves", not "continues": the block window is over, so the
+      // action goes to state C — the A→C transition `settle` makes, hooks
+      // and all, because from here it is going through.
+      // docs/boons-design.md §2
+      af.step = "C";
+      cycleRewind(af.cycle);
+      this.notifyBlocksDeclined(af);
       return;
     }
     if (ba.forceFail) {
@@ -4336,6 +4438,13 @@ export class VtesEngine implements EngineOps {
         // answered. Collected first, because burning mutates `attached`.
         for (const p of actor.attached.filter(
           (x) => x.statics.burnIfEmployerBlocked && x.locked,
+        )) {
+          this.burnPermanent(p.card.id);
+        }
+        // "Burn this card if you block this minion again" (Lesser Boon) —
+        // "you" being the boon's controller, and "block" a successful one.
+        for (const p of actor.attached.filter(
+          (x) => x.statics.burnIfBlockedByController && x.controller === ba.blockerSeat,
         )) {
           this.burnPermanent(p.card.id);
         }
@@ -4874,14 +4983,7 @@ export class VtesEngine implements EngineOps {
       // ally" (Touch of Oblivion superior).
       if (strike.incapacitate) {
         if (cf.range !== "close") return;
-        const v = getMinion(this.state, victim);
-        if (v.kind === "ally") {
-          this.burnMinion(victim);
-        } else if (!v.inTorpor) {
-          this.notifyLeaveReady(victim, "torpor");
-          this.emit({ type: "WentToTorpor", minion: victim });
-        }
-        this.notifyCombatLeave(victim);
+        this.sendToTorpor(victim);
         return;
       }
       // "The opposing vampire's strikes with weapons inflict no damage
@@ -5867,6 +5969,12 @@ export class VtesEngine implements EngineOps {
     againstSeat?: SeatId;
     linkedMinion?: MinionId;
   }): void {
+    // A BOON is a printed keyword, and "burn all boons" (Blood Trade) reads
+    // the entry's tags — so every boon in play carries the tag, whichever
+    // card put itself there. Life Boon entered play without it, so Blood
+    // Trade's burn could not see the one boon that stayed in play.
+    // docs/boons-design.md §6
+    const isBoon = (this.registry[args.card.name]?.cardKeywords?.() ?? []).includes("boon");
     const ev: Extract<GameEvent, { type: "PermanentEnteredPlay" }> = {
       type: "PermanentEnteredPlay",
       seat: args.seat,
@@ -5874,7 +5982,7 @@ export class VtesEngine implements EngineOps {
       name: args.card.name,
       attachedTo: args.attachTo,
       statics: args.statics,
-      tags: args.tags,
+      tags: isBoon && !args.tags.includes("boon") ? [...args.tags, "boon"] : args.tags,
     };
     if (args.counters !== undefined) ev.counters = args.counters;
     if (args.aura !== undefined) ev.aura = args.aura;
@@ -7392,6 +7500,11 @@ export class VtesEngine implements EngineOps {
     af.continueUnblocked = true;
   }
 
+  resolveBlockAsUnblocked(): void {
+    const ba = this.blockAttempt();
+    if (ba) ba.asIfUnblocked = true;
+  }
+
   /** Environmental damage outside combat: `source: null`, so nothing can
    *  dodge or prevent it (p. 31). Extracted so a card that defers this
    *  damage behind a question (Rutor's Hand superior) lands it exactly the
@@ -7553,11 +7666,101 @@ export class VtesEngine implements EngineOps {
     if (!m) return;
     if (m.kind === "ally") {
       this.burnMinion(minionId);
-    } else if (!m.inTorpor) {
-      this.notifyLeaveReady(minionId, "torpor");
-      this.emit({ type: "WentToTorpor", minion: minionId });
+      this.notifyCombatLeave(minionId);
+      return;
     }
-    this.notifyCombatLeave(minionId);
+    this.vampireToTorpor(minionId);
+  }
+
+  /**
+   * A vampire goes to torpor — THE one place, so a Minor Boon can stop it at
+   * every door: damage it cannot mend, aggravated damage, a strike or a card
+   * that sends it. It used to be written out at three sites.
+   *
+   * When some Methuselah could play into the `torpor` window the vampire is
+   * only marked as GOING (`TorporPending`), which takes it out of the ready
+   * region — its combat ends — and it arrives when that window closes, with
+   * the hooks an arrival fires. Otherwise this is exactly what the three
+   * sites did. docs/boons-design.md §4
+   */
+  private vampireToTorpor(id: MinionId): void {
+    const m = findMinion(this.state, id);
+    if (!m || m.inTorpor || m.torporPending) return;
+    if (this.torporWindowWanted(m)) {
+      this.emit({ type: "TorporPending", minion: id, other: this.combatOpponentOf(id) });
+      return;
+    }
+    this.notifyLeaveReady(id, "torpor");
+    this.emit({ type: "WentToTorpor", minion: id });
+    this.notifyCombatLeave(id);
+  }
+
+  /**
+   * Could any Methuselah play into the `torpor` window for `m`? Asked with
+   * `m` provisionally marked, because "is going into torpor" is the
+   * question the card itself asks, and unmarked again before returning:
+   * the window is pushed only when somebody can answer it (the OustFrame
+   * deviation), so an ordinary torpor asks nobody anything.
+   */
+  private torporWindowWanted(m: MinionState): boolean {
+    m.torporPending = { other: null };
+    try {
+      return this.state.seats.some(
+        (s) => !s.ousted && this.handlerOptions(s.id, "torpor").length > 0,
+      );
+    } finally {
+      delete m.torporPending;
+    }
+  }
+
+  /** Push the `torpor` window once no combat is underway, for whoever is
+   *  still going — or, if nobody can play into it any more, send them. */
+  private openTorporWindow(): boolean {
+    if (this.combatFrame()) return false;
+    if (this.state.frames.some((f) => f.kind === "torpor")) return false;
+    if (!this.state.seats.some((s) => s.minions.some((m) => m.torporPending))) return false;
+    const order = sequencingOrder(this.state, this.turnSeat(), []).filter(
+      (s) => this.handlerOptions(s, "torpor").length > 0,
+    );
+    if (order.length > 0) {
+      this.state.frames.push({ kind: "torpor", cycle: newCycle(order) });
+    } else {
+      this.sendPendingToTorpor();
+    }
+    return true;
+  }
+
+  /** The window has closed: every vampire nobody kept out arrives, firing
+   *  what an arrival fires — the leave-ready hooks (Guardian Angel) before
+   *  it, the combat-leave hooks (Dead Pool) after, against the opponent it
+   *  left when it went. */
+  private sendPendingToTorpor(): void {
+    for (const m of this.state.seats.flatMap((s) => s.minions)) {
+      const pending = m.torporPending;
+      if (!pending || !findMinion(this.state, m.id)) continue;
+      this.notifyLeaveReady(m.id, "torpor");
+      // A hook can have burned it in between.
+      if (!findMinion(this.state, m.id)) continue;
+      this.emit({ type: "WentToTorpor", minion: m.id });
+      if (pending.other !== null) this.fireCombatLeave(m.id, pending.other);
+    }
+  }
+
+  /** "…or when this minion's controller has less than 6 pool" (Lesser
+   *  Boon). One burn per call; `settle` loops. */
+  private burnLapsedBoons(): boolean {
+    for (const s of this.state.seats) {
+      for (const m of s.minions) {
+        for (const p of m.attached) {
+          const below = p.statics.burnWhenBearerControllerPoolBelow;
+          if (below === undefined) continue;
+          if (getSeat(this.state, m.controller).pool >= below) continue;
+          this.burnPermanent(p.card.id);
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -8534,8 +8737,18 @@ export class VtesEngine implements EngineOps {
         // (Contingency Planning): what is BLED is capped, so every reader
         // below — the burn and the success hooks — sees the capped figure.
         const bleed = Math.min(currentBleed(this.state, af), af.bleedPoolCap ?? Infinity);
+        // "You burn pool for this bleed INSTEAD of the target Methuselah
+        // (and the bleed is still successful)" (Major Boon): only the payer
+        // changes — the target, the Edge and every success hook below are
+        // still the bleed's own. A payer who has left the game takes no
+        // replacement with them. docs/boons-design.md §3
+        const payer =
+          af.bleedPayer !== undefined && !getSeat(this.state, af.bleedPayer).ousted
+            ? af.bleedPayer
+            : af.target;
         if (bleed > 0) {
-          this.emit({ type: "PoolBurned", seat: af.target, amount: bleed });
+          this.emit({ type: "PoolBurned", seat: payer, amount: bleed });
+          if (payer === af.bleedPayer) af.bleedBoonPaid = true;
         }
         if (bleed >= 1) {
           // Successful bleed of 1+ → the acting minion's controller takes
@@ -8614,6 +8827,16 @@ export class VtesEngine implements EngineOps {
         // blood" — after they are out of torpor.
         if (bonusBlood > 0) {
           this.emit({ type: "BloodGained", minion: af.targetMinion, amount: bonusBlood });
+        }
+        // "Burn this card if this vampire rescues a vampire YOU control from
+        // torpor" (Minor Boon) — "you" being the boon's controller.
+        // docs/boons-design.md §4
+        if (actorM && victimM) {
+          for (const p of actorM.attached.filter(
+            (x) => x.statics.burnOnRescueOfController && x.controller === victimM.controller,
+          )) {
+            this.burnPermanent(p.card.id);
+          }
         }
       } else if (af.actionKind === "diablerize" && af.targetMinion) {
         // Cost none (p. 24). The diablerie resolution + blood hunt run
@@ -8839,6 +9062,14 @@ export class VtesEngine implements EngineOps {
       for (const m of seat.minions) m.awake = false;
     }
     this.pop();
+    // "…or this card if you don't burn at least 1 pool" (Major Boon) — the
+    // bleed was reduced to nothing, or did not succeed at all. Here because
+    // every way out of an action passes through this function.
+    // docs/boons-design.md §3
+    const boon = af.bleedBoonCard;
+    if (boon !== undefined && !af.bleedBoonPaid && this.allEntries().some((e) => e.entry.card.id === boon)) {
+      this.burnPermanent(boon);
+    }
     // "Lock this vampire and the blocking minion, and queue a combat
     // between them" (Hedonism). Queued, not entered: the action it was
     // played into had to finish first, so this waits until the frame is
@@ -9020,6 +9251,22 @@ export class VtesEngine implements EngineOps {
               ? "action.afterResolution"
               : "action.effects";
         const seat = cycleSeat(top.cycle);
+        if (top.bleedBoonApplied && top.step === "C") {
+          // "Only modifiers and reactions that can be played 'when the
+          // action/bleed would be successful' can be played after Major Boon
+          // is played or burned" [LSJ 20090205] — so not a redirect, not a
+          // second boon [LSJ 19990218], not a reduction. One filter here
+          // rather than a clause in every enumerator that could otherwise
+          // fire. docs/boons-design.md §3
+          return this.dp(seat, window, [
+            passOption(),
+            ...this.handlerOptions(seat, window).filter(
+              (o) =>
+                o.kind === "playCard" &&
+                this.registry[o.name]?.playableWhenActionWouldSucceed?.(o.mode) === true,
+            ),
+          ]);
+        }
         return this.dp(seat, window, [
           passOption(),
           ...this.handlerOptions(seat, window),
@@ -9113,6 +9360,18 @@ export class VtesEngine implements EngineOps {
         return this.dp(seat, "oust", [
           passOption(`Let ${who} be ousted`),
           ...this.handlerOptions(seat, "oust"),
+        ]);
+      }
+      case "torpor": {
+        const seat = cycleSeat(top.cycle);
+        const who = this.state.seats
+          .flatMap((s) => s.minions)
+          .filter((m) => m.torporPending)
+          .map((m) => m.name)
+          .join(", ");
+        return this.dp(seat, "torpor", [
+          passOption(`Let ${who} go to torpor`),
+          ...this.handlerOptions(seat, "torpor"),
         ]);
       }
       case "diablerieOffer": {
@@ -9518,17 +9777,21 @@ export class VtesEngine implements EngineOps {
     // that compels her can unlock, and then she is free again.
     // docs/crypt-wave-7.md §2
     const controlsLocked = seat.minions.some((m) => isReady(m) && m.locked);
+    // A bleed goes at the prey unless something redirects it later
+    // (p. 21), so that is the target its value is computed against.
+    const preySeat = preyOf(this.state, tf.seat);
     const mustBleed = actors.filter(
       (m) =>
         !m.bledThisTurn &&
         canRepeatAction(this.state, m, "bleed") &&
+        // A bleed she cannot announce is not one she must make — "cannot
+        // bleed you" (Minor Boon), or an announcement tax she cannot pay
+        // (Tainted Vitae). This gate asked neither. docs/boons-design.md §4
+        m.blood >= bleedAnnounceTax(m, preySeat) &&
         m.attached.some(
           (p) => p.statics.mustBleed && (!p.statics.mustBleed.whileControlsLocked || controlsLocked),
         ),
     );
-    // A bleed goes at the prey unless something redirects it later
-    // (p. 21), so that is the target its value is computed against.
-    const preySeat = preyOf(this.state, tf.seat);
     const bleedValue = (m: MinionState): number =>
       prospectiveBleed(this.state, m, preySeat);
     if (mustBleed.length > 0) {
@@ -10712,6 +10975,7 @@ export class VtesEngine implements EngineOps {
       case "cardPlay":
       case "referendum":
       case "oust":
+      case "torpor":
         cyclePass(top.cycle);
         return;
       case "choice":
@@ -10794,6 +11058,15 @@ export class VtesEngine implements EngineOps {
           this.drawToReplace(tf.seat);
         }
         dseat.delayedDrawsDiscard = 0;
+        // "…winner pays 1 pool toward his or her debt during his or her
+        // discard phase until the debt is repaid" (Temptation of Greater
+        // Power). Not optional, and the last pool counts: a debtor on 1
+        // pays it and is ousted. docs/auctions-design.md §4
+        const debt = dseat.poolDebt ?? 0;
+        if (debt > 0) {
+          this.emit({ type: "PoolBurned", seat: dseat.id, amount: 1 });
+          this.emit({ type: "PoolDebtChanged", seat: dseat.id, debt: debt - 1 });
+        }
         // "During your discard phase, your predator takes control of this
         // card" (The Coven) — every card in play sees the phase begin,
         // the `onMasterPhase` / `onInfluencePhase` pattern.
@@ -11099,7 +11372,8 @@ export class VtesEngine implements EngineOps {
       // Aggravated cannot be mended (p. 34). An already-wounded (in
       // torpor) vampire burns 1 blood per point to prevent destruction,
       // else is burned; otherwise it goes straight to torpor (wounded).
-      if (m.inTorpor) {
+      // One GOING to torpor is already wounded (Minor Boon's window).
+      if (m.inTorpor || m.torporPending) {
         if (m.blood >= pd.amount) {
           if (pd.amount > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: pd.amount });
         } else {
@@ -11107,9 +11381,21 @@ export class VtesEngine implements EngineOps {
           this.notifyCombatLeave(m.id);
         }
       } else {
-        this.notifyLeaveReady(m.id, "torpor");
-        this.emit({ type: "WentToTorpor", minion: m.id });
-        this.notifyCombatLeave(m.id);
+        // The FIRST point wounds; every point after it lands on a wounded
+        // vampire, who "must burn 1 blood to prevent their destruction"
+        // (p. 32: Tamoszius, on 2 blood, takes 3 aggravated — "wounded by
+        // 1 point, and so he must burn 2 blood … leaving him empty and in
+        // torpor"). Burned, "they go directly to the ash heap. They do not
+        // go through torpor first." This sent every unwounded vampire to
+        // torpor whatever the amount (docs/auctions-design.md §5).
+        const rest = Math.max(0, pd.amount - 1);
+        if (rest > m.blood) {
+          this.burnMinion(m.id);
+          this.notifyCombatLeave(m.id);
+          return;
+        }
+        if (rest > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: rest });
+        this.vampireToTorpor(m.id);
       }
       return;
     }
@@ -11118,11 +11404,7 @@ export class VtesEngine implements EngineOps {
       this.emit({ type: "BloodBurned", minion: m.id, amount: mendable });
       this.emit({ type: "DamageMended", minion: m.id, amount: mendable });
     }
-    if (pd.amount > mendable) {
-      this.notifyLeaveReady(m.id, "torpor");
-      this.emit({ type: "WentToTorpor", minion: m.id });
-      this.notifyCombatLeave(m.id);
-    }
+    if (pd.amount > mendable) this.vampireToTorpor(m.id);
   }
 
   private announceAction(

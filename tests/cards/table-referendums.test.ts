@@ -89,6 +89,32 @@ describe("Camarilla Threat (100285)", () => {
     // themselves to discard, so at 1 pool the option is gone.
     expect(ids(build(1).engine)).not.toContain("discard:h1");
   });
+
+  it("a FAILED referendum to burn it leaves it in play and files nothing", () => {
+    // The failed-referendum path burns a card HELD for its own referendum.
+    // A burn referendum called from the card in play holds nothing, and it
+    // used to file a copy of the card in the caller's ash heap while the
+    // card stayed in play (wave 105, docs/auctions-design.md §5).
+    const state = threeSeatGame();
+    state.seats[2]!.permanents.push(inPlay("Camarilla Threat"));
+    const tf = state.frames.find((f) => f.kind === "turn")!;
+    if (tf.kind === "turn") {
+      tf.phase = "minion";
+      tf.seat = "Bob";
+    }
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Bob", "act:Camarilla Threat:Ca:vote:W"]]);
+    // Nobody has a vote, and a tie fails (p. 28).
+    for (let i = 0; i < 40 && state.frames.some((f) => f.kind === "action"); i++) {
+      const dp = engine.decision()!;
+      runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
+    }
+    const result = state.eventLog.find((e) => e.type === "ReferendumResolved");
+    expect(result?.type === "ReferendumResolved" && result.passed).toBe(false);
+    expect(state.seats[2]!.permanents.map((p) => p.card.id)).toContain("Ca");
+    const filed = state.seats.flatMap((s) => s.ashHeap ?? []).map((c) => c.id);
+    expect(filed).not.toContain("Ca");
+  });
 });
 
 describe("Masquerade Enforcement (101184)", () => {

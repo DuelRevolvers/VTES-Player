@@ -6,12 +6,13 @@
  * in config/supported.json (CLAUDE.md registry rules).
  */
 
-import type { ActionFrame, CardHandler, CardPlayFrame, ConditionalStatic, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, bleedAnnounceTax, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
+import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
+import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
   compileSpec,
+  controllerMeetsRequirements,
   enumerateAllocations,
   parseAlloc,
   seatControlsCopy,
@@ -17780,6 +17781,123 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  // --- Boons (docs/boons-design.md) ---
+  {
+    // "Master: out-of-turn. Boon. Only usable when a minion you control
+    //  would successfully block. The action resolves as if unblocked
+    //  instead. Put this card on the acting minion. This minion cannot block
+    //  your minions. Burn this card if you block this minion again, or when
+    //  this minion's controller has less than 6 pool."
+    // The bespoke `lesserBoon`; the three standing clauses are statics. §2
+    krcgId: 101095,
+    name: "Lesser Boon",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    keywords: ["boon"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: out-of-turn. Boon. Only usable if another Methuselah is being
+    //  bled by a minion you do not control and the bleed amount is 1 or
+    //  more, after blocks are declined. Put this card in play. You burn pool
+    //  for this bleed instead of the target Methuselah (and the bleed is
+    //  still successful), or this card if you don't burn at least 1 pool. If
+    //  you are about to be successfully bled, you can burn this card to have
+    //  that Methuselah burn pool instead of you (and the bleed is still
+    //  successful)."
+    // The bespoke `majorBoon`; the engine's one bleed burn reads the payer. §3
+    krcgId: 101145,
+    name: "Major Boon",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    keywords: ["boon"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: out-of-turn. Boon. Only usable when a vampire controlled by
+    //  another Methuselah is going into torpor. Put this card on that
+    //  vampire to prevent that vampire from going to torpor (combat still
+    //  ends, if any). This vampire cannot bleed you. Burn this card if this
+    //  vampire rescues a vampire you control from torpor."
+    // Played into the `torpor` window. The bespoke `minorBoon`. §4
+    krcgId: 101219,
+    name: "Minor Boon",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    keywords: ["boon"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master: out-of-turn. Boon. Only usable when you are being ousted.
+    //  Other Methuselahs may bid pool to keep you in the game. If one does,
+    //  put this card in play. As a master phase action, the high bidder may
+    //  steal up to 2 pool from you. You may burn this card by giving that
+    //  Methuselah 6 pool during your master phase."
+    // Played into the `oust` window; the auction is a chain of choice
+    // frames. The bespoke `extremisBoon`. §5
+    krcgId: 100676,
+    name: "Extremis Boon",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    keywords: ["boon"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // --- Auctions for control (docs/auctions-design.md). Three masters that
+  //     sell a card in play to the highest bidder. They share Extremis
+  //     Boon's auction, which is one chain of choice frames for all four.
+  {
+    // "Master. Choose a vampire with capacity of 6 or less. Each Methuselah
+    //  bids pool for control of that vampire. The highest bid goes to the
+    //  vampire's controller; that bidder then takes control of the vampire.
+    //  If the controller wins, half the winning bid (rounded up) goes to the
+    //  blood bank." The bespoke `hostileTakeover`. §3
+    krcgId: 100939,
+    name: "Hostile Takeover",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Choose a card you control. Starting to your left and
+    //  proceeding clockwise, other Methuselahs may bid pool for control of
+    //  that card. Highest bidder takes control of the card. You collect pool
+    //  from the two highest bidders." The bespoke `malkavianTimeAuction`. §3
+    krcgId: 101158,
+    name: "Malkavian Time Auction",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Master. Requires a ready justicar. Choose a vampire. Methuselahs may
+    //  bid pool for control of that vampire. The winner pays the bid to the
+    //  blood bank and takes control. Methuselahs may be credited up to 5 pool
+    //  on the bid: winner pays 1 pool toward his or her debt during his or
+    //  her discard phase until the debt is repaid. Only 1 Temptation of
+    //  Greater Power can be played in a game." The bespoke
+    //  `temptationOfGreaterPower`. §4
+    krcgId: 101955,
+    name: "Temptation of Greater Power",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 3,
+    requiresControlledTitle: ["justicar"],
+    oncePerGameByName: true,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // --- The token-vampire gate (docs/token-vampire-design.md). Unblocked
   //     by the owner 2026-09-03. Two cards, and they are the same card
   //     twice: a LIBRARY card that becomes a 1-capacity vampire, which is
@@ -19874,6 +19992,9 @@ const twoWrongs: CardHandler = {
     if (!outOfTurnOpen(ctx)) return [];
     const to = preyOf(ctx.state, af.actingSeat);
     if (to === ctx.seat || to === af.actingSeat) return [];
+    // "…cannot be redirected to you either" (Minor Boon) [PIB 20130711].
+    const bleeder = findMinion(ctx.state, af.acting);
+    if (bleeder && bleedBarred(bleeder, to)) return [];
     return [
       {
         id: playOptionId(this.name, null, card.id),
@@ -19893,6 +20014,8 @@ const twoWrongs: CardHandler = {
     // Re-derived at resolution: the ring can have moved since enumeration.
     const to = preyOf(ops.state, af.actingSeat);
     if (to === play.seat || to === af.actingSeat) return;
+    const bleeder = findMinion(ops.state, af.acting);
+    if (bleeder && bleedBarred(bleeder, to)) return;
     ops.emit({ type: "TargetChanged", actionId: af.actionId, from: play.seat, to });
     af.redirectShield = true;
   },
@@ -20530,6 +20653,927 @@ const lifeBoon: CardHandler = {
     // a withdrawn seat's cards stay on the table (p. 38).
     if (beingOusted.includes(owner.seat)) return false;
     return !getSeat(state, owner.seat).ousted;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Boons (docs/boons-design.md)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lesser Boon (101095) — "Master: out-of-turn. Boon. Only usable when a
+ * minion you control would successfully block. The action resolves as if
+ * unblocked instead. Put this card on the acting minion. This minion cannot
+ * block your minions. Burn this card if you block this minion again, or when
+ * this minion's controller has less than 6 pool."
+ *
+ * Played into the block attempt while it is still open, which is where
+ * "would successfully block" can be asked: `blockWouldSucceed` on the
+ * attempt underway. The engine then resolves the attempt as neither a
+ * success nor a failure (`asIfUnblocked`) and the action goes to state C.
+ * The three standing clauses are statics, read by `mayAttemptBlock`, the
+ * successful-block path and a `settle` sweep. §2
+ */
+const lesserBoon: CardHandler = {
+  ...compileSpec(specByName("Lesser Boon")),
+  isOutOfTurnMaster: true,
+  options(card, ctx) {
+    if (ctx.window !== "action.effects") return [];
+    const ba = ctx.blockAttempt;
+    const af = ctx.action;
+    if (!ba || !af || ba.asIfUnblocked || ba.cancelled || ba.forceFail) return [];
+    // "…a minion YOU CONTROL would successfully block."
+    const blocker = findMinion(ctx.state, ba.blocker);
+    if (!blocker || blocker.controller !== ctx.seat) return [];
+    if (!blockWouldSucceed(ctx.state, ba.actionId, ba.blocker)) return [];
+    if (!outOfTurnOpen(ctx)) return [];
+    const actor = findMinion(ctx.state, af.acting);
+    if (!actor) return [];
+    return [
+      {
+        id: playOptionId(this.name, null, actor.id, card.id),
+        kind: "playCard",
+        label: `${this.name} — ${actor.name}'s action resolves as if unblocked`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: { target: actor.id, unblock: ba.blocker },
+      },
+    ];
+  },
+  resolve(play, ops) {
+    const actorId = play.params["target"];
+    if (!ops.action() || !actorId) return;
+    ops.resolveBlockAsUnblocked();
+    // "Put this card on the acting minion" — total: it can have left play.
+    const actor = findMinion(ops.state, actorId);
+    if (!actor) return;
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: actor.controller,
+      attachTo: actor.id,
+      statics: {
+        cannotBlockControllersMinions: true,
+        burnIfBlockedByController: true,
+        burnWhenBearerControllerPoolBelow: 6,
+      },
+      tags: [this.name],
+      // p. 16: a card put on another Methuselah's minion still answers to
+      // the player who played it — and "your minions" are that player's.
+      controller: play.seat,
+    });
+  },
+};
+
+/** What a Major Boon makes its payer burn: the bleed as it stands, under
+ *  any ceiling on what is bled (Contingency Planning). */
+function boonedBleed(state: GameState, af: ActionFrame): number {
+  return Math.min(currentBleed(state, af), af.bleedPoolCap ?? Infinity);
+}
+
+/**
+ * Major Boon (101145) — "Master: out-of-turn. Boon. Only usable if another
+ * Methuselah is being bled by a minion you do not control and the bleed
+ * amount is 1 or more, after blocks are declined. Put this card in play. You
+ * burn pool for this bleed instead of the target Methuselah (and the bleed is
+ * still successful), or this card if you don't burn at least 1 pool. If you
+ * are about to be successfully bled, you can burn this card to have that
+ * Methuselah burn pool instead of you (and the bleed is still successful)."
+ *
+ * Both halves set `ActionFrame.bleedPayer`, which the engine's one bleed
+ * burn reads. The target stays the target, so the Edge and every
+ * successful-bleed hook are unchanged. Either half sets `bleedBoonApplied`:
+ * after it only "would be successful" cards may be played [LSJ 20090205],
+ * so no second boon in succession [RTR 19970630] and no second burn on the
+ * same bleed [LSJ 19990218]. §3
+ */
+const majorBoon: CardHandler = {
+  ...compileSpec(specByName("Major Boon")),
+  isOutOfTurnMaster: true,
+  options(card, ctx) {
+    if (ctx.window !== "action.effects" || ctx.blockAttempt) return [];
+    const af = ctx.action;
+    if (!af || af.actionKind !== "bleed" || af.target === null) return [];
+    // "…after blocks are declined": state C.
+    if (af.step !== "C" || af.bleedBoonApplied) return [];
+    // "ANOTHER Methuselah is being bled by a minion YOU DO NOT CONTROL."
+    if (af.target === ctx.seat) return [];
+    const actor = findMinion(ctx.state, af.acting);
+    if (!actor || actor.controller === ctx.seat) return [];
+    // "…and the bleed amount is 1 or more."
+    if (currentBleed(ctx.state, af) < 1) return [];
+    if (!outOfTurnOpen(ctx)) return [];
+    const pays = boonedBleed(ctx.state, af);
+    return [
+      {
+        id: playOptionId(this.name, null, af.target, card.id),
+        kind: "playCard",
+        label: `${this.name} — burn ${pays} pool for ${af.target}'s bleed`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: { seat: af.target, pays: String(pays) },
+      },
+    ];
+  },
+  resolve(play, ops) {
+    const af = ops.action();
+    const target = play.params["seat"];
+    // Re-derived: the bleed can have been answered in between.
+    if (!af || af.actionKind !== "bleed" || !target || af.target !== target) return;
+    if (af.bleedBoonApplied) return;
+    putMasterInPlay(play, ops);
+    const entry = getSeat(ops.state, play.seat).permanents.find((p) => p.card.id === play.card.id);
+    if (entry) entry.boonTarget = target;
+    af.bleedPayer = play.seat;
+    af.bleedBoonCard = play.card.id;
+    af.bleedBoonApplied = true;
+  },
+  abilityOptions(entry, owner, ctx) {
+    // "If you are ABOUT TO BE SUCCESSFULLY BLED, you can burn this card to
+    // have that Methuselah burn pool instead of you" — state C of a bleed
+    // aimed at you, and only while you are still the one paying.
+    if (ctx.window !== "action.effects" || ctx.blockAttempt) return [];
+    const controller = entry.controller ?? owner.seat;
+    const debtor = entry.boonTarget;
+    const af = ctx.action;
+    if (!debtor || !af || ctx.seat !== controller) return [];
+    if (af.actionKind !== "bleed" || af.step !== "C" || af.target !== controller) return [];
+    if (af.bleedBoonApplied || getSeat(ctx.state, debtor).ousted) return [];
+    if (boonedBleed(ctx.state, af) < 1) return [];
+    return [
+      {
+        id: `ability:${this.name}:${entry.card.id}:burn`,
+        kind: "useAbility",
+        label: `${this.name}: burn it — ${debtor} burns the pool for this bleed`,
+        source: entry.card.id,
+        params: {},
+      },
+    ];
+  },
+  useAbility(entry, _owner, _choice, ops) {
+    const af = ops.action();
+    const debtor = entry.boonTarget;
+    ops.burnPermanent(entry.card.id);
+    if (!af || !debtor || af.bleedBoonApplied) return;
+    af.bleedPayer = debtor;
+    af.bleedBoonApplied = true;
+  },
+};
+
+/**
+ * Minor Boon (101219) — "Master: out-of-turn. Boon. Only usable when a
+ * vampire controlled by another Methuselah is going into torpor. Put this
+ * card on that vampire to prevent that vampire from going to torpor (combat
+ * still ends, if any). This vampire cannot bleed you. Burn this card if this
+ * vampire rescues a vampire you control from torpor."
+ *
+ * Played into the `torpor` window, which the engine opens after the combat
+ * ends [RTR 19950509-2] for every vampire still GOING to torpor. The bleed
+ * bar is a static that `bleedAnnounceTax` and every redirect read; the burn
+ * is read by the rescue. §4
+ */
+const minorBoon: CardHandler = {
+  ...compileSpec(specByName("Minor Boon")),
+  isOutOfTurnMaster: true,
+  playEffects: () => [{ tag: "deny" }],
+  options(card, ctx) {
+    if (ctx.window !== "torpor" || !outOfTurnOpen(ctx)) return [];
+    const out: LegalOption[] = [];
+    for (const s of ctx.state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        // "…a vampire controlled by ANOTHER Methuselah."
+        if (!m.torporPending || m.kind !== "vampire" || m.controller === ctx.seat) continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id),
+          kind: "playCard",
+          label: `${this.name} — keep ${m.name} out of torpor`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const id = play.params["target"];
+    const m = id ? findMinion(ops.state, id) : null;
+    // Re-derived: another boon can have kept it out first.
+    if (!m || !m.torporPending || m.controller === play.seat) return;
+    ops.emit({ type: "TorporPrevented", minion: m.id });
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: m.controller,
+      attachTo: m.id,
+      statics: { cannotBleedController: true, burnOnRescueOfController: true },
+      tags: [this.name],
+      controller: play.seat,
+    });
+  },
+};
+
+/** The Methuselahs who may bid to keep `victim` in the game, in turn order
+ *  from the victim's prey: standing, not going out themselves, and able to
+ *  meet the opening bid [ANK 20190827] without bidding their last pool. */
+function extremisBidders(state: GameState, victim: SeatId): SeatId[] {
+  const least = lifeBoonLeast(getSeat(state, victim).pool);
+  const out: SeatId[] = [];
+  let s = preyOf(state, victim);
+  for (let i = 0; i < state.seats.length && s !== victim; i++) {
+    if (lifeBoonMost(state, s) >= least) out.push(s);
+    s = preyOf(state, s);
+  }
+  return out;
+}
+
+// --- Auctions (docs/auctions-design.md) ------------------------------------
+// Four cards run an auction: Extremis Boon (to keep a Methuselah in the
+// game) and Hostile Takeover, Malkavian Time Auction and Temptation of
+// Greater Power (for control of a card). ONE chain of choice frames runs all
+// four, so the bidding rule cannot drift between them: the bidders are asked
+// in a fixed order, each raises or passes, a pass is final, and the auction
+// ends when nobody left can top the high bid. The card supplies who bids, how
+// much each may bid, and what the result does. §2
+
+/** What one card's auction leaves to the card. */
+interface AuctionRules {
+  /** The least the opening bid may be. */
+  opening(state: GameState, params: Record<string, string>): number;
+  /** The most `seat` may bid. */
+  most(state: GameState, params: Record<string, string>, seat: SeatId): number;
+  /** One bid's label, and the params a bot reads to price it. */
+  bid(
+    state: GameState,
+    params: Record<string, string>,
+    seat: SeatId,
+    n: number,
+  ): { label: string; params: Record<string, string> };
+  /** The bidding is over. `bids` is each bidder's highest bid. */
+  settle(
+    ops: EngineOps,
+    cardId: CardInstanceId,
+    params: Record<string, string>,
+    leader: SeatId | null,
+    high: number,
+    bids: Map<SeatId, number>,
+  ): void;
+}
+
+const listParam = (v: string | undefined): string[] => (v ?? "").split(",").filter(Boolean);
+
+/** Each bidder's highest bid, as the frame carries it: `seat:n,…`. */
+function auctionBids(params: Record<string, string>): Map<SeatId, number> {
+  const out = new Map<SeatId, number>();
+  for (const pair of listParam(params["bids"])) {
+    const at = pair.lastIndexOf(":");
+    out.set(pair.slice(0, at), Number(pair.slice(at + 1)));
+  }
+  return out;
+}
+
+/** The next bidder after `current` (the first, from null), round the
+ *  bidding order: not the high bidder, not out, and able to top the high
+ *  bid. Null ends the auction. */
+function nextAuctionBidder(
+  state: GameState,
+  params: Record<string, string>,
+  current: SeatId | null,
+  rules: AuctionRules,
+): SeatId | null {
+  const order = listParam(params["order"]);
+  const out = listParam(params["out"]);
+  const leader = params["leader"] ?? "";
+  const need = Math.max(rules.opening(state, params), Number(params["high"] ?? "0") + 1);
+  const at = current === null ? -1 : order.indexOf(current);
+  for (let k = 1; k <= order.length; k++) {
+    const s = order[(at + k) % order.length]!;
+    if (s === leader || out.includes(s)) continue;
+    if (getSeat(state, s).ousted) continue;
+    if (rules.most(state, params, s) < need) continue;
+    return s;
+  }
+  return null;
+}
+
+/** Ask the next bidder, or settle when there is none. */
+function runAuction(
+  ops: EngineOps,
+  rules: AuctionRules,
+  cardName: string,
+  cardId: CardInstanceId,
+  params: Record<string, string>,
+  current: SeatId | null,
+): void {
+  const next = nextAuctionBidder(ops.state, params, current, rules);
+  if (next !== null) {
+    ops.raiseChoice({ seat: next, cardName, cardId, key: "bid", params });
+    return;
+  }
+  const leader = params["leader"] ? params["leader"] : null;
+  rules.settle(ops, cardId, params, leader, Number(params["high"] ?? "0"), auctionBids(params));
+}
+
+/** Open an auction among `order`, asked in that order. */
+function startAuction(
+  ops: EngineOps,
+  rules: AuctionRules,
+  cardName: string,
+  cardId: CardInstanceId,
+  order: SeatId[],
+  params: Record<string, string>,
+): void {
+  const fresh = { ...params, order: order.join(","), out: "", high: "0", leader: "", bids: "" };
+  runAuction(ops, rules, cardName, cardId, fresh, null);
+}
+
+/** One bidder's answers: pass, or any bid from the least that tops the high
+ *  bid to the most this bidder may bid. */
+function auctionOptions(
+  cardName: string,
+  frame: ChoiceFrame,
+  state: GameState,
+  rules: AuctionRules,
+): LegalOption[] {
+  const high = Number(frame.params["high"] ?? "0");
+  const least = Math.max(rules.opening(state, frame.params), high + 1);
+  const most = rules.most(state, frame.params, frame.seat);
+  // The pass is an ANSWER, not a decline: a declined frame just goes
+  // away, and the auction has to move on to the next bidder.
+  const out: LegalOption[] = [
+    {
+      id: `choice:${cardName}:${frame.cardId}:bid:pass`,
+      kind: "answerChoice",
+      label: `${cardName}: no bid`,
+      params: { bid: "pass" },
+    },
+  ];
+  for (let n = least; n <= most; n++) {
+    const b = rules.bid(state, frame.params, frame.seat, n);
+    out.push({
+      id: `choice:${cardName}:${frame.cardId}:bid:${n}`,
+      kind: "answerChoice",
+      label: b.label,
+      params: { bid: String(n), ...b.params, ...(n === least ? { minimum: "1" } : {}) },
+    });
+  }
+  return out;
+}
+
+/** Record one bidder's answer and move the auction on. */
+function auctionAnswer(
+  cardName: string,
+  frame: ChoiceFrame,
+  choice: Extract<LegalOption, { kind: "answerChoice" }>,
+  ops: EngineOps,
+  rules: AuctionRules,
+): void {
+  const params = { ...frame.params };
+  const bid = choice.params["bid"];
+  if (bid === undefined || bid === "pass") {
+    params["out"] = [...listParam(params["out"]), frame.seat].join(",");
+  } else {
+    params["high"] = bid;
+    params["leader"] = frame.seat;
+    const bids = auctionBids(params);
+    bids.set(frame.seat, Number(bid));
+    params["bids"] = [...bids].map(([s, n]) => `${s}:${n}`).join(",");
+  }
+  runAuction(ops, rules, cardName, frame.cardId, params, frame.seat);
+}
+
+/** "Bids pool": it moves from the bidder to whoever the card names. */
+function payBid(ops: EngineOps, from: SeatId, to: SeatId | null, amount: number): void {
+  if (amount <= 0) return;
+  ops.emit({ type: "PoolBurned", seat: from, amount });
+  if (to !== null) ops.emit({ type: "PoolGained", seat: to, amount });
+}
+
+/** "…takes control of the vampire" — for good, so a loan the vampire was on
+ *  ends with it (docs/borrowed-minions-design.md). */
+function takeMinionControl(ops: EngineOps, id: MinionId, to: SeatId): void {
+  const m = findMinion(ops.state, id);
+  if (!m || m.controller === to) return;
+  delete m.controlRevertsTo;
+  delete m.controlRevertsAt;
+  ops.changeMinionControl(id, to);
+}
+
+/** Every standing seat, starting with `from` and going clockwise — "to your
+ *  left" is your prey (p. 15). */
+function seatsFrom(state: GameState, from: SeatId): SeatId[] {
+  const out: SeatId[] = [];
+  let s = from;
+  for (let i = 0; i < state.seats.length; i++) {
+    if (!getSeat(state, s).ousted && !out.includes(s)) out.push(s);
+    s = preyOf(state, s);
+  }
+  return out;
+}
+
+const extremisAuction: AuctionRules = {
+  opening: (state, p) => lifeBoonLeast(getSeat(state, p["victim"]!).pool),
+  most: (state, _p, seat) => lifeBoonMost(state, seat),
+  bid: (_state, p, _seat, n) => ({
+    label: `Extremis Boon: bid ${n} pool to keep ${p["victim"]} in the game`,
+    params: { bidFor: p["victim"]! },
+  }),
+  settle(ops, cardId, p, leader, high) {
+    const victim = p["victim"];
+    if (!victim) return;
+    const entry = getSeat(ops.state, victim).permanents.find((x) => x.card.id === cardId);
+    if (!entry) return;
+    // "If one does, put this card in play" — and if nobody did, it goes.
+    if (!leader) {
+      ops.burnPermanent(cardId);
+      return;
+    }
+    // "The pool of the highest bidder goes to the target Methuselah. The
+    // losers do not lose pool" [LSJ 20031121-1].
+    payBid(ops, leader, victim, high);
+    entry.boonCreditor = leader;
+  },
+};
+
+/**
+ * Extremis Boon (100676) — "Master: out-of-turn. Boon. Only usable when you
+ * are being ousted. Other Methuselahs may bid pool to keep you in the game.
+ * If one does, put this card in play. As a master phase action, the high
+ * bidder may steal up to 2 pool from you. You may burn this card by giving
+ * that Methuselah 6 pool during your master phase."
+ *
+ * Played into the `oust` window by the Methuselah going out. The auction is
+ * a chain of choice frames in turn order from the victim's prey: each bidder
+ * raises or passes, and a pass is final. "The starting bid must be enough to
+ * keep the target into play" [ANK 20190827]; only the high bidder pays, and
+ * pays the victim [LSJ 20031121-1]. The card is put in play while the bids
+ * run and burned if nobody bids; nothing reads an Extremis Boon until it has
+ * a `boonCreditor`. §5
+ */
+const extremisBoon: CardHandler = {
+  ...compileSpec(specByName("Extremis Boon")),
+  isOutOfTurnMaster: true,
+  // The steal is the HIGH BIDDER's, on a card the victim controls.
+  abilityAnySeat: true,
+  options(card, ctx) {
+    if (ctx.window !== "oust") return [];
+    // "Only usable when YOU are being ousted."
+    const me = getSeat(ctx.state, ctx.seat);
+    if (me.ousted || me.pool > 0 || !outOfTurnOpen(ctx)) return [];
+    // A table that cannot bid would leave the card doing nothing.
+    if (extremisBidders(ctx.state, ctx.seat).length === 0) return [];
+    return [
+      {
+        id: playOptionId(this.name, null, card.id),
+        kind: "playCard",
+        label: `${this.name} — the table may bid to keep you in the game`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: { seat: ctx.seat },
+      },
+    ];
+  },
+  resolve(play, ops) {
+    const victim = play.seat;
+    if (getSeat(ops.state, victim).ousted || getSeat(ops.state, victim).pool > 0) return;
+    const order = extremisBidders(ops.state, victim);
+    if (order.length === 0) return;
+    putMasterInPlay(play, ops);
+    startAuction(ops, extremisAuction, this.name, play.card.id, order, { victim });
+  },
+  choiceOptions(frame, state) {
+    if (!frame.params["victim"]) return [];
+    return auctionOptions(this.name, frame, state, extremisAuction);
+  },
+  applyChoice(frame, choice, ops) {
+    if (!frame.params["victim"]) return;
+    auctionAnswer(this.name, frame, choice, ops, extremisAuction);
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.master" || ctx.seat !== ctx.turnSeat) return [];
+    const holder = entry.controller ?? owner.seat;
+    const creditor = entry.boonCreditor;
+    if (!creditor) return [];
+    const holderPool = getSeat(ctx.state, holder).pool;
+    if (ctx.seat === creditor) {
+      // "As a MASTER PHASE ACTION, the high bidder may steal up to 2 pool
+      // from you" — so it needs one left, and spending it is the latch.
+      const tf = ctx.state.frames[0];
+      if (tf?.kind !== "turn" || tf.masterActionsLeft <= 0) return [];
+      const out: LegalOption[] = [];
+      for (let n = 1; n <= Math.min(2, holderPool); n++) {
+        out.push({
+          id: `ability:${this.name}:${entry.card.id}:steal:${n}`,
+          kind: "useAbility",
+          label: `${this.name}: steal ${n} pool from ${holder} (master phase action)`,
+          source: entry.card.id,
+          params: { steal: String(n) },
+        });
+      }
+      return out;
+    }
+    if (ctx.seat === holder) {
+      // "You may burn this card by giving that Methuselah 6 pool during your
+      // master phase" — not a master phase action, and never your last pool
+      // (the Life Boon line).
+      if (getSeat(ctx.state, creditor).ousted || holderPool <= 6) return [];
+      return [
+        {
+          id: `ability:${this.name}:${entry.card.id}:payoff`,
+          kind: "useAbility",
+          label: `${this.name}: give ${creditor} 6 pool to burn it`,
+          source: entry.card.id,
+          params: { give: "6" },
+        },
+      ];
+    }
+    return [];
+  },
+  useAbility(entry, _owner, choice, ops) {
+    // A SEAT card's `owner` here is the deciding seat (the high bidder, on
+    // a steal), so the holder is read off the table instead.
+    const holder = ops.state.seats.find((s) =>
+      s.permanents.some((p) => p.card.id === entry.card.id),
+    )?.id;
+    const creditor = entry.boonCreditor;
+    if (!holder || !creditor) return;
+    if (choice.params["give"] !== undefined) {
+      if (getSeat(ops.state, holder).pool <= 6) return;
+      ops.emit({ type: "PoolBurned", seat: holder, amount: 6 });
+      ops.emit({ type: "PoolGained", seat: creditor, amount: 6 });
+      ops.burnPermanent(entry.card.id);
+      return;
+    }
+    ops.spendMasterAction();
+    const n = Math.min(Number(choice.params["steal"] ?? "0"), getSeat(ops.state, holder).pool);
+    if (n > 0) {
+      ops.emit({ type: "PoolBurned", seat: holder, amount: n });
+      ops.emit({ type: "PoolGained", seat: creditor, amount: n });
+    }
+  },
+};
+
+/**
+ * Hostile Takeover (100939) — "Master. Choose a vampire with capacity of 6
+ * or less. Each Methuselah bids pool for control of that vampire. The
+ * highest bid goes to the vampire's controller; that bidder then takes
+ * control of the vampire. If the controller wins, half the winning bid
+ * (rounded up) goes to the blood bank."
+ *
+ * "Each Methuselah" is every standing seat, the controller included, asked
+ * from the one who played it: "the player who played the card conducts the
+ * auction" [LSJ 19990104]. "Since the controller pays a reduce cost, they
+ * can bid up to twice their current pool total, while other Methuselahs can
+ * bid up to their pool total" [LSJ 19990825]. A vampire in torpor is still
+ * a vampire in play. §3
+ */
+const hostileTakeoverAuction: AuctionRules = {
+  opening: () => 1,
+  most: (state, p, seat) => getSeat(state, seat).pool * (seat === p["holder"] ? 2 : 1),
+  bid(state, p, seat, n) {
+    const name = findMinion(state, p["target"] ?? "")?.name ?? p["target"];
+    const pays = seat === p["holder"] ? Math.ceil(n / 2) : n;
+    return {
+      label: `Hostile Takeover: bid ${n} pool for ${name}${pays !== n ? ` (you pay ${pays})` : ""}`,
+      params: { bidOn: p["target"] ?? "", pays: String(pays) },
+    };
+  },
+  settle(ops, _cardId, p, leader, high) {
+    const holder = p["holder"];
+    const m = findMinion(ops.state, p["target"] ?? "");
+    if (!leader || !holder || !m) return;
+    // "If the controller wins, half the winning bid (rounded up) goes to
+    // the blood bank" — and the vampire stays where it is.
+    if (leader === holder) {
+      payBid(ops, holder, null, Math.ceil(high / 2));
+      return;
+    }
+    payBid(ops, leader, holder, high);
+    takeMinionControl(ops, m.id, leader);
+  },
+};
+
+const hostileTakeover: CardHandler = {
+  ...compileSpec(specByName("Hostile Takeover")),
+  // Aimed at a rival's vampire, it is a bid to take it.
+  playEffects: () => [{ tag: "steal" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const out: LegalOption[] = [];
+    for (const s of ctx.state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        if (m.kind !== "vampire" || capacityOf(m) > 6) continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id),
+          kind: "playCard",
+          label: `${this.name} — the table bids for ${m.name}`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id, auction: "control" },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const m = findMinion(ops.state, play.params["target"] ?? "");
+    if (!m) return; // burned during the as-played window
+    const order = seatsFrom(ops.state, play.seat);
+    startAuction(ops, hostileTakeoverAuction, this.name, play.card.id, order, {
+      target: m.id,
+      holder: m.controller,
+    });
+  },
+  choiceOptions(frame, state) {
+    return auctionOptions(this.name, frame, state, hostileTakeoverAuction);
+  },
+  applyChoice(frame, choice, ops) {
+    auctionAnswer(this.name, frame, choice, ops, hostileTakeoverAuction);
+  },
+};
+
+/** "Choose a card you control": the cards in play `seat` controls — its
+ *  minions, the cards on them, its own permanents, and anything it
+ *  controls on another seat's minion (a master played there, p. 16). A
+ *  vampire's own ability entry is the vampire, not a second card. */
+function cardsControlledBy(state: GameState, seat: SeatId): Array<{ id: string; name: string }> {
+  const out: Array<{ id: string; name: string }> = [];
+  for (const s of state.seats) {
+    if (s.ousted) continue;
+    for (const p of s.permanents) {
+      if ((p.controller ?? s.id) === seat) out.push({ id: p.card.id, name: p.card.name });
+    }
+    for (const m of s.minions) {
+      if (m.controller === seat) out.push({ id: m.id, name: m.name });
+      for (const a of m.attached) {
+        if (a.card.id === m.id) continue;
+        if ((a.controller ?? m.controller) === seat) out.push({ id: a.card.id, name: a.card.name });
+      }
+    }
+  }
+  return out;
+}
+
+/** The minion a card in play is on, if it is on one. */
+function bearerOf(state: GameState, cardId: CardInstanceId): MinionState | null {
+  for (const s of state.seats) {
+    for (const m of s.minions) {
+      if (m.id !== cardId && m.attached.some((a) => a.card.id === cardId)) return m;
+    }
+  }
+  return null;
+}
+
+/**
+ * Malkavian Time Auction (101158) — "Master. Choose a card you control.
+ * Starting to your left and proceeding clockwise, other Methuselahs may bid
+ * pool for control of that card. Highest bidder takes control of the card.
+ * You collect pool from the two highest bidders."
+ *
+ * "Bidding continues until noone wants to bid. You do not participate in
+ * the bid" [LSJ 20030604]. The runner-up pays too, for nothing — that is
+ * the card. "Requirements do not apply when taking control of a card
+ * already in play" [TOM 19960226-1], and "if an equipment, retainer or
+ * location on a minion changes controller, the new controller chooses a new
+ * target they control for them" [LSJ 20030606]. Any other card on a minion
+ * (a master) changes controller and stays where it is. A bidder may bid up
+ * to their pool, the Hostile Takeover line [LSJ 19990825]. §3
+ */
+const timeAuctionRules: AuctionRules = {
+  opening: () => 1,
+  most: (state, _p, seat) => getSeat(state, seat).pool,
+  bid: (_state, p, _seat, n) => ({
+    label: `Malkavian Time Auction: bid ${n} pool for ${p["targetName"] ?? p["target"]}`,
+    params: { bidOn: p["target"] ?? "", pays: String(n), runnerUpPays: "1" },
+  }),
+  settle(ops, cardId, p, leader, high, bids) {
+    const seller = p["seller"];
+    const target = p["target"];
+    if (!leader || !seller || !target) return;
+    // "You collect pool from the TWO highest bidders." Every raise tops the
+    // last, so the runner-up's best bid is the highest that is not the
+    // winner's.
+    let runnerUp: SeatId | null = null;
+    let second = 0;
+    for (const [s, n] of bids) {
+      if (s !== leader && n > second) {
+        runnerUp = s;
+        second = n;
+      }
+    }
+    payBid(ops, leader, seller, high);
+    if (runnerUp !== null) payBid(ops, runnerUp, seller, second);
+    if (findMinion(ops.state, target)) {
+      takeMinionControl(ops, target, leader);
+      return;
+    }
+    const bearer = bearerOf(ops.state, target);
+    ops.changePermanentControl(target, leader);
+    if (!bearer) return;
+    const entry = bearer.attached.find((a) => a.card.id === target);
+    if (!entry) return; // the incoming copy of a unique, burned (p. 17)
+    const h = ops.registry[entry.card.name];
+    const possession = h?.isEquipment === true || h?.isRetainer === true || entry.tags.includes("location");
+    if (!possession || bearer.controller === leader) return;
+    // A possession needs a minion of its new controller to sit on. With
+    // none, there is nothing to put it on, and it is burned.
+    if (getSeat(ops.state, leader).minions.length === 0) {
+      ops.burnPermanent(target);
+      return;
+    }
+    ops.raiseChoice({
+      seat: leader,
+      cardName: "Malkavian Time Auction",
+      cardId,
+      key: "bearer",
+      params: { target, targetName: entry.card.name },
+    });
+  },
+};
+
+const malkavianTimeAuction: CardHandler = {
+  ...compileSpec(specByName("Malkavian Time Auction")),
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    // "OTHER Methuselahs may bid": a table of one has nobody to sell to.
+    if (seatsFrom(ctx.state, ctx.seat).length < 2) return [];
+    return cardsControlledBy(ctx.state, ctx.seat).map((c) => ({
+      id: playOptionId(this.name, null, c.id, card.id),
+      kind: "playCard" as const,
+      label: `${this.name} — the table bids for ${c.name}`,
+      card: card.id,
+      name: this.name,
+      minion: null,
+      mode: null,
+      params: { target: c.id, auction: "sale" },
+    }));
+  },
+  resolve(play, ops) {
+    const target = play.params["target"] ?? "";
+    const still = cardsControlledBy(ops.state, play.seat).find((c) => c.id === target);
+    if (!still) return; // gone, or no longer the player's, as it resolves
+    const order = seatsFrom(ops.state, preyOf(ops.state, play.seat)).filter((s) => s !== play.seat);
+    startAuction(ops, timeAuctionRules, this.name, play.card.id, order, {
+      target,
+      targetName: still.name,
+      seller: play.seat,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key === "bid") return auctionOptions(this.name, frame, state, timeAuctionRules);
+    // "…the new controller chooses a new target they control for them."
+    const what = frame.params["targetName"] ?? frame.params["target"];
+    return getSeat(state, frame.seat).minions.map((m) => ({
+      id: `choice:${this.name}:${frame.cardId}:bearer:${m.id}`,
+      kind: "answerChoice" as const,
+      label: `${this.name}: put ${what} on ${m.name}`,
+      params: { bearer: m.id },
+    }));
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key === "bid") {
+      auctionAnswer(this.name, frame, choice, ops, timeAuctionRules);
+      return;
+    }
+    const target = frame.params["target"] ?? "";
+    const from = bearerOf(ops.state, target);
+    const to = choice.params["bearer"];
+    if (!from || !to || !findMinion(ops.state, to)) return;
+    ops.emit({ type: "EquipmentMoved", cardId: target, from: from.id, to });
+  },
+};
+
+/** "Methuselahs may be credited up to 5 pool on the bid." */
+const TEMPTATION_CREDIT = 5;
+
+/** Pay `high` with `credit` of it owed, and take the vampire. */
+function settleTemptation(
+  ops: EngineOps,
+  target: MinionId,
+  winner: SeatId,
+  high: number,
+  credit: number,
+): void {
+  payBid(ops, winner, null, high - credit);
+  if (credit > 0) {
+    const owed = getSeat(ops.state, winner).poolDebt ?? 0;
+    ops.emit({ type: "PoolDebtChanged", seat: winner, debt: owed + credit });
+  }
+  takeMinionControl(ops, target, winner);
+}
+
+/**
+ * Temptation of Greater Power (101955) — "Master. Requires a ready justicar.
+ * Choose a vampire. Methuselahs may bid pool for control of that vampire.
+ * The winner pays the bid to the blood bank and takes control. Methuselahs
+ * may be credited up to 5 pool on the bid: winner pays 1 pool toward his or
+ * her debt during his or her discard phase until the debt is repaid. Only 1
+ * Temptation of Greater Power can be played in a game."
+ *
+ * Every standing seat bids, from the one who played it, the Hostile
+ * Takeover order. "Credited up to 5" lets a bid run 5 past the bidder's
+ * pool, and the WINNER chooses how much of it to owe: at least what their
+ * pool cannot cover, at most 5. The debt is the seat's (`poolDebt`), paid in
+ * the engine's discard phase, because this card is in the ash heap by then.
+ * §4
+ */
+const temptationAuction: AuctionRules = {
+  opening: () => 1,
+  most: (state, _p, seat) => getSeat(state, seat).pool + TEMPTATION_CREDIT,
+  bid(state, p, _seat, n) {
+    const name = findMinion(state, p["target"] ?? "")?.name ?? p["target"];
+    return {
+      label: `Temptation of Greater Power: bid ${n} pool for ${name}`,
+      params: { bidOn: p["target"] ?? "", pays: String(n) },
+    };
+  },
+  settle(ops, cardId, p, leader, high) {
+    const target = p["target"];
+    if (!leader || !target || !findMinion(ops.state, target)) return;
+    const pool = getSeat(ops.state, leader).pool;
+    const least = Math.max(0, high - pool);
+    const most = Math.min(TEMPTATION_CREDIT, high);
+    if (least === most) {
+      settleTemptation(ops, target, leader, high, least);
+      return;
+    }
+    ops.raiseChoice({
+      seat: leader,
+      cardName: "Temptation of Greater Power",
+      cardId,
+      key: "credit",
+      params: { target, high: String(high), least: String(least), most: String(most) },
+    });
+  },
+};
+
+const temptationOfGreaterPower: CardHandler = {
+  ...compileSpec(specByName("Temptation of Greater Power")),
+  playEffects: () => [{ tag: "steal" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    if (!controllerMeetsRequirements(ctx.state, ctx.seat, specByName(this.name))) return [];
+    const out: LegalOption[] = [];
+    for (const s of ctx.state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        if (m.kind !== "vampire") continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id),
+          kind: "playCard",
+          label: `${this.name} — the table bids for ${m.name}`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id, auction: "control" },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const m = findMinion(ops.state, play.params["target"] ?? "");
+    if (!m) return;
+    const order = seatsFrom(ops.state, play.seat);
+    startAuction(ops, temptationAuction, this.name, play.card.id, order, { target: m.id });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key === "bid") return auctionOptions(this.name, frame, state, temptationAuction);
+    const high = Number(frame.params["high"] ?? "0");
+    const least = Number(frame.params["least"] ?? "0");
+    const most = Number(frame.params["most"] ?? "0");
+    // Most credit first: owing later is pool kept now.
+    const out: LegalOption[] = [];
+    for (let c = most; c >= least; c--) {
+      out.push({
+        id: `choice:${this.name}:${frame.cardId}:credit:${c}`,
+        kind: "answerChoice",
+        label: `${this.name}: pay ${high - c} pool now and owe ${c}`,
+        params: { credit: String(c) },
+      });
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key === "bid") {
+      auctionAnswer(this.name, frame, choice, ops, temptationAuction);
+      return;
+    }
+    const target = frame.params["target"] ?? "";
+    if (!findMinion(ops.state, target)) return;
+    const credit = Number(choice.params["credit"] ?? frame.params["least"] ?? "0");
+    settleTemptation(ops, target, frame.seat, Number(frame.params["high"] ?? "0"), credit);
   },
 };
 
@@ -25006,6 +26050,13 @@ export function buildHandlerRegistry(): HandlerRegistry {
     momentumsEdge,
     gambitAccepted,
     lifeBoon,
+    lesserBoon,
+    majorBoon,
+    minorBoon,
+    extremisBoon,
+    hostileTakeover,
+    malkavianTimeAuction,
+    temptationOfGreaterPower,
     absolutionOfTheDiabolist,
     layLow,
     hideTheMind,

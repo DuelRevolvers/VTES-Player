@@ -120,10 +120,11 @@ describe("Song in the Dark (101825) — the flag, and nothing else", () => {
     // Normal: 2 blood burned to mend it, still ready (p. 34).
     expect(normal.blood).toBe(3); // capacity 5, less 2 mended
     expect(normal.torpor).toBe(false);
-    // Aggravated: no blood spent, straight to torpor. The two facts move in
-    // OPPOSITE directions, which is what makes this a real assertion rather
-    // than "something changed".
-    expect(agg.blood).toBe(5);
+    // Aggravated: none of it mended. The first point wounds and the second
+    // costs 1 blood to prevent destruction (p. 32, the Tamoszius example):
+    // 4 blood, in torpor. The two facts move in OPPOSITE directions, which
+    // is what makes this a real assertion rather than "something changed".
+    expect(agg.blood).toBe(4);
     expect(agg.torpor).toBe(true);
   });
 });
@@ -143,10 +144,11 @@ describe("Burning Wrath (100271) — an aggravated HAND strike", () => {
       settle(a.engine);
       expect(a.v1.blood, `${mode} cost`).toBe(before - 3);
       playOut(a.engine, a.state);
-      // The hit is aggravated: torpor, with M's blood untouched because
-      // aggravated damage cannot be mended (p. 34).
+      // The hit is aggravated: torpor, and nothing mended. Of 2 (basic) or
+      // 3 (superior) points the first wounds and each after it costs 1
+      // blood to prevent destruction (p. 32).
       expect(a.m.inTorpor, `${mode} torpor`).toBe(true);
-      expect(a.m.blood, `${mode} unmended`).toBe(a.m.capacity);
+      expect(a.m.blood, `${mode} unmended`).toBe(a.m.capacity - (mode === "basic" ? 1 : 2));
     }
   });
 });
@@ -233,8 +235,9 @@ describe("Burst of Sunlight (100273) — the strike hurts its own striker", () =
     expect(a.v1.inTorpor).toBe(true);
     // M's own hand strike lands 1 NORMAL damage on V1, which is mended — so
     // V1's blood is not a clean read of the recoil, and the recoil's mark is
-    // the torpor above. M's is: aggravated leaves the blood alone.
-    expect(a.m.blood).toBe(a.m.capacity);
+    // the torpor above. M's is: of 2 aggravated, the first wounds and the
+    // second costs 1 blood (p. 32).
+    expect(a.m.blood).toBe(a.m.capacity - 1);
   });
 });
 

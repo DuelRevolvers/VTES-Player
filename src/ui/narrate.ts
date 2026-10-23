@@ -180,6 +180,10 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
       return { text: `${m(ev.minion)} mends ${plural(ev.amount, "damage", "damage")}.`, weight: "minor" };
     case "WentToTorpor":
       return { text: `${M(ev.minion)} goes to torpor.`, weight: "major" };
+    case "TorporPending":
+      return { text: `${M(ev.minion)} is going to torpor.`, weight: "normal" };
+    case "TorporPrevented":
+      return { text: `${M(ev.minion)} is kept out of torpor.`, weight: "major" };
     case "CombatEnded":
       return { text: `Combat ends after ${plural(ev.rounds, "round")}.`, weight: "normal" };
     case "PressUsed":
@@ -352,6 +356,14 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
       };
     case "VictoryPointGained":
       return { text: `${ev.seat} gains a victory point.`, weight: "major" };
+    case "PoolDebtChanged":
+      return {
+        text:
+          ev.debt > 0
+            ? `${ev.seat} owes ${ev.debt} pool to the blood bank.`
+            : `${ev.seat} has repaid their debt.`,
+        weight: "normal",
+      };
 
     default: {
       // Readable last resort: the event name spaced out, plus its scalar

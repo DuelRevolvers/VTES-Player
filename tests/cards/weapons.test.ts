@@ -51,7 +51,9 @@ describe("Flamethrower (100742) — aggravated gun", () => {
     ]);
 
     expect(v1.inTorpor).toBe(true);
-    expect(v1.blood).toBe(5); // aggravated not mended
+    // Not mended: the first point wounds, the second costs 1 blood to
+    // prevent destruction (p. 32).
+    expect(v1.blood).toBe(4);
   });
 });
 

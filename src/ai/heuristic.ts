@@ -26,7 +26,7 @@
 import type { Agent, PlayerView } from "../engine/agent.ts";
 import type { DecisionPoint, LegalOption, PlayEffect, PlayEffectTag, WindowId } from "../engine/options.ts";
 import type { MinionState, SeatId } from "../engine/state.ts";
-import { preyOf, relationTo } from "./seats.ts";
+import { predatorOf, preyOf, relationTo } from "./seats.ts";
 
 /**
  * Every weight the policy uses, in one place so it can be read, argued
@@ -751,6 +751,11 @@ export class HeuristicAgent implements Agent {
         // positive reason to pick the gun rather than the leftover after
         // the hand strike was penalised.
         if (o.strikeReaches && view.combat?.range === "long") return w.strikeRangedAtLong;
+        // NEVER BUY OUT A BOON. "Burn this card by giving that Methuselah 6
+        // pool" (Extremis Boon) is six pool now against a debt this policy
+        // cannot price, so it keeps paying the debt instead.
+        // docs/boons-design.md §7
+        if (o.params["give"] !== undefined) return w.selfOustGuard;
         return w.playCard;
 
       case "useEntryAction":
@@ -911,6 +916,43 @@ export class HeuristicAgent implements Agent {
       if (payer.m.blood <= 1) return base + w.choicePayBloodEmpty;
       return base + w.choicePayBlood;
     }
+
+    // A BID to keep a Methuselah in the game (Extremis Boon). The opening
+    // bid, when there is pool to spare and the victim is not my prey —
+    // whose oust is my point and 6 pool. Anything above the opening bid
+    // loses to the pass answer, which scores `base`: this policy does not
+    // bid a debt up. docs/boons-design.md §7
+    const bidFor = o.params["bidFor"];
+    if (bidFor !== undefined) {
+      const bid = Number(o.params["bid"]);
+      if (bidFor === preyOf(view, me)) return base - 1;
+      if (poolAfter(view, me, bid) <= w.poolFloor) return base - 1;
+      return o.params["minimum"] === "1" ? base + 1 : base - 1;
+    }
+
+    // A BID for control of a vampire (Hostile Takeover, Temptation of
+    // Greater Power). The least bid that tops the table, while what winning
+    // costs (`pays`: half, for the controller) stays within half the
+    // vampire's capacity and above the pool floor — so the controller
+    // defends its own vampire at half price. Never where the runner-up pays
+    // too (Malkavian Time Auction): a losing bid there is pool for nothing.
+    // docs/auctions-design.md §6
+    const bidOn = o.params["bidOn"];
+    if (bidOn !== undefined) {
+      if (o.params["runnerUpPays"] === "1") return base - 1;
+      const target = findMinion(view, bidOn)?.m;
+      if (!target || target.kind !== "vampire") return base - 1;
+      const pays = Number(o.params["pays"] ?? o.params["bid"]);
+      if (poolAfter(view, me, pays) <= w.poolFloor) return base - 1;
+      if (pays > Math.ceil(target.capacity / 2)) return base - 1;
+      return o.params["minimum"] === "1" ? base + 1 : base - 1;
+    }
+
+    // HOW MUCH TO OWE (Temptation of Greater Power): the most. The total is
+    // the same either way, and pool kept now is pool that can still be
+    // spent.
+    const credit = o.params["credit"];
+    if (credit !== undefined) return base + Number(credit) / 10;
 
     // A DISCARD, or any choice that names one of my cards: shed the most
     // redundant one.
@@ -1510,7 +1552,50 @@ export class HeuristicAgent implements Agent {
     if (dp.window === "oust") {
       const saved = o.params["seat"];
       if (saved === undefined || saved === preyOf(view, me)) return w.selfOustGuard;
-      if (pool - 1 <= w.poolFloor) return w.selfOustGuard;
+      // Saving YOURSELF costs nothing (Extremis Boon asks the table to pay),
+      // and a seat on no pool is always under its floor — so the floor
+      // prices a gift to someone else, never a rescue of me.
+      // docs/boons-design.md §7
+      if (saved !== me && pool - 1 <= w.poolFloor) return w.selfOustGuard;
+    }
+
+    // AN AUCTION. Selling one of my own cards (Malkavian Time Auction) is a
+    // price this policy cannot set, so it never calls one. An auction for
+    // control is called only on a rival's vampire worth bidding for, with
+    // pool left after the card to open the bidding. docs/auctions-design.md §6
+    const auction = o.params["auction"];
+    if (auction === "sale") return w.selfOustGuard;
+    if (auction === "control") {
+      const target = findMinion(view, o.params["target"] ?? "");
+      if (!target || target.seat === me) return w.selfOustGuard;
+      if (Math.ceil(target.m.capacity / 2) < 2) return w.selfOustGuard;
+      if (pool - cost.pool - 1 <= w.poolFloor) return w.selfOustGuard;
+    }
+
+    // NEVER UNDO YOUR OWN BLOCK. "The action resolves as if unblocked
+    // instead" (Lesser Boon) lets through the very action this seat chose
+    // to stop, for a promise this policy cannot price.
+    if (o.params["unblock"] !== undefined) return w.selfOustGuard;
+
+    // PAYING SOMEBODY ELSE'S BLEED (Major Boon) is a pool spend the option
+    // does not carry as a cost. Only to stop an oust — the bleed takes the
+    // target's last pool — never for my prey, whose oust is my point, and
+    // never down to the floor.
+    const pays = o.params["pays"];
+    if (pays !== undefined) {
+      const saved = o.params["seat"];
+      const amount = Number(pays);
+      const savedPool = saved ? (seatOf(view, saved)?.pool ?? 0) : 0;
+      if (!saved || saved === preyOf(view, me)) return w.selfOustGuard;
+      if (amount < savedPool || pool - amount <= w.poolFloor) return w.selfOustGuard;
+    }
+
+    // KEEPING A VAMPIRE OUT OF TORPOR (Minor Boon) is a gift unless the
+    // vampire is my predator's: then the card's own clause, "this vampire
+    // cannot bleed you", turns it against them.
+    if (dp.window === "torpor") {
+      const kept = o.params["target"] ? findMinion(view, o.params["target"]) : null;
+      if (!kept || kept.seat !== predatorOf(view, me)) return w.selfOustGuard;
     }
 
     // NEVER CANCEL YOUR OWN CARD. Inside another card's as-played window a

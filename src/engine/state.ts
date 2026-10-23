@@ -204,6 +204,14 @@ export interface MinionState {
   /** Wake effect active for the current action — does NOT unlock (p. 44). */
   awake: boolean;
   inTorpor: boolean;
+  /** GOING to torpor, not there yet: "only usable when a vampire … is going
+   *  into torpor … to prevent that vampire from going to torpor" (Minor
+   *  Boon). Set only when some Methuselah could play into the `torpor`
+   *  window, which opens once no combat is underway [RTR 19950509-2]; until
+   *  then the vampire is neither ready nor in torpor. `other` is the
+   *  opposing combatant, kept for the combat-leave hooks (Dead Pool) that
+   *  fire when the vampire actually arrives. docs/boons-design.md §4 */
+  torporPending?: { other: MinionId | null };
   /** Discipline name -> level, e.g. { dom: "superior" }. */
   disciplines: Record<string, DisciplineLevel>;
   /** One bleed action per minion per turn (p. 20). */
@@ -993,6 +1001,22 @@ export interface PermanentStatics {
    *  block what is aimed at their own Methuselah.
    *  docs/block-taxes-design.md §4 */
   cannotBlockUndirected?: boolean;
+  /** "This minion cannot block YOUR minions" (Lesser Boon) — "your" is this
+   *  card's controller, not the bearer's. docs/boons-design.md §2 */
+  cannotBlockControllersMinions?: boolean;
+  /** "Burn this card if you block this minion again" (Lesser Boon) — a
+   *  successful block of the bearer by a minion this card's controller
+   *  controls. §2 */
+  burnIfBlockedByController?: boolean;
+  /** "…or when this minion's controller has less than N pool" (Lesser
+   *  Boon) — swept in `settle`, so it holds whichever way the pool moved. §2 */
+  burnWhenBearerControllerPoolBelow?: number;
+  /** "This vampire cannot bleed you" (Minor Boon) — "you" is this card's
+   *  controller, and a redirect to them is barred too [PIB 20130711]. §4 */
+  cannotBleedController?: boolean;
+  /** "Burn this card if this vampire rescues a vampire you control from
+   *  torpor" (Minor Boon). §4 */
+  burnOnRescueOfController?: boolean;
   /** "DIRECTED actions cost this vampire an additional blood" (Kaymakli
    *  Barrier) — a surcharge on the bearer's own actions, charged at
    *  announcement beside the torpor tax, which is the one existing tax of
@@ -1345,6 +1369,10 @@ export interface PermanentInPlay {
    *  unlock phases it may steal from, and whose next victory point it
    *  takes. docs/victory-points-design.md §4 */
   boonTarget?: SeatId;
+  /** The Methuselah this card's controller OWES — the reverse of
+   *  `boonTarget`: "the high bidder may steal up to 2 pool from you"
+   *  (Extremis Boon). docs/boons-design.md §5 */
+  boonCreditor?: SeatId;
   /** A minion this card is ABOUT but is not attached to (Slaughtering the
    *  Herd sits on the predator's vampire and feeds — and dies with — the
    *  vampire that played it). docs/taking-actions-design.md §6 */
@@ -1469,6 +1497,13 @@ export interface SeatState {
    *  reproduces p. 49's "a hand size of 6 until your discard phase"
    *  without modelling hand size. docs/end-action-design.md §6 */
   delayedDrawsDiscard?: number;
+  /** Pool still owed to the blood bank, 1 of it paid in each of this
+   *  seat's discard phases — "Methuselahs may be credited up to 5 pool on
+   *  the bid: winner pays 1 pool toward his or her debt during his or her
+   *  discard phase until the debt is repaid" (Temptation of Greater Power).
+   *  On the SEAT because the card that made it is in the ash heap.
+   *  docs/auctions-design.md §4 */
+  poolDebt?: number;
   /** Action keys no minion of this seat may perform again this turn
    *  ("minions controlled by the acting Methuselah cannot perform the
    *  same political action again this turn" — Delaying Tactics). Cleared
@@ -1735,6 +1770,9 @@ export type GameEvent =
   /** "Lose 1 victory point" (Gambit Accepted) — the first card that spends
    *  one. docs/victory-points-design.md §3 */
   | { type: "VictoryPointLost"; seat: SeatId }
+  /** A seat's pool debt is now `debt` (Temptation of Greater Power's credit,
+   *  and each payment toward it). docs/auctions-design.md §4 */
+  | { type: "PoolDebtChanged"; seat: SeatId; debt: number }
   | { type: "GameEnded"; winner: SeatId | null }
   /** A Methuselah announced their intent to withdraw (p. 38). */
   | { type: "WithdrawalAnnounced"; seat: SeatId }
@@ -1813,6 +1851,11 @@ export type GameEvent =
   | { type: "UncontrolledRemovedFromGame"; seat: SeatId; minion: MinionId }
   | { type: "VampireEnteredPlay"; seat: SeatId; minion: MinionId; blood: number }
   | { type: "LeftTorpor"; minion: MinionId }
+  /** A vampire is going to torpor and a Minor Boon could still stop it
+   *  (`MinionState.torporPending`). docs/boons-design.md §4 */
+  | { type: "TorporPending"; minion: MinionId; other: MinionId | null }
+  /** "…to prevent that vampire from going to torpor" (Minor Boon). */
+  | { type: "TorporPrevented"; minion: MinionId }
   // Action cards (phase 3).
   | { type: "CardBurned"; cardId: CardInstanceId; name: string; seat?: SeatId }
   /** A card moved into an ash heap (p. 16). Emitted alongside the event
@@ -2271,6 +2314,19 @@ export interface ActionFrame {
    *  bleed amount, so a card reading the amount still sees it.
    *  docs/bleed-redirects-design.md §3 */
   bleedPoolCap?: number;
+  /** "You burn pool for this bleed instead of the target Methuselah (and the
+   *  bleed is still successful)" (Major Boon) — the seat that pays. The
+   *  target, the Edge and every success hook are unchanged.
+   *  docs/boons-design.md §3 */
+  bleedPayer?: SeatId;
+  /** The Major Boon PLAYED on this bleed: "…or this card if you don't burn
+   *  at least 1 pool" — burned by `finishAction` unless `bleedBoonPaid`. */
+  bleedBoonCard?: CardInstanceId;
+  bleedBoonPaid?: boolean;
+  /** A Major Boon has been played or burned on this bleed. From then on only
+   *  cards usable "when the action would be successful" may be played
+   *  [LSJ 20090205], and no second boon [LSJ 19990218]. */
+  bleedBoonApplied?: boolean;
   /** "This vampire burns 1 blood to continue the action AS IF UNBLOCKED"
    *  (Go-getter superior) — set in the `action.afterResolution` window and
    *  consumed the moment that window closes, which is the only point at
@@ -2562,6 +2618,11 @@ export interface BlockAttemptFrame {
    *  does not lock them and does not spend their right to attempt again
    *  (p. 25). docs/dawn-operation-design.md */
   cancelled?: boolean;
+  /** "The action resolves as if unblocked instead" (Lesser Boon) — the
+   *  attempt neither succeeds nor fails: no `BlockSucceeded`, so nothing
+   *  that reads a successful block sees one [RTR 20080808], and the
+   *  blocker is not locked. docs/boons-design.md §2 */
+  asIfUnblocked?: boolean;
 }
 
 /**
@@ -3667,6 +3728,20 @@ export interface OustFrame {
   cycle: ImpulseCycle;
 }
 
+/**
+ * One or more vampires are going to torpor and a Minor Boon could stop it —
+ * "Is played after the combat ends, keeping the vampire out of torpor"
+ * [RTR 19950509-2]. Which vampires is DERIVED from
+ * `MinionState.torporPending`; closing the window sends the ones nobody
+ * saved. Pushed by `settle` once no combat is underway, and only when some
+ * seat can play into it — the OustFrame deviation.
+ * docs/boons-design.md §4
+ */
+export interface TorporFrame {
+  kind: "torpor";
+  cycle: ImpulseCycle;
+}
+
 /** After a leave-torpor action is blocked by a vampire (p. 24), that
  *  blocker's controller may diablerise the acting torpor vampire or
  *  decline; either way the leave-torpor action then fails. */
@@ -3829,7 +3904,8 @@ export type Frame =
   | ReferendumFrame
   | DiablerieOfferFrame
   | ChoiceFrame
-  | OustFrame;
+  | OustFrame
+  | TorporFrame;
 
 // ---------------------------------------------------------------------------
 // Game state
@@ -3965,7 +4041,10 @@ export function findUncontrolled(
 }
 
 export function isReady(m: MinionState): boolean {
-  return !m.inTorpor;
+  // A vampire GOING to torpor has left the ready region already — the
+  // combat it was in ends — even though it has not arrived (Minor Boon's
+  // window). docs/boons-design.md §4
+  return !m.inTorpor && !m.torporPending;
 }
 
 /** May act/block/react without a wake: ready and unlocked. With a wake, a

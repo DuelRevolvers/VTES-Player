@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 315 test files, 3408 tests**, with `npm run typecheck`,
+**Green baseline: 319 test files, 3464 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -923,7 +923,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-222 files under `docs/`, one per mechanic that took a decision. **Read the
+224 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -935,7 +935,8 @@ card wave, newest first).
 
 **Kernel / sequencing:** impulse, choice-frames, control-change,
 derived-traits, contested, old-gaps-closeout, victory-points (the oust
-window and the one VP award).
+window and the one VP award), boons (the `torpor` window, a block resolved
+as if unblocked, a bleed someone else pays).
 
 **Combat:** cancel-in-combat, armed-mid-combat, one-each-round,
 conditional-weapons, basic-combat, first-strike, first-strike-cards,
@@ -959,7 +960,7 @@ polling-votes, ballots, politics-locations, referendum-terms, blood-hunt-answers
 once-in-a-game, borrowed-minions, title-riders, in-this-referendum,
 referendum-margin.
 
-**Cards and economies:** blood-bank-actions, blood-banking-locations,
+**Cards and economies:** auctions, blood-bank-actions, blood-banking-locations,
 the-edge, ash-heap-resource, before-range-attachments,
 vehicles-and-havens, hunting-ground-variants, investments, stores-you-fill, burn-the-equipment, discipline-granting-equipment,
 events, gehenna-events, gehenna-unlock, counter-clock-events,

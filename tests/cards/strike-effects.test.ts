@@ -52,7 +52,9 @@ describe("Body Flare (100230) — aggravated damage", () => {
     ]);
 
     expect(m.inTorpor).toBe(true);
-    expect(m.blood).toBe(5); // aggravated is never mended
+    // Never mended: the first point wounds, the second costs 1 blood to
+    // prevent destruction (p. 32).
+    expect(m.blood).toBe(4);
     expect(state.eventLog.some((e) => e.type === "DamageMended" && e.minion === "M")).toBe(false);
   });
 

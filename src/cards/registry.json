@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-22T23:28:12.779Z",
+ "fetchedAt": "2026-10-23T00:52:00.890Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -5424,6 +5424,27 @@
    },
    "supported": true
   },
+  "100676": {
+   "card": {
+    "kind": "library",
+    "id": 100676,
+    "name": "Extremis Boon",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn. Boon.\nOnly usable when you are being ousted. Other Methuselahs may bid pool to keep you in the game. If one does, put this card in play. As a master phase action, the high bidder may steal up to 2 pool from you. You may burn this card by giving that Methuselah 6 pool during your master phase.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/extremisboon.jpg",
+    "sets": [
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
   "100680": {
    "card": {
     "kind": "library",
@@ -7563,6 +7584,32 @@
    },
    "supported": true
   },
+  "100939": {
+   "card": {
+    "kind": "library",
+    "id": 100939,
+    "name": "Hostile Takeover",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Ventrue"
+    ],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master.\nChoose a vampire with capacity of 6 or less. Each Methuselah bids pool for control of that vampire. The highest bid goes to the vampire's controller; that bidder then takes control of the vampire. If the controller wins, half the winning bid (rounded up) goes to the blood bank.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/hostiletakeover.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100944": {
    "card": {
     "kind": "library",
@@ -8586,6 +8633,27 @@
    },
    "supported": true
   },
+  "101095": {
+   "card": {
+    "kind": "library",
+    "id": 101095,
+    "name": "Lesser Boon",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn. Boon.\nOnly usable when a minion you control would successfully block. The action resolves as if unblocked instead. Put this card on the acting minion. This minion cannot block your minions. Burn this card if you block this minion again, or when this minion's controller has less than 6 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/lesserboon.jpg",
+    "sets": [
+     "Lords of the Night"
+    ]
+   },
+   "supported": true
+  },
   "101097": {
    "card": {
     "kind": "library",
@@ -9099,6 +9167,33 @@
    },
    "supported": true
   },
+  "101145": {
+   "card": {
+    "kind": "library",
+    "id": 101145,
+    "name": "Major Boon",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn. Boon. Only usable if another Methuselah is being bled by a minion you do not control and the bleed amount is 1 or more, after blocks are declined.\nPut this card in play. You burn pool for this bleed instead of the target Methuselah (and the bleed is still successful), or this card if you don't burn at least 1 pool.. If you are about to be successfully bled, you can burn this card to have that Methuselah burn pool instead of you (and the bleed is still successful).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/majorboon.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Kindred Most Wanted",
+     "Legacies of Blood",
+     "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101147": {
    "card": {
     "kind": "library",
@@ -9209,6 +9304,30 @@
      "Ancient Hearts",
      "Camarilla Edition",
      "2021 Promo Pack 3"
+    ]
+   },
+   "supported": true
+  },
+  "101158": {
+   "card": {
+    "kind": "library",
+    "id": 101158,
+    "name": "Malkavian Time Auction",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Malkavian"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master.\nChoose a card you control. Starting to your left and proceeding clockwise, other Methuselahs may bid pool for control of that card. Highest bidder takes control of the card. You collect pool from the two highest bidders.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/malkaviantimeauction.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle"
     ]
    },
    "supported": true
@@ -9606,6 +9725,30 @@
     "sets": [
      "New Blood",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "101219": {
+   "card": {
+    "kind": "library",
+    "id": 101219,
+    "name": "Minor Boon",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn. Boon.\nOnly usable when a vampire controlled by another Methuselah is going into torpor. Put this card on that vampire to prevent that vampire from going to torpor (combat still ends, if any). This vampire cannot bleed you. Burn this card if this vampire rescues a vampire you control from torpor.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/minorboon.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -15247,6 +15390,30 @@
     "image": "https://static.krcg.org/card/templehuntingground.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": true
+  },
+  "101955": {
+   "card": {
+    "kind": "library",
+    "id": 101955,
+    "name": "Temptation of Greater Power",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Master. Requires a ready justicar.\nChoose a vampire. Methuselahs may bid pool for control of that vampire. The winner pays the bid to the blood bank and takes control. Methuselahs may be credited up to 5 pool on the bid: winner pays 1 pool toward his or her debt during his or her discard phase until the debt is repaid. Only 1 Temptation of Greater Power can be played in a game.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/temptationofgreaterpower.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true

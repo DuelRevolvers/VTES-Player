@@ -632,6 +632,11 @@ export interface EngineOps {
    *  tail) when the after-resolution window closes.
    *  docs/ledger-closeout.md §11 */
   continueActionAsUnblocked(): void;
+  /** "Only usable when a minion you control would successfully block. The
+   *  action resolves as if unblocked instead" (Lesser Boon) — flags the
+   *  attempt underway; `resolveBlockAttempt` then neither succeeds nor
+   *  fails it and sends the action to state C. docs/boons-design.md §2 */
+  resolveBlockAsUnblocked(): void;
   // Permanents:
   /** Put a card into play as a permanent (seat-level, or attached). */
   putPermanentInPlay(args: {
@@ -1089,6 +1094,12 @@ export interface CardHandler {
    *  Murmur of the False Will's modifier half does not.
    *  docs/events-design.md §3, docs/bleed-redirects-design.md §1 */
   redirectsBleed?(mode: DisciplineLevel | null, variant?: string): boolean;
+  /** This card is played "when the action/bleed WOULD BE SUCCESSFUL" in this
+   *  mode (Spying Mission superior) — the one kind of card still playable
+   *  on a bleed after a Major Boon is played or burned on it
+   *  [LSJ 20090205]. Per MODE, for the reason `redirectsBleed` is.
+   *  docs/boons-design.md §3 */
+  playableWhenActionWouldSucceed?(mode: DisciplineLevel | null): boolean;
   /** Trifles refund one master phase action per phase (p. 10). */
   isTrifle?: boolean;
   /** Out-of-turn masters: playable during another Methuselah's turn,

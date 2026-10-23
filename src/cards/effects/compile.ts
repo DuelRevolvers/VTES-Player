@@ -39,6 +39,7 @@ import {
   blockEligibleSeats,
   auraBlocksPolitical,
   bleedAnnounceTax,
+  bleedBarred,
   canAct,
   canReact,
   canRepeatAction,
@@ -4895,12 +4896,20 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             const toComputed = mode.effects.some(
               (e) => e.kind === "redirectBleed" && e.toPredatorsPredator,
             );
+            // "A bleed from this vampire cannot be redirected to you either"
+            // (Minor Boon) [PIB 20130711] — a destination the acting minion
+            // could not have bled is not one a redirect can send it to.
+            const bleeder = findMinion(ctx.state, af.acting);
+            const barred = (to: SeatId): boolean => !!bleeder && bleedBarred(bleeder, to);
             if (toComputed) {
-              options.push(makeOption(spec, card, m, mode, {}));
+              if (!barred(predatorOf(ctx.state, predatorOf(ctx.state, ctx.seat)))) {
+                options.push(makeOption(spec, card, m, mode, {}));
+              }
             } else {
               for (const seat of ctx.state.seats) {
                 if (seat.ousted) continue;
                 if (seat.id === ctx.seat || seat.id === af.actingSeat) continue;
+                if (barred(seat.id)) continue;
                 options.push(makeOption(spec, card, m, mode, { target: seat.id }));
               }
             }
@@ -9731,6 +9740,15 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // Printed keywords ("Grapple.", "Aim."), central for the same reason as
   // the queries above (docs/weapon-riders-design.md §5).
   handler.cardKeywords = () => spec.keywords ?? [];
+  // "Only usable if a bleed WOULD BE SUCCESSFUL" (Spying Mission superior) —
+  // what a Major Boon leaves playable [LSJ 20090205]. Central for the same
+  // reason, and per mode. docs/boons-design.md §3
+  if (spec.modes.some((m) => m.usable?.includes("ifActionWouldSucceed"))) {
+    handler.playableWhenActionWouldSucceed = (mode) =>
+      spec.modes.some(
+        (m) => (mode === null || m.level === mode) && m.usable?.includes("ifActionWouldSucceed"),
+      );
+  }
   // "Only one X may be played in a game" — read by the engine's one hand-play
   // enumerator, so it holds for every card TYPE rather than for the one type
   // whose compiler happened to check it (docs/hand-churn-design.md §4).
@@ -14859,7 +14877,11 @@ function addAllyAbilities(spec: CardSpec, handler: CardHandler): void {
     // so the parenthetical needs no second condition (§3).
     if (ab?.burnToUnlock && ctx.seat === owner.seat) {
       const af = ctx.action;
-      const blocking = ctx.blockAttempt?.blocker === me.id;
+      // Blocking is the ATTEMPT and, once it succeeds, the combat it starts:
+      // reading only the attempt frame let a successful blocker burn itself
+      // out of its own combat, leaving a combat with one combatant
+      // (docs/auctions-design.md §5).
+      const blocking = ctx.blockAttempt?.blocker === me.id || af?.blockedBy === me.id;
       if (af && af.directed && af.target === owner.seat && !blocking && isReady(me)) {
         for (const t of getSeat(ctx.state, owner.seat).minions) {
           if (t.id === me.id || !isReady(t) || !t.locked) continue;
@@ -17120,10 +17142,11 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     };
   }
   // "BURN ALL BOONS" (Blood Trade) — as the card arrives, over every seat's
-  // play area, reading the printed keyword and the entry's own tags. No boon
-  // in the pool stays in play today, so this burns nothing; it is written as a
-  // read over a set rather than as a no-op, which is what makes the clause
-  // true rather than absent (docs/blood-and-gear-design.md §5).
+  // play area, reading the entry's own tags. It was written when no boon in
+  // the pool stayed in play; five do now (Life, Lesser, Major, Minor and
+  // Extremis Boon), and `putPermanentInPlay` tags each one from its printed
+  // keyword — Life Boon arrived untagged and this burn could not see it
+  // (docs/blood-and-gear-design.md §5, docs/boons-design.md §6).
   if (perm?.statics?.barsBoons === true) {
     const priorBoonBurn = handler.onEnterPlay;
     handler.onEnterPlay = (entry, owner, ops) => {

@@ -49,6 +49,9 @@ export type WindowId =
   /** A Methuselah has no pool and is about to be ousted (Life Boon) —
    *  docs/victory-points-design.md §1. */
   | "oust"
+  /** A vampire is going to torpor and a Minor Boon could stop it —
+   *  docs/boons-design.md §4. */
+  | "torpor"
   /** A card asking one Methuselah a question (docs/choice-frames-design.md). */
   | "choice";
 

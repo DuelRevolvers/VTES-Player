@@ -721,11 +721,27 @@ export function stealHuntTargets(state: GameState, m: MinionState): MinionState[
  */
 export function bleedAnnounceTax(m: MinionState, target: SeatId | null): number {
   if (target === null) return 0;
+  // A BAR is a tax nobody can pay. "This vampire cannot bleed you" (Minor
+  // Boon) rides this function because every bleed's gate already asks it —
+  // the basic bleed, a bleed action card, a granted bleed — so one line
+  // closes all three doors. docs/boons-design.md §4
+  if (bleedBarred(m, target)) return Infinity;
   return m.attached.reduce(
     (n, p) =>
       p.controller === target ? n + (p.statics.bleedAgainstControllerBloodTax ?? 0) : n,
     0,
   );
+}
+
+/**
+ * "This vampire cannot bleed you" (Minor Boon), where "you" is the card's
+ * controller — and "a bleed from this vampire cannot be redirected to you
+ * either" [PIB 20130711], which is why a redirect asks this too.
+ * docs/boons-design.md §4
+ */
+export function bleedBarred(m: MinionState, target: SeatId | null): boolean {
+  if (target === null) return false;
+  return m.attached.some((p) => p.statics.cannotBleedController && p.controller === target);
 }
 
 /**
@@ -1674,6 +1690,17 @@ export function mayAttemptBlock(state: GameState, af: ActionFrame, m: MinionStat
   if (actor && m.attached.some((p) => p.statics.cannotBlockKind === actor.kind)) return false;
   // "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier).
   if (!af.directed && m.attached.some((p) => p.statics.cannotBlockUndirected)) return false;
+  // "This minion cannot block YOUR minions" (Lesser Boon) — "your" is that
+  // card's controller, so the bar follows the actor's controller, not the
+  // bearer's. docs/boons-design.md §2
+  if (
+    actor &&
+    m.attached.some(
+      (p) => p.statics.cannotBlockControllersMinions && p.controller === actor.controller,
+    )
+  ) {
+    return false;
+  }
   // "Allies AND vampires with capacity 3 or less cannot block this vampire"
   // (Rexton), "Toreador and Toreador antitribu cannot block this minion"
   // (Cloak of the Abalone) — a bar carried by the ACTING minion. An ally

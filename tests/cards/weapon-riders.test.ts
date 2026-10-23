@@ -206,10 +206,12 @@ describe("Sword of the Archangel (102261)", () => {
       equip(s, "V1", "sw", "Sword of the Archangel"),
     );
     // Aggravated damage BURNS an already-wounded vampire who cannot pay
-    // to survive (p. 34). A minion in torpor cannot block, so the wound
-    // is applied once the combat is live rather than legislated through
-    // a two-round fight.
-    Object.assign(find(state, "M"), { inTorpor: true, blood: 0 });
+    // to survive (p. 34). The strike is strength+1 = 2 aggravated: on a
+    // READY vampire with no blood, the first point wounds and the second
+    // burns (the rulebook's Tamoszius example). This used to put the foe in
+    // torpor once the combat was live, which p. 30 says ends the combat on
+    // the spot — the engine did not check that until wave 105.
+    Object.assign(find(state, "M"), { blood: 0 });
     expect(walkTo(engine, "ability:Sword of the Archangel:sw:strike")).toBe(true);
     runTrace(engine, [["Alice", "ability:Sword of the Archangel:sw:strike"]]);
     drain(engine, state);

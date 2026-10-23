@@ -253,8 +253,9 @@ describe("Skin of Night (101790) — aggravated becomes normal", () => {
   });
 
   it("turns a torpor-sending aggravated hit into mendable damage", () => {
-    // 2 aggravated damage on a ready vampire is torpor outright (p. 34) —
-    // no blood is burned, because aggravated cannot be mended.
+    // 2 aggravated damage on a ready vampire is torpor outright (p. 32) —
+    // none of it is mended: the first point wounds and the second costs 1
+    // blood to prevent destruction (the Tamoszius example).
     const bare = armoured("Skin of Night", { damage: 2, aggravated: true });
     toDamage(bare.engine);
     for (let i = 0; i < 10; i++) {
@@ -266,7 +267,7 @@ describe("Skin of Night (101790) — aggravated becomes normal", () => {
       if (bare.v1.inTorpor) break;
     }
     expect(bare.v1.inTorpor).toBe(true);
-    expect(bare.v1.blood).toBe(4);
+    expect(bare.v1.blood).toBe(3);
 
     // With Skin of Night the same hit is mended with 2 blood instead.
     const armed = armoured("Skin of Night", { damage: 2, aggravated: true });

@@ -295,9 +295,15 @@ function storeOverlay(n: number): string {
 
 /** Who owes this boon (Life Boon) — otherwise invisible on the table, and a
  *  feature that cannot be seen reads as one that is absent. */
-function boonOverlay(debtor: string | undefined): string {
-  if (!debtor) return "";
-  return `<div class="store-overlay" title="Owed by ${esc(debtor)}">→ ${esc(debtor)}</div>`;
+function boonOverlay(debtor: string | undefined, creditor?: string): string {
+  if (debtor) {
+    return `<div class="store-overlay" title="Owed by ${esc(debtor)}">→ ${esc(debtor)}</div>`;
+  }
+  // The other direction: this card's controller owes (Extremis Boon).
+  if (creditor) {
+    return `<div class="store-overlay" title="Owed to ${esc(creditor)}">← ${esc(creditor)}</div>`;
+  }
+  return "";
 }
 
 /** Blood/life as pips, with the number for anything above a handful. */
@@ -417,7 +423,7 @@ function permanentTile(p: PermanentInPlay, ctx: TableCtx | null): string {
     ${cardImage(p.card.name, "small", p.locked)}
     ${counterOverlay(p.counters)}
     ${storeOverlay((p.stored ?? []).length)}
-    ${boonOverlay(p.boonTarget)}
+    ${boonOverlay(p.boonTarget, p.boonCreditor)}
     ${mark.body}
   </div>`;
 }
@@ -509,6 +515,12 @@ function seatMat(
         <span class="spacer"></span>
         <span class="pool" title="pool">🩸 ${seat.pool}</span>
         <span class="vp" title="victory points">VP ${seat.victoryPoints}</span>
+        ${
+          // Temptation of Greater Power's credit: owed, and paid 1 a turn.
+          (seat.poolDebt ?? 0) > 0
+            ? `<span class="badge debt" title="pool owed to the blood bank: 1 is paid in each discard phase">owes ${seat.poolDebt}</span>`
+            : ""
+        }
       </header>
 
       ${zone("READY", ready.length ? ready.map((m) => minionTile(m, m.id === actingId, ctx)).join("") : `<span class="dim">empty</span>`)}

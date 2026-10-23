@@ -395,7 +395,12 @@ describe("Underbridge Stray (102065)", () => {
 
   it("NEGATIVE SPACE: not offered while it is the one BLOCKING", () => {
     // The clause the ledger row named: the ally is spent INSTEAD of
-    // blocking, so a live attempt by it bars the ability.
+    // blocking. "Blocking Minion: the minion currently attempting to block
+    // an action, OR THE MINION WHO HAS SUCCESSFULLY BLOCKED the current
+    // action" (p. 41) — so the attempt AND the combat it starts. This test
+    // used to stop at the attempt and call the ability "rightly back on the
+    // table" after it, which is how a blocker burned itself out of its own
+    // combat in the fuzz (wave 105).
     const state = threeSeatGame();
     allyInPlay(state, "Bob", "US", "Underbridge Stray", 2, 1);
     find(state, "M").locked = true;
@@ -405,17 +410,49 @@ describe("Underbridge Stray (102065)", () => {
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
       ["Alice", "pass"], ["Bob", "block:US"],
     ]);
-    // Scoped to WHILE the attempt is live: once it resolves the ally is
-    // no longer blocking, and the ability is rightly back on the table.
     let seen = false;
-    for (let i = 0; i < 10; i++) {
-      if (!state.frames.some((f) => f.kind === "blockAttempt")) break;
+    let fought = false;
+    for (let i = 0; i < 40; i++) {
+      if (!state.frames.some((f) => f.kind === "action")) break;
+      if (combat(state)) fought = true;
       const dp = engine.decision();
       if (!dp) break;
       if (dp.options.some((o) => o.id.includes("US:burnunlock:"))) seen = true;
       runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
     }
+    expect(fought).toBe(true);
     expect(seen).toBe(false);
+  });
+
+  it("a blocker that burns its last life before range ends the combat (p. 30)", () => {
+    // "If one or both of the combatants are no longer ready … the round
+    // and the combat end immediately. This is true at any point during
+    // combat" (p. 30). Only damage resolution used to check, so the combat
+    // went on to range and strikes with one combatant (wave 105).
+    const state = threeSeatGame();
+    allyInPlay(state, "Bob", "US", "Underbridge Stray", 1, 0);
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", "bleed:V1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "block:US"],
+    ]);
+    const id = "ability:Underbridge Stray:US:press:US";
+    expect(walkTo(engine, id)).toBe(true);
+    expect(combat(state)?.step).toBe("beforeRange");
+    runTrace(engine, [["Bob", id]]);
+    expect(maybe(state, "US")).toBeUndefined();
+    // End of Round still occurs (p. 32); range and strikes never do.
+    const windows: string[] = [];
+    for (let i = 0; i < 10 && combat(state); i++) {
+      const dp = engine.decision()!;
+      windows.push(dp.window);
+      runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
+    }
+    expect(combat(state)).toBeUndefined();
+    for (const w of ["combat.range", "combat.beforeStrikes", "combat.chooseStrike"]) {
+      expect(windows).not.toContain(w);
+    }
   });
 });
 

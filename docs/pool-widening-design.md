@@ -1006,6 +1006,57 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 105 — auctions for control (3 cards), 2026-10-22
+
+Library **889 → 892**. Hostile Takeover, Malkavian Time Auction, Temptation
+of Greater Power. Write-up: `docs/auctions-design.md`. They are the only
+unbuilt T1 cards that bid, and none is inert.
+
+New: one auction for four cards (`AuctionRules` and its helpers). Extremis
+Boon was moved onto it, so the bidding rule lives in one place.
+`takeMinionControl`, a permanent take that ends any loan the vampire was on.
+`SeatState.poolDebt` and the `PoolDebtChanged` event for Temptation's credit,
+paid 1 pool as the debtor's discard phase opens and shown as an "owes N"
+badge. The Time Auction's choice of a new bearer for a possession. Bot
+guards and bid pricing (`bidOn`, `pays`, `runnerUpPays`, `credit`).
+
+**Found, five defects fixed:** (1) **a master on a stolen vampire changed
+hands with it**. A master is its player's (p. 9), and only minion cards
+follow the bearer (p. 10). (2) **A combat went on after a combatant left it
+before damage resolution.** p. 30 says "at any point during combat". Fuzz
+seed 8. (3) **Underbridge Stray could burn itself out of the combat its own
+block started.** "Blocking minion" includes the successful blocker (p. 41).
+This reverses a recorded reading. (4) **A failed referendum to burn a card in
+play filed a copy in the caller's ash heap** and left the card in play
+(Camarilla Threat, fuzz seed 132). (5) **Aggravated damage on an unwounded
+vampire was one wound whatever the amount.** Each point after the first costs
+1 blood or burns the vampire (p. 32). Seven older tests asserted the old
+totals. Defects 2 to 4 surfaced once a fuzz vampire was given a justicar
+title, which let Temptation be offered at all.
+
+### Wave 104 — boons (4 cards), 2026-10-22
+
+Library **885 → 889**. Lesser Boon, Major Boon, Minor Boon, Extremis Boon.
+Write-up: `docs/boons-design.md`. King's Favor is also a Boon and stays out:
+it needs a Guruhi, and the V5 crypt has none.
+
+New: `BlockAttemptFrame.asIfUnblocked`, a block that neither succeeds nor
+fails. `ActionFrame.bleedPayer`, so someone else burns a bleed's pool while
+the bleed stays the target's. `bleedBoonApplied` and the
+`playableWhenActionWouldSucceed` handler query, which after a Major Boon
+leave only "would be successful" plays. `MinionState.torporPending`, the
+`torpor` window and `TorporFrame`, for a vampire GOING to torpor. Also new:
+`vampireToTorpor`, the one door to torpor, which replaced three copies of
+it. `bleedBarred`, which makes "cannot bleed you" an unpayable announcement
+tax. `PermanentInPlay.boonCreditor`, and an auction as a chain of choice
+frames. Plus five statics and bot guards for all four cards.
+
+**Found, two defects fixed:** (1) **Blood Trade's "burn all boons" could not
+see Life Boon.** It burns entries tagged `boon`, and Life Boon entered play
+untagged. `putPermanentInPlay` now tags every boon from its printed keyword.
+(2) **The mandatory-bleed gate never asked the announcement tax**, so Tainted
+Vitae could be charged on an Elen Kamjian who could not pay it.
+
 ### Wave 103 — victory points (4 cards), 2026-10-22
 
 Library **881 → 885**. Momentum's Edge, Gambit Accepted, Lextalionis, Life

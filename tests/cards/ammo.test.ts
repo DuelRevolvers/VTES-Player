@@ -300,10 +300,11 @@ describe("Dragon's Breath Rounds (100580)", () => {
     const m = maybe(state, "M");
     // The two readings differ OBSERVABLY, which is why this asserts the
     // outcome rather than the queue:
-    //   2 normal + 2 aggravated → 2 blood burned to mend the normal, and
-    //     the aggravated cannot be mended, so M goes to torpor;
+    //   2 normal + 2 aggravated → the normal first, 2 blood burned to mend
+    //     it; then the aggravated, which cannot be mended: the first point
+    //     wounds and the second costs 1 blood (p. 32). 3 burned, in torpor;
     //   4 normal (the wrong reading) → 4 blood burned, M stays ready.
-    expect(before - (m?.blood ?? 0)).toBe(2);
+    expect(before - (m?.blood ?? 0)).toBe(3);
     expect(m?.inTorpor ?? true).toBe(true);
   });
 

@@ -650,6 +650,19 @@ function fourSeatGame(seed: number): GameState {
     "Gambit Accepted",
     "Lextalionis",
     "Life Boon",
+    // Wave 104: boons (docs/boons-design.md) — four new windows into the
+    // loop: a block that would succeed, a bleed in state C, a vampire GOING
+    // to torpor, and the oust window's auction.
+    "Lesser Boon",
+    "Major Boon",
+    "Minor Boon",
+    "Extremis Boon",
+    // Wave 105: auctions for control (docs/auctions-design.md) — Extremis
+    // Boon's auction, now shared, selling a card in play. Temptation needs
+    // a ready justicar, which the Justicar title cards in these decks give.
+    "Hostile Takeover",
+    "Malkavian Time Auction",
+    "Temptation of Greater Power",
     // The Path cards (docs/path-cards-design.md) — all four, now that a
     // Path is known to be a printed CRYPT trait. The minions below carry
     // one each, or none of these would ever be dealt a legal player.
@@ -1427,6 +1440,11 @@ function fourSeatGame(seed: number): GameState {
           capacity: 4,
           clan: i % 2 === 0 ? ("Salubri" as const) : ("Ravnos" as const),
           sect: "anarch" as const,
+          // Temptation of Greater Power requires a ready justicar, and the
+          // Justicar title cards in these decks are rarely played: in 150
+          // seeds without this it was offered 0 times. No clan Justicar in
+          // the decks names a Salubri, so this title contests nothing.
+          title: i % 2 === 0 ? ("justicar" as const) : null,
           // Terrifying Visage attaches only to a Cathari, and Forward
           // Momentum only counts a Cathari's bleeds.
           path: "Cathari" as const,
