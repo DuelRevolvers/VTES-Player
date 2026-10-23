@@ -635,7 +635,11 @@ export class VtesEngine implements EngineOps {
         break;
       }
       case "TorporPending":
-        getMinion(this.state, ev.minion).torporPending = { other: ev.other };
+        getMinion(this.state, ev.minion).torporPending = {
+          other: ev.other,
+          by: ev.by ?? null,
+          rushBy: ev.rushBy ?? null,
+        };
         break;
       case "TorporPrevented":
         delete getMinion(this.state, ev.minion).torporPending;
@@ -3011,6 +3015,12 @@ export class VtesEngine implements EngineOps {
       return;
     }
     this.handler(rf.cardName).applyReferendum?.(rf, this);
+    // "The blood is gained after the referendum effects are applied" (Guru)
+    // [LSJ 20090115-2].
+    const info = { actionId: rf.actionId, callingMinion: rf.callingMinion ?? null };
+    for (const { entry, owner } of this.allEntries()) {
+      this.registry[entry.card.name]?.onReferendumPassed?.(entry, owner, info, this);
+    }
   }
 
   /**
@@ -4320,9 +4330,23 @@ export class VtesEngine implements EngineOps {
       opposing: cf.opposing,
       rounds: cf.round,
       burnedByStrike: cf.burnedByStrike ?? [],
+      rushBy: cf.rushBy ?? null,
+      leftReady: cf.leftReady ?? [],
     };
     for (const { entry, owner } of this.allEntries()) {
       this.registry[entry.card.name]?.onCombatEnded?.(entry, owner, info, this);
+    }
+  }
+
+  /** A strike resolved (Creep Show). A minion who is gone by now neither
+   *  strikes nor is struck — the `inflict` rule. */
+  private notifyStrikeResolved(cf: CombatFrame, side: "acting" | "opposing", strike: Strike): void {
+    const striker = side === "acting" ? cf.acting : cf.opposing;
+    const opposing = side === "acting" ? cf.opposing : cf.acting;
+    if (!findMinion(this.state, striker)) return;
+    const info = { striker, opposing, strike };
+    for (const { entry, owner } of this.allEntries()) {
+      this.registry[entry.card.name]?.onStrikeResolved?.(entry, owner, info, this);
     }
   }
 
@@ -4341,11 +4365,15 @@ export class VtesEngine implements EngineOps {
   }
 
   /** Notify in-play cards that a combatant left the ready region (Dead
-   *  Pool) — `other` is the surviving combatant, if this combat has one. */
-  private notifyCombatLeave(minion: MinionId): void {
+   *  Pool) — `other` is the surviving combatant, if this combat has one;
+   *  `by` the combatant whose strike sent it, if it was one (Sociopath). */
+  private notifyCombatLeave(minion: MinionId, by: MinionId | null = null): void {
     const other = this.combatOpponentOf(minion);
     if (other === null) return;
-    this.fireCombatLeave(minion, other);
+    // On the frame, for whoever asks once the combat is over (Sociopath).
+    const cf = this.combatFrame();
+    if (cf) (cf.leftReady ??= []).push({ minion, by });
+    this.fireCombatLeave(minion, other, by);
   }
 
   /** The other combatant, if `minion` is fighting right now. */
@@ -4359,12 +4387,14 @@ export class VtesEngine implements EngineOps {
    *  a vampire that was GOING to torpor arrives after its combat is over,
    *  and the opponent it left was captured when it went (Minor Boon's
    *  window, docs/boons-design.md §4). */
-  private fireCombatLeave(minion: MinionId, other: MinionId): void {
-    const info = { leaver: minion, other };
-    for (const s of this.state.seats) {
-      for (const p of [...s.permanents]) {
-        this.registry[p.card.name]?.onCombatLeave?.(p, { seat: s.id, minion: null }, info, this);
-      }
+  private fireCombatLeave(minion: MinionId, other: MinionId, by: MinionId | null): void {
+    const info = { leaver: minion, other, by };
+    // `allEntries()`, not `seat.permanents`: this read only seat-level
+    // cards, so Egidia Arrú's drain — a crypt ability, and every crypt
+    // ability is attached — never fired. The bug `onBleedSuccess` and
+    // `onAnyUnlock` had before it. docs/archetypes-design.md §7
+    for (const { entry, owner } of this.allEntries()) {
+      this.registry[entry.card.name]?.onCombatLeave?.(entry, owner, info, this);
     }
   }
 
@@ -4621,6 +4651,8 @@ export class VtesEngine implements EngineOps {
     /** "At the end of that combat, …" — installed only on a rush's OWN
      *  combat (docs/rush-outcome-design.md §2). */
     outcome: AfterCombatRider | null = null,
+    /** The actor of the successful rush that entered this combat. */
+    rushBy: MinionId | null = null,
   ): void {
     this.emit({ type: "CombatBegan", acting, opposing });
     // "1 optional press each combat" statics (Dread Mastiff superior):
@@ -4666,6 +4698,7 @@ export class VtesEngine implements EngineOps {
       opposing,
       opposingSeat,
       fromBlock,
+      ...(rushBy !== null ? { rushBy } : {}),
       round: 1,
       step: "beforeRange",
       range: "close",
@@ -4839,6 +4872,10 @@ export class VtesEngine implements EngineOps {
       if (so?.combatEnds && so.unlockSelf) {
         this.emit({ type: "MinionUnlocked", minion: cf.opposing });
       }
+      // Only the combat-ends strikes resolved; anything opposite them did
+      // not (Creep Show: "ends combat as a strike").
+      if (sa?.combatEnds) this.notifyStrikeResolved(cf, "acting", sa);
+      if (so?.combatEnds) this.notifyStrikeResolved(cf, "opposing", so);
       // "Burn after use" on a weapon whose OWN strike is the combat-ends
       // strike (Smoke Grenade): *"still burns when used if the opponent
       // uses a 'strike: combat ends' too"* [LSJ 20001127-2]. Its strike
@@ -4992,7 +5029,7 @@ export class VtesEngine implements EngineOps {
       // ally" (Touch of Oblivion superior).
       if (strike.incapacitate) {
         if (cf.range !== "close") return;
-        this.sendToTorpor(victim);
+        this.sendToTorpor(victim, source);
         return;
       }
       // "The opposing vampire's strikes with weapons inflict no damage
@@ -5136,6 +5173,10 @@ export class VtesEngine implements EngineOps {
     // Which side's blow lands is the ONLY thing `phase` changes here: the
     // other side's Strike stays on the frame and is still read, so a
     // dodge still cancels a first strike's effects (p. 33).
+    // Reported before any damage (Creep Show: "when a minion opposing this
+    // vampire in combat DODGES").
+    if (sa && resolves("acting")) this.notifyStrikeResolved(cf, "acting", sa);
+    if (so && resolves("opposing")) this.notifyStrikeResolved(cf, "opposing", so);
     if (resolves("opposing")) inflict("opposing", so);
     if (resolves("acting")) inflict("acting", sa);
     // AMMO EFFECTS THAT ARE NOT DAMAGE, applied once per gun strike that
@@ -7680,15 +7721,15 @@ export class VtesEngine implements EngineOps {
    * `strikeIncapacitate` takes: an ally has no torpor to go to (p. 22),
    * so it is burned; a vampire already in torpor is left alone.
    */
-  sendToTorpor(minionId: MinionId): void {
+  sendToTorpor(minionId: MinionId, by: MinionId | null = null): void {
     const m = findMinion(this.state, minionId);
     if (!m) return;
     if (m.kind === "ally") {
       this.burnMinion(minionId);
-      this.notifyCombatLeave(minionId);
+      this.notifyCombatLeave(minionId, by);
       return;
     }
-    this.vampireToTorpor(minionId);
+    this.vampireToTorpor(minionId, by);
   }
 
   /**
@@ -7702,16 +7743,22 @@ export class VtesEngine implements EngineOps {
    * the hooks an arrival fires. Otherwise this is exactly what the three
    * sites did. docs/boons-design.md §4
    */
-  private vampireToTorpor(id: MinionId): void {
+  private vampireToTorpor(id: MinionId, by: MinionId | null = null): void {
     const m = findMinion(this.state, id);
     if (!m || m.inTorpor || m.torporPending) return;
     if (this.torporWindowWanted(m)) {
-      this.emit({ type: "TorporPending", minion: id, other: this.combatOpponentOf(id) });
+      this.emit({
+        type: "TorporPending",
+        minion: id,
+        other: this.combatOpponentOf(id),
+        by,
+        rushBy: this.combatFrame()?.rushBy ?? null,
+      });
       return;
     }
     this.notifyLeaveReady(id, "torpor");
     this.emit({ type: "WentToTorpor", minion: id });
-    this.notifyCombatLeave(id);
+    this.notifyCombatLeave(id, by);
   }
 
   /**
@@ -7749,6 +7796,23 @@ export class VtesEngine implements EngineOps {
     return true;
   }
 
+  /**
+   * "…to prevent that vampire from going to torpor" (Minor Boon). The
+   * vampire never left the ready region, so a question its combat's end
+   * could not answer yet is answered now (Bravo, owner ruling 2026-10-23).
+   * docs/archetypes-design.md §7.5
+   */
+  preventTorpor(minionId: MinionId): void {
+    const m = findMinion(this.state, minionId);
+    const pending = m?.torporPending;
+    if (!m || !pending) return;
+    this.emit({ type: "TorporPrevented", minion: m.id });
+    const info = { minion: m.id, rushBy: pending.rushBy ?? null };
+    for (const { entry, owner } of this.allEntries()) {
+      this.registry[entry.card.name]?.onTorporPrevented?.(entry, owner, info, this);
+    }
+  }
+
   /** The window has closed: every vampire nobody kept out arrives, firing
    *  what an arrival fires — the leave-ready hooks (Guardian Angel) before
    *  it, the combat-leave hooks (Dead Pool) after, against the opponent it
@@ -7761,7 +7825,7 @@ export class VtesEngine implements EngineOps {
       // A hook can have burned it in between.
       if (!findMinion(this.state, m.id)) continue;
       this.emit({ type: "WentToTorpor", minion: m.id });
-      if (pending.other !== null) this.fireCombatLeave(m.id, pending.other);
+      if (pending.other !== null) this.fireCombatLeave(m.id, pending.other, pending.by ?? null);
     }
   }
 
@@ -9261,6 +9325,7 @@ export class VtesEngine implements EngineOps {
           af.rushRiders,
           false, // a rush combat — the target did not block
           af.combatOutcome,
+          af.acting,
         );
       } else if (
         af.card &&
@@ -11409,7 +11474,9 @@ export class VtesEngine implements EngineOps {
         cf.bloodLostThisRound[side] += lost;
       }
     }
-    if (side && wasInPlay && !findMinion(this.state, pd.minion)) {
+    // A VAMPIRE: an ally emptied by damage is now burned on the spot too,
+    // and "the opposing vampire is burned" is not about one.
+    if (side && wasInPlay && before?.kind === "vampire" && !findMinion(this.state, pd.minion)) {
       const striker = side === "acting" ? "opposing" : "acting";
       const name = cf.strikes[striker]?.name;
       if (name) (cf.burnedByStrike ??= []).push(name);
@@ -11425,6 +11492,14 @@ export class VtesEngine implements EngineOps {
       const burn = Math.min(m.blood, pd.amount);
       if (burn > 0) {
         this.emit({ type: "BloodBurned", minion: m.id, amount: burn });
+      }
+      // Emptied, it is burned HERE rather than by `burnDepleted` at the
+      // next settle, which fired no combat-leave hook — so a minion killed
+      // by a strike never left its combat as far as Egidia Arrú or
+      // Sociopath could tell, and nothing knew whose strike it was.
+      if (burn > 0 && m.blood <= 0) {
+        this.burnMinion(m.id);
+        this.notifyCombatLeave(m.id, pd.source);
       }
       return;
     }
@@ -11447,7 +11522,7 @@ export class VtesEngine implements EngineOps {
           if (pd.amount > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: pd.amount });
         } else {
           this.burnMinion(m.id);
-          this.notifyCombatLeave(m.id);
+          this.notifyCombatLeave(m.id, pd.source);
         }
       } else {
         // The FIRST point wounds; every point after it lands on a wounded
@@ -11460,11 +11535,11 @@ export class VtesEngine implements EngineOps {
         const rest = Math.max(0, pd.amount - 1);
         if (rest > m.blood) {
           this.burnMinion(m.id);
-          this.notifyCombatLeave(m.id);
+          this.notifyCombatLeave(m.id, pd.source);
           return;
         }
         if (rest > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: rest });
-        this.vampireToTorpor(m.id);
+        this.vampireToTorpor(m.id, pd.source);
       }
       return;
     }
@@ -11473,7 +11548,7 @@ export class VtesEngine implements EngineOps {
       this.emit({ type: "BloodBurned", minion: m.id, amount: mendable });
       this.emit({ type: "DamageMended", minion: m.id, amount: mendable });
     }
-    if (pd.amount > mendable) this.vampireToTorpor(m.id);
+    if (pd.amount > mendable) this.vampireToTorpor(m.id, pd.source);
   }
 
   private announceAction(

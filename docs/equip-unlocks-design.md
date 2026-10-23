@@ -154,6 +154,9 @@ the politics tables: 0 errors.
 
 ## §8 Open questions for the owner
 
+**Answered October 23, 2026: the owner accepted all five readings as
+built.**
+
 1. **"Meets the requirements" for Repo Man's vehicle** also excludes a minion
    that already has a vehicle, a minion that can't have equipment, and a
    second copy of a unique vehicle. Read narrowly, it would place a second

@@ -9058,6 +9058,90 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  // Wave 107: five more archetypes on the same skeleton, each paying 1 blood
+  // once per turn, automatically (docs/archetypes-design.md §7). Four print
+  // "a Sabbat vampire you control".
+  {
+    krcgId: 100247,
+    name: "Bravo",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    krcgId: 100292,
+    name: "Capitalist",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire", sect: "sabbat" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    krcgId: 100442,
+    name: "Creep Show",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    trifle: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire", sect: "sabbat" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    krcgId: 100872,
+    name: "Guru",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire", sect: "sabbat" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    krcgId: 101823,
+    name: "Sociopath",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire", sect: "sabbat" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // Lock-to-grant locations (docs/lock-grant-locations-design.md).
   {
     krcgId: 100052,
@@ -20947,7 +21031,7 @@ const minorBoon: CardHandler = {
     const m = id ? findMinion(ops.state, id) : null;
     // Re-derived: another boon can have kept it out first.
     if (!m || !m.torporPending || m.controller === play.seat) return;
-    ops.emit({ type: "TorporPrevented", minion: m.id });
+    ops.preventTorpor(m.id);
     ops.putPermanentInPlay({
       card: play.card,
       seat: m.controller,
@@ -25304,8 +25388,10 @@ const monster: CardHandler = {
       info.acting === bearer.id ? info.opposing : info.opposing === bearer.id ? info.acting : null;
     if (otherId === null) return; // this combat did not involve the bearer
     const other = findMinion(ops.state, otherId);
-    // Burned or in torpor — either way it is not ready.
-    if (other && !other.inTorpor) return;
+    // Burned, in torpor or GOING to torpor — none of them is ready. This
+    // read `!other.inTorpor`, which missed an opponent held in Minor Boon's
+    // window (docs/archetypes-design.md §7).
+    if (other && isReady(other)) return;
     ops.raiseChoice({
       seat: entry.controller ?? owner.seat,
       cardName: "Monster",
@@ -25415,6 +25501,149 @@ const rebel: CardHandler = {
     if (!isPolitical && !isTitled) return;
     entry.usedThisTurn = true;
     ops.emit({ type: "BloodGained", minion: owner.minion, amount: 1 });
+  },
+};
+
+/**
+ * The wave 107 archetypes all end the same way: "once per turn … this
+ * vampire gains 1 blood from the blood bank". Automatic — none says "can"
+ * or "may" — so, like Rebel, no question is asked (§4). The use is spent
+ * when the blood is taken, as §1 has it.
+ */
+function archetypeGain(entry: PermanentInPlay, minion: MinionId, ops: EngineOps): void {
+  entry.usedThisTurn = true;
+  ops.emit({ type: "BloodGained", minion, amount: 1 });
+}
+
+/**
+ * Bravo (100247) — "Once per turn, when this vampire successfully performs
+ * an action to enter combat with another, he or she gains 1 blood from the
+ * blood bank when the combat ends, if he or she is still ready."
+ *
+ * The rush's own combat carries its actor (`CombatFrame.rushBy`), so a
+ * block's combat — where the rush did NOT succeed — and a combat a card
+ * queued are not this one. "Still ready" is `isReady`. A vampire GOING to
+ * torpor is not ready yet, but one a Minor Boon keeps out never stopped
+ * being ready, so it is paid then (owner ruling 2026-10-23,
+ * docs/archetypes-design.md §7.5).
+ */
+const bravo: CardHandler = {
+  ...compileSpec(specByName("Bravo")),
+  onCombatEnded(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    if (info.rushBy !== owner.minion) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || !isReady(bearer)) return;
+    archetypeGain(entry, bearer.id, ops);
+  },
+  onTorporPrevented(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    if (info.minion !== owner.minion || info.rushBy !== owner.minion) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || !isReady(bearer)) return;
+    archetypeGain(entry, bearer.id, ops);
+  },
+};
+
+/**
+ * Capitalist (100292) — "Once per turn, when this vampire successfully
+ * bleeds his or her prey, he or she gains 1 blood from the bank."
+ *
+ * "Successfully bleeds" is the rulebook's own term: the action succeeds AND
+ * the bleed amount is 1 or more (p. 21), which is exactly when
+ * `onBleedSuccess` fires. A bleed redirected away from the prey is not a
+ * bleed of the prey. The gain comes before the after-resolution window
+ * [ANK 20190113].
+ */
+const capitalist: CardHandler = {
+  ...compileSpec(specByName("Capitalist")),
+  onBleedSuccess(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    if (info.actingMinion !== owner.minion) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || info.target !== preyOf(ops.state, bearer.controller)) return;
+    archetypeGain(entry, bearer.id, ops);
+  },
+};
+
+/**
+ * Creep Show (100442) — "Once per turn, when a minion opposing this vampire
+ * in combat dodges or ends combat as a strike, this vampire gains 1 blood
+ * from the blood bank."
+ *
+ * Read off the strike as it RESOLVES (`onStrikeResolved`): a dodge chosen
+ * opposite a "combat ends" strike never resolves, because combat ends
+ * first (p. 33), so it pays nothing.
+ */
+const creepShow: CardHandler = {
+  ...compileSpec(specByName("Creep Show")),
+  onStrikeResolved(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    if (info.opposing !== owner.minion) return;
+    if (!info.strike.dodge && !info.strike.combatEnds) return;
+    if (!findMinion(ops.state, owner.minion)) return;
+    archetypeGain(entry, owner.minion, ops);
+  },
+};
+
+/**
+ * Guru (100872) — "Once per turn, when this vampire calls a referendum and
+ * it passes, he or she gains 1 blood from the blood bank."
+ *
+ * "The blood is gained after the referendum effects are applied" [LSJ
+ * 20090115-2] — which is where `onReferendumPassed` fires.
+ */
+const guru: CardHandler = {
+  ...compileSpec(specByName("Guru")),
+  onReferendumPassed(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    if (info.callingMinion !== owner.minion) return;
+    if (!findMinion(ops.state, owner.minion)) return;
+    archetypeGain(entry, owner.minion, ops);
+  },
+};
+
+/**
+ * Sociopath (101823) — "Once per turn, when this vampire remains ready and
+ * burns a minion in combat or sends a vampire to torpor in combat, he or
+ * she gains 1 blood from the blood bank."
+ *
+ * "Remains ready" can only be answered once the damage is all in: strikes
+ * resolve simultaneously but damage is applied acting-minion-first (p. 29),
+ * so when the first combatant leaves, the second has not taken its damage
+ * yet. Two paths, so the question is asked at the right moment on each:
+ *
+ * - the opponent left DURING the combat (`leftReady`) → at combat end;
+ * - the opponent was GOING to torpor (Minor Boon's window) → when it
+ *   arrives, which is after the combat, and only if nobody kept it out.
+ *
+ * "This vampire burns … or sends" means THIS VAMPIRE's strike did it (owner
+ * ruling 2026-10-23): `by` on both paths. A retainer's damage, an
+ * environmental one, or the opponent emptying itself pays nothing.
+ */
+const sociopath: CardHandler = {
+  ...compileSpec(specByName("Sociopath")),
+  onCombatEnded(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    const other =
+      info.acting === owner.minion ? info.opposing : info.opposing === owner.minion ? info.acting : null;
+    if (other === null) return;
+    if (!info.leftReady.some((l) => l.minion === other && l.by === owner.minion)) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || !isReady(bearer)) return;
+    archetypeGain(entry, bearer.id, ops);
+  },
+  onCombatLeave(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    if (info.other !== owner.minion || info.by !== owner.minion) return;
+    // Still mid-combat: `onCombatEnded` decides, once the damage is in.
+    const live = ops.state.frames.some(
+      (f) => f.kind === "combat" && (f.acting === info.leaver || f.opposing === info.leaver),
+    );
+    if (live) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || !isReady(bearer)) return;
+    archetypeGain(entry, bearer.id, ops);
   },
 };
 
@@ -26361,6 +26590,11 @@ export function buildHandlerRegistry(): HandlerRegistry {
     monster,
     perfectionist,
     rebel,
+    bravo,
+    capitalist,
+    creepShow,
+    guru,
+    sociopath,
   ]) {
     registry[bespoke.name] = bespoke;
   }

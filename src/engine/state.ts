@@ -210,8 +210,10 @@ export interface MinionState {
    *  window, which opens once no combat is underway [RTR 19950509-2]; until
    *  then the vampire is neither ready nor in torpor. `other` is the
    *  opposing combatant, kept for the combat-leave hooks (Dead Pool) that
-   *  fire when the vampire actually arrives. docs/boons-design.md §4 */
-  torporPending?: { other: MinionId | null };
+   *  fire when the vampire actually arrives. `rushBy` is the combat's
+   *  `CombatFrame.rushBy`, kept for the hooks that fire if it is KEPT OUT
+   *  (Bravo: "if he or she is still ready"). docs/boons-design.md §4 */
+  torporPending?: { other: MinionId | null; by?: MinionId | null; rushBy?: MinionId | null };
   /** Discipline name -> level, e.g. { dom: "superior" }. */
   disciplines: Record<string, DisciplineLevel>;
   /** One bleed action per minion per turn (p. 20). */
@@ -1866,7 +1868,13 @@ export type GameEvent =
   | { type: "LeftTorpor"; minion: MinionId }
   /** A vampire is going to torpor and a Minor Boon could still stop it
    *  (`MinionState.torporPending`). docs/boons-design.md §4 */
-  | { type: "TorporPending"; minion: MinionId; other: MinionId | null }
+  | {
+      type: "TorporPending";
+      minion: MinionId;
+      other: MinionId | null;
+      by?: MinionId | null;
+      rushBy?: MinionId | null;
+    }
   /** "…to prevent that vampire from going to torpor" (Minor Boon). */
   | { type: "TorporPrevented"; minion: MinionId }
   // Action cards (phase 3).
@@ -3067,6 +3075,18 @@ export interface CombatFrame {
    *  minion is the blocker) — Cats' Guidance / Forced Vigilance's "a vampire
    *  who has blocked" post-block-resolution window keys off this. */
   fromBlock: boolean;
+  /** The minion whose successful ACTION entered this combat — the actor of
+   *  a rush, even when the roles are inverted (Deep Song superior makes the
+   *  target the acting minion). Absent for a block and for a combat a card
+   *  queued. Bravo reads it. docs/archetypes-design.md §7 */
+  rushBy?: MinionId;
+  /** Combatants that left the ready region DURING this combat, burned or
+   *  sent straight to torpor, in order. Written at the one combat-leave
+   *  site, so a frame-scoped answer dies with the frame. `by` is the
+   *  combatant whose strike did it, or null for anything else (a
+   *  retainer, environmental damage, a card) — Sociopath pays only for
+   *  its own vampire's (owner ruling 2026-10-23). docs/archetypes-design.md §7 */
+  leftReady?: { minion: MinionId; by: MinionId | null }[];
   round: number;
   step: CombatStep;
   range: Range;

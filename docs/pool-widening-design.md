@@ -1006,6 +1006,44 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 107 — five archetypes that pay 1 blood (5 cards), 2026-10-23
+
+Library **896 → 901**. Bravo, Capitalist, Creep Show, Guru, Sociopath.
+Write-up: `docs/archetypes-design.md` §7. Each pays 1 blood once per turn,
+automatically, on the existing archetype skeleton. None is inert: four need a
+Sabbat vampire, and the V5 crypt has them.
+
+New: `CombatFrame.rushBy` (the actor of the rush that entered a combat) and
+`CombatFrame.leftReady` (combatants that left the ready region during it),
+both passed to `onCombatEnded`. Two hooks: `onStrikeResolved`, fired before
+damage for each strike that resolves, and `onReferendumPassed`, fired after a
+political referendum's effects apply.
+
+**Found, two defects fixed:** (1) **the combat-leave hook never reached an
+attached card**, so Egidia Arrú (G6)'s pool drain never fired. Her test was
+named for the drain and asserted only her strength. (2) **Monster missed an
+opponent going to torpor** in Minor Boon's window: it read `inTorpor` where
+the other readers use `isReady`.
+
+**Owner rulings, 0.11.46.** Creep Show keeps paying for a dodge against an
+undodgeable strike. Sociopath pays only for its own vampire's burn or torpor,
+so each leave now records `by`, the combatant whose strike caused it. Applying
+that ruling found a third defect: **an ally killed by a strike never left its
+combat.** It was burned at the next settle, which fires no combat-leave hook,
+so neither Sociopath nor Egidia Arrú saw it. It is now burned on the spot.
+
+**Owner ruling, 0.11.47.** Bravo pays when Minor Boon keeps its vampire out
+of torpor after the rush, because that vampire never stopped being ready. The
+engine had no hook for a kept-out vampire, so this added one:
+`onTorporPrevented`, fired by `ops.preventTorpor`. The pending record now
+carries the combat's `rushBy`, because the combat frame is gone by the time
+the boon is played (archetypes §7.5).
+
+**Left out: Traditionalist.** The engine files card-granted votes per seat,
+so it can't tell that a vampire cast them. That's also a live deviation from
+p. 28 ("all of the votes and ballots from any given vampire … must be cast in
+agreement as a group"), and it's the next politics family.
+
 ### Wave 106 — the actor unlocks after the equip (4 cards), 2026-10-23
 
 Library **892 → 896**. Baseball Bat, Leather Jacket, Powder of Rigidity,

@@ -50,11 +50,11 @@
 | Anarchs (2003)                           |   260 |   117 |  **45%** |               0 |       45% |   47 |   13 |    1 |      21 |       61 |      0 |
 | Summer 2003 Storyline promo (2003)       |     2 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        1 |      0 |
 | Black Hand promo (2003)                  |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
-| Black Hand (2003)                        |   286 |    83 |  **29%** |               0 |       29% |   75 |   24 |   14 |      27 |       63 |      0 |
+| Black Hand (2003)                        |   286 |    87 |  **30%** |               0 |       30% |   71 |   24 |   14 |      27 |       63 |      0 |
 | Prophecies league promo (2004)           |     2 |     1 |  **50%** |               0 |       50% |    1 |    0 |    0 |       0 |        0 |      0 |
 | 2004 promo (2004)                        |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
 | Gehenna promo (2004)                     |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
-| Gehenna (2004)                           |   150 |    34 |  **23%** |               0 |       23% |   44 |    6 |   16 |       6 |       44 |      0 |
+| Gehenna (2004)                           |   150 |    35 |  **23%** |               0 |       23% |   43 |    6 |   16 |       6 |       44 |      0 |
 | Fall 2004 Storyline promo (2004)         |     2 |     1 |  **50%** |               0 |       50% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Tenth Anniversary (2004)                 |   190 |    14 |   **7%** |               0 |        7% |   33 |    3 |    4 |      60 |       76 |      0 |
 | Kindred Most Wanted promo (2005)         |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
@@ -81,7 +81,7 @@
 | Keepers of Tradition (2008)              |   457 |   199 |  **44%** |               0 |       44% |   89 |   35 |   10 |      26 |       98 |      0 |
 | 2009 Tournament / Storyline promo (2009) |    13 |     1 |   **8%** |               0 |        8% |   10 |    0 |    0 |       0 |        2 |      0 |
 | Ebony Kingdom (2009)                     |    62 |     1 |   **2%** |               0 |        2% |   31 |    5 |    5 |       6 |       14 |      0 |
-| Heirs to the Blood (2010)                |   324 |    67 |  **21%** |               0 |       21% |   67 |    8 |   86 |      19 |       77 |      0 |
+| Heirs to the Blood (2010)                |   324 |    68 |  **21%** |               0 |       21% |   66 |    8 |   86 |      19 |       77 |      0 |
 | 2010 Storyline promo (2010)              |     5 |     0 |   **0%** |               0 |        0% |    3 |    0 |    0 |       0 |        2 |      0 |
 | Danse Macabre (2013)                     |    34 |     3 |   **9%** |               0 |        9% |    5 |    3 |    1 |       4 |       18 |      0 |
 | The Unaligned (2014)                     |    76 |     9 |  **12%** |               0 |       12% |    7 |    0 |   10 |      11 |       39 |      0 |
@@ -139,15 +139,15 @@
 | ★ Sabbat V5 (2025)                       |   146 |   124 |  **85%** |              22 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2025 European GP Promo (2025)            |     1 |     0 |   **0%** |               0 |        0% |    0 |    1 |    0 |       0 |        0 |      0 |
 | Print on Demand                          |   943 |    64 |   **7%** |               0 |        7% |  138 |    3 |  302 |      88 |      348 |      0 |
-| **All unique cards**                     |  4149 |   995 |  **24%** |             118 |       27% |  819 |  164 |  485 |     386 |     1162 |     20 |
+| **All unique cards**                     |  4149 |  1000 |  **24%** |             118 |       27% |  814 |  164 |  485 |     386 |     1162 |     20 |
 
 ## Totals
 
 |                                            |    Cards |    % |
 | ------------------------------------------ | -------: | ---: |
-| Built                                      |      995 |  24% |
+| Built                                      |     1000 |  24% |
 | Whole, no build (V5 crypt)                 |      118 |   3% |
-| Planned T1 (library, no discipline)        |      819 |  20% |
+| Planned T1 (library, no discipline)        |      814 |  20% |
 | Planned T2 (library, pool disciplines)     |      164 |   4% |
 | Planned T3 (library, legacy discipline)    |      485 |  12% |
 | Planned §7 gate (legacy vampire, whole)    |      386 |   9% |
@@ -257,10 +257,10 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Anarch Barons                   | Anarchs               | 2003 |    12 |      77 |       **69%** | yes         | —                             |
 | Anarch Gang                     | Anarchs               | 2003 |    12 |      77 |       **60%** | yes         | —                             |
 | Gangrel                         | Anarchs               | 2003 |    12 |      77 |       **74%** | yes         | —                             |
-| Malkavian antitribu             | Black Hand            | 2003 |    12 |      77 |       **49%** | yes         | —                             |
-| Nosferatu antitribu             | Black Hand            | 2003 |    12 |      77 |       **64%** | yes         | —                             |
+| Malkavian antitribu             | Black Hand            | 2003 |    12 |      77 |       **51%** | yes         | —                             |
+| Nosferatu antitribu             | Black Hand            | 2003 |    12 |      77 |       **65%** | yes         | —                             |
 | Toreador antitribu              | Black Hand            | 2003 |    12 |      77 |       **60%** | yes         | —                             |
-| Tremere antitribu               | Black Hand            | 2003 |    12 |      77 |       **62%** | yes         | —                             |
+| Tremere antitribu               | Black Hand            | 2003 |    12 |      77 |       **64%** | yes         | —                             |
 | Alastors                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **66%** | yes         | —                             |
 | Anathema                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **65%** | yes         | —                             |
 | Baali                           | Kindred Most Wanted   | 2005 |    12 |      77 |       **44%** | yes         | —                             |
@@ -286,7 +286,7 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Toreador                        | Keepers of Tradition  | 2008 |    12 |      77 |       **69%** | yes         | —                             |
 | Ventrue                         | Keepers of Tradition  | 2008 |    12 |      77 |       **67%** | yes         | —                             |
 | Gargoyles                       | Heirs to the Blood    | 2010 |    12 |      77 |       **48%** | yes         | —                             |
-| Kiasyd                          | Heirs to the Blood    | 2010 |    12 |      77 |       **37%** | yes         | —                             |
+| Kiasyd                          | Heirs to the Blood    | 2010 |    12 |      77 |       **39%** | yes         | —                             |
 | Salubri antitribu               | Heirs to the Blood    | 2010 |    12 |      77 |       **64%** | yes         | —                             |
 | Samedi                          | Heirs to the Blood    | 2010 |    12 |      77 |       **49%** | yes         | —                             |
 | Den of Fiends                   | Sabbat Preconstructed | 2019 |    12 |      77 |       **58%** | yes         | —                             |

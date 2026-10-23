@@ -341,9 +341,37 @@ describe("statics the library already had", () => {
   });
 
   it("Egidia drains the controller of a minion that dies fighting her", () => {
-    const state = threeSeatGame();
-    const v = asVampire(state.seats[0]!.minions[0]!, "Egidia Arrú (G6)");
-    expect(v.attached[0]!.statics.strength).toBe(1);
+    // This test used to assert only her +1 strength, so it passed while the
+    // drain never fired: the combat-leave hook read seat-level cards only,
+    // and a crypt ability is attached (docs/archetypes-design.md §7).
+    // Alice's V1 (1 blood) bleeds; Bob's Egidia blocks and sends her to
+    // torpor; Alice burns 1 pool. And, as the control, a V1 who survives.
+    for (const survives of [false, true]) {
+      const state = threeSeatGame();
+      const w = asVampire(seat(state, "Bob").minions[0]!, "Egidia Arrú (G6)");
+      expect(w.attached[0]!.statics.strength).toBe(1);
+      find(state, "V1").blood = survives ? 4 : 1;
+      seat(state, "Bob").hand = [];
+      const engine = new VtesEngine(state, testRegistry);
+      runTrace(engine, [["Alice", "bleed:V1"]]);
+      expect(walkTo(engine, "block:W")).toBe(true);
+      runTrace(engine, [["Bob", "block:W"]]);
+      for (let i = 0; i < 60 && state.frames.some((f) => f.kind === "action"); i++) {
+        const dp = engine.decision();
+        if (!dp) break;
+        const pick =
+          dp.options.find((o) => o.id === "pass") ??
+          dp.options.find((o) => o.id === "strike:hand") ??
+          dp.options[0]!;
+        runTrace(engine, [[dp.seat, pick.id]]);
+      }
+      expect(state.frames.some((f) => f.kind === "action")).toBe(false);
+      expect(find(state, "V1").inTorpor).toBe(!survives);
+      const drained = state.eventLog.some(
+        (e) => e.type === "PoolBurned" && e.seat === "Alice" && e.amount === 1,
+      );
+      expect(drained).toBe(!survives);
+    }
   });
 });
 

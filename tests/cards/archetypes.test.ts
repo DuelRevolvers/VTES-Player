@@ -381,3 +381,426 @@ describe("Dabbler (100485)", () => {
     expect(v1.attached[0]!.usedThisTurn ?? false).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave 107 — Bravo, Capitalist, Creep Show, Guru, Sociopath
+// (docs/archetypes-design.md §7). All five gain 1 blood once per turn,
+// automatically, so each scenario reads the event log rather than a choice.
+// ---------------------------------------------------------------------------
+
+const gains = (state: GameState, minionId: string): number =>
+  state.eventLog.filter((e) => e.type === "BloodGained" && e.minion === minionId).length;
+const indexOf = (state: GameState, pred: (e: GameState["eventLog"][number]) => boolean): number =>
+  state.eventLog.findIndex(pred);
+
+/** The walker's default: pass, else a hand strike, else end a press. */
+function idle(engine: VtesEngine): void {
+  const dp = engine.decision()!;
+  const pick =
+    dp.options.find((o) => o.id === "pass") ??
+    dp.options.find((o) => o.id === "strike:hand") ??
+    dp.options.find((o) => o.id === "press:end") ??
+    dp.options[0]!;
+  runTrace(engine, [[dp.seat, pick.id]]);
+}
+
+/** Walk idly, taking `script[seat]` the first time it is offered, until
+ *  `done` holds. */
+function walk(
+  engine: VtesEngine,
+  done: () => boolean,
+  script: Record<string, string> = {},
+  limit = 150,
+): void {
+  const left = { ...script };
+  for (let i = 0; i < limit && !done(); i++) {
+    const dp = engine.decision();
+    if (!dp) return;
+    const want = left[dp.seat];
+    const hit = want ? dp.options.find((o) => o.id.startsWith(want)) : undefined;
+    if (hit) {
+      delete left[dp.seat];
+      runTrace(engine, [[dp.seat, hit.id]]);
+    } else {
+      idle(engine);
+    }
+  }
+}
+
+const combatOver = (state: GameState) => (): boolean =>
+  state.eventLog.some((e) => e.type === "CombatEnded") &&
+  !state.frames.some((f) => f.kind === "combat");
+const actionOver = (state: GameState) => (): boolean =>
+  !state.frames.some((f) => f.kind === "action");
+
+/** Alice's V1 rushes Bob's W with Hunter's Mark; every idle seat declines
+ *  to block. */
+function rushW(state: GameState): VtesEngine {
+  const v1 = find(state, "V1");
+  v1.disciplines = { ...v1.disciplines, cel: "basic", tha: "basic" };
+  state.seats[0]!.hand.push({ id: "hm1", name: "Hunter's Mark" });
+  const engine = new VtesEngine(state, testRegistry);
+  const rush = engine
+    .decision()!
+    .options.find((o) => o.id.startsWith("play:Hunter's Mark") && o.id.includes(":W:"));
+  if (!rush) throw new Error("no rush at W");
+  runTrace(engine, [["Alice", rush.id]]);
+  return engine;
+}
+
+/** Alice's V1 bleeds and Bob's W blocks: V1 (1 blood) against W (strength
+ *  2) goes to torpor. A Minor Boon in `boonHolder`'s hand opens the torpor
+ *  window, so V1 is GOING to torpor when the combat ends. */
+function blockedIntoTorpor(state: GameState, boonHolder?: string): VtesEngine {
+  find(state, "V1").blood = 1;
+  find(state, "W").strength = 2;
+  state.seats[1]!.hand = [];
+  if (boonHolder) {
+    state.seats.find((s) => s.id === boonHolder)!.hand.push({ id: "mnb", name: "Minor Boon" });
+  }
+  const engine = new VtesEngine(state, testRegistry);
+  runTrace(engine, [["Alice", "bleed:V1"]]);
+  walk(engine, () => engine.decision()!.options.some((o) => o.id === "block:W"));
+  runTrace(engine, [["Bob", "block:W"]]);
+  return engine;
+}
+
+describe("wave 107 — four archetypes that need a Sabbat vampire", () => {
+  for (const name of ["Capitalist", "Creep Show", "Guru", "Sociopath"]) {
+    it(`${name} goes on a Sabbat vampire you control, and on no other`, () => {
+      const state = threeSeatGame();
+      masterPhase(state);
+      find(state, "V1").sect = "sabbat";
+      state.seats[0]!.minions.push(makeMinion("V2", "Alice", { sect: "camarilla" }));
+      state.seats[0]!.hand.push({ id: "a1", name });
+      const engine = new VtesEngine(state, testRegistry);
+      const plays = engine.decision()!.options.filter((o) => o.id.startsWith(`play:${name}:`));
+      expect(plays.some((o) => o.id.includes(":V1:"))).toBe(true);
+      expect(plays.some((o) => o.id.includes(":V2:"))).toBe(false);
+    });
+  }
+
+  it("Bravo prints no sect, so it goes on either", () => {
+    const state = threeSeatGame();
+    masterPhase(state);
+    find(state, "V1").sect = "sabbat";
+    state.seats[0]!.minions.push(makeMinion("V2", "Alice", { sect: "camarilla" }));
+    state.seats[0]!.hand.push({ id: "a1", name: "Bravo" });
+    const engine = new VtesEngine(state, testRegistry);
+    const plays = engine.decision()!.options.filter((o) => o.id.startsWith("play:Bravo:"));
+    expect(plays.some((o) => o.id.includes(":V1:"))).toBe(true);
+    expect(plays.some((o) => o.id.includes(":V2:"))).toBe(true);
+  });
+});
+
+describe("Bravo (100247)", () => {
+  it("gains 1 blood when its successful rush's combat ends, still ready", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.blood = 3;
+    v1.attached.push(archetype("Bravo", "b1"));
+    find(state, "W").blood = 5;
+    find(state, "W").capacity = 8;
+    const engine = rushW(state);
+    walk(engine, combatOver(state));
+    const ended = indexOf(state, (e) => e.type === "CombatEnded");
+    const gained = indexOf(state, (e) => e.type === "BloodGained" && e.minion === "V1");
+    expect(ended).toBeGreaterThanOrEqual(0);
+    expect(gained).toBeGreaterThan(ended);
+    expect(gains(state, "V1")).toBe(1);
+    expect(v1.attached[0]!.usedThisTurn).toBe(true);
+  });
+
+  it("NEGATIVE SPACE: not when its action was blocked — that combat is the blocker's", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.blood = 4;
+    v1.attached.push(archetype("Bravo", "b1"));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    walk(engine, () => engine.decision()!.options.some((o) => o.id === "block:W"));
+    runTrace(engine, [["Bob", "block:W"]]);
+    walk(engine, combatOver(state));
+    expect(state.eventLog.some((e) => e.type === "CombatEnded")).toBe(true);
+    expect(gains(state, "V1")).toBe(0);
+  });
+
+  it("NEGATIVE SPACE: not when the bearer is no longer ready at the end", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.blood = 1;
+    v1.attached.push(archetype("Bravo", "b1"));
+    const w = find(state, "W");
+    w.blood = 5;
+    w.strength = 3;
+    const engine = rushW(state);
+    walk(engine, combatOver(state));
+    expect(v1.inTorpor).toBe(true);
+    expect(gains(state, "V1")).toBe(0);
+  });
+
+  // Owner ruling 2026-10-23 (docs/archetypes-design.md §7.5): a vampire a
+  // Minor Boon keeps out of torpor never stopped being ready.
+  it("gains 1 blood when a Minor Boon keeps the bearer out of torpor after its rush", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.blood = 1;
+    v1.attached.push(archetype("Bravo", "b1"));
+    const w = find(state, "W");
+    w.blood = 5;
+    w.strength = 3;
+    state.seats[2]!.hand.push({ id: "mnb", name: "Minor Boon" });
+    const engine = rushW(state);
+    // The rush's action frame is gone before its combat starts.
+    const settled = (): boolean =>
+      combatOver(state)() && !state.frames.some((f) => f.kind === "torpor");
+    walk(engine, settled, { Carol: "play:Minor Boon" });
+    const kept = indexOf(state, (e) => e.type === "TorporPrevented" && e.minion === "V1");
+    expect(kept).toBeGreaterThanOrEqual(0);
+    expect(v1.inTorpor).toBe(false);
+    expect(gains(state, "V1")).toBe(1);
+    expect(indexOf(state, (e) => e.type === "BloodGained" && e.minion === "V1")).toBeGreaterThan(kept);
+    expect(v1.attached.find((p) => p.card.name === "Bravo")!.usedThisTurn).toBe(true);
+  });
+
+  it("NEGATIVE SPACE: a boon after a BLOCK's combat pays nothing — no rush succeeded", () => {
+    const state = threeSeatGame();
+    find(state, "V1").attached.push(archetype("Bravo", "b1"));
+    const engine = blockedIntoTorpor(state, "Carol");
+    walk(engine, actionOver(state), { Carol: "play:Minor Boon" });
+    expect(state.eventLog.some((e) => e.type === "TorporPrevented" && e.minion === "V1")).toBe(true);
+    expect(gains(state, "V1")).toBe(0);
+  });
+});
+
+describe("Capitalist (100292)", () => {
+  it("gains 1 blood when the bearer successfully bleeds its prey", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.attached.push(archetype("Capitalist", "c1"));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    walk(engine, actionOver(state));
+    expect(state.eventLog.some((e) => e.type === "PoolBurned" && e.seat === "Bob")).toBe(true);
+    expect(gains(state, "V1")).toBe(1);
+    expect(v1.attached[0]!.usedThisTurn).toBe(true);
+  });
+
+  it("NEGATIVE SPACE: a bleed for 0 is not a successful bleed (p. 21)", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.bleedAmount = 0;
+    v1.attached.push(archetype("Capitalist", "c1"));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    walk(engine, actionOver(state));
+    expect(state.eventLog.some((e) => e.type === "ActionResolved")).toBe(true);
+    expect(gains(state, "V1")).toBe(0);
+  });
+});
+
+describe("Creep Show (100442)", () => {
+  function creepRush(setUp: (state: GameState) => void, script: Record<string, string>): GameState {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.blood = 3;
+    v1.attached.push(archetype("Creep Show", "cs1"));
+    find(state, "W").blood = 5;
+    find(state, "W").capacity = 8;
+    setUp(state);
+    const engine = rushW(state);
+    walk(engine, combatOver(state), script);
+    return state;
+  }
+  const played = (state: GameState, name: string): boolean =>
+    state.eventLog.some((e) => e.type === "CardPlayed" && e.name === name);
+
+  it("gains 1 blood when the opposing minion dodges", () => {
+    const state = creepRush((s) => s.seats[1]!.hand.push({ id: "dg1", name: "Dodge" }), {
+      Bob: "play:Dodge",
+    });
+    expect(played(state, "Dodge")).toBe(true);
+    expect(gains(state, "V1")).toBe(1);
+  });
+
+  it("gains 1 blood when the opposing minion ends combat as a strike", () => {
+    const state = creepRush(
+      (s) => {
+        find(s, "W").disciplines = { ...find(s, "W").disciplines, pre: "basic" };
+        s.seats[1]!.hand.push({ id: "cf1", name: "Catatonic Fear" });
+      },
+      { Bob: "play:Catatonic Fear" },
+    );
+    expect(played(state, "Catatonic Fear")).toBe(true);
+    expect(gains(state, "V1")).toBe(1);
+  });
+
+  it("NEGATIVE SPACE: not for hand strikes, and not for the bearer's OWN dodge", () => {
+    const plain = creepRush(() => {}, {});
+    expect(gains(plain, "V1")).toBe(0);
+    const own = creepRush((s) => s.seats[0]!.hand.push({ id: "dg1", name: "Dodge" }), {
+      Alice: "play:Dodge",
+    });
+    expect(played(own, "Dodge")).toBe(true);
+    expect(gains(own, "V1")).toBe(0);
+  });
+});
+
+describe("Guru (100872)", () => {
+  function callUprising(vote: boolean): GameState {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.title = "prince";
+    v1.attached.push(archetype("Guru", "g1"));
+    state.seats[0]!.hand.push({ id: "au1", name: "Anarchist Uprising" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:Anarchist Uprising"]]);
+    walk(
+      engine,
+      () => state.eventLog.some((e) => e.type === "ReferendumResolved"),
+      vote ? { Alice: "vote:V1:for" } : {},
+    );
+    return state;
+  }
+
+  it("gains 1 blood when its referendum passes — after the effects apply", () => {
+    const state = callUprising(true);
+    const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved");
+    expect(resolved?.type === "ReferendumResolved" && resolved.passed).toBe(true);
+    // "Each Methuselah burns 1 pool for each minion they control" — then
+    // the blood [LSJ 20090115-2].
+    const lastBurn = state.eventLog.map((e) => e.type).lastIndexOf("PoolBurned");
+    const gained = indexOf(state, (e) => e.type === "BloodGained" && e.minion === "V1");
+    expect(lastBurn).toBeGreaterThanOrEqual(0);
+    expect(gained).toBeGreaterThan(lastBurn);
+    expect(gains(state, "V1")).toBe(1);
+  });
+
+  it("NEGATIVE SPACE: nothing when the referendum fails", () => {
+    const state = callUprising(false);
+    const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved");
+    expect(resolved?.type === "ReferendumResolved" && resolved.passed).toBe(false);
+    expect(gains(state, "V1")).toBe(0);
+  });
+});
+
+describe("Sociopath (101823)", () => {
+  it("gains 1 blood when it sends the opposing vampire to torpor and stays ready", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.blood = 3;
+    v1.attached.push(archetype("Sociopath", "s1"));
+    find(state, "W").blood = 0;
+    const engine = rushW(state);
+    walk(engine, combatOver(state));
+    expect(find(state, "W").inTorpor).toBe(true);
+    expect(gains(state, "V1")).toBe(1);
+    expect(v1.attached[0]!.usedThisTurn).toBe(true);
+  });
+
+  it("NEGATIVE SPACE: both to torpor at once — neither remains ready, on either side", () => {
+    // Damage is applied acting-first (p. 29), so a check made as each one
+    // LEFT would have paid whichever side went second. Sociopath is on both.
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.blood = 1;
+    v1.attached.push(archetype("Sociopath", "s1"));
+    const w = find(state, "W");
+    w.sect = "sabbat";
+    w.blood = 0;
+    w.strength = 2;
+    w.attached.push(archetype("Sociopath", "s2"));
+    const engine = rushW(state);
+    walk(engine, combatOver(state));
+    expect(v1.inTorpor).toBe(true);
+    expect(w.inTorpor).toBe(true);
+    expect(gains(state, "V1")).toBe(0);
+    expect(gains(state, "W")).toBe(0);
+  });
+
+  it("gains 1 blood when its strike burns an opposing ALLY", () => {
+    // An ally emptied by damage used to wait for the next settle to be
+    // burned, which fired no combat-leave hook at all.
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.blood = 3;
+    v1.attached.push(archetype("Sociopath", "s1"));
+    state.seats[1]!.minions.push(makeMinion("A1", "Bob", { kind: "ally", blood: 1, capacity: 1 }));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    walk(engine, () => engine.decision()!.options.some((o) => o.id === "block:A1"));
+    runTrace(engine, [["Bob", "block:A1"]]);
+    walk(engine, combatOver(state));
+    expect(state.seats[1]!.minions.some((m) => m.id === "A1")).toBe(false);
+    expect(gains(state, "V1")).toBe(1);
+  });
+
+  it("NEGATIVE SPACE: not when something other than its own strike sends them (owner ruling)", () => {
+    // A retainer's damage is environmental (p. 31), not this vampire's
+    // strike. The bearer dodges, so the retainer is all that lands.
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.blood = 3;
+    v1.attached.push(archetype("Sociopath", "s1"), {
+      ...archetype("Test Retainer", "r1"),
+      tags: [],
+      statics: { combatRoundDamage: { amount: 1, ranged: false } },
+    });
+    find(state, "W").blood = 0;
+    state.seats[0]!.hand.push({ id: "dg1", name: "Dodge" });
+    const engine = rushW(state);
+    walk(engine, combatOver(state), { Alice: "play:Dodge" });
+    expect(state.eventLog.some((e) => e.type === "CardPlayed" && e.name === "Dodge")).toBe(true);
+    expect(find(state, "W").inTorpor).toBe(true);
+    expect(gains(state, "V1")).toBe(0);
+  });
+
+  it("NEGATIVE SPACE: nothing when the opposing minion survives", () => {
+    const state = threeSeatGame();
+    const v1 = find(state, "V1");
+    v1.sect = "sabbat";
+    v1.blood = 3;
+    v1.attached.push(archetype("Sociopath", "s1"));
+    find(state, "W").blood = 5;
+    const engine = rushW(state);
+    walk(engine, combatOver(state));
+    expect(gains(state, "V1")).toBe(0);
+  });
+
+  it("a vampire GOING to torpor pays when it arrives — and not if a boon keeps it out", () => {
+    for (const playBoon of [false, true]) {
+      const state = threeSeatGame();
+      const w = find(state, "W");
+      w.sect = "sabbat";
+      w.attached.push(archetype("Sociopath", "s1"));
+      const engine = blockedIntoTorpor(state, "Carol");
+      walk(engine, actionOver(state), playBoon ? { Carol: "play:Minor Boon" } : {});
+      expect(state.eventLog.some((e) => e.type === "TorporPending" && e.minion === "V1")).toBe(true);
+      expect(find(state, "V1").inTorpor).toBe(!playBoon);
+      expect(gains(state, "W")).toBe(playBoon ? 0 : 1);
+    }
+  });
+});
+
+describe("Monster (101242) — an opponent GOING to torpor is not ready", () => {
+  it("offers the unlock when the opposing vampire is held in Minor Boon's window", () => {
+    const state = threeSeatGame();
+    find(state, "W").attached.push(archetype("Monster", "m1"));
+    const engine = blockedIntoTorpor(state, "Carol");
+    let offered = false;
+    walk(engine, () => {
+      offered ||= engine.decision()?.options.some((o) => o.id.startsWith("choice:Monster:")) ?? false;
+      return offered || !state.frames.some((f) => f.kind === "action");
+    });
+    expect(state.eventLog.some((e) => e.type === "TorporPending" && e.minion === "V1")).toBe(true);
+    expect(offered).toBe(true);
+  });
+});

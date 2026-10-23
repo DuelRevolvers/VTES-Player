@@ -1,14 +1,14 @@
-V5 pool registry — built 2026-10-23T18:35:28.641Z
+V5 pool registry — built 2026-10-23T19:06:59.459Z
 Sets: Fifth Edition, Fifth Edition (Anarch), Fifth Edition (Companion), Sabbat V5, New Blood, New Blood II, New Blood III
 
-Unique cards:   1113
+Unique cards:   1118
   Crypt:        217
-  Library:      896
-Supported:      995 / 1113
+  Library:      901
+Supported:      1000 / 1118
 Precon decks:   32
 
 Library by type:
-  Master             235
+  Master             240
   Combat             160
   Action             105
   Political Action   103

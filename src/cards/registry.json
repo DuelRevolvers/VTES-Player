@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-23T18:35:28.641Z",
+ "fetchedAt": "2026-10-23T19:06:59.459Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -1927,6 +1927,27 @@
    },
    "supported": true
   },
+  "100247": {
+   "card": {
+    "kind": "library",
+    "id": 100247,
+    "name": "Bravo",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: archetype.\nPut this card on a vampire you control. Once per turn, when this vampire successfully performs an action to enter combat with another, he or she gains 1 blood from the blood bank when the combat ends, if he or she is still ready. A vampire can have only one archetype.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bravo.jpg",
+    "sets": [
+     "Gehenna"
+    ]
+   },
+   "supported": true
+  },
   "100251": {
    "card": {
     "kind": "library",
@@ -2321,6 +2342,28 @@
      "Anarchs",
      "Legacies of Blood",
      "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100292": {
+   "card": {
+    "kind": "library",
+    "id": 100292,
+    "name": "Capitalist",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: archetype.\nPut this card on a Sabbat vampire you control. Once per turn, when this vampire successfully bleeds his or her prey, he or she gains 1 blood from the bank. A vampire can have only one archetype.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/capitalist.jpg",
+    "sets": [
+     "Black Hand",
+     "Heirs to the Blood"
     ]
    },
    "supported": true
@@ -3425,6 +3468,27 @@
      "Sabbat",
      "Sabbat War",
      "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100442": {
+   "card": {
+    "kind": "library",
+    "id": 100442,
+    "name": "Creep Show",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: archetype. Trifle.\nPut this card on a Sabbat vampire you control. Once per turn, when a minion opposing this vampire in combat dodges or ends combat as a strike, this vampire gains 1 blood from the blood bank. A vampire can have only one archetype.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/creepshow.jpg",
+    "sets": [
+     "Black Hand"
     ]
    },
    "supported": true
@@ -7205,6 +7269,27 @@
     "image": "https://static.krcg.org/card/gurchonhall.jpg",
     "sets": [
      "Third Edition"
+    ]
+   },
+   "supported": true
+  },
+  "100872": {
+   "card": {
+    "kind": "library",
+    "id": 100872,
+    "name": "Guru",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: archetype.\nPut this card on a Sabbat vampire you control. Once per turn, when this vampire calls a referendum and it passes, he or she gains 1 blood from the blood bank. A vampire can have only one archetype.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/guru.jpg",
+    "sets": [
+     "Black Hand"
     ]
    },
    "supported": true
@@ -14655,6 +14740,27 @@
     "image": "https://static.krcg.org/card/societyhuntingground.jpg",
     "sets": [
      "Fifth Edition"
+    ]
+   },
+   "supported": true
+  },
+  "101823": {
+   "card": {
+    "kind": "library",
+    "id": 101823,
+    "name": "Sociopath",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: archetype.\nPut this card on a Sabbat vampire you control. Once per turn, when this vampire remains ready and burns a minion in combat or sends a vampire to torpor in combat, he or she gains 1 blood from the blood bank. A vampire can have only one archetype.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/sociopath.jpg",
+    "sets": [
+     "Black Hand"
     ]
    },
    "supported": true

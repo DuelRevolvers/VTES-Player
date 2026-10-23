@@ -39,6 +39,7 @@ import type {
   SeatId,
   StrikeKind,
   GrantedStrike,
+  Strike,
   VoteGrants,
 } from "./state.ts";
 
@@ -225,6 +226,9 @@ export interface EngineOps {
    *  outside the damage pipeline; an ally is burned instead, as
    *  `strikeIncapacitate` already reads it (p. 22). */
   sendToTorpor(minion: MinionId): void;
+  /** "…to prevent that vampire from going to torpor" (Minor Boon): clears
+   *  `torporPending` and fires `onTorporPrevented`. */
+  preventTorpor(minion: MinionId): void;
   /** "Prevent all damage from the opposing minion's strikes this round"
    *  (Rolling with the Punches superior). */
   preventAllFromOpponentThisRound(play: CardPlayFrame): void;
@@ -1564,7 +1568,30 @@ export interface CardHandler {
        *  resolution" (Sword of the Archangel).
        *  docs/weapon-riders-design.md §6 */
       burnedByStrike: string[];
+      /** The minion whose successful ACTION started this combat — a rush
+       *  (Bravo: "successfully performs an action to enter combat with
+       *  another"). Null for a block's combat and for one a card queued.
+       *  docs/archetypes-design.md §7 */
+      rushBy: MinionId | null;
+      /** Combatants that left the ready region DURING the combat, burned
+       *  or sent straight to torpor (Sociopath). One still GOING to torpor
+       *  is not here: it arrives after the combat, through `onCombatLeave`.
+       *  `by` is the combatant whose strike did it, else null.
+       *  docs/archetypes-design.md §7 */
+      leftReady: { minion: MinionId; by: MinionId | null }[];
     },
+    ops: EngineOps,
+  ): void;
+  /** A strike has RESOLVED — one per side whose strike resolved, fired
+   *  before any damage (Creep Show: "when a minion opposing this vampire in
+   *  combat dodges or ends combat as a strike"). A "combat ends" strike
+   *  resolves before everything else, so on that branch only the combat-ends
+   *  strikes are reported. Mid-resolution: automatic effects only, never a
+   *  choice. docs/archetypes-design.md §7 */
+  onStrikeResolved?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    info: { striker: MinionId; opposing: MinionId; strike: Strike },
     ops: EngineOps,
   ): void;
   /** A block has been DECLARED — before the attempt resolves (Rebel's
@@ -1589,11 +1616,12 @@ export interface CardHandler {
   ): void;
   /** A combatant left the ready region (torpor/burned) during combat (Dead
    *  Pool: "after a vampire in combat with a Lasombra you control leaves
-   *  the ready region…"). `other` is the surviving combatant. */
+   *  the ready region…"). `other` is the surviving combatant; `by` is the
+   *  combatant whose strike sent it, or null (Sociopath). */
   onCombatLeave?(
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
-    info: { leaver: MinionId; other: MinionId },
+    info: { leaver: MinionId; other: MinionId; by: MinionId | null },
     ops: EngineOps,
   ): void;
   /** This card's in-play abilities are offered to EVERY Methuselah, not
@@ -1661,6 +1689,15 @@ export interface CardHandler {
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
     info: { minion: MinionId; controller: SeatId; how: "burned" | "torpor" | "removed" },
+    ops: EngineOps,
+  ): void;
+  /** A vampire GOING to torpor was kept out (Minor Boon), so it never
+   *  left the ready region. `rushBy` is the `rushBy` of the combat it was
+   *  going from, else null (Bravo). docs/archetypes-design.md §7.5 */
+  onTorporPrevented?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    info: { minion: MinionId; rushBy: MinionId | null },
     ops: EngineOps,
   ): void;
   /** "Each time the attached vampire announces an action, …"
@@ -1781,6 +1818,16 @@ export interface CardHandler {
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
     info: { callingMinion: MinionId | null; how: "cancelled" | "failed" },
+    ops: EngineOps,
+  ): void;
+  /** A POLITICAL referendum has passed and its effects have been applied
+   *  (Guru: "the blood is gained after the referendum effects are applied"
+   *  [LSJ 20090115-2]). Not fired for a blood hunt, which no vampire calls.
+   *  docs/archetypes-design.md §7 */
+  onReferendumPassed?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    info: { actionId: ActionId; callingMinion: MinionId | null },
     ops: EngineOps,
   ): void;
   /** "During your influence phase, …" (Frontal Assault) — the influence

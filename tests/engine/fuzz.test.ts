@@ -229,6 +229,11 @@ function fourSeatGame(seed: number): GameState {
     "Monster",
     "Perfectionist",
     "Rebel",
+    "Bravo",
+    "Capitalist",
+    "Creep Show",
+    "Guru",
+    "Sociopath",
     // Fourth sweep.
     "Arcane Library",
     "Sight Beyond Sight",

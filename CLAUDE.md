@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 321 test files, 3483 tests**, with `npm run typecheck`,
+**Green baseline: 321 test files, 3507 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
