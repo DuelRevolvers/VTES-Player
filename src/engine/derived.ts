@@ -22,6 +22,7 @@ import type {
   PlayCostMod,
   SeatId,
 } from "./state.ts";
+import type { HandlerRegistry } from "./handlers.ts";
 // No `getMinion` here on purpose: a derived read must be TOTAL. Everything
 // in this module is asked about a minion that may have left play mid-action
 // or mid-combat, and a throw from here surfaces as a game that cannot be
@@ -1739,4 +1740,26 @@ export function mayAttemptBlock(state: GameState, af: ActionFrame, m: MinionStat
   // "Minions must burn 1 blood to attempt to block this action" — a minion
   // that cannot pay the toll cannot attempt at all (block-tax design).
   return blockTollFor(af, m, actor, state) !== null;
+}
+
+/**
+ * "…cards REQUIRING Protean [pro]" — a card that requires one of
+ * `disciplines` in ANY of its modes. The requirement is printed per mode (a
+ * card requiring [pro] only at superior still "requires Protean"), and a
+ * handler answers per mode, so all three are asked
+ * (docs/store-plays-design.md §4). ONE function, because Gift of Proteus's
+ * store and Powder of Rigidity's combat ban ask the same question
+ * (docs/equip-unlocks-design.md §4).
+ */
+export function cardRequiresDiscipline(
+  registry: HandlerRegistry,
+  cardName: string,
+  disciplines: string[],
+): boolean {
+  const h = registry[cardName];
+  if (!h) return false;
+  const modes: Array<DisciplineLevel | null> = [null, "basic", "superior"];
+  return modes.some((m) =>
+    (h.requiresDisciplines?.(m, undefined) ?? []).some((d) => disciplines.includes(d)),
+  );
 }

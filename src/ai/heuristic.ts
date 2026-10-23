@@ -756,6 +756,23 @@ export class HeuristicAgent implements Agent {
         // cannot price, so it keeps paying the debt instead.
         // docs/boons-design.md §7
         if (o.params["give"] !== undefined) return w.selfOustGuard;
+        // "The opposing minion cannot use cards requiring Protean or
+        // Vicissitude … a werewolf gets -2 strength" (Powder of Rigidity)
+        // does nothing to an opponent that is neither, and the card has no
+        // other use — so it is kept for one that is.
+        // docs/equip-unlocks-design.md §6
+        if (o.params["do"] === "ban") {
+          const opp = view.seats
+            .flatMap((s) => s.minions)
+            .find((m) => m.id === view.combat?.opponent);
+          if (!opp) return -w.playCard;
+          // Read off the viewed minion, not `derived.ts`, which this module
+          // may not import: printed Disciplines, and the werewolf tag on the
+          // ally's own card.
+          const d = opp.disciplines;
+          const wolf = opp.attached.some((p) => p.card.id === opp.id && p.tags.includes("werewolf"));
+          return d["pro"] || d["vic"] || wolf ? w.playCard : -w.playCard;
+        }
         return w.playCard;
 
       case "useEntryAction":

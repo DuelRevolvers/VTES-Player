@@ -663,6 +663,15 @@ function fourSeatGame(seed: number): GameState {
     "Hostile Takeover",
     "Malkavian Time Auction",
     "Temptation of Greater Power",
+    // Wave 106: the actor unlocks after the equip
+    // (docs/equip-unlocks-design.md) — two unlock timings, an action card's
+    // held replacement, a burn in damage resolution, a per-combat Discipline
+    // bar, and Repo Man's library search with a chosen bearer. The vehicles
+    // he looks for are already in these decks.
+    "Baseball Bat",
+    "Leather Jacket",
+    "Powder of Rigidity",
+    "Repo Man",
     // The Path cards (docs/path-cards-design.md) — all four, now that a
     // Path is known to be a printed CRYPT trait. The minions below carry
     // one each, or none of these would ever be dealt a legal player.

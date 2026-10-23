@@ -52,6 +52,7 @@ import {
   startingLifeBonus,
   titleContestKey,
   unlockSuppressed,
+  cardRequiresDiscipline,
 } from "./derived.ts";
 import { rngInt } from "./rng.ts";
 import type {
@@ -3449,6 +3450,14 @@ export class VtesEngine implements EngineOps {
       // hand — a flat extra draw would leave it one card OVER size
       // (docs/hand-churn-design.md §2).
       if (handler.delayedReplace === "afterResolve") this.drawUpToHandSize(cp.seat);
+      // An action card's "do not replace until after this action": its
+      // action exists now, so the draw waits on it. A card that announced
+      // nothing has nothing to wait for. docs/equip-unlocks-design.md §3
+      if (cp.heldReplacement?.kind === "ownAction") {
+        const af = this.action();
+        if (af && af.card?.instance.id === cp.card.id) af.drawAfter.push(cp.seat);
+        else this.drawToReplace(cp.seat);
+      }
       // "When a Methuselah successfully plays a trifle, they gain an
       // additional master phase action" — once per master phase (p. 10).
       //
@@ -6146,6 +6155,12 @@ export class VtesEngine implements EngineOps {
       cardId: card.id,
       handler,
       fromHand: zone === "hand",
+      // No action of its own is wrapped around this play, so a card's "do
+      // not replace until after THIS action" has nothing to wait for: "if
+      // put into play in a special way (eg. using Concealed Weapon), it is
+      // replaced immediately" [LSJ 20080702-2] (Baseball Bat).
+      // docs/equip-unlocks-design.md §3
+      noOwnAction: true,
       delayedByAction:
         !!this.action() &&
         (handler.costTypes?.(args.mode, undefined) ?? []).some((t) =>
@@ -6921,6 +6936,10 @@ export class VtesEngine implements EngineOps {
         );
         return af?.kind === "action" ? dropOne(af.drawAfter) : false;
       }
+      case "ownAction":
+        // Cancelled as played, the action was never announced, so nothing
+        // was moved onto one.
+        return true;
     }
   }
 
@@ -7934,6 +7953,22 @@ export class VtesEngine implements EngineOps {
     cf.strengthBonus[this.sideOf(cf, minion)] += amount;
   }
 
+  banDisciplineCardsThisCombat(minion: MinionId, disciplines: string[]): void {
+    const cf = this.requireCombat();
+    (cf.disciplineBans ??= []).push({ minion, disciplines });
+  }
+
+  /** Is `minion` barred from using `cardName` in the live combat? The one
+   *  reader of `disciplineBans`, asked by both option gatherers.
+   *  docs/equip-unlocks-design.md §4 */
+  private bannedInCombat(minion: MinionId | null, cardName: string): boolean {
+    if (minion === null) return false;
+    const bans = this.combatFrame()?.disciplineBans ?? [];
+    return bans.some(
+      (b) => b.minion === minion && cardRequiresDiscipline(this.registry, cardName, b.disciplines),
+    );
+  }
+
   grantManeuverCreditTo(minion: MinionId): void {
     const cf = this.requireCombat();
     cf.maneuverCredits[this.sideOf(cf, minion)] += 1;
@@ -8332,6 +8367,18 @@ export class VtesEngine implements EngineOps {
     ) {
       const actor = findMinion(this.state, af.acting);
       if (actor) actor.unlocksAtEndOfTurn = true;
+    }
+    // "If the action to equip with the Baseball Bat / recruit Repo Man is
+    // successful, unlock the acting minion at the end of the turn" — the
+    // card's own copy of the NRA PAC promise, kept on the minion for the
+    // same reason. Powder of Rigidity's comes due sooner, at the next
+    // discard phase. docs/equip-unlocks-design.md §2
+    if (handler.successUnlocksActor) {
+      const actor = findMinion(this.state, af.acting);
+      if (actor && handler.successUnlocksActor === "endOfTurn") actor.unlocksAtEndOfTurn = true;
+      if (actor && handler.successUnlocksActor === "discardPhase") {
+        actor.unlocksInDiscardPhase = true;
+      }
     }
     if (handler.becomesVampireOnSuccess) {
       // "Put this card in play. It becomes a 1-capacity vampire" — the
@@ -9584,6 +9631,9 @@ export class VtesEngine implements EngineOps {
           const h = this.registry[p.card.name];
           if (foreign && !h?.abilityAnySeat) continue;
           if (asPlayed && !h?.abilityInAsPlayed) continue;
+          // A card ON the barred minion that required the Discipline is a
+          // card they would be using (Powder of Rigidity, §4).
+          if (this.bannedInCombat(m.id, p.card.name)) continue;
           if (h?.abilityOptions) {
             options.push(
               ...h.abilityOptions(p, { seat: p.controller ?? s.id, minion: m.id }, ctx),
@@ -10010,7 +10060,13 @@ export class VtesEngine implements EngineOps {
       ) {
         continue;
       }
-      options.push(...handler.options(card, ctx));
+      // "…cannot use cards requiring Protean" (Powder of Rigidity) — on the
+      // minion the option names, so a card the same seat plays with another
+      // minion is untouched. docs/equip-unlocks-design.md §4
+      for (const opt of handler.options(card, ctx)) {
+        if (opt.kind === "playCard" && this.bannedInCombat(opt.minion, card.name)) continue;
+        options.push(opt);
+      }
     }
     // "…can play cards from this card AS IF FROM YOUR HAND" (Gift of
     // Proteus, Mokolé Blood, Fleshforge Chamber). The same enumerator with
@@ -10032,6 +10088,7 @@ export class VtesEngine implements EngineOps {
         for (const opt of handler.options(c, ctx)) {
           if (opt.kind !== "playCard") continue;
           if (sp.bearerOnly && opt.minion !== owner.minion) continue;
+          if (this.bannedInCombat(opt.minion, c.name)) continue;
           if (sp.clan !== undefined) {
             const m = opt.minion === null ? null : findMinion(this.state, opt.minion);
             if (m?.clan !== sp.clan) continue;
@@ -11058,6 +11115,18 @@ export class VtesEngine implements EngineOps {
           this.drawToReplace(tf.seat);
         }
         dseat.delayedDrawsDiscard = 0;
+        // "…unlock the acting minion during the NEXT discard phase"
+        // (Powder of Rigidity) — whoever's phase it is, because the card
+        // says "the next", not "your next". docs/equip-unlocks-design.md §2
+        for (const s of this.state.seats) {
+          for (const m of s.minions) {
+            if (m.unlocksInDiscardPhase !== true) continue;
+            m.unlocksInDiscardPhase = false;
+            if (m.locked && !unlockSuppressed(this.state, m.id)) {
+              this.emit({ type: "MinionUnlocked", minion: m.id });
+            }
+          }
+        }
         // "…winner pays 1 pool toward his or her debt during his or her
         // discard phase until the debt is repaid" (Temptation of Greater
         // Power). Not optional, and the last pool counts: a debtor on 1
@@ -11735,6 +11804,12 @@ export class VtesEngine implements EngineOps {
      *  to Oblivion superior) — read off the ACTION rather than the card,
      *  so the caller that knows the cost types decides it. */
     delayedByAction?: boolean;
+    /** The card was put into play with no action of its own (§3 of
+     *  docs/equip-unlocks-design.md), so `afterAction` does not apply. */
+    noOwnAction?: boolean;
+    /** The card ANNOUNCES an action once it resolves (an action card), so
+     *  "after this action" means an action that does not exist yet. */
+    ownAction?: boolean;
   }): HeldReplacement | undefined {
     const seat = getSeat(this.state, args.seat);
     const handler = args.handler;
@@ -11782,12 +11857,20 @@ export class VtesEngine implements EngineOps {
       // "Do not replace until your next DISCARD phase" (Mirror Walk).
       seat.delayedDrawsDiscard = (seat.delayedDrawsDiscard ?? 0) + 1;
       return { kind: "discard" };
+    } else if (handler.delayedReplace === "afterAction" && args.ownAction) {
+      // "Do not replace until after THIS action" on an action card (Arson,
+      // Bum's Rush, Baseball Bat). Its action is announced only when the
+      // card resolves, so there is no frame to wait on yet — and this used
+      // to fall through to the immediate draw below, replacing every such
+      // card at once. Moved onto the action in `resolveCardPlay`.
+      // docs/equip-unlocks-design.md §3
+      return { kind: "ownAction" };
     } else if (args.delayedByAction && afForDraw) {
       // NOT returned: "those cards are not replaced until the end of the
       // action" is the ACTION's rule (Consign to Oblivion), not the card's
       // own clause, and a cancelled card was still played into the action.
       afForDraw.drawAfter.push(seat.id);
-    } else if (handler.delayedReplace === "afterAction" && afForDraw) {
+    } else if (handler.delayedReplace === "afterAction" && afForDraw && !args.noOwnAction) {
       afForDraw.drawAfter.push(seat.id);
       return { kind: "afterAction", actionId: afForDraw.actionId };
     } else {
@@ -12057,6 +12140,7 @@ export class VtesEngine implements EngineOps {
       handler,
       fromHand: store === null,
       delayedByAction,
+      ownAction: asAction,
     });
     // The as-played window: only cancel-as-played and wake effects may be
     // used inside it (p. 7); normal sequencing order applies — outside an

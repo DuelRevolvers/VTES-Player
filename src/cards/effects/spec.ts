@@ -3049,6 +3049,18 @@ export interface CardSpec {
        *  `preventDamageFor` already does, so the ruling costs nothing.
        *  docs/burn-the-equipment-design.md §1 */
       burnToPrevent?: number;
+      /** "Bearer may burn Leather Jacket to PREVENT ALL THE DAMAGE FROM THE
+       *  OPPOSING MINION'S STRIKE" — `burnToPrevent` narrowed to the
+       *  opponent's damage and widened to all of it. *"Cannot be used if
+       *  there is no damage to prevent"* [LSJ 20001114].
+       *  docs/equip-unlocks-design.md §3 */
+      burnToPreventStrike?: true;
+      /** "The bearer can burn this equipment before range is determined in
+       *  a round of combat. If they do so, the opposing minion cannot use
+       *  cards requiring \<disciplines\> until the end of combat and if the
+       *  opposing minion is a werewolf, they get -N strength until the end
+       *  of combat" (Powder of Rigidity). docs/equip-unlocks-design.md §4 */
+      burnToBanDisciplines?: { disciplines: string[]; werewolfStrength: number };
       /** "…or to GAIN N BLOOD (ignore excess blood)" (Blood Tears of
        *  Kephran) — the second half of one "or", and the reason the price
        *  is a field of its own rather than part of either effect: one
@@ -4386,6 +4398,11 @@ export interface CardSpec {
    *  CONDITION form of the clause above, which waits on an event rather
    *  than a phase. docs/gehenna-taxes-design.md §1 */
   delayedReplaceUntil?: DelayedDrawCondition;
+  /** "If the action to equip with the Baseball Bat / recruit Repo Man is
+   *  successful, unlock the acting minion at the end of the turn" —
+   *  `discardPhase` for Powder of Rigidity's "during the next discard
+   *  phase". docs/equip-unlocks-design.md §2 */
+  successUnlocksActor?: "endOfTurn" | "discardPhase";
   /** "+1 stealth HUNT action" (Psychophagia) — the action card announces a
    *  hunt, and its blood is the hunt's, paid through `payHunt`.
    *  docs/hunt-success-design.md §1 */

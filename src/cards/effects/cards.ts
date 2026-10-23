@@ -11,6 +11,7 @@ import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, c
 import {
   allocToParams,
   applyReferendumRiders,
+  cannotBeEquipped,
   compileSpec,
   controllerMeetsRequirements,
   enumerateAllocations,
@@ -17898,6 +17899,86 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  // --- Wave 106: the actor unlocks after the equip
+  //     (docs/equip-unlocks-design.md).
+  {
+    // "Melee weapon. Do not replace until after this action. Strength+1
+    //  damage each strike. If the action to equip with the Baseball Bat is
+    //  successful, unlock the acting minion at the end of the turn." §2–§3
+    krcgId: 100137,
+    name: "Baseball Bat",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    delayedReplace: "afterAction",
+    successUnlocksActor: "endOfTurn",
+    weapon: { damage: null, handBonus: 1, ranged: false, aggravated: false },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "melee"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "If the action to equip with the Leather Jacket is successful, unlock
+    //  the acting minion at the end of the turn. Bearer may burn Leather
+    //  Jacket to prevent all the damage from the opposing minion's strike.
+    //  A minion may have only one Leather Jacket." §2–§3
+    krcgId: 101081,
+    name: "Leather Jacket",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    successUnlocksActor: "endOfTurn",
+    permanent: {
+      where: "bearer",
+      statics: {},
+      exclusiveKey: "Leather Jacket",
+      equipmentAbilities: { burnToPreventStrike: true },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "If the action to equip with the Powder is successful, unlock the
+    //  acting minion during the next discard phase. The bearer can burn
+    //  this equipment before range is determined in a round of combat. If
+    //  they do so, the opposing minion cannot use cards requiring Protean
+    //  [pro] or Vicissitude [vic] until the end of combat and if the
+    //  opposing minion is a werewolf, they get -2 strength until the end
+    //  of combat." §2, §4
+    krcgId: 101427,
+    name: "Powder of Rigidity",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 0,
+    successUnlocksActor: "discardPhase",
+    permanent: {
+      where: "bearer",
+      statics: {},
+      equipmentAbilities: {
+        burnToBanDisciplines: { disciplines: ["pro", "vic"], werewolfStrength: -2 },
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique ghoul with 1 life. 0 strength, 0 bleed. If the action to
+    //  recruit Repo Man is successful, unlock the acting minion at the end
+    //  of the turn. Repo Man can retrieve the first vehicle you find in your
+    //  library as a +2 stealth action. …" The action is the bespoke
+    //  `repoMan`. *"Ghouls are monsters, not mortal"* [ANK 20200203-2]. §5
+    krcgId: 101605,
+    name: "Repo Man",
+    cardType: "ally",
+    bloodCost: 1,
+    poolCost: 0,
+    unique: true,
+    successUnlocksActor: "endOfTurn",
+    ally: { life: 1, strength: 0, bleed: 0 },
+    permanent: { where: "bearer", statics: {}, tags: ["ghoul"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // --- The token-vampire gate (docs/token-vampire-design.md). Unblocked
   //     by the owner 2026-09-03. Two cards, and they are the same card
   //     twice: a LIBRARY card that becomes a 1-capacity vampire, which is
@@ -21574,6 +21655,153 @@ const temptationOfGreaterPower: CardHandler = {
     if (!findMinion(ops.state, target)) return;
     const credit = Number(choice.params["credit"] ?? frame.params["least"] ?? "0");
     settleTemptation(ops, target, frame.seat, Number(frame.params["high"] ?? "0"), credit);
+  },
+};
+
+/**
+ * "…any ready minion you control who meets the requirements of the card" —
+ * the minions Repo Man's vehicle may go on. The equip gates the vehicle
+ * would face from the hand (`playFromHandChoices`): requirements, own-copy
+ * uniqueness, one vehicle per minion, and a minion that cannot have
+ * equipment. docs/equip-unlocks-design.md §5
+ */
+function repoManBearers(
+  state: GameState,
+  registry: HandlerRegistry,
+  seatId: SeatId,
+  cardName: string,
+): MinionState[] {
+  const h = registry[cardName];
+  if (!h) return [];
+  if (h.isUnique && seatControlsCopy(state, seatId, cardName)) return [];
+  return getSeat(state, seatId).minions.filter(
+    (m) =>
+      isReady(m) &&
+      !cannotBeEquipped(m, "equipment") &&
+      !m.attached.some((p) => p.tags.includes("vehicle")) &&
+      (h.modesPlayableBy?.(m) ?? []).length > 0,
+  );
+}
+
+/**
+ * Repo Man (101605): "Repo Man can retrieve the first vehicle you find in
+ * your library as a +2 stealth action. You then place the vehicle on any
+ * ready minion you control who meets the requirements of the card (pay cost
+ * to equip as normal). If none of your ready minions meet the requirements
+ * of the card, the card is burned without cost. Shuffle afterward."
+ *
+ * Vast Wealth's search with the bearer CHOSEN instead of fixed. "The first
+ * vehicle you find" is the first one, whoever can use it — the card's own
+ * fallback ("burned without cost") is the case where nobody can. Paying is
+ * not optional, even when it ousts [RTR 19941109] [RTR 20010710].
+ * docs/equip-unlocks-design.md §5
+ */
+const repoManBase = compileSpec(specByName("Repo Man"));
+const repoMan: CardHandler = {
+  ...repoManBase,
+  actionOptions(entry, owner, ctx) {
+    const base = repoManBase.actionOptions?.(entry, owner, ctx) ?? [];
+    if (ctx.window !== "turn.minion") return base;
+    // The ally himself, for the Methuselah who controls him (p. 16).
+    if (owner.minion === null || ctx.seat !== owner.seat) return base;
+    const m = findMinion(ctx.state, owner.minion);
+    if (!m || !canAct(m)) return base;
+    if (entry.grantedActionUses?.some((u) => u.minion === m.id && u.key === "repo")) {
+      return base;
+    }
+    return [
+      ...base,
+      {
+        id: `act:${this.name}:${entry.card.id}:repo:${m.id}`,
+        kind: "useEntryAction",
+        label: `${m.name}: retrieve the first vehicle in your library`,
+        source: entry.card.id,
+        minion: m.id,
+        params: {},
+      },
+    ];
+  },
+  useActionOption(entry, owner, choice, ops) {
+    if (!choice.id.includes(":repo:")) {
+      repoManBase.useActionOption?.(entry, owner, choice, ops);
+      return;
+    }
+    ops.announceEntryAction(entry, choice.minion, { effect: { key: "repo" }, stealth: 2 });
+  },
+  resolveGrantedAction(entry, af, ops) {
+    if (af.grantedEffect?.key !== "repo") {
+      repoManBase.resolveGrantedAction?.(entry, af, ops);
+      return;
+    }
+    const seat = getSeat(ops.state, af.actingSeat);
+    const vehicle = seat.library.find((c) =>
+      (ops.registry[c.name]?.permanentTags ?? []).includes("vehicle"),
+    );
+    if (vehicle && repoManBearers(ops.state, ops.registry, seat.id, vehicle.name).length > 0) {
+      // Shuffled once the vehicle is placed, in `applyChoice`.
+      ops.raiseChoice({
+        seat: seat.id,
+        cardName: this.name,
+        cardId: entry.card.id,
+        key: "bearer",
+        params: { vehicle: vehicle.id, vehicleName: vehicle.name },
+      });
+      return;
+    }
+    // "…the card is burned without cost." Burning is what sends it to the
+    // ash heap (p. 16), so the library-burn event carries it there.
+    if (vehicle) {
+      ops.emit({ type: "LibraryTopBurned", seat: seat.id, cardId: vehicle.id, name: vehicle.name });
+    }
+    ops.shuffleLibrary(seat.id);
+  },
+  choiceOptions(frame, state, registry) {
+    if (frame.key !== "bearer") return repoManBase.choiceOptions?.(frame, state, registry) ?? [];
+    const name = frame.params["vehicleName"] ?? "";
+    const bearers = repoManBearers(state, registry, frame.seat, name);
+    // Total: should every bearer have gone in the meantime, the card's own
+    // fallback is the one answer left.
+    if (bearers.length === 0) {
+      return [
+        {
+          id: `choice:${this.name}:${frame.cardId}:bearer:none`,
+          kind: "answerChoice" as const,
+          label: `${this.name}: burn ${name} (no minion can take it)`,
+          params: { bearer: "" },
+        },
+      ];
+    }
+    return bearers.map((m) => ({
+      id: `choice:${this.name}:${frame.cardId}:bearer:${m.id}`,
+      kind: "answerChoice" as const,
+      label: `${this.name}: put ${name} on ${m.name}`,
+      params: { bearer: m.id },
+    }));
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key !== "bearer") {
+      repoManBase.applyChoice?.(frame, choice, ops);
+      return;
+    }
+    const seat = getSeat(ops.state, frame.seat);
+    const vehicle = seat.library.find((c) => c.id === frame.params["vehicle"]);
+    const bearer = findMinion(ops.state, choice.params["bearer"] ?? "");
+    if (vehicle && bearer) {
+      // "…pay cost to equip as normal" — priced and paid by the one
+      // put-in-play path, which is also what makes a pool cost oust.
+      const h = ops.registry[vehicle.name];
+      const mode = (h?.modesPlayableBy?.(bearer) ?? [null])[0] ?? null;
+      ops.playCardFromHand({
+        cardId: vehicle.id,
+        seat: seat.id,
+        minion: bearer.id,
+        mode,
+        from: { zone: "library" },
+      });
+    } else if (vehicle) {
+      ops.emit({ type: "LibraryTopBurned", seat: seat.id, cardId: vehicle.id, name: vehicle.name });
+    }
+    ops.shuffleLibrary(seat.id);
   },
 };
 
@@ -26057,6 +26285,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     hostileTakeover,
     malkavianTimeAuction,
     temptationOfGreaterPower,
+    repoMan,
     absolutionOfTheDiabolist,
     layLow,
     hideTheMind,

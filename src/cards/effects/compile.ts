@@ -55,6 +55,7 @@ import {
   currentIntercept,
   isUndeadAlly,
   minionHasTag,
+  cardRequiresDiscipline,
   otherCopies,
   currentStealth,
   findMinion,
@@ -939,10 +940,7 @@ function requiresDiscipline(
   card: CardInstance,
   discipline: string,
 ): boolean {
-  const h = registry[card.name];
-  if (!h) return false;
-  const modes: Array<DisciplineLevel | null> = [null, "basic", "superior"];
-  return modes.some((m) => (h.requiresDisciplines?.(m, undefined) ?? []).includes(discipline));
+  return cardRequiresDiscipline(registry, card.name, [discipline]);
 }
 
 /**
@@ -8248,7 +8246,7 @@ export function playsNonActionOnly(m: MinionState): boolean {
   );
 }
 
-function cannotBeEquipped(m: MinionState, kind: "equipment" | "retainer"): boolean {
+export function cannotBeEquipped(m: MinionState, kind: "equipment" | "retainer"): boolean {
   const st = m.attached.find((e) => e.card.id === m.id)?.statics.cannotBeEquipped;
   if (!st) return false;
   return kind === "equipment" ? true : st.retainers === true;
@@ -9634,6 +9632,7 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // simply wrong.
   if (spec.delayedReplace) handler.delayedReplace = spec.delayedReplace;
   if (spec.delayedReplaceUntil) handler.delayedReplaceUntil = spec.delayedReplaceUntil;
+  if (spec.successUnlocksActor) handler.successUnlocksActor = spec.successUnlocksActor;
   if (spec.huntAction) handler.huntAction = true;
   // The printed type line, for cancel-as-played effects that name a type.
   // A dual-typed Action Modifier/Reaction really is a reaction card, so it
@@ -13900,6 +13899,47 @@ function addEquipmentAbilities(spec: CardSpec, handler: CardHandler): void {
         });
       }
     }
+
+    // "Bearer may burn Leather Jacket to prevent ALL the damage from the
+    // OPPOSING MINION'S strike" — the item being resolved must be the
+    // bearer's and come from the other combatant, and with nothing to
+    // prevent it is not offered [LSJ 20001114]. docs/equip-unlocks-design.md §3
+    if (eq.burnToPreventStrike && ctx.window === "combat.damageResolution" && ctx.combat) {
+      const cf = ctx.combat;
+      const pd = cf.pendingDamage[0];
+      const opponent = cf.acting === bearer.id ? cf.opposing : cf.acting;
+      if (
+        pd &&
+        pd.minion === bearer.id &&
+        pd.source === opponent &&
+        pd.amount > 0 &&
+        !pd.unpreventable
+      ) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:burnpreventstrike`,
+          kind: "useAbility",
+          label: `${spec.name}: burn it to prevent all ${pd.amount} damage`,
+          source: entry.card.id,
+          params: { do: "burnpreventstrike" },
+        });
+      }
+    }
+
+    // "The bearer can burn this equipment before range is determined in a
+    // round of combat" — the bearer's own combat, any round (§4).
+    const ban = eq.burnToBanDisciplines;
+    if (ban && ctx.window === "combat.beforeRange" && ctx.combat) {
+      const cf = ctx.combat;
+      if (cf.acting === bearer.id || cf.opposing === bearer.id) {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:ban`,
+          kind: "useAbility",
+          label: `${spec.name}: burn it to bar the opposing minion's ${ban.disciplines.join("/")} cards this combat`,
+          source: entry.card.id,
+          params: { do: "ban" },
+        });
+      }
+    }
     return out;
   };
 
@@ -13997,6 +14037,27 @@ function addEquipmentAbilities(spec: CardSpec, handler: CardHandler): void {
     if (act === "endcombat" && eq.burnToEndCombat) {
       ops.burnPermanent(entry.card.id);
       ops.endCombatFromOutside();
+      return;
+    }
+    if (act === "burnpreventstrike" && eq.burnToPreventStrike && owner.minion) {
+      const cf = [...ops.state.frames].reverse().find((f) => f.kind === "combat");
+      const pd = cf?.kind === "combat" ? cf.pendingDamage[0] : undefined;
+      ops.burnPermanent(entry.card.id);
+      if (pd && pd.minion === owner.minion) ops.preventDamageFor(owner.minion, pd.amount);
+      return;
+    }
+    if (act === "ban" && eq.burnToBanDisciplines && owner.minion) {
+      const cf = [...ops.state.frames].reverse().find((f) => f.kind === "combat");
+      if (cf?.kind !== "combat") return;
+      const opponent = cf.acting === owner.minion ? cf.opposing : cf.acting;
+      ops.burnPermanent(entry.card.id);
+      ops.banDisciplineCardsThisCombat(opponent, eq.burnToBanDisciplines.disciplines);
+      // "…and if the opposing minion is a werewolf, they get -2 strength
+      // until the end of combat." The tag Double Deuce carries.
+      const opp = findMinion(ops.state, opponent);
+      if (opp && minionHasTag(opp, "werewolf")) {
+        ops.addCombatStrengthTo(opponent, eq.burnToBanDisciplines.werewolfStrength);
+      }
       return;
     }
     priorUse?.(entry, owner, choice, ops);

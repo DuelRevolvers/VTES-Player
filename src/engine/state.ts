@@ -233,6 +233,12 @@ export interface MinionState {
    *  when the equip succeeds, because the promise outlives the card that
    *  made it [LSJ 20080619]. docs/table-rule-events-design.md §2 */
   unlocksAtEndOfTurn?: boolean;
+  /** "If the action to equip with the Powder is successful, unlock the
+   *  acting minion during the NEXT DISCARD PHASE" — the same promise as
+   *  `unlocksAtEndOfTurn`, kept on the minion for the same reason, and
+   *  spent as the next discard phase opens.
+   *  docs/equip-unlocks-design.md §2 */
+  unlocksInDiscardPhase?: boolean;
   /** "A vampire can gain blood from only one hunting ground each turn" —
    *  reset at the controller's unlock phase. Optional (undefined = false). */
   usedHuntingGroundThisTurn?: boolean;
@@ -434,7 +440,12 @@ export type HeldReplacement =
   | { kind: "condition"; until: DelayedDrawCondition }
   | { kind: "whileInPlay" }
   | { kind: "discard" }
-  | { kind: "afterAction"; actionId: string };
+  | { kind: "afterAction"; actionId: string }
+  /** An ACTION card's own "do not replace until after this action" (Arson,
+   *  Baseball Bat): held on the card play until the card announces its
+   *  action, then moved onto that action's `drawAfter`.
+   *  docs/equip-unlocks-design.md §3 */
+  | { kind: "ownAction" };
 
 export interface PlayCostMod {
   amount: number;
@@ -1651,7 +1662,9 @@ export type GameEvent =
    *  card stays on top of the library. */
   | { type: "LibraryTopRevealed"; seat: SeatId; name: string }
   /** "Burn the top card of their library to attempt to block" (Parijat) —
-   *  a block toll paid in cards rather than blood. */
+   *  a block toll paid in cards rather than blood. The reducer finds the
+   *  card by id, so it also carries a card found DEEPER in the library and
+   *  burned (Repo Man's vehicle "burned without cost"). */
   | { type: "LibraryTopBurned"; seat: SeatId; cardId: CardInstanceId; name: string }
   /** "Move a library card from your ash heap to the BOTTOM of your
    *  library" (Mora). The card has already left the ash heap by its own
@@ -3497,6 +3510,12 @@ export interface CombatFrame {
    *  (Rolling with the Punches superior) — per side, reset each round,
    *  checked at the `pushPendingDamage` chokepoint (§4). */
   preventAllFrom: { acting: boolean; opposing: boolean };
+  /** "…the opposing minion CANNOT USE CARDS REQUIRING Protean [pro] or
+   *  Vicissitude [vic] until the end of combat" (Powder of Rigidity). On
+   *  the frame because it dies with the combat; read by the two option
+   *  gatherers, which is every way a card is used.
+   *  docs/equip-unlocks-design.md §4 */
+  disciplineBans?: Array<{ minion: MinionId; disciplines: string[] }>;
   /** Damage awaiting prevention + mend, acting minion's first (p. 29). */
   pendingDamage: PendingDamage[];
   willContinue: boolean;

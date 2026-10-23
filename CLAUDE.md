@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 319 test files, 3464 tests**, with `npm run typecheck`,
+**Green baseline: 321 test files, 3483 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -923,7 +923,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-224 files under `docs/`, one per mechanic that took a decision. **Read the
+225 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -962,7 +962,7 @@ referendum-margin.
 
 **Cards and economies:** auctions, blood-bank-actions, blood-banking-locations,
 the-edge, ash-heap-resource, before-range-attachments,
-vehicles-and-havens, hunting-ground-variants, investments, stores-you-fill, burn-the-equipment, discipline-granting-equipment,
+vehicles-and-havens, hunting-ground-variants, investments, stores-you-fill, burn-the-equipment, equip-unlocks, discipline-granting-equipment,
 events, gehenna-events, gehenna-unlock, counter-clock-events,
 table-rule-events, gehenna-taxes, discipline-masters, clan-sect,
 on-vampire-statics, conditional-statics, opposing-statics, counters,

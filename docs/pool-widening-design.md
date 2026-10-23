@@ -1006,6 +1006,28 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 106 — the actor unlocks after the equip (4 cards), 2026-10-23
+
+Library **892 → 896**. Baseball Bat, Leather Jacket, Powder of Rigidity,
+Repo Man. Write-up: `docs/equip-unlocks-design.md`. Each one unlocks its
+actor after a successful equip or recruit. None is inert: Protean is a V5
+Discipline, Double Deuce is a werewolf, and six vehicles are supported.
+
+New: `successUnlocksActor` (end of turn, or the next discard phase through
+`MinionState.unlocksInDiscardPhase`). Leather Jacket's burn to prevent all of
+the opposing minion's strike. Powder's per-combat Discipline bar
+(`CombatFrame.disciplineBans`), read by both option gatherers, with
+`cardRequiresDiscipline` now the one answer to "requires Protean". Repo Man's
+vehicle search with a chosen bearer and a mandatory payment. A bot guard that
+keeps Powder unless the opponent has something to lose.
+
+**Found, one defect fixed:** **an action card's own "do not replace until
+after this action" replaced at once.** Its action is announced only when the
+card resolves, so the deferral found no action frame and fell through to the
+immediate draw. Arson, Bum's Rush and New Management have replaced early
+since they were admitted, and no test covered any of them. A new held
+replacement (`ownAction`) moves the draw onto the action the card announces.
+
 ### Wave 105 — auctions for control (3 cards), 2026-10-22
 
 Library **889 → 892**. Hostile Takeover, Malkavian Time Auction, Temptation

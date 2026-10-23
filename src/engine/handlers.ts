@@ -317,6 +317,10 @@ export interface EngineOps {
   /** "+N strength THAT COMBAT" (Kasim Bayar) — combat-long, unlike
    *  `addRoundStrengthTo`. docs/crypt-wave-4.md §1 */
   addCombatStrengthTo(minion: MinionId | null, amount: number): void;
+  /** "…the opposing minion cannot use cards requiring \<disciplines\>
+   *  until the end of combat" (Powder of Rigidity).
+   *  docs/equip-unlocks-design.md §4 */
+  banDisciplineCardsThisCombat(minion: MinionId, disciplines: string[]): void;
   /** "You get +N discard phase actions" (Sreelekha). */
   addDiscardPhaseActions(n: number): void;
   /** "+1 master phase action" — `now` adds to the running master phase if
@@ -1054,6 +1058,11 @@ export interface CardHandler {
    *  a vampire who must hunt may play it and Restricted Vitae's bar reaches
    *  it. docs/hunt-success-design.md §1 */
   huntAction?: boolean;
+  /** "If the action to equip with / recruit THIS CARD is successful, unlock
+   *  the acting minion at the end of the turn" (Baseball Bat, Repo Man) /
+   *  "…during the next discard phase" (Powder of Rigidity). Read where the
+   *  equip or recruit succeeds. docs/equip-unlocks-design.md §2 */
+  successUnlocksActor?: "endOfTurn" | "discardPhase";
   /** "Do not replace until …" — defer the replacement draw (p. 7 default
    *  is immediate replacement). */
   /** `"afterResolve"` is "do not replace this card until AFTER you discard
