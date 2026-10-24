@@ -64,14 +64,14 @@ describe("Powerbase: Madrid (101437)", () => {
     runTrace(engine, [
       ...politicalActionTrace("play:Kine Resources Contested"),
       ["Alice", "terms:Bob=2,Carol=2"],
-      ["Alice", "ability:Powerbase: Madrid:pm1:votes"], // lock → +2 votes
-      ["Alice", "vote:grant:for"],
+      ["Alice", "ability:Powerbase: Madrid:pm1:votes:V1"], // lock → V1 gets +2 votes
+      ["Alice", "vote:V1:for"], // one group: the bishop's 1 and the card's 2
       ["Alice", "pass"],
       ["Bob", "pass"], ["Carol", "pass"],
     ]);
 
     const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved")!;
-    expect(resolved).toMatchObject({ passed: true, votesFor: 2 });
+    expect(resolved).toMatchObject({ passed: true, votesFor: 3 });
     expect(state.seats[0]!.permanents.find((p) => p.card.id === "pm1")!.locked).toBe(true);
   });
 });

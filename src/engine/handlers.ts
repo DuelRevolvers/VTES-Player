@@ -43,6 +43,10 @@ import type {
   VoteGrants,
 } from "./state.ts";
 
+/** Whose granted votes these are: a vampire's (cast with its group), or a
+ *  Methuselah's from one card (a source of its own). docs/vampire-votes-design.md §4.1 */
+export type VoteGrantTo = { minion: MinionId } | { seat: SeatId; card: CardInstanceId; name: string };
+
 /** What a handler may see when enumerating options. Pure — no mutation. */
 export interface PlayContext {
   state: GameState;
@@ -410,12 +414,20 @@ export interface EngineOps {
   /** Cancel the card whose as-played window we are in (p. 7). With
    *  refund, its already-paid cost is returned (Sudden Reversal). */
   cancelPendingCard(refundCost: boolean): void;
-  /** Grant a seat bonus votes in the current referendum, cast as a source
-   *  in the polling step (docs/polling-votes-design.md §3). `direction` is
-   *  what the granting CARD printed, not what the seat wants: "+3 votes
-   *  against the referendum" (Protected District) cannot be cast for it.
-   *  Omitted means "any", which is every other vote grant in the pool. */
-  grantVotes(seat: SeatId, amount: number, direction?: keyof VoteGrants): void;
+  /** Grant bonus votes in the current referendum. `to` says WHOSE they
+   *  are, and every caller must say: "this vampire gets +2 votes" is the
+   *  vampire's, cast with its group (p. 28, p. 47), where "you get +3
+   *  votes" is the Methuselah's, a source of its own keyed by the granting
+   *  card. `direction` is what the granting CARD printed: "+3 votes against
+   *  the referendum" (Protected District) cannot be cast for it. Omitted
+   *  means "any". docs/vampire-votes-design.md §4.1 */
+  grantVotes(to: VoteGrantTo, amount: number, direction?: keyof VoteGrants): void;
+  /** "When a vampire votes in this referendum, lock him or her" (Disarming
+   *  Presence); `exceptSeat`'s vampires are spared. */
+  lockVampiresOnVote(exceptSeat?: SeatId): void;
+  /** "Any <sect> vampire older than <target> can lock to cancel <target>'s
+   *  votes and ballots" (Emissary). */
+  offerVoteCancel(target: MinionId, sect: Sect, olderOnly: boolean): void;
   /** "If this vampire blocks, it gets N maneuvers/presses in the resulting
    *  combat" (Spirit's Touch). */
   grantBlockerCombatRider(
@@ -1817,7 +1829,13 @@ export interface CardHandler {
   onReferendumLost?(
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
-    info: { callingMinion: MinionId | null; how: "cancelled" | "failed" },
+    info: {
+      callingMinion: MinionId | null;
+      how: "cancelled" | "failed";
+      /** Vampires that cast any votes against it (Traditionalist).
+       *  docs/vampire-votes-design.md §4.7 */
+      votedAgainst: MinionId[];
+    },
     ops: EngineOps,
   ): void;
   /** A POLITICAL referendum has passed and its effects have been applied

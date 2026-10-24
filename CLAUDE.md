@@ -779,7 +779,10 @@ JSON and for read-only queries.
   `act:<Name>:<cardInstanceId>:<what>:<actingMinion>` for a non-rush grant
   (`burn`, `counter`, `raid`, …; one card may grant several)
 - `maneuver:credit`, `terms:<…>`, `vote:<source>:for|against`
-  (source = minion id, `edge`, `grant`, `caller`, or `card:<id>`),
+  (source = minion id — a vampire's title AND card-granted votes, one group
+  (p. 28) — `blood:<minion>:<offer>`, `edge`, `grant:<cardId>` /
+  `grantFor:` / `grantAgainst:` for a Methuselah's card, `caller`, or
+  `card:<id>`), `cancelvotes:<locker>:<target>` (Emissary),
   `diablerize:offer:<blocker>:<victim>`,
   `choice:<Name>:<cardInstanceId>:<key>:<answer>` (declining an optional
   choice is plain `pass`)
@@ -958,7 +961,8 @@ referendum-blood, referendum-riders, crusades, fee-stake,
 acting-minion-reactions, politics, abstain-gate, politics-followups,
 polling-votes, ballots, politics-locations, referendum-terms, blood-hunt-answers,
 once-in-a-game, borrowed-minions, title-riders, in-this-referendum,
-referendum-margin.
+referendum-margin, vampire-votes (whose every vote is; supersedes
+polling-votes §3).
 
 **Cards and economies:** auctions, blood-bank-actions, blood-banking-locations,
 the-edge, ash-heap-resource, before-range-attachments,

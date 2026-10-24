@@ -92,7 +92,7 @@ describe("the politics table", () => {
     let voteDecisions = 0;
     let termsDecisions = 0;
     let forkingSources = 0;
-    const oneWaySources: string[] = [];
+    const oneWaySources: Array<{ source: string; minion: string | undefined }> = [];
     class Probe extends HeuristicAgent {
       override decide(
         dp: DecisionPoint,
@@ -115,14 +115,16 @@ describe("the politics table", () => {
             // (docs/polling-votes-design.md §3). For such a source the
             // decision is cast-or-decline, not for-or-against.
             const bySource = new Map<string, boolean[]>();
+            const minionOf = new Map<string, string | undefined>();
             for (const v of votes) {
               const seen = bySource.get(v.source) ?? [];
               seen.push(v.inFavor);
               bySource.set(v.source, seen);
+              minionOf.set(v.source, v.minion);
             }
             for (const [source, dirs] of bySource) {
               if (dirs.includes(true) && dirs.includes(false)) forkingSources++;
-              else oneWaySources.push(source);
+              else oneWaySources.push({ source, minion: minionOf.get(source) });
             }
           }
           if (options.some((o) => o.kind === "chooseTerms")) termsDecisions++;
@@ -151,13 +153,15 @@ describe("the politics table", () => {
     expect(termsDecisions).toBeGreaterThan(0);
     // The fork the vote scorer depends on is the common case…
     expect(forkingSources).toBeGreaterThan(0);
-    // …and every exception is a DIRECTED GRANT, which is the one source
-    // that legitimately offers a single direction. Pinning the reason
-    // rather than a count: if a future card makes some OTHER kind of
-    // source one-way, this fails and says which, instead of quietly
-    // shifting a number.
-    for (const source of oneWaySources) {
-      expect(source).toMatch(/^grant/);
+    // …and every exception is one of the two sources that legitimately
+    // offer a single direction: a Methuselah's DIRECTED GRANT, or a
+    // VAMPIRE's votes, whose group goes one way once it has cast or when a
+    // card aimed its grant (p. 28; docs/vampire-votes-design.md §4.5).
+    // Pinning the reason rather than a count: if a future card makes some
+    // OTHER kind of source one-way, this fails and says which, instead of
+    // quietly shifting a number.
+    for (const { source, minion } of oneWaySources) {
+      expect(/^grant(For|Against):/.test(source) || minion !== undefined, source).toBe(true);
     }
   });
 

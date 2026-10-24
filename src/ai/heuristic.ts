@@ -807,6 +807,15 @@ export class HeuristicAgent implements Agent {
         // Withdrawing is rarely right for a policy this simple.
         return -1;
 
+      case "cancelVotes": {
+        // Emissary's anarch belongs to the caller, so its votes push FOR.
+        // Lock to cancel them only when this seat wants the referendum to
+        // fail. docs/vampire-votes-design.md §5
+        const ref = view.referendum;
+        if (!ref || o.targetSeat === me) return -1;
+        return this.referendumValue(ref, view, me) < 0 ? w.playCard : -1;
+      }
+
       case "chooseTerms":
         // WHERE TO AIM IT. The caller used to answer this in offered
         // order, so a bot that landed Parity Shift chose its victim by

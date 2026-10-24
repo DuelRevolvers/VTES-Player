@@ -47,7 +47,7 @@ describe("Ventrue Justicar (102111)", () => {
     runTrace(engine, [
       ...politicalTrace("play:Ventrue Justicar"),
       ["Alice", "terms:V1"],
-      ["Alice", "vote:grant:for"], // the rider's vote: V1 has no title of its own
+      ["Alice", "vote:V1:for"], // the rider's vote: V1 has no title of its own
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
 

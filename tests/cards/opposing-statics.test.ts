@@ -186,10 +186,9 @@ describe("Perfect Paragon (101387) basic", () => {
     runTrace(engine, [
       ["Alice", optionIds(engine).find((o) => o.startsWith("play:Perfect Paragon:basic"))!],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as played
-      ["Alice", "vote:V1:for"], // the prince's own 2
-      // The card's +3 arrive as a per-seat GRANT that still has to be
-      // cast — the polling-votes gate's shape, not a silent bonus.
-      ["Alice", "vote:grant:for"],
+      // The prince's own 2 and the card's +3 are ONE group, cast together
+      // [p. 47, Bewitching Oration] (docs/vampire-votes-design.md §4.3).
+      ["Alice", "vote:V1:for"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
     const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved")!;

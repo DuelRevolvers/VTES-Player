@@ -145,11 +145,12 @@ describe("Investiture (101003) — cardinals louder, the Camarilla silenced", ()
     expect(bob.some((o) => o.id.startsWith("vote:W:"))).toBe(false);
     // …and Bob controls no CARDINAL, so the rider grants him nothing: the
     // bonus is keyed on the title, not on "any ready vampire".
-    expect(bob.some((o) => o.id.startsWith("vote:grant:"))).toBe(false);
+    expect(bob.some((o) => o.kind === "castVote")).toBe(false);
     const carol = votesFor(engine, "Carol");
-    // N's own 3 (cardinal) and the rider's +1, granted to Carol.
-    expect(countOf(carol, "vote:N:for")).toBe(3);
-    expect(countOf(carol, "vote:grant:for")).toBe(1);
+    // N's own 3 (cardinal) and the rider's +1 — the rider's vote is N's, one
+    // group with its title votes (docs/vampire-votes-design.md §4.2).
+    expect(countOf(carol, "vote:N:for")).toBe(4);
+    expect(carol.some((o) => o.id.startsWith("vote:grant"))).toBe(false);
   });
 
   it("the payout: the chosen Sabbat vampire becomes a priscus", () => {
@@ -191,10 +192,10 @@ describe("Praxis Seizure: Istanbul (101463) — Banu Haqim louder, and locked", 
     return { state, engine: new VtesEngine(state, testRegistry) };
   }
 
-  it("at the polling step: each ready Banu Haqim earns its controller +1 vote", () => {
+  it("at the polling step: each ready Banu Haqim gets +1 vote of its own", () => {
     const { engine } = game({ clan: "Ventrue" });
     runTrace(engine, politicalTrace("play:Praxis Seizure: Istanbul"));
-    expect(countOf(votesFor(engine, "Bob"), "vote:grant:for")).toBe(1);
+    expect(countOf(votesFor(engine, "Bob"), "vote:BH:for")).toBe(1);
   });
 
   it("a non-Assamite prince: every ready Banu Haqim at the table LOCKS", () => {

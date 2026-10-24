@@ -290,6 +290,17 @@ export type LegalOption =
   /** The blocking seat withdrawing an attempt already underway (Dawn
    *  Operation) — not a failure: they may attempt again. */
   | { id: string; kind: "cancelBlock"; label: string; minion: MinionId }
+  /** "Any Camarilla vampire older than that anarch can lock to cancel that
+   *  anarch's votes and ballots" (Emissary): `minion` locks, `target`
+   *  abstains. docs/vampire-votes-design.md §5 */
+  | {
+      id: string;
+      kind: "cancelVotes";
+      label: string;
+      minion: MinionId;
+      target: MinionId;
+      targetSeat: SeatId;
+    }
   /** "Their controller can burn N pool to cancel this card as it is
    *  played" (Golconda: Inner Peace) — a cancel paid in POOL, with no
    *  card involved, offered as a built-in in the as-played window the
@@ -347,6 +358,12 @@ export type LegalOption =
       source: string;
       count: number;
       inFavor: boolean;
+      /** The vampire whose votes these are, whatever the source — its title
+       *  votes and the votes cards gave it (`vote:<minion>`) and the votes it
+       *  bought (`blood:<minion>`). All of one vampire's votes go one way
+       *  (p. 28). Absent for a Methuselah's own: the Edge, a card, a seat
+       *  grant. docs/vampire-votes-design.md §4.4 */
+      minion?: MinionId;
       /** Blood the CASTING VAMPIRE burns to cast this way (Alexander
        *  Silverson). Already checked affordable — an option carrying a
        *  toll the voter cannot pay is not enumerated.

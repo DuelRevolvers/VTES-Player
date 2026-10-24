@@ -1993,9 +1993,25 @@ export type GameEvent =
   // Politics (docs/politics-design.md).
   | { type: "ReferendumCalled"; actionId: ActionId; seat: SeatId; cardName: string }
   | { type: "TermsChosen"; actionId: ActionId; terms: Record<string, string> }
-  | { type: "VoteCast"; actionId: ActionId; seat: SeatId; source: string; count: number; inFavor: boolean }
+  | {
+      type: "VoteCast";
+      actionId: ActionId;
+      seat: SeatId;
+      source: string;
+      count: number;
+      inFavor: boolean;
+      minion?: MinionId;
+    }
   | { type: "EdgeBurned"; seat: SeatId }
-  | { type: "ReferendumResolved"; actionId: ActionId; passed: boolean; votesFor: number; votesAgainst: number }
+  | {
+      type: "ReferendumResolved";
+      actionId: ActionId;
+      passed: boolean;
+      votesFor: number;
+      votesAgainst: number;
+      /** Votes each vampire cast, for `GameState.lastReferendum`. */
+      votesByMinion?: Record<MinionId, number>;
+    }
   | { type: "MovedToUncontrolled"; seat: SeatId; minion: MinionId }
   /** "Control can change through game effects" (p. 16) — a minion or a
    *  card in play passes to another Methuselah. Ownership is untouched. */
@@ -3582,7 +3598,17 @@ export interface ReferendumFrame {
    *  Blood, Stealing Years) — copied off the diablerist as the hunt is
    *  pushed, so the clause cannot leak into a later referendum.
    *  docs/torpor-prey-design.md §4 */
-  extraVotes?: Array<{ minion?: MinionId; sect?: Sect; amount: number }>;
+  extraVotes?: Array<{
+    minion?: MinionId;
+    sect?: Sect;
+    /** "In this referendum, each <clan> / each cardinal gets +1 vote"
+     *  (the Justicars, Praxis Seizure, Investiture) — read as votes are
+     *  counted, so a vampire leaving the ready region loses it.
+     *  docs/vampire-votes-design.md §4.2 */
+    clan?: string;
+    title?: VampireTitle;
+    amount: number;
+  }>;
   /** This referendum was called by a card ALREADY IN PLAY granting a
    *  political action ("vampires can call a referendum to burn this
    *  card"), not by a political action card from hand. Carried so one
@@ -3593,14 +3619,24 @@ export interface ReferendumFrame {
    *  for the polling-step action-modifier/reaction split (p. 28). Null
    *  for blood-hunt referendums (no calling minion). */
   callingMinion: MinionId | null;
-  /** Bonus votes granted per seat by cards played during polling
-   *  (docs/polling-votes-design.md §3), cast as a source. Bucketed by the
-   *  DIRECTION the granting card printed: "+3 votes AGAINST the referendum"
-   *  (Protected District) may only be cast that way, where a bare "+2 votes"
-   *  (Bewitching Oration) is the seat's to aim. One record rather than a
-   *  flexible one and a directed sibling, so there is exactly one place a
-   *  grant lives. Each bucket is its own vote source, spent separately. */
-  voteGrants: Record<SeatId, VoteGrants>;
+  /** Votes a card gives a METHUSELAH ("you get +3 votes", Ventrue
+   *  Headquarters), keyed by the granting card's instance id: each card is
+   *  its own source (p. 28, "or other source"). Bucketed by the DIRECTION
+   *  the card printed, each bucket spent on its own.
+   *  docs/vampire-votes-design.md §4.1 */
+  voteGrants: Record<CardInstanceId, VoteGrants & { seat: SeatId; name: string }>;
+  /** Votes a card gives a VAMPIRE ("this vampire gets +2 votes", Bewitching
+   *  Oration; "+3 votes against", Protected District). They are that
+   *  vampire's votes [p. 47], counted into its group, so every bar on the
+   *  vampire bars them too. docs/vampire-votes-design.md §4.3 */
+  minionVoteGrants?: Record<MinionId, VoteGrants>;
+  /** "When a vampire votes in this referendum, lock him or her" (Disarming
+   *  Presence); `exceptSeat`'s vampires are spared ("do not lock your
+   *  vampires"). Locking is a side effect, never a bar [RTR 19941109]. */
+  lockOnVote?: { exceptSeat?: SeatId };
+  /** "Any Camarilla vampire older than that anarch can lock to cancel that
+   *  anarch's votes and ballots" (Emissary): an open offer to every seat. */
+  cancelVoteOffers?: Array<{ target: MinionId; sect: Sect; olderOnly: boolean }>;
   /** "Non-<sect> vampires cannot cast votes or ballots this referendum"
    *  (Closed Session, Private Audience, Cardinal Benediction) — restricts
    *  the per-vampire title vote sources to this sect. */
@@ -3720,7 +3756,16 @@ export interface ReferendumFrame {
    * has no terms at all (p. 35).
    */
   termsLabel?: string;
-  votes: Array<{ seat: SeatId; source: string; count: number; inFavor: boolean }>;
+  /** Every cast, in order. `minion` is the vampire whose votes they were
+   *  (the option's `minion`): a vampire's first entry fixes which way the
+   *  rest of its votes may go (p. 28). docs/vampire-votes-design.md §4.5 */
+  votes: Array<{
+    seat: SeatId;
+    source: string;
+    count: number;
+    inFavor: boolean;
+    minion?: MinionId;
+  }>;
   /** Spent vote sources: minion ids, "edge", "caller", "cardvote:<seat>". */
   usedSources: string[];
   /** "Each vampire with a capacity above N can BURN BLOOD TO GAIN VOTES"
@@ -3963,6 +4008,12 @@ export interface GameState {
   edge: SeatId | null;
   frames: Frame[];
   eventLog: GameEvent[];
+  /** The most recent referendum that reached its tally, and the votes each
+   *  vampire cast in it: "a vampire who cast any votes in the most recent
+   *  referendum (must be since your last turn)" (Tribunal Judgment). A
+   *  cancelled referendum is never tallied and leaves none (owner ruling
+   *  2026-10-24). docs/vampire-votes-design.md §4.6 */
+  lastReferendum?: { turnNumber: number; votesByMinion: Record<MinionId, number> };
   /** Event card NAMES put into play this game. *"Each event card may only
    *  be played once each game"* (p. 37) — a bar that outlives the card
    *  itself (it still bars a second copy after the first is burnt), so it

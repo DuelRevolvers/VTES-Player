@@ -16,7 +16,10 @@ Session, Private Audience, and completes Cardinal Benediction's rider.
 - `ReferendumFrame.voteRestriction?: { sect }`. `pollingOptions` skips a
   titled vampire's vote source when its `sect` differs from the restriction.
   Methuselah-level sources (Edge, calling card, granted votes) are
-  unaffected — they are not vampires casting.
+  unaffected — they are not vampires casting. **Since 0.11.48, votes a
+  card gives a VAMPIRE are that vampire's, so the restriction bars them**
+  (`vampire-votes-design.md` §4.3). Only a Methuselah's card grants stay
+  unaffected.
 - Op `restrictReferendumVotes(sect)` sets it.
 - Primitive `restrictVotes { sect }`, a **caller-only** polling-step action
   modifier, playable once and only before any vote is cast.

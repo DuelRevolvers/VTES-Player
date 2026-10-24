@@ -77,7 +77,7 @@ describe("Cheval de Bataille (100337)", () => {
     const state = threeSeatGame();
     pushReferendum(state, {
       // A vote cast BEFORE the card was played [RTR 19951110].
-      votes: [{ seat: "Bob", source: "W", count: 2, inFavor: false }],
+      votes: [{ seat: "Bob", source: "W", count: 2, inFavor: false, minion: "W" }],
       againstBloodTaxAtTally: 1,
       cycle: { order: ["Alice", "Bob", "Carol"], cursor: 0, passes: 3 },
     } as Partial<ReferendumFrame>);

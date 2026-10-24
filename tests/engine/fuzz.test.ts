@@ -234,6 +234,11 @@ function fourSeatGame(seed: number): GameState {
     "Creep Show",
     "Guru",
     "Sociopath",
+    // Wave 108: a vampire's votes are one group.
+    "Traditionalist",
+    "Tribunal Judgment",
+    "Emissary",
+    "Disarming Presence",
     // Fourth sweep.
     "Arcane Library",
     "Sight Beyond Sight",

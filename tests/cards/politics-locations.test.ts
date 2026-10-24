@@ -114,7 +114,12 @@ describe("Elysium: The Palace of Versailles (100632)", () => {
     const opt = dp.options.find((o) => o.id.startsWith("ability:Elysium"))!;
     expect(opt.label).toContain("+2 votes");
     runTrace(engine, [["Alice", opt.id]]);
-    expect(referendum(state).voteGrants["Alice"]).toEqual({ any: 2, for: 0, against: 0 });
+    // "…give EACH titled Camarilla vampire you control +1 vote" — each
+    // one's own (docs/vampire-votes-design.md §3).
+    expect(referendum(state).minionVoteGrants).toEqual({
+      V1: { any: 1, for: 0, against: 0 },
+      V2: { any: 1, for: 0, against: 0 },
+    });
     expect(state.seats[0]!.permanents[0]!.locked).toBe(true);
   });
 
@@ -141,7 +146,14 @@ describe("Ferraille (100722)", () => {
     const opt = engine.decision()!.options.find((o) => o.id.startsWith("ability:Ferraille"))!;
     expect(opt.label).toContain("burn 1 pool for +3 votes");
     runTrace(engine, [["Alice", opt.id]]);
-    expect(referendum(state).voteGrants["Alice"]).toEqual({ any: 3, for: 0, against: 0 });
+    // "…to get +3 votes" — the Methuselah's, a source keyed by the card.
+    expect(referendum(state).voteGrants["L1"]).toEqual({
+      seat: "Alice",
+      name: "Ferraille",
+      any: 3,
+      for: 0,
+      against: 0,
+    });
     expect(state.seats[0]!.pool).toBe(pool - 1);
     expect(state.seats[0]!.permanents[0]!.locked).toBe(false);
   });

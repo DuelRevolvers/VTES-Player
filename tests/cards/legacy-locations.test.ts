@@ -223,7 +223,7 @@ describe("The Mausoleum, Venice (101187)", () => {
     expect(opt.label).toContain("+2 votes");
     runTrace(engine, [
       ["Alice", opt.id],
-      ["Alice", "vote:grant:for"],
+      ["Alice", "vote:grant:mv:for"], // the card is its own source (p. 28)
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
     expect(state.eventLog.find((e) => e.type === "ReferendumResolved")).toMatchObject({
@@ -239,7 +239,7 @@ describe("The Mausoleum, Venice (101187)", () => {
     expect(opt.label).toContain("+1 votes");
     runTrace(engine, [
       ["Alice", opt.id],
-      ["Alice", "vote:grant:for"],
+      ["Alice", "vote:grant:mv:for"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
     expect(state.eventLog.find((e) => e.type === "ReferendumResolved")).toMatchObject({

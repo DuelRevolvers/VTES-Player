@@ -51,8 +51,8 @@ describe("Alamut (100037)", () => {
     runTrace(engine, [
       ...politicalActionTrace("play:Kine Resources Contested"),
       ["Alice", "terms:Bob=2,Carol=2"],
-      ["Alice", "ability:Alamut:al1:votes:2"], // burn 2 → +2 votes
-      ["Alice", "vote:grant:for"],
+      ["Alice", "ability:Alamut:al1:votes:V1:2"], // burn 2 → V1 gets +2 votes
+      ["Alice", "vote:V1:for"], // V1's own votes (p. 28)
       ["Alice", "pass"],
       ["Bob", "pass"], ["Carol", "pass"],
     ]);

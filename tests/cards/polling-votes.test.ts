@@ -38,7 +38,7 @@ describe("Bewitching Oration (100157) — action-modifier votes", () => {
       ...toPolling(),
       ["Alice", "play:Bewitching Oration:basic"], // V1 gets +2 votes
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as-played
-      ["Alice", "vote:grant:for"], // cast the 2 granted votes
+      ["Alice", "vote:V1:for"], // the 2 granted votes are V1's own (p. 47)
       ["Alice", "vote:caller:for"], // +1 from the calling card
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // quiesce
     ]);
@@ -94,10 +94,10 @@ describe("Ominous Chorus (102278) — dual action-modifier/reaction", () => {
     expect(dp.options.some((o) => o.id.startsWith("play:Ominous Chorus"))).toBe(true);
 
     runTrace(engine, [
-      ["Bob", "play:Ominous Chorus:basic:W"], // W (Lasombra) grants Bob +3 votes
+      ["Bob", "play:Ominous Chorus:basic:W"], // "This Lasombra gets +3 votes"
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as-played
       ["Alice", "pass"], // impulse rewound to the caller; Alice declines
-      ["Bob", "vote:grant:against"], // Bob casts 3 against
+      ["Bob", "vote:W:against"], // W casts its 3 against
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // quiesce
     ]);
 
@@ -118,7 +118,7 @@ describe("Ventrue Headquarters (102109) / Oxford University (101341) — locatio
     runTrace(engine, [
       ...toPolling(),
       ["Alice", "ability:Ventrue Headquarters"], // lock → +3 votes
-      ["Alice", "vote:grant:for"],
+      ["Alice", "vote:grant:vh0:for"], // the card is its own source (p. 28)
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
 
@@ -138,7 +138,7 @@ describe("Ventrue Headquarters (102109) / Oxford University (101341) — locatio
     runTrace(engine, [
       ...toPolling(),
       ["Alice", "ability:Oxford University, England:ox0:votes:2"], // burn 2 → +4 votes
-      ["Alice", "vote:grant:for"],
+      ["Alice", "vote:grant:ox0:for"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
 
@@ -151,8 +151,10 @@ describe("Ventrue Headquarters (102109) / Oxford University (101341) — locatio
 
 describe("Protected District (102214) — a grant the CARD aims", () => {
   /** Bob's W is the primogen the card requires. A primogen also votes on
-   *  its own title, which is what makes the two sources worth telling
-   *  apart: the title vote is Bob's to aim, the card's +3 is not. */
+   *  its own title. Both are W's votes, so they are ONE group (p. 28): the
+   *  card's +3 can only go against, and so the title vote goes with it or
+   *  the +3 is left uncast. docs/vampire-votes-design.md §4.3 (this
+   *  reverses polling-votes-design.md §3, which made them two sources). */
   function districtGame(): { state: GameState; engine: VtesEngine } {
     const state = threeSeatGame();
     const alice = state.seats[0]!;
@@ -163,7 +165,7 @@ describe("Protected District (102214) — a grant the CARD aims", () => {
     return { state, engine: new VtesEngine(state, testRegistry) };
   }
 
-  it('casts its +3 AGAINST, and the "for" half of that source is never offered', () => {
+  it("W casts 1 + 3 AGAINST, or only its title vote FOR — the +3 never goes for", () => {
     const { state, engine } = districtGame();
     runTrace(engine, [
       ...toPolling(),
@@ -173,30 +175,29 @@ describe("Protected District (102214) — a grant the CARD aims", () => {
       ["Alice", "pass"], // impulse rewound to the caller; Alice declines
     ]);
 
-    // THE POINT OF THE CARD. The granted votes exist in one direction only:
-    // no `for` option for this source, and no flexible bucket to launder
-    // them through. Asserted BEFORE casting, because an option list is the
-    // only place a too-permissive grant shows.
-    const ids = engine.decision()!.options.map((o) => o.id);
-    expect(ids).toContain("vote:grantAgainst:against");
-    expect(ids).not.toContain("vote:grantAgainst:for");
-    expect(ids).not.toContain("vote:grant:for");
-    expect(ids).not.toContain("vote:grant:against");
-    // The primogen's OWN title vote is untouched by any of this — it is a
-    // separate source and Bob may still aim it either way.
-    expect(ids).toContain("vote:W:for");
-    expect(ids).toContain("vote:W:against");
+    // THE POINT OF THE CARD. The granted votes exist in one direction only,
+    // and there is no Methuselah bucket to launder them through. Asserted
+    // BEFORE casting, because an option list is the only place a
+    // too-permissive grant shows.
+    const votes = engine.decision()!.options.filter((o) => o.kind === "castVote");
+    expect(votes.map((o) => o.id).filter((id) => id.startsWith("vote:grant"))).toEqual([]);
+    const count = (id: string): number | undefined => {
+      const o = votes.find((x) => x.id === id);
+      return o && o.kind === "castVote" ? o.count : undefined;
+    };
+    expect(count("vote:W:against")).toBe(4);
+    expect(count("vote:W:for")).toBe(1);
 
     runTrace(engine, [
-      ["Bob", "vote:grantAgainst:against"],
+      ["Bob", "vote:W:against"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // quiesce
     ]);
 
     const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved")!;
-    expect(resolved).toMatchObject({ passed: false, votesFor: 0, votesAgainst: 3 });
+    expect(resolved).toMatchObject({ passed: false, votesFor: 0, votesAgainst: 4 });
   });
 
-  it("spends only its own bucket: the primogen can still cast after it", () => {
+  it("NEGATIVE SPACE (p. 28): once W's title vote goes FOR, the +3 AGAINST is gone", () => {
     const { state, engine } = districtGame();
     runTrace(engine, [
       ...toPolling(),
@@ -204,13 +205,15 @@ describe("Protected District (102214) — a grant the CARD aims", () => {
       ["Bob", "play:Protected District:basic:W:votes"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
       ["Alice", "pass"],
-      ["Bob", "vote:grantAgainst:against"],
+      ["Bob", "vote:W:for"],
       ["Alice", "pass"],
-      ["Bob", "vote:W:against"], // the title vote is a DIFFERENT source
-      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
+    const dp = engine.decision()!;
+    expect(dp.seat).toBe("Bob");
+    expect(dp.options.some((o) => o.id.startsWith("vote:W:"))).toBe(false);
 
+    runTrace(engine, [["Bob", "pass"], ["Carol", "pass"]]);
     const resolved = state.eventLog.find((e) => e.type === "ReferendumResolved")!;
-    expect(resolved).toMatchObject({ passed: false, votesAgainst: 4 }); // 3 + 1
+    expect(resolved).toMatchObject({ passed: true, votesFor: 1, votesAgainst: 0 });
   });
 });

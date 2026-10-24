@@ -73,8 +73,9 @@ describe("Toreador Justicar (101990) — title-granting referendum", () => {
     runTrace(engine, [
       ...politicalActionTrace("play:Toreador Justicar"),
       ["Alice", "terms:V2"],
-      // Caller has no titled vampire; only the +1 Toreador grant votes (2).
-      ["Alice", "vote:grant:for"], // 2 for
+      // Caller has no titled vampire; each Toreador's own +1 rider vote.
+      ["Alice", "vote:V1:for"],
+      ["Alice", "vote:V2:for"], // 2 for
       ["Alice", "pass"],
       ["Bob", "vote:W:against"], // 2 against → tie fails
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
@@ -101,8 +102,9 @@ describe("Power Structure (101430) — per-clan vote static", () => {
     runTrace(engine, [
       ...politicalActionTrace("play:Kine Resources Contested"),
       ["Alice", "terms:Bob=2,Carol=2"],
-      ["Alice", "ability:Power Structure:ps1:votes"], // +2 (two Lasombra)
-      ["Alice", "vote:grant:for"], // cast the 2 granted votes
+      ["Alice", "ability:Power Structure:ps1:votes"], // +1 to EACH Lasombra
+      ["Alice", "vote:V1:for"], // each one's own vote (p. 28)
+      ["Alice", "vote:V2:for"],
       ["Alice", "pass"],
       ["Bob", "pass"], ["Carol", "pass"],
     ]);

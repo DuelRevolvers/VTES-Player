@@ -200,7 +200,7 @@ describe("the window each card trades in", () => {
     expect(sale).toBeDefined();
     runTrace(engine, [
       ["Alice", sale!],
-      ["Alice", "vote:grant:for"],
+      ["Alice", "vote:V1:for"], // Alexa's own vote
       ["Alice", "vote:caller:for"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);

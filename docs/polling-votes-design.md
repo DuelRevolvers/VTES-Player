@@ -59,6 +59,10 @@ pass. Two changes:
 
 > **Superseded in part by §9 (2026-09-18).** The record below is now
 > bucketed by direction. Everything else in this section still holds.
+>
+> **Superseded again by `vampire-votes-design.md` (2026-10-24).** Votes a
+> card gives a vampire are now that vampire's own, in its group (p. 28,
+> p. 47). Only a Methuselah's votes stay seat sources, keyed per card.
 
 ```ts
 // ReferendumFrame gains:

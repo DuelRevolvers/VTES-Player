@@ -62,6 +62,7 @@ import type {
   EngineOps,
   HandlerRegistry,
   PlayContext,
+  VoteGrantTo,
 } from "./handlers.ts";
 import { isGehennaCard, isMinionCardPlay, minionCardRedirects } from "./handlers.ts";
 import type { DecisionPoint, LegalOption, WindowId } from "./options.ts";
@@ -661,6 +662,16 @@ export class VtesEngine implements EngineOps {
         // turn" (Lextalionis) — stamped here so a replayed log stamps it too.
         const turn = this.state.frames[0];
         if (turn?.kind === "turn") seat.lastVictoryPointTurn = turn.turnNumber;
+        break;
+      }
+      case "ReferendumResolved": {
+        // Tribunal Judgment's "most recent referendum", stamped here for the
+        // same reason as the VP receipt above.
+        const turn = this.state.frames[0];
+        this.state.lastReferendum = {
+          turnNumber: turn?.kind === "turn" ? turn.turnNumber : 0,
+          votesByMinion: ev.votesByMinion ?? {},
+        };
         break;
       }
       case "VictoryPointLost":
@@ -2883,7 +2894,7 @@ export class VtesEngine implements EngineOps {
       if (tax > 0) {
         for (const v of rf.votes) {
           if (v.inFavor) continue;
-          const voter = findMinion(this.state, v.source.replace(/^blood:/, ""));
+          const voter = v.minion !== undefined ? findMinion(this.state, v.minion) : null;
           if (!voter || voter.kind !== "vampire") continue;
           const pay = Math.min(tax, voter.blood);
           if (pay > 0) this.emit({ type: "BloodBurned", minion: voter.id, amount: pay });
@@ -2914,6 +2925,10 @@ export class VtesEngine implements EngineOps {
     const votesFor = rf.votesFor ?? 0;
     const votesAgainst = rf.votesAgainst ?? 0;
     const passed = rf.passed === true;
+    const votesByMinion: Record<MinionId, number> = {};
+    for (const v of rf.votes) {
+      if (v.minion !== undefined) votesByMinion[v.minion] = (votesByMinion[v.minion] ?? 0) + v.count;
+    }
     this.pop();
     this.emit({
       type: "ReferendumResolved",
@@ -2921,6 +2936,7 @@ export class VtesEngine implements EngineOps {
       passed,
       votesFor,
       votesAgainst,
+      votesByMinion,
     });
     // "…once results are tallied" (Scorn of Adonis): after the result is
     // emitted and WHATEVER the outcome — the card does not say "if it
@@ -3077,7 +3093,10 @@ export class VtesEngine implements EngineOps {
    *  hook is fired from both paths, with `how` saying which.
    *  docs/crypt-wave-6.md §3 */
   private notifyReferendumLost(rf: ReferendumFrame, how: "cancelled" | "failed"): void {
-    const info = { callingMinion: rf.callingMinion ?? null, how };
+    const votedAgainst = [
+      ...new Set(rf.votes.flatMap((v) => (!v.inFavor && v.minion !== undefined ? [v.minion] : []))),
+    ];
+    const info = { callingMinion: rf.callingMinion ?? null, how, votedAgainst };
     for (const { entry, owner } of this.allEntries()) {
       this.registry[entry.card.name]?.onReferendumLost?.(entry, owner, info, this);
     }
@@ -3189,7 +3208,9 @@ export class VtesEngine implements EngineOps {
       caller?.attached.reduce((n, p) => n + (p.statics.voteTollAgainst?.blood ?? 0), 0) ?? 0;
     /** `voter` is the vampire casting, when the source is one — a toll is
      *  paid in BLOOD, so only a minion can pay it, and a card or Edge vote
-     *  is untolled by construction. */
+     *  is untolled by construction. Once the voter has cast, its votes are
+     *  one group (p. 28): only its direction is offered, less what it has
+     *  already cast from this source. */
     const both = (
       source: string,
       count: number,
@@ -3197,8 +3218,11 @@ export class VtesEngine implements EngineOps {
       voter?: MinionState,
       bonus?: { for: number; against: number },
     ): void => {
+      const group = voter ? this.voteGroup(rf, voter.id) : null;
       for (const inFavor of [true, false]) {
-        const n = count + (inFavor ? (bonus?.for ?? 0) : (bonus?.against ?? 0));
+        if (group && group.inFavor !== null && group.inFavor !== inFavor) continue;
+        const already = group ? group.castFrom(source) : 0;
+        const n = count + (inFavor ? (bonus?.for ?? 0) : (bonus?.against ?? 0)) - already;
         if (n <= 0) continue;
         const toll = !inFavor && voter ? againstToll : 0;
         // A voter who cannot pay cannot vote that way — the option is not
@@ -3213,6 +3237,7 @@ export class VtesEngine implements EngineOps {
           source,
           count: n,
           inFavor,
+          ...(voter ? { minion: voter.id } : {}),
           ...(toll > 0 ? { toll } : {}),
         });
       }
@@ -3251,12 +3276,18 @@ export class VtesEngine implements EngineOps {
         if (offer.sect !== undefined && m.sect !== offer.sect) continue;
         const spent = rf.bloodVotesBought?.[m.id] ?? 0;
         if (offer.maxBloodPerMinion !== undefined && spent >= offer.maxBloodPerMinion) continue;
+        // Bought votes are the vampire's own (owner ruling 2026-10-24): every
+        // bar on it bars them, and they go its group's way.
+        // docs/vampire-votes-design.md §4.5
+        if (!this.vampireMayVote(rf, m)) continue;
+        const direction = this.voteGroup(rf, m.id).inFavor;
         const n =
           offer.votesPerBlood +
           (offer.bigCapacity !== undefined && capacityOf(m) > offer.bigCapacity
             ? (offer.bigVotesPerBlood ?? 0)
             : 0);
         for (const inFavor of [true, false]) {
+          if (direction !== null && direction !== inFavor) continue;
           options.push({
             id: `vote:blood:${m.id}:${offerIndex}:${inFavor ? "for" : "against"}`,
             kind: "castVote",
@@ -3266,6 +3297,7 @@ export class VtesEngine implements EngineOps {
             source: `blood:${m.id}`,
             count: n,
             inFavor,
+            minion: m.id,
             toll: 1,
             tollFrom: m.id,
           });
@@ -3318,8 +3350,16 @@ export class VtesEngine implements EngineOps {
       const referendumRider = (rf.extraVotes ?? []).reduce((n, r) => {
         if (r.minion !== undefined && r.minion !== m.id) return n;
         if (r.sect !== undefined && m.sect !== r.sect) return n;
+        // "Each <clan> / each cardinal gets +1 vote" — read now, so a
+        // vampire that left the ready region has lost it.
+        if (r.clan !== undefined && (m.kind !== "vampire" || m.clan !== r.clan)) return n;
+        if (r.title !== undefined && (m.kind !== "vampire" || m.title !== r.title)) return n;
         return n + r.amount;
       }, 0);
+      // Votes a card gave THIS vampire are its own, cast with the rest of
+      // its group [p. 47, Bewitching Oration] — so every bar below bars
+      // them too. docs/vampire-votes-design.md §4.3
+      const granted = rf.minionVoteGrants?.[m.id];
       const votes = Math.max(
         0,
         titleVotes +
@@ -3330,43 +3370,15 @@ export class VtesEngine implements EngineOps {
           conditionalStaticNoAction(this.state, m, "votes") +
           refMod +
           callerBonus +
-          referendumRider,
+          referendumRider +
+          (granted?.any ?? 0),
       );
-      if (votes <= 0) continue;
-      if (rf.usedSources.includes(m.id)) continue;
-      // Forced to abstain this referendum (Scalpel Tongue, Telepathic Vote
-      // Counting) — separate from usedSources, which means "spent".
-      if (rf.abstaining?.includes(m.id)) continue;
-      // "…or cast votes or ballots this turn" (Expulsion).
-      if (m.expelledThisTurn) continue;
-      // "This vampire cannot cast votes or ballots" (Detection) — the same
-      // bar with no expiry, carried by a card on the vampire
-      // (docs/pay-to-unlock-design.md §4).
-      if (m.attached.some((p) => p.statics.cannotCastVotes)) continue;
-      // "This vampire may not cast votes or ballots during a referendum to
-      // call a blood hunt ON THIS VAMPIRE" (The Hunt Club) — the same bar,
-      // scoped to one referendum, so it is read HERE where the frame is in
-      // hand rather than as an unconditional static.
-      // docs/blood-hunt-answers-design.md §3
-      if (
-        rf.variant === "bloodHunt" &&
-        rf.bloodHuntTarget === m.id &&
-        m.attached.some((p) => p.statics.cannotCastVotesInOwnBloodHunt)
-      ) {
-        continue;
-      }
-      // "Non-<sect> vampires cannot cast votes or ballots" (p. 28).
-      if (rf.voteRestriction && m.sect !== rf.voteRestriction.sect) continue;
-      // "CAMARILLA vampires cannot cast votes or ballots during this
-      // referendum" (Investiture) — the inverse gate, beside its sibling.
-      // Like it, it bars VAMPIRES casting; the Edge, the calling card and
-      // granted votes are Methuselah sources and are untouched.
-      if (rf.voteBan && m.sect === rf.voteBan.sect) continue;
-      // "+2 votes when casting votes AGAINST blood hunt referendums"
-      // (Jason Newberry) — the only vote static that depends on which WAY
-      // the vote goes, so it is applied per option rather than folded
-      // into the count above (docs/crypt-wave-6.md §1).
-      const bonus = { for: 0, against: 0 };
+      if (!this.vampireMayVote(rf, m)) continue;
+      // Votes that may go only ONE way: a directed grant ("+3 votes
+      // against", Protected District) and "+2 votes when casting votes
+      // AGAINST blood hunt referendums" (Jason Newberry). Applied per
+      // option rather than folded into the count (docs/crypt-wave-6.md §1).
+      const bonus = { for: granted?.for ?? 0, against: granted?.against ?? 0 };
       for (const p of m.attached) {
         const vb = p.statics.voteBonus;
         if (!vb) continue;
@@ -3374,6 +3386,7 @@ export class VtesEngine implements EngineOps {
         if (vb.direction !== "against") bonus.for += vb.amount;
         if (vb.direction !== "for") bonus.against += vb.amount;
       }
+      if (votes + Math.max(bonus.for, bonus.against) <= 0) continue;
       both(m.id, votes, `${m.name} (${m.title ?? "titled by a card"})`, m, bonus);
     }
     if (this.state.edge === seat && !rf.usedSources.includes("edge")) {
@@ -3382,20 +3395,42 @@ export class VtesEngine implements EngineOps {
       // docs/in-this-referendum-design.md §2
       both("edge", 1 + (rf.edgeVoteBonus ?? 0), "Burn the Edge");
     }
-    // Bonus votes granted by cards played this polling step (§3). Three
-    // sources, not one: a grant printed with a DIRECTION ("+3 votes against
-    // the referendum", Protected District) is only castable that way, and
-    // each bucket is spent on its own so a seat holding both can cast both.
-    const grants = rf.voteGrants[seat];
-    if (grants) {
-      if (grants.any > 0 && !rf.usedSources.includes(`grant:${seat}`)) {
-        both("grant", grants.any, "Granted votes");
+    // A Methuselah's card-granted votes ("you get +3 votes", Ventrue
+    // Headquarters): one source per granting card (p. 28, "or other
+    // source"), and per DIRECTION the card printed, each spent on its own.
+    // A vampire's grants are not here — they are in its group above.
+    // docs/vampire-votes-design.md §4.1
+    for (const [cardId, g] of Object.entries(rf.voteGrants)) {
+      if (g.seat !== seat) continue;
+      if (g.any > 0 && !rf.usedSources.includes(`grant:${cardId}`)) {
+        both(`grant:${cardId}`, g.any, g.name);
       }
-      if (grants.for > 0 && !rf.usedSources.includes(`grantFor:${seat}`)) {
-        oneWay("grantFor", grants.for, "Granted votes (for)", true);
+      if (g.for > 0 && !rf.usedSources.includes(`grantFor:${cardId}`)) {
+        oneWay(`grantFor:${cardId}`, g.for, g.name, true);
       }
-      if (grants.against > 0 && !rf.usedSources.includes(`grantAgainst:${seat}`)) {
-        oneWay("grantAgainst", grants.against, "Granted votes (against)", false);
+      if (g.against > 0 && !rf.usedSources.includes(`grantAgainst:${cardId}`)) {
+        oneWay(`grantAgainst:${cardId}`, g.against, g.name, false);
+      }
+    }
+    // "Any Camarilla vampire older than that anarch can lock to cancel that
+    // anarch's votes and ballots" (Emissary) — open to every seat, paid by
+    // locking, so only a ready unlocked vampire can take it.
+    for (const offer of rf.cancelVoteOffers ?? []) {
+      const target = findMinion(this.state, offer.target);
+      if (!target || rf.abstaining?.includes(target.id)) continue;
+      for (const m of getSeat(this.state, seat).minions) {
+        if (m.id === target.id || m.kind !== "vampire" || !isReady(m) || m.locked) continue;
+        if (m.sect !== offer.sect) continue;
+        // "Older" is derived capacity, as "younger" is (`blockerMatches`).
+        if (offer.olderOnly && capacityOf(m) <= capacityOf(target)) continue;
+        options.push({
+          id: `cancelvotes:${m.id}:${target.id}`,
+          kind: "cancelVotes",
+          label: `${m.name}: lock to cancel ${target.name}'s votes`,
+          minion: m.id,
+          target: target.id,
+          targetSeat: target.controller,
+        });
       }
     }
     const cardVoteSpent = rf.usedSources.includes(`cardvote:${seat}`);
@@ -3416,6 +3451,60 @@ export class VtesEngine implements EngineOps {
       }
     }
     return options;
+  }
+
+  /** May this vampire cast votes in `rf` at all? Every bar on a VAMPIRE
+   *  casting, in one place, so its title votes, the votes cards gave it and
+   *  the votes it buys cannot disagree (p. 28: they are one group).
+   *  docs/vampire-votes-design.md §4.3 */
+  private vampireMayVote(rf: ReferendumFrame, m: MinionState): boolean {
+    // "A minion's votes and ballots can be used only when the minion is
+    // ready" (p. 28).
+    if (!isReady(m)) return false;
+    // Forced to abstain this referendum (Scalpel Tongue, Telepathic Vote
+    // Counting) — separate from usedSources, which means "spent".
+    if (rf.abstaining?.includes(m.id)) return false;
+    // "…or cast votes or ballots this turn" (Expulsion).
+    if (m.expelledThisTurn) return false;
+    // "This vampire cannot cast votes or ballots" (Detection) — the same
+    // bar with no expiry, carried by a card on the vampire
+    // (docs/pay-to-unlock-design.md §4).
+    if (m.attached.some((p) => p.statics.cannotCastVotes)) return false;
+    // "This vampire may not cast votes or ballots during a referendum to
+    // call a blood hunt ON THIS VAMPIRE" (The Hunt Club) — the same bar,
+    // scoped to one referendum, so it is read HERE where the frame is in
+    // hand rather than as an unconditional static.
+    // docs/blood-hunt-answers-design.md §3
+    if (
+      rf.variant === "bloodHunt" &&
+      rf.bloodHuntTarget === m.id &&
+      m.attached.some((p) => p.statics.cannotCastVotesInOwnBloodHunt)
+    ) {
+      return false;
+    }
+    // "Non-<sect> vampires cannot cast votes or ballots" (p. 28).
+    if (rf.voteRestriction && m.sect !== rf.voteRestriction.sect) return false;
+    // "CAMARILLA vampires cannot cast votes or ballots during this
+    // referendum" (Investiture) — the inverse gate, beside its sibling.
+    // Like it, it bars VAMPIRES casting; the Edge, the calling card and a
+    // Methuselah's card-granted votes are untouched.
+    if (rf.voteBan && m.sect === rf.voteBan.sect) return false;
+    return true;
+  }
+
+  /** A vampire's votes so far in `rf`: the direction its first cast fixed
+   *  for the whole group (p. 28; null before it casts), and how many it has
+   *  cast from one source. DERIVED from `rf.votes`, so an abstention that
+   *  un-casts them frees the group again. docs/vampire-votes-design.md §4.5 */
+  private voteGroup(
+    rf: ReferendumFrame,
+    minion: MinionId,
+  ): { inFavor: boolean | null; castFrom(source: string): number } {
+    const mine = rf.votes.filter((v) => v.minion === minion);
+    return {
+      inFavor: mine[0]?.inFavor ?? null,
+      castFrom: (source) => mine.filter((v) => v.source === source).reduce((n, v) => n + v.count, 0),
+    };
   }
 
   private combatantReady(minionId: MinionId): boolean {
@@ -6989,11 +7078,30 @@ export class VtesEngine implements EngineOps {
    *  card and casting it for the referendum it was played to stop is not a
    *  legal option. Defaults to "any", which is every other vote grant in the
    *  pool. docs/polling-votes-design.md §3 */
-  grantVotes(seat: SeatId, amount: number, direction: keyof VoteGrants = "any"): void {
+  grantVotes(to: VoteGrantTo, amount: number, direction: keyof VoteGrants = "any"): void {
     const rf = this.referendumFrame();
     if (!rf) throw new Error("grantVotes outside a referendum");
-    const g = (rf.voteGrants[seat] ??= { any: 0, for: 0, against: 0 });
+    if (amount <= 0) return;
+    const g =
+      "minion" in to
+        ? ((rf.minionVoteGrants ??= {})[to.minion] ??= { any: 0, for: 0, against: 0 })
+        : (rf.voteGrants[to.card] ??= { seat: to.seat, name: to.name, any: 0, for: 0, against: 0 });
     g[direction] += amount;
+  }
+
+  lockVampiresOnVote(exceptSeat?: SeatId): void {
+    const rf = this.referendumFrame();
+    if (!rf) throw new Error("lockVampiresOnVote outside a referendum");
+    // A basic copy already locks everyone; a superior one after it cannot
+    // spare anybody the basic copy locks.
+    if (rf.lockOnVote && rf.lockOnVote.exceptSeat === undefined) return;
+    rf.lockOnVote = exceptSeat !== undefined ? { exceptSeat } : {};
+  }
+
+  offerVoteCancel(target: MinionId, sect: Sect, olderOnly: boolean): void {
+    const rf = this.referendumFrame();
+    if (!rf) throw new Error("offerVoteCancel outside a referendum");
+    rf.cancelVoteOffers = [...(rf.cancelVoteOffers ?? []), { target, sect, olderOnly }];
   }
 
   /** "If this vampire blocks, it gets N maneuvers/presses in the resulting
@@ -7088,8 +7196,9 @@ export class VtesEngine implements EngineOps {
    * Two halves, and both are needed: the votes already in the array are
    * removed (the tally is a fold, so that IS the cancellation), and the
    * vampire joins `abstaining` so the enumeration stops offering them.
-   * Votes and ballots both key on the casting vampire's id, so removing by
-   * source takes both — which is what the parenthetical promises.
+   * Every cast of the vampire's records it as `minion` — title, granted
+   * and bought votes alike — so removing by vampire takes them all, which
+   * is what the parenthetical promises. docs/vampire-votes-design.md §4.4
    *
    * Deliberately does nothing else: Scalpel Tongue's lock and blood burn
    * belong to the card, not to abstaining.
@@ -7098,9 +7207,9 @@ export class VtesEngine implements EngineOps {
     const rf = this.referendum();
     if (!rf) return;
     const cancelled = rf.votes
-      .filter((v) => v.source === minion)
+      .filter((v) => v.minion === minion)
       .reduce((n, v) => n + v.count, 0);
-    rf.votes = rf.votes.filter((v) => v.source !== minion);
+    rf.votes = rf.votes.filter((v) => v.minion !== minion);
     rf.abstaining = [...(rf.abstaining ?? []), minion];
     this.emit({
       type: "VampireAbstained",
@@ -10908,6 +11017,7 @@ export class VtesEngine implements EngineOps {
           source: option.source,
           count: option.count,
           inFavor: option.inFavor,
+          ...(option.minion !== undefined ? { minion: option.minion } : {}),
         });
         if (option.source === "edge") {
           top.usedSources.push("edge");
@@ -10926,15 +11036,11 @@ export class VtesEngine implements EngineOps {
           const [card] = hand.splice(idx, 1);
           this.emit({ type: "CardBurned", cardId: card!.id, name: card!.name, seat });
           this.drawToReplace(seat);
-        } else if (
-          option.source === "grant" ||
-          option.source === "grantFor" ||
-          option.source === "grantAgainst"
-        ) {
-          // Card-granted votes, keyed by BUCKET: a seat holding a flexible
-          // grant and a directed one has two sources, and spending one must
-          // not spend the other.
-          top.usedSources.push(`${option.source}:${seat}`);
+        } else if (/^grant(For|Against)?:/.test(option.source)) {
+          // A Methuselah's card-granted votes, keyed by card AND bucket: each
+          // card is its own source (p. 28), and spending a flexible grant
+          // must not spend a directed one. docs/vampire-votes-design.md §4.1
+          top.usedSources.push(option.source);
         } else if (option.source.startsWith("blood:")) {
           // A bought vote spends blood, not a vote SOURCE — the vampire's
           // own title votes are still theirs to cast, and the offer stays
@@ -10954,8 +11060,29 @@ export class VtesEngine implements EngineOps {
           source: option.source,
           count: option.count,
           inFavor: option.inFavor,
+          ...(option.minion !== undefined ? { minion: option.minion } : {}),
         });
+        // "When a vampire votes in this referendum, lock him or her"
+        // (Disarming Presence) — as the votes are cast [RTR 19970425], and
+        // a side effect rather than a cost, so an already-locked vampire
+        // votes all the same [RTR 19941109].
+        if (top.lockOnVote && option.minion !== undefined) {
+          const voter = findMinion(this.state, option.minion);
+          if (voter && !voter.locked && voter.controller !== top.lockOnVote.exceptSeat) {
+            this.emit({ type: "MinionLocked", minion: voter.id });
+          }
+        }
         // Casting is using an effect: the impulse rewinds (p. 8).
+        cycleRewind(top.cycle);
+        return;
+      }
+      case "cancelVotes": {
+        if (top.kind !== "referendum") throw new Error("cancelVotes outside referendum");
+        // "…can lock to cancel that anarch's votes and ballots" (Emissary):
+        // the abstain cards' own phrase, so the abstain reading — un-cast
+        // and barred (docs/abstain-gate-design.md).
+        this.emit({ type: "MinionLocked", minion: option.minion });
+        this.forceAbstain(option.target);
         cycleRewind(top.cycle);
         return;
       }

@@ -1006,6 +1006,50 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 108 — a vampire's votes are one group (4 cards), 2026-10-24
+
+**Cards:** Traditionalist, Tribunal Judgment and Emissary (T1), and
+Disarming Presence (T2). Design and owner rulings:
+`vampire-votes-design.md`. Version 0.11.48.
+
+**The mechanic.** The engine now records whose every vote is. A card that
+gives "this vampire" votes credits that vampire, and each cast records its
+vampire. That one change gives p. 28's rule a reader: a vampire's first
+cast fixes the direction of all its other votes, including votes it gains
+later and votes it buys with Mob Rule.
+
+**The defect the wave was built to fix.** Card-granted votes were pooled per
+seat, a choice `polling-votes-design.md` §3 made on a tally argument. That
+choice put 39 implemented cards in breach of p. 28 and the p. 47 Bewitching
+Oration ruling:
+
+- A seat could split one vampire's votes.
+- Granted votes survived the vampire going to torpor.
+- Granted votes slipped every bar on the vampire: abstention, Detection,
+  Expulsion, The Hunt Club, Closed Session and Investiture.
+- Mob Rule's bought votes went either way, and abstaining didn't un-cast
+  them.
+
+The bars now live in one helper, `vampireMayVote`, which the vampire's
+own votes and its bought votes both call.
+
+**Found while classifying.** Powerbase: Madrid prints "a titled Sabbat
+vampire", with no "you control". The handler required your own vampire
+and credited your seat. It now chooses any titled Sabbat vampire.
+
+**Methuselah sources split per card** (owner ruling): Ventrue Headquarters,
+The Black Throne, Oxford University, The Mausoleum and Ferraille are each
+their own source, keyed `grant:<cardId>`.
+
+**New kernel pieces:**
+- `GameState.lastReferendum`, written by the `ReferendumResolved` reducer.
+- The `votedAgainst` list on `onReferendumLost`.
+- `rf.lockOnVote`.
+- The `cancelVotes` option kind (`cancelvotes:<minion>:<target>`).
+
+**Test churn:** 23 existing tests moved from `vote:grant:*` to the vampire's
+source. That's the reversal working.
+
 ### Wave 107 — five archetypes that pay 1 blood (5 cards), 2026-10-23
 
 Library **896 → 901**. Bravo, Capitalist, Creep Show, Guru, Sociopath.

@@ -87,7 +87,8 @@ describe("Surprise Influence (101909) — the reactor gains 2 votes", () => {
     for (let i = 0; i < 20 && ref(state); i++) {
       const dp = engine.decision();
       if (!dp) break;
-      const cast = dp.options.find((o) => o.id === "vote:grant:against");
+      // "This REACTING vampire gains 2 votes" — the reactor's own.
+      const cast = dp.options.find((o) => o.id === "vote:W:against");
       if (cast) {
         runTrace(engine, [[dp.seat, cast.id]]);
         break;

@@ -4594,15 +4594,18 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
                   if (abstain.sameClanAsReactor && (m.clan === null || t.clan !== m.clan)) {
                     continue;
                   }
-                  if (abstain.onlyIfVoted && !ref.votes.some((v) => v.source === t.id)) {
-                    continue;
-                  }
+                  // A cast records its vampire whatever the source — title,
+                  // granted or bought (docs/vampire-votes-design.md §4.4).
+                  const hasCast = ref.votes.some((v) => v.minion === t.id);
+                  if (abstain.onlyIfVoted && !hasCast) continue;
                   // A vampire with no vote source and no cast vote has
-                  // nothing to abstain from.
+                  // nothing to abstain from. Votes a card gave it are a
+                  // source of its own (p. 47).
                   if (
                     !abstain.onlyIfVoted &&
                     t.title === null &&
-                    !ref.votes.some((v) => v.source === t.id)
+                    !hasCast &&
+                    !ref.minionVoteGrants?.[t.id]
                   ) {
                     continue;
                   }
@@ -5119,10 +5122,15 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
         }
         return;
       }
-      // Polling-step vote grant — no action underway.
+      // Polling-step vote grant — no action underway. "THIS vampire gets +2
+      // votes": the playing vampire's, cast with its group [p. 47].
+      // docs/vampire-votes-design.md §4.1
       if (mode.effects.some((e) => e.kind === "modifyVotes")) {
+        if (play.minion === null) throw new Error(`${spec.name}: a vote grant needs its vampire`);
         for (const e of mode.effects) {
-          if (e.kind === "modifyVotes") ops.grantVotes(play.seat, e.amount, e.direction ?? "any");
+          if (e.kind === "modifyVotes") {
+            ops.grantVotes({ minion: play.minion }, e.amount, e.direction ?? "any");
+          }
         }
         return;
       }
@@ -6091,8 +6099,13 @@ function addLockGrant(spec: CardSpec, handler: CardHandler): void {
           ops.emit({ type: "PoolBurned", seat: owner.seat, amount: lg.poolCost });
         }
         if (lg.perClanMinion) {
-          const n = Number(choice.params["n"] ?? "0");
-          ops.grantVotes(owner.seat, lg.amount * n);
+          // "Give EACH Lasombra you control +1 vote": each one's own vote,
+          // cast with its group (p. 28). Re-derived now, by the same
+          // filter the option counted. docs/vampire-votes-design.md §3
+          for (const m of getSeat(ops.state, owner.seat).minions) {
+            if (m.kind !== "vampire" || !isReady(m) || !matches(m)) continue;
+            ops.grantVotes({ minion: m.id }, lg.amount);
+          }
           return;
         }
         const x = lg.perPoolX ? Number(choice.params["x"] ?? "1") : 1;
@@ -6101,7 +6114,11 @@ function addLockGrant(spec: CardSpec, handler: CardHandler): void {
         }
         // Read NOW, not at enumeration: the card it names can leave play
         // between the option being offered and the lock being paid.
-        ops.grantVotes(owner.seat, voteAmount(ops.state) * x);
+        // "…to get +N votes" — the Methuselah's, a source of its own.
+        ops.grantVotes(
+          { seat: owner.seat, card: entry.card.id, name: spec.name },
+          voteAmount(ops.state) * x,
+        );
         return;
       }
       if (choice.params["grant"] === "uncontrolledBlood") {
@@ -8665,27 +8682,17 @@ export function applyReferendumRiders(
       { amount: riders.titledVoteDelta, titledOnly: true },
     ];
   }
-  // "Each <clan> / each CARDINAL gets +1 vote" — one extra castable vote per
-  // matching READY vampire, credited to its controller (p. 28). A torpid
-  // vampire casts nothing, so it earns its controller nothing either.
+  // "Each <clan> / each CARDINAL gets +1 vote" — each matching vampire's own
+  // vote, cast with its group (p. 28). Read as votes are counted, not now,
+  // so a vampire that leaves the ready region during polling loses it.
+  // docs/vampire-votes-design.md §4.2
   const clan = riders.voteBonusClan;
   const title = riders.voteBonusTitle;
   if (clan === undefined && title === undefined) return;
-  for (const s of state.seats) {
-    if (s.ousted) continue;
-    const n = s.minions.filter(
-      (m) =>
-        m.kind === "vampire" &&
-        isReady(m) &&
-        (clan === undefined || m.clan === clan) &&
-        (title === undefined || m.title === title),
-    ).length;
-    if (n > 0) {
-      const g = (frame.voteGrants[s.id] ??= { any: 0, for: 0, against: 0 });
-      // The rider says only "+1 vote" — each seat aims its own.
-      g.any += n;
-    }
-  }
+  frame.extraVotes = [
+    ...(frame.extraVotes ?? []),
+    { ...(clan !== undefined ? { clan } : {}), ...(title !== undefined ? { title } : {}), amount: 1 },
+  ];
 }
 
 export function referendumPolarity(primitive: EffectPrimitive | null): ReferendumEffectKind | null {
@@ -13492,7 +13499,10 @@ function addCryptAbilities(
       const af = ops.action();
       switch (grant) {
         case "votes":
-          ops.grantVotes(controller, sale.amount);
+          // "<They> can discard a card … to get +1 vote" — the vampire's
+          // own, cast with its group. docs/vampire-votes-design.md §3
+          if (owner.minion === null) throw new Error(`${spec.name}: no vampire to vote`);
+          ops.grantVotes({ minion: owner.minion }, sale.amount);
           break;
         case "bleed":
           if (af) {

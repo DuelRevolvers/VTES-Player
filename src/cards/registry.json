@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-23T19:06:59.459Z",
+ "fetchedAt": "2026-10-24T21:36:38.144Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -4335,6 +4335,31 @@
    },
    "supported": true
   },
+  "100550": {
+   "card": {
+    "kind": "library",
+    "id": 100550,
+    "name": "Disarming Presence",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum before any votes or ballots are cast.\n[pre] When a vampire votes in this referendum, lock him or her.\n[PRE] As above, but do not lock your vampires when they cast their votes.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/disarmingpresence.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "100554": {
    "card": {
     "kind": "library",
@@ -5252,6 +5277,27 @@
     "image": "https://static.krcg.org/card/emergencypreparations.jpg",
     "sets": [
      "Gehenna"
+    ]
+   },
+   "supported": true
+  },
+  "100638": {
+   "card": {
+    "kind": "library",
+    "id": 100638,
+    "name": "Emissary",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a ready baron. Only usable during a referendum before votes and ballots are cast.\nChoose a ready unlocked anarch you control. Lock the chosen anarch. That anarch gains 3 votes. Any Camarilla vampire older than that anarch can lock to cancel that anarch's votes and ballots.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/emissary.jpg",
+    "sets": [
+     "Anarchs"
     ]
    },
    "supported": true
@@ -16118,6 +16164,27 @@
    },
    "supported": true
   },
+  "102005": {
+   "card": {
+    "kind": "library",
+    "id": 102005,
+    "name": "Traditionalist",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: archetype. Trifle.\nPut this card on a vampire you control. Once per turn, when this vampire casts his or her votes or ballots against a referendum and the referendum fails, he or she gains 1 blood from the blood bank. A vampire can have only one archetype.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/traditionalist.jpg",
+    "sets": [
+     "Gehenna"
+    ]
+   },
+   "supported": true
+  },
   "102010": {
    "card": {
     "kind": "library",
@@ -16205,6 +16272,27 @@
      "Vampire: The Eternal Struggle",
      "Camarilla Edition",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "102022": {
+   "card": {
+    "kind": "library",
+    "id": 102022,
+    "name": "Tribunal Judgment",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire.\nChoose a vampire who cast any votes in the most recent referendum (must be since your last turn). Successful referendum means that vampire takes X damage, where X is the number of votes he or she cast in that previous referendum.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/tribunaljudgment.jpg",
+    "sets": [
+     "Sword of Caine"
     ]
    },
    "supported": true

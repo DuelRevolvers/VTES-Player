@@ -226,6 +226,7 @@ export function actionsByTableCard(
       case "burnForIntercept":
       case "burnForUnlock":
       case "cancelBlock":
+      case "cancelVotes":
       case "transferToVampire":
       case "transferToPool":
       case "influenceOut":

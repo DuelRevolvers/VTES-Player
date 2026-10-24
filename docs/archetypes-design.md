@@ -220,6 +220,7 @@ votes and ballots from any given vampire or other source must be cast in
 agreement as a group." A granted vote is its own source, so a seat can cast a
 vampire's Dread Gaze votes one way and its title votes the other.
 Traditionalist belongs in a wave that attributes votes to vampires.
+**Built in wave 108 (0.11.48)**, `vampire-votes-design.md` §5.
 
 ### 7.4 Measured
 

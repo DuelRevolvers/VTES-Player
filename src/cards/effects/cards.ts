@@ -9142,6 +9142,63 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  // Wave 108: the archetype wave 107 left out, which needed the engine to
+  // know which vampire cast a vote (docs/vampire-votes-design.md §5).
+  {
+    krcgId: 102005,
+    name: "Traditionalist",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    trifle: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  // The rest of wave 108: three cards that act on a vampire's votes as a
+  // group. Each is bespoke below (docs/vampire-votes-design.md §5).
+  {
+    // "Requires a Sabbat vampire. Choose a vampire who cast any votes in the
+    //  most recent referendum … takes X damage". The terms and the play gate
+    //  are the handler's.
+    krcgId: 102022,
+    name: "Tribunal Judgment",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    referendumEffect: "other",
+    requiresSect: ["sabbat"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Requires a ready baron. Only usable during a referendum before votes
+    //  and ballots are cast." The requirement is the controller's, the
+    //  `requiresControlledTitle` reading (docs/ballots-design.md).
+    krcgId: 100638,
+    name: "Emissary",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    requiresControlledTitle: ["baron"],
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    krcgId: 100550,
+    name: "Disarming Presence",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "pre", effects: [] },
+      { level: "superior", discipline: "pre", effects: [] },
+    ],
+  },
   // Lock-to-grant locations (docs/lock-grant-locations-design.md).
   {
     krcgId: 100052,
@@ -23521,19 +23578,26 @@ const powerbaseMadrid: CardHandler = {
         params: { do: "add" },
       });
     }
-    // "Lock during polling to give a titled Sabbat +1 vote per counter."
+    // "Lock … to give A TITLED SABBAT VAMPIRE +1 vote for each counter" —
+    // no "you control", so any controller's (card text wins, p. 16), and
+    // the votes are that vampire's, cast by its controller with its group.
+    // This handler used to require your own and credit your seat.
+    // docs/vampire-votes-design.md §3
     if (ctx.window === "referendum.polling" && !entry.locked && counters > 0) {
-      const hasTitledSabbat = getSeat(ctx.state, owner.seat).minions.some(
-        (m) => m.kind === "vampire" && m.sect === "sabbat" && m.title !== null && isReady(m),
-      );
-      if (hasTitledSabbat) {
-        opts.push({
-          id: `ability:Powerbase: Madrid:${entry.card.id}:votes`,
-          kind: "useAbility",
-          label: `Powerbase: Madrid: lock for +${counters} votes`,
-          source: entry.card.id,
-          params: { do: "votes" },
-        });
+      for (const s of ctx.state.seats) {
+        if (s.ousted) continue;
+        for (const m of s.minions) {
+          if (m.kind !== "vampire" || m.sect !== "sabbat" || m.title === null || !isReady(m)) {
+            continue;
+          }
+          opts.push({
+            id: `ability:Powerbase: Madrid:${entry.card.id}:votes:${m.id}`,
+            kind: "useAbility",
+            label: `Powerbase: Madrid: lock to give ${m.name} +${counters} votes`,
+            source: entry.card.id,
+            params: { do: "votes", minion: m.id },
+          });
+        }
       }
     }
     return opts;
@@ -23544,7 +23608,8 @@ const powerbaseMadrid: CardHandler = {
       ops.addCounters(entry.card.id, 1);
     } else {
       ops.lockPermanent(entry.card.id);
-      ops.grantVotes(owner.seat, entry.counters ?? 0);
+      const m = findMinion(ops.state, choice.params["minion"] ?? "");
+      if (m) ops.grantVotes({ minion: m.id }, entry.counters ?? 0);
     }
   },
 };
@@ -23977,11 +24042,15 @@ const saulotsGuidingWisdom: CardHandler = {
           if (t.kind !== "vampire" || !isReady(t)) continue;
           if (ref.abstaining?.includes(t.id)) continue;
           // Nothing to take away from a vampire with no vote source and
-          // no vote cast.
+          // no vote cast. Votes a card gave it are a source of its own, and
+          // a cast records its vampire whatever the source
+          // (docs/vampire-votes-design.md §4.4).
           const votes =
             (t.title === null ? 0 : 1) +
             t.attached.reduce((n, p) => n + (p.statics.votes ?? 0), 0);
-          if (votes <= 0 && !ref.votes.some((v) => v.source === t.id)) continue;
+          if (votes <= 0 && !ref.minionVoteGrants?.[t.id] && !ref.votes.some((v) => v.minion === t.id)) {
+            continue;
+          }
           out.push({
             id: `ability:Saulot's Guiding Wisdom:${entry.card.id}:abstain:${t.id}`,
             kind: "useAbility",
@@ -24792,27 +24861,32 @@ const alamut: CardHandler = {
     if (ctx.window !== "referendum.polling" || ctx.seat !== owner.seat) return [];
     const counters = entry.counters ?? 0;
     if (counters <= 0) return [];
-    const hasVampire = getSeat(ctx.state, owner.seat).minions.some(
+    // "…to give A VAMPIRE YOU CONTROL +X votes" — that vampire's own,
+    // cast with its group, so which vampire is part of the choice.
+    // docs/vampire-votes-design.md §3
+    const vampires = getSeat(ctx.state, owner.seat).minions.filter(
       (m) => m.kind === "vampire" && isReady(m),
     );
-    if (!hasVampire) return [];
     const opts: LegalOption[] = [];
-    for (let x = 1; x <= counters; x++) {
-      opts.push({
-        id: `ability:Alamut:${entry.card.id}:votes:${x}`,
-        kind: "useAbility",
-        label: `Alamut: burn ${x} counter(s) for +${x} votes`,
-        source: entry.card.id,
-        params: { x: String(x) },
-      });
+    for (const m of vampires) {
+      for (let x = 1; x <= counters; x++) {
+        opts.push({
+          id: `ability:Alamut:${entry.card.id}:votes:${m.id}:${x}`,
+          kind: "useAbility",
+          label: `Alamut: burn ${x} counter(s) to give ${m.name} +${x} votes`,
+          source: entry.card.id,
+          params: { x: String(x), minion: m.id },
+        });
+      }
     }
     return opts;
   },
   useAbility(entry, owner, choice, ops) {
     const x = Number(choice.params["x"] ?? "0");
-    if (x <= 0) return;
+    const m = findMinion(ops.state, choice.params["minion"] ?? "");
+    if (x <= 0 || !m) return;
     ops.removeCounters(entry.card.id, x);
-    ops.grantVotes(owner.seat, x);
+    ops.grantVotes({ minion: m.id }, x);
   },
 };
 
@@ -24887,24 +24961,32 @@ const deadPool: CardHandler = {
         return [{ id: `ability:Dead Pool:${entry.card.id}:bleed`, kind: "useAbility", label: "Dead Pool: burn a counter for +2 bleed", source: entry.card.id, params: { do: "bleed" } }];
       }
     }
-    // During polling: +2 votes (you control a Lasombra).
+    // During polling: "a Lasombra you control can burn 1 counter … to get
+    // +2 votes" — that Lasombra's own, cast with its group, so each one is
+    // its own option. docs/vampire-votes-design.md §3
     if (ctx.window === "referendum.polling") {
-      const hasLasombra = getSeat(ctx.state, owner.seat).minions.some(
-        (m) => m.kind === "vampire" && m.clan === "Lasombra" && isReady(m),
-      );
-      if (hasLasombra) {
-        return [{ id: `ability:Dead Pool:${entry.card.id}:votes`, kind: "useAbility", label: "Dead Pool: burn a counter for +2 votes", source: entry.card.id, params: { do: "votes" } }];
-      }
+      return getSeat(ctx.state, owner.seat)
+        .minions.filter((m) => m.kind === "vampire" && m.clan === "Lasombra" && isReady(m))
+        .map((m) => ({
+          id: `ability:Dead Pool:${entry.card.id}:votes:${m.id}`,
+          kind: "useAbility" as const,
+          label: `Dead Pool: burn a counter to give ${m.name} +2 votes`,
+          source: entry.card.id,
+          params: { do: "votes", minion: m.id },
+        }));
     }
     return [];
   },
   useAbility(entry, owner, choice, ops) {
-    ops.removeCounters(entry.card.id, 1);
     const af = ops.action();
     if (choice.params["do"] === "bleed" && af) {
+      ops.removeCounters(entry.card.id, 1);
       ops.emit({ type: "BleedAmountModified", actionId: af.actionId, delta: 2, source: "Dead Pool", limited: false });
     } else {
-      ops.grantVotes(owner.seat, 2);
+      const m = findMinion(ops.state, choice.params["minion"] ?? "");
+      if (!m) return;
+      ops.removeCounters(entry.card.id, 1);
+      ops.grantVotes({ minion: m.id }, 2);
     }
   },
 };
@@ -25644,6 +25726,177 @@ const sociopath: CardHandler = {
     const bearer = findMinion(ops.state, owner.minion);
     if (!bearer || !isReady(bearer)) return;
     archetypeGain(entry, bearer.id, ops);
+  },
+};
+
+/**
+ * Traditionalist (102005) — "Once per turn, when this vampire casts his or
+ * her votes or ballots against a referendum and the referendum fails, he or
+ * she gains 1 blood from the blood bank."
+ *
+ * Read off the cast record: every vote a vampire casts carries it as
+ * `minion`, title, granted and bought votes alike, so `votedAgainst` is
+ * exactly "this vampire cast against". A forced fail (Yoruba Shrine) is a
+ * fail. A cancelled referendum is not: it never resolves (crypt-wave-6 §3).
+ * A vote un-cast by an abstention was never cast. No "if ready" is printed.
+ * docs/vampire-votes-design.md §5
+ */
+const traditionalist: CardHandler = {
+  ...compileSpec(specByName("Traditionalist")),
+  onReferendumLost(entry, owner, info, ops) {
+    if (entry.usedThisTurn || owner.minion === null || info.how !== "failed") return;
+    if (!info.votedAgainst.includes(owner.minion)) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    archetypeGain(entry, bearer.id, ops);
+  },
+};
+
+/** Vampires Tribunal Judgment may choose for `seat`, with the votes each
+ *  cast: those in the most recent tallied referendum, when that was since
+ *  `seat`'s last turn ("your last turn does not qualify, your current turn
+ *  does" [LSJ 20020429]). The play gate and the terms both ask this, so
+ *  they cannot disagree [LSJ 20100129]. */
+function tribunalTargets(state: GameState, seat: SeatId): Array<{ minion: MinionState; votes: number }> {
+  const last = state.lastReferendum;
+  if (!last) return [];
+  const ended = getSeat(state, seat).lastTurnEnded;
+  if (ended !== undefined && last.turnNumber <= ended) return [];
+  const out: Array<{ minion: MinionState; votes: number }> = [];
+  for (const [id, votes] of Object.entries(last.votesByMinion)) {
+    const m = findMinion(state, id);
+    if (m && m.kind === "vampire" && votes > 0) out.push({ minion: m, votes });
+  }
+  return out;
+}
+
+/**
+ * Tribunal Judgment (102022) — "Choose a vampire who cast any votes in the
+ * most recent referendum (must be since your last turn). Successful
+ * referendum means that vampire takes X damage, where X is the number of
+ * votes he or she cast in that previous referendum."
+ *
+ * X is fixed in the TERMS: this card's own referendum is tallied before it
+ * is applied, and the tally replaces `lastReferendum`. Damage outside
+ * combat is the environmental path, as for every other referendum that
+ * damages (docs/outside-combat-design.md). docs/vampire-votes-design.md §5
+ */
+const tribunalBase = compileSpec(specByName("Tribunal Judgment"));
+const tribunalJudgment: CardHandler = {
+  ...tribunalBase,
+  options(card, ctx) {
+    // "Cannot be used or played if the conditions for the terms … cannot be
+    // met (e.g. no legal selection)" [LSJ 20100129].
+    if (tribunalTargets(ctx.state, ctx.seat).length === 0) return [];
+    return tribunalBase.options?.call(this, card, ctx) ?? [];
+  },
+  referendumTerms(frame, state) {
+    return tribunalTargets(state, frame.caller).map(({ minion, votes }) => ({
+      id: `terms:${minion.id}`,
+      kind: "chooseTerms" as const,
+      label: `${minion.name} (${minion.controller}) takes ${votes} damage`,
+      params: { target: minion.id, x: String(votes) },
+    }));
+  },
+  applyReferendum(frame, ops) {
+    const m = findMinion(ops.state, frame.terms["target"] ?? "");
+    const x = Number(frame.terms["x"] ?? "0");
+    if (m && x > 0) ops.applyEnvironmentalDamage(m.id, x, false);
+  },
+};
+
+/** The calling vampire, when an action modifier "only usable during a
+ *  referendum before votes and ballots are cast" can be played: only the
+ *  acting minion plays action modifiers (p. 28), nothing is cast yet, and
+ *  the referendum is not passing automatically, where nothing is ever cast
+ *  [PIB 20150105] [LSJ 19980107]. */
+function beforeVotesCaller(ctx: PlayContext): MinionState | null {
+  if (ctx.window !== "referendum.polling") return null;
+  const ref = ctx.referendum;
+  if (!ref || ref.autoPass || ref.votes.length > 0 || ctx.seat !== ref.caller) return null;
+  return ref.callingMinion ? findMinion(ctx.state, ref.callingMinion) : null;
+}
+
+/**
+ * Emissary (100638) — "Requires a ready baron. Only usable during a
+ * referendum before votes and ballots are cast. Choose a ready unlocked
+ * anarch you control. Lock the chosen anarch. That anarch gains 3 votes.
+ * Any Camarilla vampire older than that anarch can lock to cancel that
+ * anarch's votes and ballots."
+ *
+ * The 3 votes are the anarch's own, so they join its group. The cancel is
+ * an open offer on the referendum frame, taken with `cancelVotes`, and it
+ * cancels the anarch's votes the way the abstain cards do. "Counts as
+ * requiring an Anarch" [LSJ 20080603] has no reader in the pool.
+ * docs/vampire-votes-design.md §5
+ */
+const emissary: CardHandler = {
+  ...compileSpec(specByName("Emissary")),
+  options(card, ctx) {
+    const caller = beforeVotesCaller(ctx);
+    if (!caller) return [];
+    const seat = getSeat(ctx.state, ctx.seat);
+    if (!seat.minions.some((m) => m.kind === "vampire" && isReady(m) && m.title === "baron")) {
+      return [];
+    }
+    return seat.minions
+      .filter((m) => m.kind === "vampire" && m.sect === "anarch" && isReady(m) && !m.locked)
+      .map((m) => ({
+        id: playOptionId(this.name, null, caller.id, m.id, card.id),
+        kind: "playCard" as const,
+        label: `${this.name} — lock ${m.name} for 3 votes`,
+        card: card.id,
+        name: this.name,
+        minion: caller.id,
+        mode: null,
+        params: { target: m.id },
+      }));
+  },
+  resolve(play, ops) {
+    // Re-derived: the anarch can have locked or left the ready region while
+    // the card was in its as-played window.
+    const m = findMinion(ops.state, play.params["target"] ?? "");
+    if (!m || m.controller !== play.seat || m.sect !== "anarch" || !isReady(m) || m.locked) return;
+    ops.emit({ type: "MinionLocked", minion: m.id });
+    ops.grantVotes({ minion: m.id }, 3);
+    ops.offerVoteCancel(m.id, "camarilla", true);
+  },
+};
+
+/**
+ * Disarming Presence (100550) — "Only usable during a referendum before any
+ * votes or ballots are cast. [pre] When a vampire votes in this referendum,
+ * lock him or her. [PRE] As above, but do not lock your vampires when they
+ * cast their votes."
+ *
+ * The engine locks at the cast, because only a cast says which vampire
+ * voted [RTR 19970425]. Locking is a side effect, so a locked vampire still
+ * votes [RTR 19941109]. docs/vampire-votes-design.md §5
+ */
+const disarmingPresence: CardHandler = {
+  ...compileSpec(specByName("Disarming Presence")),
+  options(card, ctx) {
+    const caller = beforeVotesCaller(ctx);
+    const pre = caller ? disciplinesOf(caller)["pre"] : undefined;
+    if (!caller || !pre) return [];
+    const levels: Array<NonNullable<CardPlayFrame["mode"]>> =
+      pre === "superior" ? ["basic", "superior"] : ["basic"];
+    return levels.map((level) => ({
+      id: playOptionId(this.name, level, caller.id, card.id),
+      kind: "playCard" as const,
+      label:
+        level === "superior"
+          ? `${this.name} (PRE) — lock every other Methuselah's vampire as it votes`
+          : `${this.name} (pre) — lock every vampire as it votes`,
+      card: card.id,
+      name: this.name,
+      minion: caller.id,
+      mode: level,
+      params: {},
+    }));
+  },
+  resolve(play, ops) {
+    ops.lockVampiresOnVote(play.mode === "superior" ? play.seat : undefined);
   },
 };
 
@@ -26595,6 +26848,10 @@ export function buildHandlerRegistry(): HandlerRegistry {
     creepShow,
     guru,
     sociopath,
+    traditionalist,
+    tribunalJudgment,
+    emissary,
+    disarmingPresence,
   ]) {
     registry[bespoke.name] = bespoke;
   }
