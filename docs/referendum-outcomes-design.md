@@ -241,3 +241,31 @@ from the plan, or was found while building:
     looked only for an action frame, and the political action has left the
     stack before polling begins. In polling, "the acting minion" is
     `callingMinion` now.
+
+## 7. No reaction card in a blood hunt (0.11.52)
+
+The rulebook says a blood hunt referendum "is not an action, so it cannot
+be blocked, and action modifiers and reaction cards cannot be played"
+(p. 35). The engine barred action modifiers by accident, because a polling
+modifier must be played by the calling vampire and a blood hunt has none.
+It never barred reactions. Checking Malkavian Rider Clause, which prints
+"of a political action", found it offered in a blood hunt.
+
+- **The fix is one filter, `notInBloodHunt`,** applied beside
+  `notPlayedTwice` to every card option in a blood hunt's polling step. It
+  reads `costTypes`, the printed type line every card answers, so spec and
+  bespoke cards are covered alike.
+- **Owner ruling (2026-10-24): bar every reaction, not only the eight that
+  print "political action".** The rulebook bars the card TYPE. A card that
+  prints only "during a referendum" doesn't name the blood hunt, so it
+  doesn't override p. 35.
+- **The after-resolution step is not filtered.** Lay Low is the one card
+  played there in a blood hunt. It names the blood hunt, and card text
+  wins (p. 16). The step already refuses every other card in a blood hunt.
+- **`NEEDS_CALLING_VAMPIRE` now overlaps the filter** for Treachery and
+  Poison Pill, which are reactions. It stays, because it states the
+  card's own reason: the rider has no caller to charge.
+- **Tests:** all 18 admitted reactions that can be played in a referendum
+  are in one hand on one board. The control offers all 18 on a political
+  action. The blood hunt offers none, before or after a vote. Without the
+  filter, the blood-hunt test fails.

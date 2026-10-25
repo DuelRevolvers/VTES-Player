@@ -655,6 +655,72 @@ describe("the two cases §6 left untested", () => {
   });
 });
 
+describe("no reaction card in a blood hunt (p. 35)", () => {
+  /** Every admitted reaction that can be played in a referendum. */
+  const CARDS = [
+    "Absolute Tyranny", "Conflict of Interests", "Delaying Tactics", "Dread Gaze",
+    "Elder Kindred Network", "Irregular Protocol", "Kindred Coercion",
+    "Malkavian Rider Clause", "Mob Rule", "Ominous Chorus", "Party Out Of Bounds",
+    "Poison Pill", "Political Backlash", "Protected District", "Pulling Strings",
+    "Scalpel Tongue", "Surprise Influence", "Treachery",
+  ];
+
+  /**
+   * One board for both referendums. Bob holds all 18 cards, with a reactor
+   * able to play each one. Carol's prince casts the only vote, AGAINST, so
+   * the referendum fails with a vote on the record: Scalpel Tongue needs a
+   * cast vote, and Political Backlash needs a failure.
+   */
+  function board(): GameState {
+    const state = threeSeatGame();
+    Object.assign(minion(state, "V1"), { title: "prince", clan: "Brujah", blood: 4, capacity: 6 });
+    minion(state, "N").title = "prince";
+    state.seats[1]!.minions.push(
+      // V1's clan, older than V1 and N, and every discipline the cards ask.
+      makeMinion("R", "Bob", {
+        clan: "Brujah",
+        blood: 6,
+        capacity: 8,
+        disciplines: { pre: "superior", dom: "superior", cel: "superior", pot: "superior" },
+      }),
+      makeMinion("MK", "Bob", { clan: "Malkavian", blood: 3 }),
+      makeMinion("VT", "Bob", { clan: "Ventrue" }),
+      makeMinion("LS", "Bob", { clan: "Lasombra" }),
+      makeMinion("PR", "Bob", { title: "primogen" }),
+      makeMinion("AN", "Bob", { sect: "anarch", disciplines: { pre: "basic" } }),
+    );
+    state.seats[1]!.hand.push(...CARDS.map((name, i) => ({ id: `r${i}`, name })));
+    return state;
+  }
+
+  const VOTE: [string, string] = ["Carol", "vote:N:against"];
+
+  it("the CONTROL: on a political action, all 18 are offered", () => {
+    const state = board();
+    state.seats[0]!.hand.push({ id: "au1", name: "Anarchist Uprising" });
+    const seen = drive(new VtesEngine(state, testRegistry), state, [CALL, VOTE]);
+    expect(resolved(state).passed).toBe(false);
+    for (const name of CARDS) expect(offered(seen, "Bob", `play:${name}:`), name).toBe(true);
+  });
+
+  it("in a blood hunt, none of them is — before the vote or after it", () => {
+    const state = board();
+    minion(state, "V1").sect = "anarch";
+    Object.assign(minion(state, "W"), { inTorpor: true, blood: 1, capacity: 3 });
+    const engine = new VtesEngine(state, testRegistry);
+    engine.choose("diablerize:V1:W");
+    const seen = drive(engine, state, [VOTE]);
+    expect(resolved(state).passed).toBe(false);
+    // Bob was asked in polling on both sides of Carol's vote.
+    const vote = seen.findIndex((s) => s.seat === "Carol" && s.ids.includes("vote:N:against"));
+    const bobPolls = (part: Seen[]) =>
+      part.some((s) => s.seat === "Bob" && s.window === "referendum.polling");
+    expect(bobPolls(seen.slice(0, vote))).toBe(true);
+    expect(bobPolls(seen.slice(vote + 1))).toBe(true);
+    for (const name of CARDS) expect(offered(seen, "Bob", `play:${name}:`), name).toBe(false);
+  });
+});
+
 describe("a referendum passing AUTOMATICALLY takes none of them [PIB 20150105]", () => {
   it("resolves with no polling decision at all, the four cards still in hand", () => {
     const state = votingGame();

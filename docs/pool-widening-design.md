@@ -1057,6 +1057,12 @@ did not hand the impulse back to the caller (p. 8): the rewind in
 were missing. And the Shrine never unlocked the calling vampire, because it
 looked only for an action frame. Details: `referendum-outcomes-design.md` §6.
 
+**Follow-up (0.11.52): no reaction card in a blood hunt (p. 35).** Malkavian
+Rider Clause was offered in a blood hunt, and so were other reactions: the
+rulebook bars every reaction there, and nothing enforced it. One filter,
+`notInBloodHunt`, now covers the polling step. Details:
+`referendum-outcomes-design.md` §7.
+
 ### Wave 109 — changing a vampire's votes (4 cards), 2026-10-24
 
 **Cards:** Pulling Strings and Kindred Coercion (T2, Dominate), Under the

@@ -3527,6 +3527,24 @@ export class VtesEngine implements EngineOps {
     );
   }
 
+  /** "This referendum is not an action, so it cannot be blocked, and action
+   *  modifiers and reaction cards cannot be played" (p. 35, the blood hunt).
+   *  Applied beside `notPlayedTwice` to every card option in a blood hunt's
+   *  polling step, spec and bespoke alike, and read off `costTypes`, the
+   *  printed type line every card answers. Not applied after resolution:
+   *  the one card played there in a blood hunt names it (Lay Low), and card
+   *  text wins (p. 16). docs/referendum-outcomes-design.md §7 */
+  private notInBloodHunt(rf: ReferendumFrame, options: LegalOption[]): LegalOption[] {
+    if (rf.variant !== "bloodHunt") return options;
+    return options.filter(
+      (o) =>
+        o.kind !== "playCard" ||
+        !(this.handler(o.name).costTypes?.(o.mode, o.params["variant"]) ?? []).some(
+          (t) => t === "reaction" || t === "actionModifier",
+        ),
+    );
+  }
+
   /** A vampire's votes so far in `rf`: the direction its first cast fixed
    *  for the whole group (p. 28; null before it casts, unless a card changed
    *  its votes), and how many it has
@@ -9754,7 +9772,10 @@ export class VtesEngine implements EngineOps {
             o.kind === "castVote" && decided ? { ...o, decided } : o,
           ),
           // Vote-granting cards and location abilities (p. 28).
-          ...this.notPlayedTwice(top, this.handlerOptions(seat, "referendum.polling")),
+          ...this.notPlayedTwice(
+            top,
+            this.notInBloodHunt(top, this.handlerOptions(seat, "referendum.polling")),
+          ),
           ...this.abilityOptionsFor(seat, "referendum.polling"),
         ]);
       }
