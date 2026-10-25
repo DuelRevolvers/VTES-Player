@@ -326,6 +326,20 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
         text: `${ev.seat} casts ${plural(ev.count, "vote")} ${ev.inFavor ? "for" : "against"}.`,
         weight: "normal",
       };
+    case "VampireAbstained":
+      return {
+        text:
+          `${M(ev.minion)} abstains` +
+          (ev.votesCancelled > 0 ? ` (${plural(ev.votesCancelled, "vote")} cancelled).` : "."),
+        weight: "normal",
+      };
+    case "VotesChanged":
+      return {
+        text:
+          `${M(ev.minion)}'s votes now go ${ev.inFavor ? "for" : "against"}` +
+          (ev.votesChanged > 0 ? ` (${plural(ev.votesChanged, "vote")} changed).` : "."),
+        weight: "normal",
+      };
     case "ReferendumResolved":
       return {
         text: `The referendum ${ev.passed ? "PASSES" : "fails"} (${ev.votesFor} for, ${ev.votesAgainst} against).`,

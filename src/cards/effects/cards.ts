@@ -7,7 +7,7 @@
  */
 
 import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, isReady, playOptionId, predatorOf, preyOf } from "../../engine/index.ts";
+import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, vampireMayVote, vampireVotes } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -2049,6 +2049,144 @@ export const cardSpecs: CardSpec[] = [
             callingMinionOnly: true,
             lockSelf: true,
             notWhenAutoPassing: true,
+          },
+        ],
+      },
+    ],
+  },
+  // --- Wave 109: changing a vampire's votes
+  //     (docs/vote-changing-design.md). Every one carries "cannot be used
+  //     during a referendum that is automatically passing" [PIB 20150105].
+  {
+    // "Only usable during a referendum.
+    //  [dom] Force a younger vampire to abstain. This can cancel that
+    //  vampire's votes and ballots.
+    //  [DOM] As above, but the affected vampire can be the same age or
+    //  older."
+    krcgId: 101516,
+    name: "Pulling Strings",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "dom",
+        effects: [{ kind: "forceAbstain", age: "younger", notWhenAutoPassing: true }],
+      },
+      {
+        level: "superior",
+        discipline: "dom",
+        effects: [{ kind: "forceAbstain", notWhenAutoPassing: true }],
+      },
+    ],
+  },
+  {
+    // "Only usable during a referendum before votes and ballots are cast.
+    //  [aus][pre] Choose a younger vampire. That vampire abstains.
+    //  [AUS][PRE] As above, and lock that vampire at the end of the action
+    //  if the referendum passes."
+    krcgId: 102064,
+    name: "Under the Skin",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: { all: ["aus", "pre"] },
+        effects: [
+          { kind: "forceAbstain", age: "younger", beforeVotesCast: true, notWhenAutoPassing: true },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: { all: ["aus", "pre"] },
+        effects: [
+          {
+            kind: "forceAbstain",
+            age: "younger",
+            beforeVotesCast: true,
+            lockOnPass: true,
+            notWhenAutoPassing: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable during a referendum.
+    //  [dom] Force X vampires to abstain. This can cancel those vampires'
+    //  votes and ballots. The affected vampires cannot be older than this
+    //  reacting vampire.
+    //  [DOM] As above, but you may change the votes and ballots that the
+    //  affected vampires cast to votes and ballots of your choice instead.
+    //  (The affected vampires may choose to abstain if they have not
+    //  already cast their votes and ballots.)"  Cost: X blood.
+    // The superior's per-target choice is the `kindredCoercion` handler's.
+    krcgId: 101049,
+    name: "Kindred Coercion",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "dom",
+        effects: [
+          { kind: "forceAbstain", age: "notOlder", xTargets: true, notWhenAutoPassing: true },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "dom",
+        effects: [
+          {
+            kind: "forceAbstain",
+            age: "notOlder",
+            xTargets: true,
+            changeInstead: true,
+            notWhenAutoPassing: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action.
+    //  [dom][pre] Ⓓ Choose a vampire and put this card in play. If this
+    //  action is successful, unlock the acting vampire at the end of the
+    //  turn. You may burn this card during a referendum to change the votes
+    //  and ballots of the chosen vampire to votes and ballots of your
+    //  choice.
+    //  [DOM][PRE] As above, and you can force the chosen vampire to cast
+    //  his or her votes and ballots when you burn this card."
+    // The burn is the `distantFriend` handler's; the "superior" tag is how
+    // the card in play remembers which version was played.
+    krcgId: 100559,
+    name: "Distant Friend",
+    cardType: "action",
+    bloodCost: 0,
+    successUnlocksActor: "endOfTurn",
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: { all: ["dom", "pre"] },
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "putInPlayOnSuccess", chooseVampire: true, tags: ["Distant Friend"] },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: { all: ["dom", "pre"] },
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "putInPlayOnSuccess",
+            chooseVampire: true,
+            tags: ["Distant Friend", "superior"],
           },
         ],
       },
@@ -24041,16 +24179,10 @@ const saulotsGuidingWisdom: CardHandler = {
         for (const t of s.minions) {
           if (t.kind !== "vampire" || !isReady(t)) continue;
           if (ref.abstaining?.includes(t.id)) continue;
-          // Nothing to take away from a vampire with no vote source and
-          // no vote cast. Votes a card gave it are a source of its own, and
-          // a cast records its vampire whatever the source
-          // (docs/vampire-votes-design.md §4.4).
-          const votes =
-            (t.title === null ? 0 : 1) +
-            t.attached.reduce((n, p) => n + (p.statics.votes ?? 0), 0);
-          if (votes <= 0 && !ref.minionVoteGrants?.[t.id] && !ref.votes.some((v) => v.minion === t.id)) {
-            continue;
-          }
+          // Nothing to take away from a vampire with nothing to cast, buy
+          // or take back — the one count, which this used to approximate
+          // from the title alone (docs/vote-changing-design.md §3.1).
+          if (!hasVoice(ctx.state, ref, t)) continue;
           out.push({
             id: `ability:Saulot's Guiding Wisdom:${entry.card.id}:abstain:${t.id}`,
             kind: "useAbility",
@@ -25900,6 +26032,137 @@ const disarmingPresence: CardHandler = {
   },
 };
 
+/** The referendum a choice frame was raised inside, if any. */
+function referendumOf(state: GameState): Extract<GameState["frames"][number], { kind: "referendum" }> | null {
+  for (let i = state.frames.length - 1; i >= 0; i--) {
+    const f = state.frames[i];
+    if (f && f.kind === "referendum") return f;
+  }
+  return null;
+}
+
+/** Which way a vampire's group goes now: a direction a card fixed, else its
+ *  first cast, else null (`voteGroup`'s reading, docs/vote-changing-design.md
+ *  §2). Turning a group the way it already goes changes nothing, so the
+ *  vote-changing cards do not offer it. */
+function groupDirection(
+  rf: NonNullable<ReturnType<typeof referendumOf>>,
+  minion: MinionId,
+): boolean | null {
+  return rf.votesChangedTo?.[minion] ?? rf.votes.find((v) => v.minion === minion)?.inFavor ?? null;
+}
+
+/**
+ * Kindred Coercion (101049) superior — "you may change the votes and ballots
+ * that the affected vampires cast to votes and ballots of your choice
+ * instead." The play, its X targets and its basic abstain compile from the
+ * spec; what happens to each target is the card's effect, asked at
+ * resolution, one choice frame per target (docs/vote-changing-design.md §2).
+ * "Abstain" is the basic effect and always available; a direction is offered
+ * only if it changes something.
+ */
+const kindredCoercion: CardHandler = {
+  ...compileSpec(specByName("Kindred Coercion")),
+  choiceOptions(frame, state) {
+    if (frame.key !== "coerce") return [];
+    const rf = referendumOf(state);
+    const t = findMinion(state, frame.params["target"] ?? "");
+    if (!rf || !t) return [];
+    const out: LegalOption[] = [
+      {
+        id: `choice:Kindred Coercion:${frame.cardId}:coerce:abstain`,
+        kind: "answerChoice",
+        label: `Kindred Coercion: ${t.name} abstains`,
+        params: { answer: "abstain" },
+      },
+    ];
+    const now = groupDirection(rf, t.id);
+    for (const inFavor of [true, false]) {
+      if (now === inFavor) continue;
+      const dir = inFavor ? "for" : "against";
+      out.push({
+        id: `choice:Kindred Coercion:${frame.cardId}:coerce:${dir}`,
+        kind: "answerChoice",
+        label: `Kindred Coercion: ${t.name}'s votes go ${dir}`,
+        params: { answer: dir },
+      });
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    const target = frame.params["target"];
+    if (!target || !findMinion(ops.state, target)) return;
+    const answer = choice.params["answer"];
+    if (answer === "abstain") ops.forceAbstain(target);
+    else ops.changeVotes(target, answer === "for");
+  },
+};
+
+/**
+ * Distant Friend (100559) — the action and its trip into play compile from
+ * the spec (`putInPlayOnSuccess.chooseVampire`, which writes the chosen
+ * vampire on the entry). This is the other half: "You may burn this card
+ * during a referendum to change the votes and ballots of the chosen vampire
+ * to votes and ballots of your choice"; superior adds "you can force the
+ * chosen vampire to cast his or her votes and ballots when you burn this
+ * card".
+ *
+ * Any referendum, its controller's to use, never one passing automatically
+ * [PIB 20150105]. If the chosen vampire has left play the card stays and the
+ * burn is not offered (owner ruling 2026-10-24). A direction is offered only
+ * if it changes something, and the forced cast only if the vampire has votes
+ * it may still cast that way. docs/vote-changing-design.md
+ */
+const distantFriend: CardHandler = {
+  ...compileSpec(specByName("Distant Friend")),
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "referendum.polling") return [];
+    const ref = ctx.referendum;
+    if (!ref || ref.autoPass || ctx.seat !== (entry.controller ?? owner.seat)) return [];
+    const t = entry.chosenMinion ? findMinion(ctx.state, entry.chosenMinion) : null;
+    if (!t || !isReady(t) || ref.abstaining?.includes(t.id)) return [];
+    if (!hasVoice(ctx.state, ref, t)) return [];
+    const now = groupDirection(ref, t.id);
+    const superior = entry.tags.includes("superior");
+    // What the vampire could still cast from its own source, each way.
+    const own = vampireVotes(ctx.state, ref, t);
+    const cast = ref.votes
+      .filter((v) => v.minion === t.id && v.source === t.id)
+      .reduce((n, v) => n + v.count, 0);
+    const out: LegalOption[] = [];
+    for (const inFavor of [true, false]) {
+      const dir = inFavor ? "for" : "against";
+      if (now !== inFavor) {
+        out.push({
+          id: `ability:Distant Friend:${entry.card.id}:${dir}`,
+          kind: "useAbility",
+          label: `Distant Friend: burn it — ${t.name}'s votes go ${dir}`,
+          source: entry.card.id,
+          params: { dir },
+        });
+      }
+      const left = own.votes + (inFavor ? own.for : own.against) - cast;
+      if (superior && left > 0 && vampireMayVote(ref, t)) {
+        out.push({
+          id: `ability:Distant Friend:${entry.card.id}:${dir}:cast`,
+          kind: "useAbility",
+          label: `Distant Friend: burn it — ${t.name} casts ${left} ${dir}`,
+          source: entry.card.id,
+          params: { dir, cast: "1" },
+        });
+      }
+    }
+    return out;
+  },
+  useAbility(entry, _owner, choice, ops) {
+    const target = entry.chosenMinion;
+    ops.burnPermanent(entry.card.id);
+    if (target && findMinion(ops.state, target)) {
+      ops.changeVotes(target, choice.params["dir"] === "for", choice.params["cast"] === "1");
+    }
+  },
+};
+
 /**
  * The Anarch Free Press (100052) — the intercept clause compiles from the
  * spec; the hunt clause is the bespoke half.
@@ -26852,6 +27115,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     tribunalJudgment,
     emissary,
     disarmingPresence,
+    kindredCoercion,
+    distantFriend,
   ]) {
     registry[bespoke.name] = bespoke;
   }

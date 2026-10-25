@@ -203,11 +203,10 @@ number its previous turn began, so "since your last turn" can be checked
 ### 5.1 Deferred
 
 - **Kindred Coercion and Distant Friend:** both change a vampire's cast
-  votes to the other direction. They need §4.5's group and are the natural
-  next wave.
-- **Confusion of the Eye, Pulling Strings and Under the Skin:** abstain
-  cards. After this wave a vampire's granted votes can't escape them, so
-  they become T2 candidates.
+  votes to the other direction. **Built in wave 109** with Pulling Strings
+  and Under the Skin (`vote-changing-design.md`).
+- **Confusion of the Eye:** still deferred. Its basic level reduces a bleed
+  and shares no mechanic with the abstain cards.
 - **Knotted Cord:** it requires an infernal vampire, and the V5 crypt has
   none. It would be inert (§0).
 

@@ -295,6 +295,30 @@ export type EffectPrimitive =
        *  rather than applied to every abstain, because the two V5 cards
        *  using this effect do not print the ruling. */
       notWhenAutoPassing?: boolean;
+      /** The target's age against the minion PLAYING the card — the
+       *  reactor, or the acting vampire for a modifier. "younger": strictly
+       *  smaller capacity (Pulling Strings, Under the Skin); "notOlder":
+       *  smaller or equal, so the player qualifies ("cannot be older than
+       *  this reacting vampire", Kindred Coercion). */
+      age?: "younger" | "notOlder";
+      /** "Only usable during a referendum BEFORE votes and ballots are
+       *  cast" (Under the Skin). */
+      beforeVotesCast?: boolean;
+      /** "…and lock that vampire at the end of the action if the
+       *  referendum passes" (Under the Skin superior) — a `postTally`
+       *  rider. Its lock lands whether or not the vampire could vote, so
+       *  a voiceless vampire is not a futile target for it. */
+      lockOnPass?: boolean;
+      /** "Force X vampires to abstain", Cost: X blood (Kindred Coercion) —
+       *  the targets are chosen as it is played, as unordered
+       *  combinations, and X (= how many) rides in the `xBlood` param the
+       *  engine charges at the play. */
+      xTargets?: boolean;
+      /** "…you may change the votes and ballots that the affected vampires
+       *  cast to votes and ballots of your choice instead" (Kindred
+       *  Coercion superior) — asked per target at resolution, by the card's
+       *  own choice frames. docs/vote-changing-design.md §2 */
+      changeInstead?: boolean;
     }
   /** "Cancel the referendum. If you played a political action card to call
    *  this referendum, return it to its owner's hand" (Telepathic Vote
@@ -438,7 +462,17 @@ export type EffectPrimitive =
   /** "+1 stealth action. Put this card in play with N counters" (Under
    *  Siege and many counter actions) — the card becomes a seat-level
    *  permanent on a successful action instead of being burned. */
-  | { kind: "putInPlayOnSuccess"; counters?: number; tags?: string[]; locked?: boolean }
+  | {
+      kind: "putInPlayOnSuccess";
+      counters?: number;
+      tags?: string[];
+      locked?: boolean;
+      /** "Ⓓ Choose a vampire and put this card in play" (Distant Friend) —
+       *  the vampire is picked at announcement (p. 25), names the action's
+       *  target for directedness, and is written on the entry as
+       *  `chosenMinion`. docs/vote-changing-design.md §1 */
+      chooseVampire?: boolean;
+    }
   /**
    * "Ⓓ Diablerize a vampire in torpor" (Cloak of Blood, Stealing Years) —
    * the diablerie ACTION as a card, where the engine's own `diablerize:`

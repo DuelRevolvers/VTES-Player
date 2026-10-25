@@ -20,6 +20,7 @@ import type {
   PermanentStatics,
   PlayCostCardType,
   PlayCostMod,
+  ReferendumFrame,
   SeatId,
 } from "./state.ts";
 import type { HandlerRegistry } from "./handlers.ts";
@@ -27,7 +28,7 @@ import type { HandlerRegistry } from "./handlers.ts";
 // in this module is asked about a minion that may have left play mid-action
 // or mid-combat, and a throw from here surfaces as a game that cannot be
 // answered rather than as an error anyone can act on.
-import { findMinion, getSeat, isReady, mustHunt } from "./state.ts";
+import { TITLE_VOTES, findMinion, getSeat, isReady, mustHunt } from "./state.ts";
 
 /**
  * A vampire's capacity, including cards that raise it (the Discipline
@@ -1762,4 +1763,170 @@ export function cardRequiresDiscipline(
   return modes.some((m) =>
     (h.requiresDisciplines?.(m, undefined) ?? []).some((d) => disciplines.includes(d)),
   );
+}
+
+/**
+ * How many votes this vampire has in `rf` — THE count. `votes` may go
+ * either way; `for` and `against` may go only that way (a directed grant,
+ * Protected District; Jason Newberry's "+2 when casting against a blood
+ * hunt"). It is not the vampire's MAY-vote: the bars are `vampireMayVote`.
+ *
+ * One function because the question was asked three ways and all three
+ * disagreed: the polling step counted everything, the abstain enumerator
+ * asked only the title and the grants, and Saulot's Guiding Wisdom only the
+ * title and `statics.votes` — so a titleless vampire with a rider or an aura
+ * vote could cast votes nobody could make it abstain from.
+ * docs/vote-changing-design.md §3.1
+ */
+export function vampireVotes(
+  state: GameState,
+  rf: ReferendumFrame,
+  m: MinionState,
+): { votes: number; for: number; against: number } {
+  // Votes come from a printed title AND from cards that grant them
+  // (Saulot's Guiding Wisdom represents "a unique Independent title worth
+  // 2 votes", which is not one of the eleven VampireTitles).
+  const cardVotes = m.attached.reduce((n, p) => n + (p.statics.votes ?? 0), 0);
+  const titleVotes = m.title === null ? 0 : TITLE_VOTES[m.title];
+  // Global vote statics ("titled Brujah get +1 vote, Ventrue get −1",
+  // New Carthage). CLAMPED at zero: a negative subtracts a Ventrue's
+  // votes, it never hands their opponents votes against
+  // (docs/politics-locations-design.md §2).
+  // "Vampires who do not follow the Path of X get −1 vote" (Absolute
+  // Tyranny superior) — scoped to this referendum, and clamped by the
+  // same Math.max: a negative takes votes away, it never hands the
+  // other side votes against (docs/path-cards-design.md §4).
+  const refMod = (rf.voteModifiers ?? []).reduce((n, v) => {
+    if (v.exceptPath !== undefined && m.path === v.exceptPath) return n;
+    // "Non-Anarch TITLES are worth -1 vote" (Fee Stake): a vampire
+    // with no title has no title to devalue, and the clamp below is
+    // what keeps a negative from handing anyone votes against.
+    if (v.titledOnly && m.title == null) return n;
+    if (v.notSect !== undefined && m.sect === v.notSect) return n;
+    return n + v.amount;
+  }, 0);
+  // "While this Anarch is Toreador, they get +1 vote during
+  // referendums THEY CALL" (Fee Stake: Boston/New York/Seattle) —
+  // scoped to the calling vampire, which is a question only the
+  // referendum frame can answer, so it cannot be a ConditionalStatic.
+  const callerBonus =
+    rf.callingMinion === m.id
+      ? m.attached.reduce((n, p) => {
+          const c = p.statics.votesWhenCalling;
+          if (!c) return n;
+          if (c.bearerClan && (m.clan === null || !c.bearerClan.includes(m.clan))) return n;
+          return n + c.amount;
+        }, 0)
+      : 0;
+  // "In the resulting blood hunt referendum, this vampire gets an
+  // additional 2 votes" / "each anarch gets an additional vote" (Cloak of
+  // Blood, Stealing Years) — counted INTO the total, not added after it.
+  // The skip in the polling step means "this vampire has no voice"; a
+  // rider that GIVES a titleless vampire a voice has to be inside the sum,
+  // or the skip throws it away first (docs/torpor-prey-design.md §4).
+  const referendumRider = (rf.extraVotes ?? []).reduce((n, r) => {
+    if (r.minion !== undefined && r.minion !== m.id) return n;
+    if (r.sect !== undefined && m.sect !== r.sect) return n;
+    // "Each <clan> / each cardinal gets +1 vote" — read now, so a
+    // vampire that left the ready region has lost it.
+    if (r.clan !== undefined && (m.kind !== "vampire" || m.clan !== r.clan)) return n;
+    if (r.title !== undefined && (m.kind !== "vampire" || m.title !== r.title)) return n;
+    return n + r.amount;
+  }, 0);
+  // Votes a card gave THIS vampire are its own, cast with the rest of
+  // its group [p. 47, Bewitching Oration]. docs/vampire-votes-design.md §4.3
+  const granted = rf.minionVoteGrants?.[m.id];
+  const votes = Math.max(
+    0,
+    titleVotes +
+      cardVotes +
+      auraBonus(state, m, "votes") +
+      // "While you control 1 or more locations, Neserian gets +1
+      // vote" — a crypt card's conditional static, board-conditioned.
+      conditionalStaticNoAction(state, m, "votes") +
+      refMod +
+      callerBonus +
+      referendumRider +
+      (granted?.any ?? 0),
+  );
+  // Votes that may go only ONE way: a directed grant ("+3 votes
+  // against", Protected District) and "+2 votes when casting votes
+  // AGAINST blood hunt referendums" (Jason Newberry). Kept apart from the
+  // count rather than folded in (docs/crypt-wave-6.md §1).
+  const bonus = { for: granted?.for ?? 0, against: granted?.against ?? 0 };
+  for (const p of m.attached) {
+    const vb = p.statics.voteBonus;
+    if (!vb) continue;
+    if (vb.variant !== undefined && vb.variant !== rf.variant) continue;
+    if (vb.direction !== "against") bonus.for += vb.amount;
+    if (vb.direction !== "for") bonus.against += vb.amount;
+  }
+  return { votes, for: bonus.for, against: bonus.against };
+}
+
+/** May this vampire cast votes in `rf` at all? Every bar on a VAMPIRE
+ *  casting, in one place, so its title votes, the votes cards gave it and
+ *  the votes it buys cannot disagree (p. 28: they are one group). Here
+ *  rather than in the engine so a card offering to change a vampire's votes
+ *  asks the same bars (docs/vote-changing-design.md §3.1).
+ *  docs/vampire-votes-design.md §4.3 */
+export function vampireMayVote(rf: ReferendumFrame, m: MinionState): boolean {
+  // "A minion's votes and ballots can be used only when the minion is
+  // ready" (p. 28).
+  if (!isReady(m)) return false;
+  // Forced to abstain this referendum (Scalpel Tongue, Telepathic Vote
+  // Counting) — separate from usedSources, which means "spent".
+  if (rf.abstaining?.includes(m.id)) return false;
+  // "…or cast votes or ballots this turn" (Expulsion).
+  if (m.expelledThisTurn) return false;
+  // "This vampire cannot cast votes or ballots" (Detection) — the same
+  // bar with no expiry, carried by a card on the vampire
+  // (docs/pay-to-unlock-design.md §4).
+  if (m.attached.some((p) => p.statics.cannotCastVotes)) return false;
+  // "This vampire may not cast votes or ballots during a referendum to
+  // call a blood hunt ON THIS VAMPIRE" (The Hunt Club) — the same bar,
+  // scoped to one referendum, so it is read HERE where the frame is in
+  // hand rather than as an unconditional static.
+  // docs/blood-hunt-answers-design.md §3
+  if (
+    rf.variant === "bloodHunt" &&
+    rf.bloodHuntTarget === m.id &&
+    m.attached.some((p) => p.statics.cannotCastVotesInOwnBloodHunt)
+  ) {
+    return false;
+  }
+  // "Non-<sect> vampires cannot cast votes or ballots" (p. 28).
+  if (rf.voteRestriction && m.sect !== rf.voteRestriction.sect) return false;
+  // "CAMARILLA vampires cannot cast votes or ballots during this
+  // referendum" (Investiture) — the inverse gate, beside its sibling.
+  // Like it, it bars VAMPIRES casting; the Edge, the calling card and a
+  // Methuselah's card-granted votes are untouched.
+  if (rf.voteBan && m.sect === rf.voteBan.sect) return false;
+  return true;
+}
+
+/** May this vampire buy votes from this blood-vote offer now (Mob Rule,
+ *  Rant!)? The one spelling of the offer's own conditions, read by the
+ *  polling step and by `hasVoice`. */
+export function bloodVoteOfferFor(
+  rf: ReferendumFrame,
+  offer: NonNullable<ReferendumFrame["bloodVoteOffers"]>[number],
+  m: MinionState,
+): boolean {
+  if (!isReady(m) || m.kind !== "vampire" || m.blood < 1) return false;
+  if (offer.minCapacity !== undefined && capacityOf(m) <= offer.minCapacity) return false;
+  if (offer.sect !== undefined && m.sect !== offer.sect) return false;
+  const spent = rf.bloodVotesBought?.[m.id] ?? 0;
+  return !(offer.maxBloodPerMinion !== undefined && spent >= offer.maxBloodPerMinion);
+}
+
+/** Has this vampire anything to abstain FROM, or to change — votes it
+ *  could cast, votes it could buy, or votes it has cast? A vampire with
+ *  none of the three is a futile target (docs/futile-options-design.md).
+ *  Not the bars: a vampire barred from voting may still have cast. */
+export function hasVoice(state: GameState, rf: ReferendumFrame, m: MinionState): boolean {
+  if (rf.votes.some((v) => v.minion === m.id)) return true;
+  const v = vampireVotes(state, rf, m);
+  if (v.votes + Math.max(v.for, v.against) > 0) return true;
+  return (rf.bloodVoteOffers ?? []).some((o) => bloodVoteOfferFor(rf, o, m));
 }

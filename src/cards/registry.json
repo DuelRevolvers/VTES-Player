@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-24T21:36:38.144Z",
+ "fetchedAt": "2026-10-25T02:30:16.657Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -4428,6 +4428,30 @@
    },
    "supported": true
   },
+  "100559": {
+   "card": {
+    "kind": "library",
+    "id": 100559,
+    "name": "Distant Friend",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "dom",
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action.\n[dom][pre] Ⓓ Choose a vampire and put this card in play. If this action is successful, unlock the acting vampire at the end of the turn. You may burn this card during a referendum to change the votes and ballots of the chosen vampire to votes and ballots of your choice.\n[DOM][PRE] As above, and you can force the chosen vampire to cast his or her votes and ballots when you burn this card.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/distantfriend.jpg",
+    "sets": [
+     "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
   "100560": {
    "card": {
     "kind": "library",
@@ -8446,6 +8470,32 @@
     "sets": [
      "Ancient Hearts"
     ]
+   },
+   "supported": true
+  },
+  "101049": {
+   "card": {
+    "kind": "library",
+    "id": 101049,
+    "name": "Kindred Coercion",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "dom"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum.\n[dom] Force X vampires to abstain. This can cancel those vampires' votes and ballots. The affected vampires cannot be older than this reacting vampire.\n[DOM] As above, but you may change the votes and ballots that the affected vampires cast to votes and ballots of your choice instead. (The affected vampires may choose to abstain if they have not already cast their votes and ballots.)",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/kindredcoercion.jpg",
+    "sets": [
+     "Dark Sovereigns",
+     "Final Nights",
+     "Camarilla Edition"
+    ],
+    "rawCost": "X"
    },
    "supported": true
   },
@@ -12618,6 +12668,31 @@
    },
    "supported": true
   },
+  "101516": {
+   "card": {
+    "kind": "library",
+    "id": 101516,
+    "name": "Pulling Strings",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "dom"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum.\n[dom] Force a younger vampire to abstain. This can cancel that vampire's votes and ballots.\n[DOM] As above, but the affected vampire can be the same age or older.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/pullingstrings.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
+    ]
+   },
+   "supported": true
+  },
   "101523": {
    "card": {
     "kind": "library",
@@ -16486,6 +16561,30 @@
     "image": "https://static.krcg.org/card/undersiege.jpg",
     "sets": [
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "102064": {
+   "card": {
+    "kind": "library",
+    "id": 102064,
+    "name": "Under the Skin",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [
+     "aus",
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum before votes and ballots are cast.\n[aus][pre] Choose a younger vampire. That vampire abstains.\n[AUS][PRE] As above, and lock that vampire at the end of the action if the referendum passes.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/undertheskin.jpg",
+    "sets": [
+     "Black Hand"
     ]
    },
    "supported": true

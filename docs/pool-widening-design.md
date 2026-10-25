@@ -1006,6 +1006,44 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 109 — changing a vampire's votes (4 cards), 2026-10-24
+
+**Cards:** Pulling Strings and Kindred Coercion (T2, Dominate), Under the
+Skin and Distant Friend (T2, Auspex/Dominate + Presence combos). Design and
+owner rulings: `vote-changing-design.md`. Version 0.11.49.
+
+**The mechanic.** Wave 108's vote groups made "change the votes of a
+vampire" expressible: `ops.changeVotes` turns every cast of the vampire and
+writes `rf.votesChangedTo`, which `voteGroup` reads first, so the votes it
+has NOT cast are bound too — Kindred Coercion's ruling [RTR 19991001],
+applied to Distant Friend because it prints the same sentence. Distant
+Friend's superior forced cast goes through the ordinary cast path
+(`castVoteInto`), so a toll is paid and a lock-on-vote fires.
+
+**Defect 1 — "has a vote" was asked three ways.** The abstain enumerator
+looked at the title and the grants; Saulot's Guiding Wisdom at the title and
+`statics.votes`; the polling step counted everything. A titleless vampire
+with a rider, an aura or a conditional vote could vote and could not be made
+to abstain. One count now: `vampireVotes`, plus `hasVoice` and
+`bloodVoteOfferFor`, all in `derived.ts`. `vampireMayVote` moved there too.
+
+**Defect 2 — the same reaction twice in one referendum.** p. 24's
+once-per-action record lives on the action frame, which has popped by the
+time its referendum polls, so nothing stopped one vampire playing Conflict
+of Interests twice. The referendum frame now carries `played`, seeded from
+the action's, and the engine filters the referendum windows' card options
+against it — spec and bespoke handlers alike.
+
+**New kernel pieces:**
+- A generic `xBlood` play param, paid at the play (a canceled non-action
+  card still pays, p. 16) — Kindred Coercion's "Cost: X blood".
+- `PermanentInPlay.chosenMinion`, carried on `PermanentEnteredPlay`, and
+  `putInPlayOnSuccess.chooseVampire` taught in all three places a target is
+  (`targetRider`, the enumerator, the params switch).
+- The `lockOnPass` post-tally rider (Under the Skin superior).
+- The `VotesChanged` event, narrated, and a narration for `VampireAbstained`,
+  which had none.
+
 ### Wave 108 — a vampire's votes are one group (4 cards), 2026-10-24
 
 **Cards:** Traditionalist, Tribunal Judgment and Emissary (T1), and

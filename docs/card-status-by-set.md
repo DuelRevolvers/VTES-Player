@@ -1,6 +1,6 @@
 # Card status by set
 
-> **Generated 2026-10-24 from `data/vtes-raw.json` and `src/cards/registry.json`** by
+> **Generated 2026-10-25 from `data/vtes-raw.json` and `src/cards/registry.json`** by
 > the script in this doc's footer. Re-run it rather than editing the numbers.
 > A card printed in several sets is counted in each of them; the totals row
 > counts unique cards.
@@ -29,28 +29,28 @@
 
 | Set                                      | Cards | Built |  Built % | Whole, no build | In pool % |   T1 |   T2 |   T3 | §7 gate | §7 build | Imbued |
 | ---------------------------------------- | ----: | ----: | -------: | --------------: | --------: | ---: | ---: | ---: | ------: | -------: | -----: |
-| Jyhad (1994)                             |   437 |   242 |  **55%** |               0 |       55% |   57 |   27 |    0 |      54 |       57 |      0 |
-| Vampire: The Eternal Struggle (1995)     |   436 |   242 |  **56%** |               0 |       56% |   56 |   27 |    0 |      54 |       57 |      0 |
-| Dark Sovereigns (1995)                   |   173 |    50 |  **29%** |               0 |       29% |   48 |    6 |   18 |      11 |       40 |      0 |
+| Jyhad (1994)                             |   437 |   243 |  **56%** |               0 |       56% |   57 |   26 |    0 |      54 |       57 |      0 |
+| Vampire: The Eternal Struggle (1995)     |   436 |   243 |  **56%** |               0 |       56% |   56 |   26 |    0 |      54 |       57 |      0 |
+| Dark Sovereigns (1995)                   |   173 |    51 |  **29%** |               0 |       29% |   48 |    5 |   18 |      11 |       40 |      0 |
 | 1996 Promo (1996)                        |     2 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       1 |        1 |      0 |
 | Ancient Hearts (1996)                    |   179 |    46 |  **26%** |               0 |       26% |   41 |   13 |   24 |      16 |       39 |      0 |
 | Sabbat (1996)                            |   410 |   173 |  **42%** |               0 |       42% |   72 |   26 |   29 |      48 |       62 |      0 |
 | Sabbat War (2000)                        |   437 |   199 |  **46%** |               0 |       46% |   72 |   26 |   41 |      40 |       59 |      0 |
 | Final Nights promo (2001)                |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
-| Final Nights (2001)                      |   386 |   124 |  **32%** |               0 |       32% |   56 |   21 |   79 |      22 |       84 |      0 |
+| Final Nights (2001)                      |   386 |   125 |  **32%** |               0 |       32% |   56 |   20 |   79 |      22 |       84 |      0 |
 | Bloodlines promo (2001)                  |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Bloodlines (2001)                        |   196 |     4 |   **2%** |               0 |        2% |   33 |    7 |   89 |       4 |       59 |      0 |
 | Winter 2002 Storyline promo (2002)       |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
 | Camarilla Edition promo (2002)           |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Sabbat War promo (2002)                  |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
-| Camarilla Edition (2002)                 |   547 |   273 |  **50%** |               0 |       50% |   72 |   37 |   11 |      46 |      108 |      0 |
+| Camarilla Edition (2002)                 |   547 |   275 |  **50%** |               0 |       50% |   72 |   35 |   11 |      46 |      108 |      0 |
 | Fall 2002 Storyline promo (2002)         |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
 | 2003 Tournament promo (2002)             |     1 |     1 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | Anarchs promo (2003)                     |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Anarchs (2003)                           |   260 |   118 |  **45%** |               0 |       45% |   46 |   13 |    1 |      21 |       61 |      0 |
 | Summer 2003 Storyline promo (2003)       |     2 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        1 |      0 |
 | Black Hand promo (2003)                  |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
-| Black Hand (2003)                        |   286 |    87 |  **30%** |               0 |       30% |   71 |   24 |   14 |      27 |       63 |      0 |
+| Black Hand (2003)                        |   286 |    88 |  **31%** |               0 |       31% |   71 |   23 |   14 |      27 |       63 |      0 |
 | Prophecies league promo (2004)           |     2 |     1 |  **50%** |               0 |       50% |    1 |    0 |    0 |       0 |        0 |      0 |
 | 2004 promo (2004)                        |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
 | Gehenna promo (2004)                     |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
@@ -59,7 +59,7 @@
 | Tenth Anniversary (2004)                 |   190 |    14 |   **7%** |               0 |        7% |   33 |    3 |    4 |      60 |       76 |      0 |
 | Kindred Most Wanted promo (2005)         |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | 2005 Tournament promo (2005)             |     2 |     0 |   **0%** |               0 |        0% |    2 |    0 |    0 |       0 |        0 |      0 |
-| Kindred Most Wanted (2005)               |   314 |   110 |  **35%** |               0 |       35% |   63 |   22 |   36 |      18 |       65 |      0 |
+| Kindred Most Wanted (2005)               |   314 |   111 |  **35%** |               0 |       35% |   63 |   21 |   36 |      18 |       65 |      0 |
 | Legacies of Blood promo (2005)           |     2 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        2 |      0 |
 | 2005 Storyline promo (2005)              |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
 | Legacies of Blood (2005)                 |   461 |    96 |  **21%** |               0 |       21% |  123 |   19 |  124 |      24 |       75 |      0 |
@@ -139,16 +139,16 @@
 | ★ Sabbat V5 (2025)                       |   146 |   124 |  **85%** |              22 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2025 European GP Promo (2025)            |     1 |     0 |   **0%** |               0 |        0% |    0 |    1 |    0 |       0 |        0 |      0 |
 | Print on Demand                          |   943 |    64 |   **7%** |               0 |        7% |  138 |    3 |  302 |      88 |      348 |      0 |
-| **All unique cards**                     |  4149 |  1004 |  **24%** |             118 |       27% |  811 |  163 |  485 |     386 |     1162 |     20 |
+| **All unique cards**                     |  4149 |  1008 |  **24%** |             118 |       27% |  811 |  159 |  485 |     386 |     1162 |     20 |
 
 ## Totals
 
 |                                            |    Cards |    % |
 | ------------------------------------------ | -------: | ---: |
-| Built                                      |     1004 |  24% |
+| Built                                      |     1008 |  24% |
 | Whole, no build (V5 crypt)                 |      118 |   3% |
 | Planned T1 (library, no discipline)        |      811 |  20% |
-| Planned T2 (library, pool disciplines)     |      163 |   4% |
+| Planned T2 (library, pool disciplines)     |      159 |   4% |
 | Planned T3 (library, legacy discipline)    |      485 |  12% |
 | Planned §7 gate (legacy vampire, whole)    |      386 |   9% |
 | Planned §7 build (legacy vampire, ability) |     1162 |  28% |
@@ -259,7 +259,7 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Gangrel                         | Anarchs               | 2003 |    12 |      77 |       **74%** | yes         | —                             |
 | Malkavian antitribu             | Black Hand            | 2003 |    12 |      77 |       **51%** | yes         | —                             |
 | Nosferatu antitribu             | Black Hand            | 2003 |    12 |      77 |       **65%** | yes         | —                             |
-| Toreador antitribu              | Black Hand            | 2003 |    12 |      77 |       **60%** | yes         | —                             |
+| Toreador antitribu              | Black Hand            | 2003 |    12 |      77 |       **62%** | yes         | —                             |
 | Tremere antitribu               | Black Hand            | 2003 |    12 |      77 |       **64%** | yes         | —                             |
 | Alastors                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **66%** | yes         | —                             |
 | Anathema                        | Kindred Most Wanted   | 2005 |    12 |      77 |       **65%** | yes         | —                             |

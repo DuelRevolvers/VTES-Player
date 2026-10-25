@@ -599,6 +599,11 @@ export interface EngineOps {
   /** "Force a vampire to abstain (this cancels their votes and ballots)" —
    *  removes votes already cast AND bars them from casting again. */
   forceAbstain(minion: MinionId): void;
+  /** "Change the votes and ballots of a vampire to votes and ballots of
+   *  your choice" — turns its cast votes and fixes its direction;
+   *  `forceCast` also casts its group now (Distant Friend superior).
+   *  docs/vote-changing-design.md §2 */
+  changeVotes(minion: MinionId, inFavor: boolean, forceCast?: boolean): void;
   /** "Cancel the referendum" — it never resolves, and the calling card
    *  goes back to its owner's hand rather than burning. */
   cancelReferendum(): void;
@@ -1352,8 +1357,14 @@ export interface CardHandler {
    * and the handler is registered if ANY mode does — so the answer has to
    * be per mode or the other mode silently leaves a permanent behind.
    */
-  putsInPlayOnSuccess?(mode: DisciplineLevel | null): {
+  putsInPlayOnSuccess?(
+    mode: DisciplineLevel | null,
+    params?: Record<string, string>,
+  ): {
     counters?: number;
+    /** "Choose a vampire and put this card in play" (Distant Friend) — the
+     *  vampire chosen at announcement, read from `params`. */
+    chosenMinion?: MinionId;
     tags: string[];
     /** Statics the card grants while it sits there ("your prey plays with
      *  an open hand", Revelations superior). Hard-coded empty until

@@ -1397,6 +1397,11 @@ export interface PermanentInPlay {
    *  a minion IN PLAY and every reader of it assumes so.
    *  docs/uncontrolled-graduation-design.md §2 */
   linkedUncontrolled?: MinionId;
+  /** The vampire a seat-level card was played ABOUT — "choose a vampire and
+   *  put this card in play" (Distant Friend). Its own field rather than
+   *  `linkedMinion`, which a card put in play by an action already spends on
+   *  the ACTOR. docs/vote-changing-design.md §1 */
+  chosenMinion?: MinionId;
   /** Face up (public) or face down — the owner may look at them at any
    *  time, nobody else may (Shilmulo Tarot). Masked in `redactFor`. */
   storedFaceUp?: boolean;
@@ -1809,7 +1814,7 @@ export type GameEvent =
    */
   | { type: "CardsRevealed"; to: SeatId; cards: CardInstanceId[] }
   // Influence phase (p. 35–36) and torpor transitions.
-  | { type: "PermanentEnteredPlay"; seat: SeatId; cardId: CardInstanceId; name: string; attachedTo: MinionId | null; statics: PermanentStatics; tags: string[]; life?: number; counters?: number; aura?: PermanentAura; auras?: PermanentAura[]; costSource?: PermanentCostSource; counterSink?: PermanentCounterSink; controller?: SeatId; preventsUnlock?: MinionId; unblockable?: { minion: MinionId; exceptBleed?: boolean }; againstSeat?: SeatId; linkedMinion?: MinionId }
+  | { type: "PermanentEnteredPlay"; seat: SeatId; cardId: CardInstanceId; name: string; attachedTo: MinionId | null; statics: PermanentStatics; tags: string[]; life?: number; counters?: number; aura?: PermanentAura; auras?: PermanentAura[]; costSource?: PermanentCostSource; counterSink?: PermanentCounterSink; controller?: SeatId; preventsUnlock?: MinionId; unblockable?: { minion: MinionId; exceptBleed?: boolean }; againstSeat?: SeatId; linkedMinion?: MinionId; chosenMinion?: MinionId }
   | { type: "CountersChanged"; cardId: CardInstanceId; delta: number }
   /** `removed`: the card leaves play WITHOUT reaching the ash heap —
    *  "removed from the game … cannot be retrieved or affected in any way"
@@ -1936,6 +1941,9 @@ export type GameEvent =
   | { type: "CardReturnedToHand"; cardId: CardInstanceId; name: string; seat: SeatId }
   /** "Force a vampire to abstain (this cancels their votes and ballots)". */
   | { type: "VampireAbstained"; actionId: ActionId; minion: MinionId; votesCancelled: number }
+  /** A card turned this vampire's votes (Distant Friend, Kindred Coercion
+   *  superior); `votesChanged` is how many already cast changed side. */
+  | { type: "VotesChanged"; actionId: ActionId; minion: MinionId; inFavor: boolean; votesChanged: number }
   /** The referendum stopped without resolving — no result, no effects, and
    *  the calling card is NOT burned. Distinct from failing. */
   | { type: "ReferendumCancelled"; actionId: ActionId; cardName: string }
@@ -3657,6 +3665,17 @@ export interface ReferendumFrame {
    *  voted has nothing spent but may still be made to abstain.
    *  docs/abstain-gate-design.md */
   abstaining?: MinionId[];
+  /** "Change the votes and ballots of the chosen vampire to votes and
+   *  ballots of your choice" (Distant Friend, Kindred Coercion superior):
+   *  the direction a card FIXED for this vampire's whole group, read by the
+   *  group before its first cast [RTR 19991001].
+   *  docs/vote-changing-design.md §2 */
+  votesChangedTo?: Record<MinionId, boolean>;
+  /** The same modifier or reaction once per action per minion (p. 13,
+   *  p. 24). The ACTION frame's `played` has popped by the time its
+   *  referendum polls, so it is copied here at push and this one is
+   *  written during polling. docs/vote-changing-design.md §3.2 */
+  played?: Array<{ minion: MinionId; card: string }>;
   /** "Vampires who do not follow the Path of \<x\> get −1 vote" (Absolute
    *  Tyranny superior) — a per-vampire vote modifier scoped to THIS
    *  referendum, where every other vote modifier is either a bonus to the
@@ -3692,6 +3711,9 @@ export interface ReferendumFrame {
     /** "If the referendum PASSES, the next referendum a vampire you
      *  control calls passes automatically" (Malkavian Rider Clause). */
     | { kind: "autoPassNextOnPass"; seat: SeatId; thisTurnOnly?: boolean }
+    /** "…lock that vampire at the end of the action if the referendum
+     *  passes" (Under the Skin superior). */
+    | { kind: "lockOnPass"; minion: MinionId }
   >;
   /** Yoruba Shrine: the referendum resolves normally but as a FAILURE.
    *  Not the same as cancelling it (§3 of the design doc). */

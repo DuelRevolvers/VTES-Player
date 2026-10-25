@@ -61,6 +61,7 @@ import {
   findMinion,
   getMinion,
   getSeat,
+  hasVoice,
   huntAmountFor,
   isReady,
   playCostFor,
@@ -1166,7 +1167,9 @@ function targetRider(mode: CardMode): EffectPrimitive | null {
       e.kind === "actionUnlockMinion" ||
       e.kind === "actionLockMinion" ||
       e.kind === "actionDamageMinion" ||
-      e.kind === "attachToOpponent"
+      e.kind === "attachToOpponent" ||
+      // "Ⓓ Choose a vampire and put this card in play" (Distant Friend).
+      (e.kind === "putInPlayOnSuccess" && e.chooseVampire === true)
     ) {
       return e;
     }
@@ -1338,6 +1341,21 @@ function enumerateActionTargets(
   // it, and each excludes what the card does not name — an unlock that offered
   // an already-unlocked minion, or a lock that offered your own, would be a
   // futile option. docs/choosing-a-minion-design.md §2
+  if (e.kind === "putInPlayOnSuccess" && e.chooseVampire === true) {
+    // "Ⓓ Choose a vampire" (Distant Friend) — any Methuselah's, in torpor
+    // or not: the card waits in play for a referendum, and a torpid vampire
+    // may be ready by then. Choosing one's own makes the action undirected
+    // (p. 19: the Ⓓ is a reminder, the target decides).
+    for (const s of state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        if (m.kind !== "vampire") continue;
+        if (untargetableBy(m, seatId, actor)) continue;
+        targets.push(m.id);
+      }
+    }
+    return targets;
+  }
   if (e.kind === "actionUnlockMinion") {
     for (const s of state.seats) {
       for (const m of s.minions) {
@@ -1838,6 +1856,13 @@ function compileActionCard(spec: CardSpec): CardHandler {
         if (e.kind === "actionStealBlood") {
           const target = play.params["target"];
           if (!target) throw new Error(`${spec.name}: no steal target`);
+          params.targetMinion = target;
+          params.noCombat = true;
+        }
+        if (e.kind === "putInPlayOnSuccess" && e.chooseVampire === true) {
+          // Named for directedness (p. 25), never to fight — the stun shape.
+          const target = play.params["target"];
+          if (!target) throw new Error(`${spec.name}: no vampire chosen`);
           params.targetMinion = target;
           params.noCombat = true;
         }
@@ -2650,7 +2675,7 @@ function compileActionCard(spec: CardSpec): CardHandler {
     };
   }
   if (spec.modes.some((m) => m.effects.some((e) => e.kind === "putInPlayOnSuccess"))) {
-    handler.putsInPlayOnSuccess = (modeLevel) => {
+    handler.putsInPlayOnSuccess = (modeLevel, playParams) => {
       const mode = modeOf(spec, modeLevel, undefined);
       const eff = mode.effects.find((e) => e.kind === "putInPlayOnSuccess") as
         | Extract<EffectPrimitive, { kind: "putInPlayOnSuccess" }>
@@ -2672,10 +2697,15 @@ function compileActionCard(spec: CardSpec): CardHandler {
         tags: string[];
         statics?: PermanentStatics;
         locked?: boolean;
+        chosenMinion?: MinionId;
       } = {
         tags: eff.tags ?? [spec.name, "location"],
       };
       if (eff.counters !== undefined) r.counters = eff.counters;
+      // "Choose a vampire and put this card in play" (Distant Friend): the
+      // vampire chosen at announcement goes onto the entry.
+      const chosen = playParams?.["target"];
+      if (eff.chooseVampire === true && chosen !== undefined) r.chosenMinion = chosen;
       // "Put this card in play, LOCKED" (Gather) — the card pays a turn
       // before its own ability is available.
       if (eff.locked === true) r.locked = true;
@@ -4583,6 +4613,9 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
               // passing" — no votes are cast, so there is nothing to
               // cancel [PIB 20150105].
               if (abstain.notWhenAutoPassing && ref.autoPass) continue;
+              // "…BEFORE votes and ballots are cast" (Under the Skin).
+              if (abstain.beforeVotesCast && ref.votes.length > 0) continue;
+              const targets: MinionState[] = [];
               for (const s of ctx.state.seats) {
                 for (const t of s.minions) {
                   if (t.kind !== "vampire" || !isReady(t)) continue;
@@ -4594,23 +4627,42 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
                   if (abstain.sameClanAsReactor && (m.clan === null || t.clan !== m.clan)) {
                     continue;
                   }
+                  // Age is capacity, against the minion playing the card.
+                  if (abstain.age === "younger" && capacityOf(t) >= capacityOf(m)) continue;
+                  if (abstain.age === "notOlder" && capacityOf(t) > capacityOf(m)) continue;
                   // A cast records its vampire whatever the source — title,
                   // granted or bought (docs/vampire-votes-design.md §4.4).
                   const hasCast = ref.votes.some((v) => v.minion === t.id);
                   if (abstain.onlyIfVoted && !hasCast) continue;
-                  // A vampire with no vote source and no cast vote has
-                  // nothing to abstain from. Votes a card gave it are a
-                  // source of its own (p. 47).
-                  if (
-                    !abstain.onlyIfVoted &&
-                    t.title === null &&
-                    !hasCast &&
-                    !ref.minionVoteGrants?.[t.id]
-                  ) {
+                  // A vampire with nothing to cast, buy or take back has
+                  // nothing to abstain from — asked through the ONE vote
+                  // count, which this used to approximate from the title
+                  // alone (docs/vote-changing-design.md §3.1). A lock on a
+                  // pass lands either way, so it is never futile.
+                  if (!abstain.onlyIfVoted && !abstain.lockOnPass && !hasVoice(ctx.state, ref, t)) {
                     continue;
                   }
-                  voteOptions.push(makeOption(spec, card, m, mode, { target: t.id }));
+                  targets.push(t);
                 }
+              }
+              if (abstain.xTargets) {
+                // "Force X vampires…", Cost: X blood — every unordered
+                // choice the reactor can pay for, X riding as `xBlood`.
+                const maxX = Math.min(targets.length, m.blood - costOf(spec, ctx, m, mode).blood);
+                for (let x = 1; x <= maxX; x++) {
+                  for (const combo of combinations(targets, x)) {
+                    voteOptions.push(
+                      makeOption(spec, card, m, mode, {
+                        targets: combo.map((t) => t.id).join(","),
+                        xBlood: String(x),
+                      }),
+                    );
+                  }
+                }
+                continue;
+              }
+              for (const t of targets) {
+                voteOptions.push(makeOption(spec, card, m, mode, { target: t.id }));
               }
               continue;
             }
@@ -5047,6 +5099,30 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       ) {
         for (const e of mode.effects) {
           if (e.kind === "forceAbstain") {
+            // "Force X vampires to abstain" (Kindred Coercion) — chosen as
+            // played; any that left play since are skipped, not failed.
+            const many = play.params["targets"];
+            if (many !== undefined) {
+              const ids = many.split(",").filter((id) => findMinion(ops.state, id) !== null);
+              if (e.changeInstead) {
+                // "…you may change the votes … instead": what happens to each
+                // target is asked of the player, one question per target.
+                // Choice frames are a stack, so they are raised in REVERSE
+                // to be asked in the order chosen.
+                for (const id of [...ids].reverse()) {
+                  ops.raiseChoice({
+                    seat: play.seat,
+                    cardName: spec.name,
+                    cardId: play.card.id,
+                    key: "coerce",
+                    params: { target: id },
+                  });
+                }
+              } else {
+                for (const id of ids) ops.forceAbstain(id);
+              }
+              continue;
+            }
             const target = play.params["target"];
             if (!target) throw new Error(`${spec.name} played without a target`);
             // Lock and blood burn BEFORE the abstention, so the log reads
@@ -5061,6 +5137,9 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
               ops.emit({ type: "BloodBurned", minion: target, amount: e.burnTargetBlood });
             }
             ops.forceAbstain(target);
+            // "…lock that vampire at the end of the action if the
+            // referendum passes" (Under the Skin superior).
+            if (e.lockOnPass) ops.addPostTally({ kind: "lockOnPass", minion: target });
           } else if (e.kind === "cancelReferendum") {
             // The bar and the caller are read BEFORE the cancel, which
             // drops the frame they live on (Delaying Tactics).

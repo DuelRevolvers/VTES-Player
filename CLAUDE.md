@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 321 test files, 3507 tests**, with `npm run typecheck`,
+**Green baseline: 323 test files, 3547 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -962,7 +962,8 @@ acting-minion-reactions, politics, abstain-gate, politics-followups,
 polling-votes, ballots, politics-locations, referendum-terms, blood-hunt-answers,
 once-in-a-game, borrowed-minions, title-riders, in-this-referendum,
 referendum-margin, vampire-votes (whose every vote is; supersedes
-polling-votes §3).
+polling-votes §3), vote-changing (turning a vampire's group; the one vote
+count in `derived.ts`).
 
 **Cards and economies:** auctions, blood-bank-actions, blood-banking-locations,
 the-edge, ash-heap-resource, before-range-attachments,

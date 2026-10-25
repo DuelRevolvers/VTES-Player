@@ -239,6 +239,11 @@ function fourSeatGame(seed: number): GameState {
     "Tribunal Judgment",
     "Emissary",
     "Disarming Presence",
+    // Wave 109: changing a vampire's votes.
+    "Pulling Strings",
+    "Under the Skin",
+    "Kindred Coercion",
+    "Distant Friend",
     // Fourth sweep.
     "Arcane Library",
     "Sight Beyond Sight",
