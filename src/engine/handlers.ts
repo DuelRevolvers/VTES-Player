@@ -34,6 +34,7 @@ import type {
   PlayCostCardType,
   DelayedDrawCondition,
   PlayCostMod,
+  ReferendumAfterEffect,
   ReferendumFrame,
   Sect,
   SeatId,
@@ -631,6 +632,14 @@ export interface EngineOps {
   endCombatFromOutside(): void;
   /** "…once results are tallied" — an effect that outlives the tally. */
   addPostTally(effect: NonNullable<ReferendumFrame["postTally"]>[number]): void;
+  /** "…after the referendum effects are applied" — an effect that waits for
+   *  the WHOLE effect of a passed referendum, every choice it raises
+   *  included. docs/referendum-outcomes-design.md §4.1 */
+  addAfterEffect(effect: ReferendumAfterEffect): void;
+  /** "The referendum fails" (Vox Domini) — at ONCE: polling ends, the votes
+   *  already cast stay, and the referendum is tallied as a failure.
+   *  `failReferendum` alone lets polling finish (Yoruba Shrine). */
+  endPollingAndFail(): void;
   /** "Cannot play reaction cards, block or cast votes or ballots this
    *  turn" (Expulsion). */
   expelMinion(minion: MinionId): void;

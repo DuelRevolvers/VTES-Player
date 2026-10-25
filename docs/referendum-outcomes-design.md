@@ -198,3 +198,36 @@ its neighbours:
   hand and a legal player on the table.
 
 Then the fuzz decks, `npm run simulate`, and `npm run simulate:politics`.
+
+## 6. As built (0.11.50)
+
+The owner approved §4 and the six open points as written. What differs
+from the plan, or was found while building:
+
+- **The scope is `state.referendumAftermath`**, not `referendumEffect`: that
+  name is already a `CardSpec` field (which way a referendum moves pool).
+- **The close processes ousts first.** Ousts are otherwise processed only
+  when the turn frame surfaces, which is after the close, and the Treachery
+  ruling says "including any oust".
+- **The close runs after settle's sweeps** (depleted allies, capacity,
+  contests, the torpor window), so a window one of them opens counts as part
+  of the effect.
+- **`pollingEnded` only short-circuits the POLLING step.** Without that
+  guard, a Vox Domini failure that opened the fail window would have skipped
+  that window's own impulse.
+- **Defect: the before-votes rule was missing on three cards.** Elder
+  Kindred Network, Bribes and Malkavian Rider Clause were offered after a
+  vote. The spec rule `beforeVotesCast` now covers them, through
+  `referendumOpenToPlay`.
+- **Two pass-side abilities needed their own `passed` test** once the
+  window opened on a fail: Privileged Position (`afterReferendumBurn`) and
+  the archetype "unlock after a referendum called by them passes". The
+  cards' own play rule (`afterReferendumPassed`), Absolution of the
+  Diabolist and Lay Low already checked it.
+- **The caller riders are refused when there is no calling vampire**
+  (`NEEDS_CALLING_VAMPIRE`). Before that, Treachery's superior half was
+  playable in a blood hunt and would have burned yes-voters on a pass.
+- **Not tested:** the blood-hunt and Yoruba Shrine cases. The blood-hunt
+  bar rests on `callingMinion === null`, and Yoruba Shrine fails a
+  referendum through the same `forcedFail` that Vox Domini sets, which the
+  tests cover.

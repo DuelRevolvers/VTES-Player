@@ -244,6 +244,12 @@ function fourSeatGame(seed: number): GameState {
     "Under the Skin",
     "Kindred Coercion",
     "Distant Friend",
+    // Wave 110: referendum outcomes.
+    "Treachery",
+    "Poison Pill",
+    "Political Backlash",
+    "Aura of Invincibility",
+    "Vox Domini",
     // Fourth sweep.
     "Arcane Library",
     "Sight Beyond Sight",

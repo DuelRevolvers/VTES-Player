@@ -913,8 +913,13 @@ export interface PermanentStatics {
    *  referendums THEY CALL" (Fee Stake: Boston, New York, Seattle) —
    *  scoped to the referendum's calling minion, which no
    *  `ConditionalStatic` can ask about because those are evaluated with
-   *  no referendum in hand. docs/fee-stake-design.md §4 */
-  votesWhenCalling?: { amount: number; bearerClan?: string[] };
+   *  no referendum in hand. docs/fee-stake-design.md §4
+   *
+   *  `perCounter`: "an additional vote for each counter on this card in
+   *  referendums he or she calls" (Aura of Invincibility) — `amount` per
+   *  counter on the entry, read at the count, so a counter added later
+   *  counts at once. docs/referendum-outcomes-design.md §4.6 */
+  votesWhenCalling?: { amount: number; bearerClan?: string[]; perCounter?: boolean };
   /** "Rescuing a non-Tremere vampire from torpor costs this Salubri -N
    *  blood, and if the action is successful the rescued vampire gains M
    *  blood" (Saulot's Healing Touch) — an action-cost modifier carried by
@@ -3581,6 +3586,32 @@ export interface VoteGrants {
  *  details-at-announcement, p. 25), then polling on an impulse cycle
  *  (casting is an effect and rewinds; quiescence closes polling), then
  *  tally — more for than against passes, ties fail. */
+/** What a passed referendum does once its effect has been applied in full.
+ *  docs/referendum-outcomes-design.md §4.1 */
+export type ReferendumAfterEffect =
+  /** "If the referendum passes, the controller of the vampire calling the
+   *  referendum burns N pool" (Treachery) — "after the referendum effects
+   *  are applied, including any oust and pool gained from it"
+   *  [LSJ 20090115-2]. */
+  | { kind: "burnCallerPool"; amount: number }
+  /** "If … the effect of the referendum causes you to lose pool, the
+   *  controller of the acting vampire loses the same amount" (Poison Pill).
+   *  `seat` is the "you". */
+  | { kind: "mirrorPoolLoss"; seat: SeatId }
+  /** "If this referendum passes, put this card on the acting vampire and
+   *  put a counter on this card" (Aura of Invincibility) — out of `seat`'s
+   *  ash heap, and only if it is still there and the vampire still in play
+   *  [ANK 20220805]. */
+  | {
+      kind: "attachFromAshHeap";
+      seat: SeatId;
+      cardId: CardInstanceId;
+      name: string;
+      minion: MinionId;
+      statics: PermanentStatics;
+      counters: number;
+    };
+
 export interface ReferendumFrame {
   kind: "referendum";
   actionId: ActionId;
@@ -3714,7 +3745,23 @@ export interface ReferendumFrame {
     /** "…lock that vampire at the end of the action if the referendum
      *  passes" (Under the Skin superior). */
     | { kind: "lockOnPass"; minion: MinionId }
+    /** "…any other Methuselahs who cast votes or ballots in favor of the
+     *  referendum burn N pool when the votes are tallied" (Treachery
+     *  superior) — only on a pass (owner ruling 2026-10-24), once per SEAT,
+     *  and "other" than the caller's. docs/referendum-outcomes-design.md */
+    | { kind: "burnVotedForOnPass"; amount: number }
   >;
+  /** "…AFTER the referendum effects are applied" — riders that wait for the
+   *  WHOLE effect, every choice it raises included, not merely the tally
+   *  (Treachery, Poison Pill, Aura of Invincibility). Copied into
+   *  `GameState.referendumAftermath` when a pass opens it, and run when it
+   *  closes. docs/referendum-outcomes-design.md §4 */
+  afterEffects?: ReferendumAfterEffect[];
+  /** Vox Domini: polling is over NOW. The votes already cast stay in the
+   *  record, no more are asked for, and settle tallies at once — unlike
+   *  Yoruba Shrine's `forcedFail` alone, which lets polling finish
+   *  (owner ruling 2026-10-24). */
+  pollingEnded?: boolean;
   /** Yoruba Shrine: the referendum resolves normally but as a FAILURE.
    *  Not the same as cancelling it (§3 of the design doc). */
   forcedFail?: boolean;
@@ -3729,8 +3776,10 @@ export interface ReferendumFrame {
    *  burned. Dropped by settle instead of being tallied. */
   cancelled?: boolean;
   /** "terms" and "polling" are the two steps of p. 27–28;
-   *  "afterResolution" is the impulse a passed referendum offers before
-   *  its frame leaves the stack (docs/referendum-margin-design.md §2). */
+   *  "afterResolution" is the impulse a tallied referendum offers before
+   *  its frame leaves the stack (docs/referendum-margin-design.md §2) — on
+   *  a pass AND on a fail since wave 110, so every card played there checks
+   *  `passed` itself (docs/referendum-outcomes-design.md §4.4). */
   step: "terms" | "polling" | "afterResolution";
   /** The tally, recorded when it is taken so the after-resolution window
    *  can read it and the second pass does not recompute it. `margin` is
@@ -4036,6 +4085,21 @@ export interface GameState {
    *  cancelled referendum is never tallied and leaves none (owner ruling
    *  2026-10-24). docs/vampire-votes-design.md §4.6 */
   lastReferendum?: { turnNumber: number; votesByMinion: Record<MinionId, number> };
+  /** A PASSED referendum whose effect is still being applied. Opened just
+   *  before `applyReferendum`, closed by settle once the frame stack is back
+   *  to `depth` — so it spans every choice the effect raises: Ancient
+   *  Influence pays out only when the LAST seat answers. `lost` is each
+   *  seat's ACTUAL pool decrease while it is open (Poison Pill measures it).
+   *  Plain data, so a save taken mid-effect resumes it.
+   *  docs/referendum-outcomes-design.md §4.1 */
+  referendumAftermath?: {
+    actionId: ActionId;
+    caller: SeatId;
+    callingMinion: MinionId | null;
+    depth: number;
+    lost: Record<SeatId, number>;
+    riders: ReferendumAfterEffect[];
+  };
   /** Event card NAMES put into play this game. *"Each event card may only
    *  be played once each game"* (p. 37) — a bar that outlives the card
    *  itself (it still bars a second copy after the first is burnt), so it

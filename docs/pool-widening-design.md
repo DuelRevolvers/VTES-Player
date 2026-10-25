@@ -1006,6 +1006,50 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 110 — referendum outcomes (5 cards), 2026-10-24
+
+**Cards:** Treachery (T2, Presence), Poison Pill, Political Backlash, Aura
+of Invincibility and Vox Domini (T1). Design and owner rulings:
+`referendum-outcomes-design.md`. Version 0.11.50.
+
+**The mechanic.** "After the referendum effects are applied" was not a
+point in the code. Ancient Influence and Reins of Power pay out only when the
+LAST seat answers its choice, decisions after `applyReferendum` returns. A
+passed referendum now opens `state.referendumAftermath` before the effect,
+`emit` adds each seat's ACTUAL pool decrease to it, and settle closes it when
+the frame stack is back to the referendum's depth. At the close: any oust
+the effect caused, then the `onReferendumPassed` sweep (moved here), then
+the riders in play order. Treachery's superior burn is a `postTally` rider,
+because it lands at the tally, before the effects.
+
+**Defect 1 — "before votes and ballots are cast" was not enforced on three
+cards.** Elder Kindred Network, Bribes and Malkavian Rider Clause print it,
+and the polling branch never checked it: all three were offered after a vote.
+The rule was spelled at six sites. It is one helper now,
+`referendumOpenToPlay` in `derived.ts`, and the spec rule `beforeVotesCast`.
+
+**Defect 2 — the `onReferendumPassed` sweep ran before the effect
+finished.** For an effect with choices, it ran before the table was paid.
+Guru only gains blood, so nothing could observe it. It moved to the close.
+
+**Defect 3 — two pass-side abilities relied on the window opening only on a
+pass.** Privileged Position's `afterReferendumBurn` and the archetypes'
+"unlock after a referendum called by them passes" had no `passed` test.
+The window opens on a fail now, for Political Backlash, so both test it, and
+a fail-side test pins Privileged Position.
+
+**New kernel pieces:**
+- `rf.afterEffects` (`burnCallerPool`, `mirrorPoolLoss`,
+  `attachFromAshHeap`) and `ops.addAfterEffect`.
+- The after-resolution window opens on a fail too, with the
+  `whenReferendumFails` rule. `burnActingSeatPool` reads the caller on a
+  referendum.
+- `rf.pollingEnded` and `ops.endPollingAndFail`: Vox Domini fails the
+  referendum at once and keeps the votes already cast.
+- `votesWhenCalling.perCounter` (Aura's +1 vote per counter).
+- `NEEDS_CALLING_VAMPIRE`: the caller riders are not offered on a referendum
+  with no calling vampire (a blood hunt).
+
 ### Wave 109 — changing a vampire's votes (4 cards), 2026-10-24
 
 **Cards:** Pulling Strings and Kindred Coercion (T2, Dominate), Under the

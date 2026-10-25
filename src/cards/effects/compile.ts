@@ -62,6 +62,7 @@ import {
   getMinion,
   getSeat,
   hasVoice,
+  referendumOpenToPlay,
   huntAmountFor,
   isReady,
   playCostFor,
@@ -789,6 +790,15 @@ function applyReferendumPayout(
   const rf = ops.state.frames.find((f) => f.kind === "referendum");
   if (rf?.kind !== "referendum") return;
   const margin = rf.margin ?? 0;
+  if (e.kind === "burnActingSeatPool") {
+    // "The controller of the acting vampire burns N pool" (Political
+    // Backlash). A referendum's acting seat is its caller's; there is no
+    // action frame left to read it off.
+    if (!getSeat(ops.state, rf.caller).ousted) {
+      ops.emit({ type: "PoolBurned", seat: rf.caller, amount: e.amount });
+    }
+    return;
+  }
   if (e.kind === "autoPassNextNow") {
     // "Only usable ON A SUCCESSFUL referendum" (Cryptic Rider) — this
     // window only opens on a pass, so the condition is the window.
@@ -4555,6 +4565,14 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       if (ctx.window === "referendum.polling") {
         const ref = ctx.referendum;
         if (!ref) return [];
+        // "Only usable during a referendum BEFORE (any) votes and ballots
+        // are cast" — and so never on one passing automatically, where
+        // none ever are [PIB 20150105]. Elder Kindred Network, Bribes and
+        // Malkavian Rider Clause print it and were offered after a vote
+        // until wave 110 (docs/referendum-outcomes-design.md §3.3).
+        if (spec.usable.includes("beforeVotesCast") && !referendumOpenToPlay(ref, { beforeVotes: true })) {
+          return [];
+        }
         // "Non-<sect> vampires cannot cast votes" — a caller-only modifier,
         // playable once, before votes are cast (p. 28).
         const restrictMode = spec.modes.find((m) =>
@@ -4562,7 +4580,7 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
         );
         if (restrictMode) {
           if (ctx.seat !== ref.caller || ref.voteRestriction) return [];
-          if (ref.votes.length > 0) return []; // "before votes are cast"
+          if (!referendumOpenToPlay(ref, { beforeVotes: true })) return []; // "before votes are cast"
           const cm = ref.callingMinion ? findMinion(ctx.state, ref.callingMinion) : null;
           if (!cm) return [];
           // "Requires a prince/justicar/…": the controller must hold a ready
@@ -4574,10 +4592,15 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
         // the referendum-interference family (docs/abstain-gate-design.md).
         // `restrictVotes` is excluded — it was handled by its own branch
         // just above and returned early.
-        const voteModes = spec.modes.filter((mode) =>
-          mode.effects.some(
-            (e) => POLLING_ONLY_EFFECTS.has(e.kind) && e.kind !== "restrictVotes",
-          ),
+        const voteModes = spec.modes.filter(
+          (mode) =>
+            mode.effects.some(
+              (e) => POLLING_ONLY_EFFECTS.has(e.kind) && e.kind !== "restrictVotes",
+            ) &&
+            // A rider that charges or joins "the vampire calling the
+            // referendum" has nothing to act on without one — a blood hunt
+            // has no calling vampire (docs/referendum-outcomes-design.md §2).
+            !(ref.callingMinion === null && mode.effects.some((e) => NEEDS_CALLING_VAMPIRE.has(e.kind))),
         );
         if (voteModes.length === 0) return [];
         const isCaller = ctx.seat === ref.caller;
@@ -4612,9 +4635,11 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
               // "Cannot be used during a referendum that is automatically
               // passing" — no votes are cast, so there is nothing to
               // cancel [PIB 20150105].
-              if (abstain.notWhenAutoPassing && ref.autoPass) continue;
+              if (abstain.notWhenAutoPassing && !referendumOpenToPlay(ref)) continue;
               // "…BEFORE votes and ballots are cast" (Under the Skin).
-              if (abstain.beforeVotesCast && ref.votes.length > 0) continue;
+              if (abstain.beforeVotesCast && !referendumOpenToPlay(ref, { beforeVotes: true })) {
+                continue;
+              }
               const targets: MinionState[] = [];
               for (const s of ctx.state.seats) {
                 for (const t of s.minions) {
@@ -4678,6 +4703,29 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       // docs/referendum-margin-design.md §2
       const wantsRef = (r: UsabilityRule): boolean =>
         spec.usable.includes(r) || spec.modes.some((mo) => mo.usable?.includes(r) ?? false);
+      // "Only usable when a referendum FAILS" (Political Backlash): the same
+      // impulse, opened on a fail as well since wave 110, and this rule
+      // checks its OWN outcome the way the pass rule below checks its own.
+      // A reaction — another Methuselah's ready unlocked vampire (p. 24) —
+      // and never a blood hunt, which has no acting vampire to charge.
+      // docs/referendum-outcomes-design.md §4.4
+      if (wantsRef("whenReferendumFails")) {
+        if (ctx.window !== "referendum.afterResolution") return [];
+        const rf = ctx.referendum;
+        if (!rf || rf.step !== "afterResolution" || rf.passed !== false) return [];
+        if (rf.variant === "bloodHunt" || ctx.seat === rf.caller) return [];
+        const out: LegalOption[] = [];
+        for (const m of getSeat(ctx.state, ctx.seat).minions) {
+          if (m.kind !== "vampire" || !canReact(m) || !meetsRequirements(m, spec)) continue;
+          for (const mode of spec.modes) {
+            if (!mode.usable?.includes("whenReferendumFails")) continue;
+            if (!canPlayMode(m, mode, spec)) continue;
+            if (m.blood < costOf(spec, ctx, m, mode).blood) continue;
+            out.push(makeOption(spec, card, m, mode, {}));
+          }
+        }
+        return out;
+      }
       const afterRef = wantsRef("afterReferendumPassed");
       if (ctx.window === "referendum.afterResolution" || afterRef) {
         if (!afterRef || ctx.window !== "referendum.afterResolution") return [];
@@ -5094,7 +5142,11 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             e.kind === "payVotedForOnly" ||
             e.kind === "autoPassNextOnPass" ||
             e.kind === "bloodForVotes" ||
-            e.kind === "taxVotesAgainst",
+            e.kind === "taxVotesAgainst" ||
+            e.kind === "burnCallerAfterEffects" ||
+            e.kind === "burnPoolVotedForOnPass" ||
+            e.kind === "mirrorPoolLossToCaller" ||
+            e.kind === "attachFromAshHeapOnPass",
         )
       ) {
         for (const e of mode.effects) {
@@ -5197,6 +5249,30 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
               seat: play.seat,
               ...(e.thisTurnOnly ? { thisTurnOnly: true } : {}),
             });
+          } else if (e.kind === "burnPoolVotedForOnPass") {
+            // At the TALLY, before the effects (Treachery superior).
+            ops.addPostTally({ kind: "burnVotedForOnPass", amount: e.amount });
+          } else if (e.kind === "burnCallerAfterEffects") {
+            // AFTER the effects, choices and all (Treachery).
+            // docs/referendum-outcomes-design.md §4.1
+            ops.addAfterEffect({ kind: "burnCallerPool", amount: e.amount });
+          } else if (e.kind === "mirrorPoolLossToCaller") {
+            // "…causes YOU to lose pool" — the player of the card.
+            ops.addAfterEffect({ kind: "mirrorPoolLoss", seat: play.seat });
+          } else if (e.kind === "attachFromAshHeapOnPass") {
+            // The card is in the ash heap by the time the referendum
+            // passes, and has no effect if it has left [ANK 20220805] —
+            // which the rider checks when it runs, not now.
+            if (play.minion === null) throw new Error(`${spec.name}: needs its acting vampire`);
+            ops.addAfterEffect({
+              kind: "attachFromAshHeap",
+              seat: play.seat,
+              cardId: play.card.id,
+              name: spec.name,
+              minion: play.minion,
+              statics: e.statics,
+              counters: e.counters,
+            });
           }
         }
         return;
@@ -5236,7 +5312,10 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
       // The after-referendum payouts resolve with NO action frame at all —
       // a political action pops before its referendum is pushed
       // (docs/referendum-margin-design.md §2).
-      if (mode.usable?.includes("afterReferendumPassed")) {
+      if (
+        mode.usable?.includes("afterReferendumPassed") ||
+        mode.usable?.includes("whenReferendumFails")
+      ) {
         for (const e of mode.effects) applyReferendumPayout(e, play, ops);
         return;
       }
@@ -8563,6 +8642,23 @@ const POLLING_ONLY_EFFECTS: ReadonlySet<EffectPrimitive["kind"]> = new Set([
   // are meaningless anywhere else.
   "bloodForVotes",
   "taxVotesAgainst",
+  // Wave 110: riders that act after the tally or after the whole effect.
+  "burnCallerAfterEffects",
+  "burnPoolVotedForOnPass",
+  "mirrorPoolLossToCaller",
+  "attachFromAshHeapOnPass",
+]);
+
+/** Polling riders that name "the vampire calling the referendum" or "the
+ *  acting vampire" — not playable on a referendum with none (a blood hunt).
+ *  Treachery's superior half is here with its basic half: the card is one
+ *  play, and without a caller its first sentence has no one to charge.
+ *  docs/referendum-outcomes-design.md §2 */
+const NEEDS_CALLING_VAMPIRE: ReadonlySet<EffectPrimitive["kind"]> = new Set([
+  "burnCallerAfterEffects",
+  "burnPoolVotedForOnPass",
+  "mirrorPoolLossToCaller",
+  "attachFromAshHeapOnPass",
 ]);
 
 /** Every minion in play, in seat order — the candidate pool for a
@@ -11360,12 +11456,13 @@ export function compileSpec(spec: CardSpec): CardHandler {
     const priorOptions = handler.abilityOptions?.bind(handler);
     handler.abilityOptions = (entry, owner, ctx) => {
       const out: LegalOption[] = [...(priorOptions?.(entry, owner, ctx) ?? [])];
-      // The window opens only on a PASS, so "after a referendum … passes"
-      // needs no test of its own (docs/referendum-margin-design.md §2).
+      // "…after a referendum … PASSES". The window used to open only on a
+      // pass, which made this test unnecessary; it opens on a fail too
+      // since wave 110 (docs/referendum-outcomes-design.md §4.4).
       if (ctx.window !== "referendum.afterResolution" || ctx.seat !== owner.seat) return out;
       if (entry.locked) return out;
       const rf = ctx.referendum;
-      if (!rf || rf.callingMinion === null) return out;
+      if (!rf || rf.passed !== true || rf.callingMinion === null) return out;
       // "Called by a vampire YOU CONTROL."
       const caller = findMinion(ctx.state, rf.callingMinion);
       if (!caller || caller.controller !== owner.seat) return out;
@@ -13710,12 +13807,12 @@ function addCryptAbilities(
       });
     }
 
-    // "You can unlock <them> after a referendum called by them passes."
-    // The window opens only on a pass, so "passes" needs no test here
-    // (docs/referendum-margin-design.md §2).
+    // "You can unlock <them> after a referendum called by them PASSES."
+    // The window opens on a fail too since wave 110, so "passes" is
+    // tested here (docs/referendum-outcomes-design.md §4.4).
     if (afterRef && ctx.window === "referendum.afterResolution" && bearer.locked) {
       const rf = ctx.referendum;
-      if (rf && rf.callingMinion === bearer.id) {
+      if (rf && rf.passed === true && rf.callingMinion === bearer.id) {
         out.push({
           id: `ability:${spec.name}:${entry.card.id}:refUnlock`,
           kind: "useAbility",

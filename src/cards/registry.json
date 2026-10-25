@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-25T02:30:16.657Z",
+ "fetchedAt": "2026-10-25T05:04:58.246Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -1013,6 +1013,29 @@
      "Ancient Hearts",
      "Final Nights",
      "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "100112": {
+   "card": {
+    "kind": "library",
+    "id": 100112,
+    "name": "Aura of Invincibility",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Only usable during a referendum, before any votes and ballots are cast.\nIf this referendum passes, put this card on the acting vampire and put a counter on this card. This vampire gets an additional vote for each counter on this card in referendums he or she calls. Add a counter to this card when a referendum called by this vampire passes. If a referendum called by this vampire fails, burn this card and send this vampire to torpor. A vampire can have only one Aura of Invincibility.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/auraofinvincibility.jpg",
+    "sets": [
+     "Gehenna",
+     "Third Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -11405,6 +11428,28 @@
    },
    "supported": true
   },
+  "101406": {
+   "card": {
+    "kind": "library",
+    "id": 101406,
+    "name": "Poison Pill",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum, before votes and ballots are cast.\nIf the referendum passes and the effect of the referendum causes you to lose pool, the controller of the acting vampire loses the same amount of pool (in addition to the effects of the referendum).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/poisonpill.jpg",
+    "sets": [
+     "Gehenna",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101411": {
    "card": {
     "kind": "library",
@@ -11424,6 +11469,29 @@
     "image": "https://static.krcg.org/card/politicalally.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101413": {
+   "card": {
+    "kind": "library",
+    "id": 101413,
+    "name": "Political Backlash",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable when a referendum fails.\nThe controller of the acting vampire burns 2 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/politicalbacklash.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition"
     ]
    },
    "supported": true
@@ -16283,6 +16351,31 @@
    },
    "supported": true
   },
+  "102014": {
+   "card": {
+    "kind": "library",
+    "id": 102014,
+    "name": "Treachery",
+    "types": [
+     "Reaction"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable during a referendum before any votes and ballots are cast.\n[pre] If the referendum passes, the controller of the vampire calling the referendum burns 1 pool.\n[PRE] As above, and any other Methuselahs who cast votes or ballots in favor of the referendum burn 1 pool when the votes are tallied.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/treachery.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Camarilla Edition",
+     "Black Hand"
+    ]
+   },
+   "supported": true
+  },
   "102015": {
    "card": {
     "kind": "library",
@@ -17172,6 +17265,28 @@
      "New Blood",
      "New Blood II",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "102132": {
+   "card": {
+    "kind": "library",
+    "id": 102132,
+    "name": "Vox Domini",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Master: out-of-turn.\nOnly usable during the referendum of a political action. Not usable on a referendum that is automatically passing. The referendum fails. Each Methuselah may play only one Vox Domini each game.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/voxdomini.jpg",
+    "sets": [
+     "Black Hand",
+     "Legacies of Blood"
     ]
    },
    "supported": true

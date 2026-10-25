@@ -7,7 +7,7 @@
  */
 
 import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, vampireMayVote, vampireVotes } from "../../engine/index.ts";
+import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, vampireMayVote, vampireVotes } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -15287,7 +15287,7 @@ export const cardSpecs: CardSpec[] = [
     requiresClan: ["Ventrue"],
     cardType: "reaction",
     bloodCost: 0,
-    usable: [],
+    usable: ["beforeVotesCast"],
     modes: [
       {
         level: "basic",
@@ -15309,7 +15309,7 @@ export const cardSpecs: CardSpec[] = [
     name: "Bribes",
     cardType: "actionModifier",
     bloodCost: 0,
-    usable: [],
+    usable: ["beforeVotesCast"],
     modes: [
       {
         level: "basic",
@@ -15334,9 +15334,108 @@ export const cardSpecs: CardSpec[] = [
     requiresClan: ["Malkavian"],
     cardType: "reaction",
     bloodCost: 1,
-    usable: [],
+    usable: ["beforeVotesCast"],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "autoPassNextOnPass" }] },
+    ],
+  },
+  // --- Referendum outcomes (wave 110, docs/referendum-outcomes-design.md) ---
+  {
+    // "Only usable during a referendum before any votes and ballots are cast.
+    //  [pre] If the referendum passes, the controller of the vampire calling
+    //  the referendum burns 1 pool.
+    //  [PRE] As above, and any other Methuselahs who cast votes or ballots in
+    //  favor of the referendum burn 1 pool when the votes are tallied."
+    //
+    // Two halves at two moments: the superior burn is at the TALLY, before
+    // the effects [RTR 20010710]; the caller's is AFTER them, oust included
+    // [LSJ 20090115-2]. Both only on a pass (owner ruling 2026-10-24).
+    krcgId: 102014,
+    name: "Treachery",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: ["beforeVotesCast"],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pre",
+        effects: [{ kind: "burnCallerAfterEffects", amount: 1 }],
+      },
+      {
+        level: "superior",
+        discipline: "pre",
+        effects: [
+          { kind: "burnCallerAfterEffects", amount: 1 },
+          { kind: "burnPoolVotedForOnPass", amount: 1 },
+        ],
+      },
+    ],
+  },
+  {
+    // "Only usable during a referendum, before votes and ballots are cast.
+    //  If the referendum passes and the effect of the referendum causes you
+    //  to lose pool, the controller of the acting vampire loses the same
+    //  amount of pool (in addition to the effects of the referendum)."
+    //
+    // Measured over the referendum's OWN effect — not a post-tally rider
+    // (owner ruling 2026-10-24) — as the pool actually lost, gains never
+    // netted against it [ANK 20180813].
+    krcgId: 101406,
+    name: "Poison Pill",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: ["beforeVotesCast"],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "mirrorPoolLossToCaller" }] }],
+  },
+  {
+    // "Only usable when a referendum fails. The controller of the acting
+    //  vampire burns 2 pool."
+    //
+    // A failure, not a cancellation: Telepathic Vote Counting's never
+    // resolves, so nothing is offered after it.
+    krcgId: 101413,
+    name: "Political Backlash",
+    cardType: "reaction",
+    bloodCost: 0,
+    usable: ["whenReferendumFails"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        usable: ["whenReferendumFails"],
+        effects: [{ kind: "burnActingSeatPool", amount: 2 }],
+      },
+    ],
+  },
+  {
+    // "Only usable during a referendum, before any votes and ballots are
+    //  cast. If this referendum passes, put this card on the acting vampire
+    //  and put a counter on this card. This vampire gets an additional vote
+    //  for each counter on this card in referendums he or she calls. Add a
+    //  counter to this card when a referendum called by this vampire passes.
+    //  If a referendum called by this vampire fails, burn this card and send
+    //  this vampire to torpor. A vampire can have only one Aura of
+    //  Invincibility."
+    //
+    // The play and the attach are here; the life cycle once attached, and
+    // the one-per-vampire gate, are in the bespoke handler.
+    krcgId: 100112,
+    name: "Aura of Invincibility",
+    cardType: "actionModifier",
+    bloodCost: 1,
+    usable: ["beforeVotesCast"],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "attachFromAshHeapOnPass",
+            statics: { votesWhenCalling: { amount: 1, perCounter: true } },
+            counters: 1,
+          },
+        ],
+      },
     ],
   },
   {
@@ -17512,6 +17611,19 @@ export const cardSpecs: CardSpec[] = [
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
+    // "Master: out-of-turn. Only usable during the referendum of a political
+    //  action. Not usable on a referendum that is automatically passing. The
+    //  referendum fails. Each Methuselah may play only one Vox Domini each
+    //  game." The behaviour is in the bespoke handler.
+    krcgId: 102132,
+    name: "Vox Domini",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 1,
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
     // "Unique. Put this card in play. During your unlock phase, you can
     //  give your prey control of the Anarch Troublemaker and either lock
     //  up to two vampires they control or burn an equipment on one of
@@ -17943,9 +18055,10 @@ export const cardSpecs: CardSpec[] = [
     // The requirement COUNTS, which is new: its three siblings ask whether
     // some ready vampire matches. The payout lives in
     // `referendum.afterResolution`, a window built for Voter Captivation
-    // and friends that already opens only on a PASS and already offers
-    // abilities of cards in play — so "passes" needs no test of its own
-    // (docs/path-cards-design.md §4).
+    // and friends that already offers abilities of cards in play
+    // (docs/path-cards-design.md §4). It opens on a FAIL too since wave
+    // 110, so `afterReferendumBurn` tests "passes" itself
+    // (docs/referendum-outcomes-design.md §4.4).
     krcgId: 102334,
     name: "Privileged Position",
     cardType: "master",
@@ -19724,6 +19837,92 @@ const archonInvestigation: CardHandler = {
     // The actor can already be gone; the action still fails.
     if (findMinion(ops.state, af.acting)) ops.burnMinion(af.acting);
     ops.failAction();
+  },
+};
+
+/**
+ * Vox Domini (102132) — "Master: out-of-turn. Only usable during the
+ * referendum of a political action. Not usable on a referendum that is
+ * automatically passing. The referendum fails. Each Methuselah may play only
+ * one Vox Domini each game."
+ *
+ * The Archon Investigation shape in the polling window. "The referendum
+ * fails" is at ONCE (owner ruling 2026-10-24): polling ends, the votes
+ * already cast stay in the record, and the tally comes out failed — so a
+ * title-granting card still burns, and Political Backlash and Aura of
+ * Invincibility see a failure. "Only one each game" is per METHUSELAH: a
+ * query over the log for this seat's own `CardPlayed`, the
+ * `oncePerGameByName` pattern with a seat filter, so there is nothing to
+ * latch or serialize. Out-of-turn, so never on your own turn (p. 9).
+ * docs/referendum-outcomes-design.md §4.8
+ */
+const voxDomini: CardHandler = {
+  ...compileSpec(specByName("Vox Domini")),
+  isOutOfTurnMaster: true,
+  options(card, ctx) {
+    if (ctx.window !== "referendum.polling") return [];
+    const ref = ctx.referendum;
+    // "…the referendum of a POLITICAL ACTION": never a blood hunt.
+    if (!ref || ref.variant === "bloodHunt" || !referendumOpenToPlay(ref)) return [];
+    if (!outOfTurnOpen(ctx)) return [];
+    if (getSeat(ctx.state, ctx.seat).pool <= 1) return []; // never oust yourself
+    const name = this.name;
+    if (ctx.state.eventLog.some((ev) => ev.type === "CardPlayed" && ev.name === name && ev.seat === ctx.seat)) {
+      return [];
+    }
+    return [
+      {
+        id: playOptionId(name, null, card.id),
+        kind: "playCard",
+        label: "Vox Domini — the referendum fails",
+        card: card.id,
+        name,
+        minion: null,
+        mode: null,
+        params: {},
+      },
+    ];
+  },
+  resolve(_play, ops) {
+    ops.endPollingAndFail();
+  },
+};
+
+const auraOfInvincibilityBase = compileSpec(specByName("Aura of Invincibility"));
+
+/**
+ * Aura of Invincibility (100112) — the play and the attach compile from the
+ * spec; this is the card's life once it is on its vampire.
+ *
+ * - +1 vote per counter on referendums its bearer calls: the `perCounter`
+ *   static, read where `vampireVotes` adds caller-only votes.
+ * - "Add a counter when a referendum called by this vampire passes":
+ *   `onReferendumPassed`, which runs BEFORE the rider that attaches the card,
+ *   so the pass that puts it there adds nothing (owner ruling 2026-10-24).
+ * - "If a referendum called by this vampire fails, burn this card and send
+ *   this vampire to torpor": `onReferendumLost` with `how === "failed"` — a
+ *   cancellation is not a failure, and a forced one (Vox Domini, Yoruba
+ *   Shrine) is.
+ * - "A vampire can have only one" — so one that has it cannot play another,
+ *   not even to cycle it [LSJ 20040730-2].
+ * docs/referendum-outcomes-design.md §4.7
+ */
+const auraOfInvincibility: CardHandler = {
+  ...auraOfInvincibilityBase,
+  options(card, ctx) {
+    const caller = beforeVotesCaller(ctx);
+    if (!caller || caller.attached.some((p) => p.card.name === this.name)) return [];
+    return auraOfInvincibilityBase.options?.(card, ctx) ?? [];
+  },
+  onReferendumPassed(entry, owner, info, ops) {
+    if (owner.minion === null || info.callingMinion !== owner.minion) return;
+    ops.addCounters(entry.card.id, 1);
+  },
+  onReferendumLost(entry, owner, info, ops) {
+    if (owner.minion === null || info.how !== "failed" || info.callingMinion !== owner.minion) return;
+    const bearer = owner.minion;
+    ops.burnPermanent(entry.card.id);
+    if (findMinion(ops.state, bearer)) ops.sendToTorpor(bearer);
   },
 };
 
@@ -23941,7 +24140,7 @@ const yorubaShrine: CardHandler = {
     // ballots are cast."
     if (ctx.window === "referendum.polling") {
       const ref = ctx.referendum;
-      if (!ref || ref.votes.length > 0) return [];
+      if (!ref || !referendumOpenToPlay(ref, { beforeVotes: true })) return [];
       // "…chosen by the acting Methuselah in the terms". Terms are stored
       // as strings; a minion-choosing referendum (Expulsion) lists ids.
       const chosen = Object.values(ref.terms).flatMap((v) => v.split(","));
@@ -25945,7 +26144,7 @@ const tribunalJudgment: CardHandler = {
 function beforeVotesCaller(ctx: PlayContext): MinionState | null {
   if (ctx.window !== "referendum.polling") return null;
   const ref = ctx.referendum;
-  if (!ref || ref.autoPass || ref.votes.length > 0 || ctx.seat !== ref.caller) return null;
+  if (!ref || !referendumOpenToPlay(ref, { beforeVotes: true }) || ctx.seat !== ref.caller) return null;
   return ref.callingMinion ? findMinion(ctx.state, ref.callingMinion) : null;
 }
 
@@ -26118,7 +26317,7 @@ const distantFriend: CardHandler = {
   abilityOptions(entry, owner, ctx) {
     if (ctx.window !== "referendum.polling") return [];
     const ref = ctx.referendum;
-    if (!ref || ref.autoPass || ctx.seat !== (entry.controller ?? owner.seat)) return [];
+    if (!ref || !referendumOpenToPlay(ref) || ctx.seat !== (entry.controller ?? owner.seat)) return [];
     const t = entry.chosenMinion ? findMinion(ctx.state, entry.chosenMinion) : null;
     if (!t || !isReady(t) || ref.abstaining?.includes(t.id)) return [];
     if (!hasVoice(ctx.state, ref, t)) return [];
@@ -27117,6 +27316,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     disarmingPresence,
     kindredCoercion,
     distantFriend,
+    voxDomini,
+    auraOfInvincibility,
   ]) {
     registry[bespoke.name] = bespoke;
   }

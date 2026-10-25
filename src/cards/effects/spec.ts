@@ -358,6 +358,28 @@ export type EffectPrimitive =
    *  are legal in different windows and `POLLING_ONLY_EFFECTS` keys on
    *  the kind; they share one op. */
   | { kind: "autoPassNextNow"; thisTurnOnly?: boolean }
+  /**
+   * The wave-110 OUTCOME riders: played in the polling step, before any
+   * votes, and acting once the referendum's effect has been applied in full
+   * — every choice it raises included. docs/referendum-outcomes-design.md
+   */
+  /** "If the referendum passes, the controller of the vampire calling the
+   *  referendum burns N pool" (Treachery) — after the effects
+   *  [LSJ 20090115-2]. */
+  | { kind: "burnCallerAfterEffects"; amount: number }
+  /** "…any other Methuselahs who cast votes or ballots in favor of the
+   *  referendum burn N pool when the votes are tallied" (Treachery
+   *  superior) — at the TALLY, before the effects [RTR 20010710], and only
+   *  on a pass (owner ruling 2026-10-24). */
+  | { kind: "burnPoolVotedForOnPass"; amount: number }
+  /** "If the referendum passes and the effect of the referendum causes you
+   *  to lose pool, the controller of the acting vampire loses the same
+   *  amount of pool" (Poison Pill). */
+  | { kind: "mirrorPoolLossToCaller" }
+  /** "If this referendum passes, put this card on the acting vampire and
+   *  put a counter on this card" (Aura of Invincibility) — from the ash
+   *  heap the card went to when played [ANK 20220805]. */
+  | { kind: "attachFromAshHeapOnPass"; statics: PermanentStatics; counters: number }
   /** "Prevent N damage to a minion or retainer in combat", played by a
    *  vampire NOT in that combat (Martyr's Resilience, Touch of Valeren
    *  superior). The victim is chosen at play time and rides in the option
@@ -2295,6 +2317,17 @@ export type UsabilityRule =
    *  Authority) — played in the after-referendum impulse.
    *  docs/referendum-margin-design.md */
   | "afterReferendumPassed"
+  /** "Only usable when a referendum FAILS" (Political Backlash) — the same
+   *  after-resolution impulse, which opens on a fail as well since wave
+   *  110. A reaction: another Methuselah's ready unlocked vampire. Never a
+   *  blood hunt, which has no acting vampire.
+   *  docs/referendum-outcomes-design.md §4.4 */
+  | "whenReferendumFails"
+  /** "Only usable during a referendum BEFORE (any) votes and ballots are
+   *  cast" — read by the polling branch through `referendumOpenToPlay`,
+   *  which also refuses an automatic pass [PIB 20150105].
+   *  docs/referendum-outcomes-design.md §3.3 */
+  | "beforeVotesCast"
   /** "…if the action was successful" — with afterResolutionByActor. */
   | "ifActionSucceeded"
   /** "…if the action was blocked" (Freak Drive superior). */

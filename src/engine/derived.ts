@@ -1815,7 +1815,9 @@ export function vampireVotes(
           const c = p.statics.votesWhenCalling;
           if (!c) return n;
           if (c.bearerClan && (m.clan === null || !c.bearerClan.includes(m.clan))) return n;
-          return n + c.amount;
+          // "…an additional vote FOR EACH COUNTER on this card" (Aura of
+          // Invincibility), read now, so a counter added since counts.
+          return n + c.amount * (c.perCounter ? (p.counters ?? 0) : 1);
         }, 0)
       : 0;
   // "In the resulting blood hunt referendum, this vampire gets an
@@ -1918,6 +1920,29 @@ export function bloodVoteOfferFor(
   if (offer.sect !== undefined && m.sect !== offer.sect) return false;
   const spent = rf.bloodVotesBought?.[m.id] ?? 0;
   return !(offer.maxBloodPerMinion !== undefined && spent >= offer.maxBloodPerMinion);
+}
+
+/**
+ * Can a card still be played INTO this referendum's polling step?
+ *
+ * "Cannot be used during a referendum that is automatically passing"
+ * [PIB 20150105] [LSJ 19980107], and with `beforeVotes`, "only usable
+ * during a referendum BEFORE votes and ballots are cast". A referendum whose
+ * polling has ended (Vox Domini) takes nothing more either.
+ *
+ * ONE helper, because the rule was spelled at six sites and missing at
+ * three: Elder Kindred Network, Bribes and Malkavian Rider Clause print
+ * "before votes and ballots are cast" and were offered after them.
+ * `settle` skips polling on an automatic pass, so that half is structural
+ * today; it is kept so the guard does not depend on the loop.
+ * docs/referendum-outcomes-design.md §3.3
+ */
+export function referendumOpenToPlay(
+  rf: ReferendumFrame,
+  opts: { beforeVotes?: boolean } = {},
+): boolean {
+  if (rf.autoPass || rf.pollingEnded) return false;
+  return !opts.beforeVotes || rf.votes.length === 0;
 }
 
 /** Has this vampire anything to abstain FROM, or to change — votes it

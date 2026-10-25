@@ -104,6 +104,7 @@ import type {
   PermanentStatics,
   PlayCostCardType,
   PlayCostMod,
+  ReferendumAfterEffect,
   ReferendumFrame,
   Sect,
   SeatId,
@@ -489,6 +490,17 @@ export class VtesEngine implements EngineOps {
     // applied: "until your prey is ousted" has to read the seating ring
     // as it was when the oust happened.
     this.releaseConditionalDraws(ev);
+    // "If … the effect of the referendum causes you to LOSE pool" (Poison
+    // Pill): while a passed referendum's effect is being applied, every
+    // pool decrease is credited to its seat. The ACTUAL decrease — a seat on
+    // 3 told to burn 5 has lost 3 — and gains are never netted against it
+    // [ANK 20180813]. Paying is losing [ANK 20180719-2], and every pay and
+    // burn of pool is a `PoolBurned`. docs/referendum-outcomes-design.md §4.1
+    const aftermath = this.state.referendumAftermath;
+    if (aftermath && ev.type === "PoolBurned") {
+      const lost = Math.max(0, Math.min(ev.amount, getSeat(this.state, ev.seat).pool));
+      if (lost > 0) aftermath.lost[ev.seat] = (aftermath.lost[ev.seat] ?? 0) + lost;
+    }
     this.state.eventLog.push(ev);
     this.applyToEntities(ev);
     this.applyToFrames(ev);
@@ -1461,6 +1473,13 @@ export class VtesEngine implements EngineOps {
       // one is underway. docs/boons-design.md §4
       if (this.openTorporWindow()) continue;
 
+      // A passed referendum's effect has been applied IN FULL: the stack is
+      // back where the referendum left it, so every choice the effect
+      // raised has been answered. After the sweeps above, so a window one
+      // of them opens is part of the effect too.
+      // docs/referendum-outcomes-design.md §4.1
+      if (this.closeReferendumAftermath()) continue;
+
       // A question with no legal answer is no question at all: pop it
       // rather than offer an empty decision (docs/choice-frames-design.md
       // — an optional choice always has its Decline, so only a mandatory
@@ -1574,7 +1593,11 @@ export class VtesEngine implements EngineOps {
           this.resolveReferendum(top);
           continue;
         }
-        if (cycleQuiescent(top.cycle)) {
+        // "The referendum fails" (Vox Domini) ends polling at ONCE — the
+        // votes already cast are tallied and nobody is asked again. Polling
+        // only: the after-resolution impulse that follows still runs its
+        // cycle (owner ruling 2026-10-24).
+        if (cycleQuiescent(top.cycle) || (top.pollingEnded && top.step === "polling")) {
           this.resolveReferendum(top);
           continue;
         }
@@ -2913,11 +2936,14 @@ export class VtesEngine implements EngineOps {
     }
     // "Only usable after resolution of a political action whose referendum
     // PASSED" — an impulse before the frame leaves the stack, offered only
-    // on a pass and only when some seat can use it
-    // (docs/referendum-margin-design.md §2). The step is set BEFORE the
-    // probe: each card's usable rule asserts it is in this window, so
-    // asking first would always answer "nobody".
-    if (rf.passed === true && rf.step !== "afterResolution") {
+    // when some seat can use it (docs/referendum-margin-design.md §2). It
+    // opens on a FAIL as well since wave 110 ("only usable when a
+    // referendum fails", Political Backlash), so every card played here
+    // checks `passed` itself (docs/referendum-outcomes-design.md §4.4). A
+    // cancelled referendum never reaches this function. The step is set
+    // BEFORE the probe: each card's usable rule asserts it is in this
+    // window, so asking first would always answer "nobody".
+    if (rf.step !== "afterResolution") {
       const previous = rf.step;
       rf.step = "afterResolution";
       if (this.anyAfterReferendumPlay()) {
@@ -2994,6 +3020,18 @@ export class VtesEngine implements EngineOps {
         if (!passed) continue;
         const m = findMinion(this.state, pt.minion);
         if (m && isReady(m) && !m.locked) this.emit({ type: "MinionLocked", minion: m.id });
+      } else if (pt.kind === "burnVotedForOnPass") {
+        // "…any OTHER Methuselahs who cast votes or ballots in favor of the
+        // referendum burn 1 pool when the votes are tallied" (Treachery
+        // superior): only on a pass (owner ruling 2026-10-24), per SEAT
+        // however many votes they cast, and "other" than the caller's — so
+        // the Methuselah who played Treachery pays too if they voted for.
+        if (!passed) continue;
+        const seats = new Set(rf.votes.filter((v) => v.inFavor && v.seat !== rf.caller).map((v) => v.seat));
+        for (const seat of seats) {
+          if (getSeat(this.state, seat).ousted) continue;
+          this.emit({ type: "PoolBurned", seat, amount: pt.amount });
+        }
       }
     }
     if (!passed) {
@@ -3042,12 +3080,99 @@ export class VtesEngine implements EngineOps {
       }
       return;
     }
+    // "After the referendum effects are applied" is NOT the line after
+    // `applyReferendum`: Ancient Influence and Reins of Power raise a choice
+    // per seat and pay out only when the LAST one is answered, decisions
+    // from now. So the effect gets a SCOPE, opened here with the stack
+    // depth the referendum left, and settle closes it when the stack is
+    // back there — at once for an effect with no choices. What waits for
+    // it runs at the close: the `onReferendumPassed` sweep (Guru), then
+    // the riders (Treachery, Poison Pill, Aura of Invincibility).
+    // docs/referendum-outcomes-design.md §4.1
+    this.state.referendumAftermath = {
+      actionId: rf.actionId,
+      caller: rf.caller,
+      callingMinion: rf.callingMinion ?? null,
+      depth: this.state.frames.length,
+      lost: {},
+      riders: [...(rf.afterEffects ?? [])],
+    };
     this.handler(rf.cardName).applyReferendum?.(rf, this);
-    // "The blood is gained after the referendum effects are applied" (Guru)
-    // [LSJ 20090115-2].
-    const info = { actionId: rf.actionId, callingMinion: rf.callingMinion ?? null };
+  }
+
+  /**
+   * Close the scope `resolveReferendum` opened, once the frame stack is back
+   * to its depth. In this order:
+   *
+   * 1. Any oust the effect caused — "after the referendum effects are
+   *    applied, INCLUDING ANY OUST and pool gained from it" [LSJ
+   *    20090115-2]. Ousts are otherwise processed only when the turn frame
+   *    surfaces, which is after this.
+   * 2. The `onReferendumPassed` sweep, moved here from `resolveReferendum`
+   *    ("the blood is gained after the referendum effects are applied",
+   *    Guru — the same ruling).
+   * 3. The riders, in the order they were played.
+   *
+   * The scope is dropped BEFORE 2 and 3, so pool they move is not "the
+   * effect of the referendum" (owner ruling 2026-10-24, Poison Pill). And 2
+   * runs before 3 so an Aura of Invincibility that is not on its vampire
+   * yet cannot count the pass that puts it there (owner ruling 2026-10-24).
+   */
+  private closeReferendumAftermath(): boolean {
+    const am = this.state.referendumAftermath;
+    if (!am || this.state.frames.length !== am.depth) return false;
+    if (this.oustVictims().length > 0) {
+      this.processOusts();
+      return true;
+    }
+    delete this.state.referendumAftermath;
+    const info = { actionId: am.actionId, callingMinion: am.callingMinion };
     for (const { entry, owner } of this.allEntries()) {
       this.registry[entry.card.name]?.onReferendumPassed?.(entry, owner, info, this);
+    }
+    for (const r of am.riders) this.applyAfterEffect(r, am);
+    return true;
+  }
+
+  private applyAfterEffect(
+    r: ReferendumAfterEffect,
+    am: NonNullable<GameState["referendumAftermath"]>,
+  ): void {
+    const caller = getSeat(this.state, am.caller);
+    switch (r.kind) {
+      case "burnCallerPool":
+        if (!caller.ousted) this.emit({ type: "PoolBurned", seat: am.caller, amount: r.amount });
+        return;
+      case "mirrorPoolLoss": {
+        // Measured over the effect alone; nothing if the acting Methuselah
+        // is gone. Being ousted yourself does not stop it — the card names
+        // the acting Methuselah as the payer.
+        const n = am.lost[r.seat] ?? 0;
+        if (n > 0 && !caller.ousted) this.emit({ type: "PoolBurned", seat: am.caller, amount: n });
+        return;
+      }
+      case "attachFromAshHeap": {
+        // "Goes to the ash heap when played; if it has been removed when the
+        // referendum passes, it has no effect" [ANK 20220805] — and none if
+        // the vampire has left play. A vampire in torpor is still in play.
+        const seat = getSeat(this.state, r.seat);
+        const card = (seat.ashHeap ?? []).find((c) => c.id === r.cardId);
+        const m = findMinion(this.state, r.minion);
+        if (!card || !m || seat.ousted) return;
+        // "A vampire can have only one" — kept at the attach as well as at
+        // the play, so no path can stack two.
+        if (m.attached.some((p) => p.card.name === r.name)) return;
+        this.emit({ type: "CardLeftZone", seat: r.seat, cardId: card.id, name: card.name, zone: "ashHeap" });
+        this.putPermanentInPlay({
+          card,
+          seat: m.controller,
+          attachTo: m.id,
+          statics: r.statics,
+          tags: [r.name],
+          counters: r.counters,
+        });
+        return;
+      }
     }
   }
 
@@ -7300,6 +7425,17 @@ export class VtesEngine implements EngineOps {
     if (rf) rf.forcedFail = true;
   }
 
+  /** Vox Domini: "The referendum fails" — at ONCE. The same forced failure,
+   *  plus the end of polling, so settle tallies the votes already cast and
+   *  asks for no more (owner ruling 2026-10-24). Still a failure, not a
+   *  cancellation: a title-granting card burns (p. 27). */
+  endPollingAndFail(): void {
+    const rf = this.referendum();
+    if (!rf) return;
+    rf.forcedFail = true;
+    rf.pollingEnded = true;
+  }
+
   /**
    * "…have the action fail" (Yoruba Shrine). Reuses the step the diablerie
    * offer already uses for a failed action: settle resolves `"blocked"` as
@@ -7377,6 +7513,15 @@ export class VtesEngine implements EngineOps {
     const rf = this.referendum();
     if (!rf) return;
     rf.postTally = [...(rf.postTally ?? []), effect];
+  }
+
+  /** "…after the referendum effects are applied" (Treachery, Poison Pill,
+   *  Aura of Invincibility) — run when the effect's scope closes, and only
+   *  on a pass, because only a pass opens one. */
+  addAfterEffect(effect: ReferendumAfterEffect): void {
+    const rf = this.referendum();
+    if (!rf) return;
+    rf.afterEffects = [...(rf.afterEffects ?? []), effect];
   }
 
   /** "Cannot play reaction cards, block or cast votes or ballots this

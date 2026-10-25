@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 323 test files, 3547 tests**, with `npm run typecheck`,
+**Green baseline: 324 test files, 3577 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -926,7 +926,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-225 files under `docs/`, one per mechanic that took a decision. **Read the
+228 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -963,7 +963,8 @@ polling-votes, ballots, politics-locations, referendum-terms, blood-hunt-answers
 once-in-a-game, borrowed-minions, title-riders, in-this-referendum,
 referendum-margin, vampire-votes (whose every vote is; supersedes
 polling-votes §3), vote-changing (turning a vampire's group; the one vote
-count in `derived.ts`).
+count in `derived.ts`), referendum-outcomes (the after-the-effects scope,
+the fail window, `referendumOpenToPlay`).
 
 **Cards and economies:** auctions, blood-bank-actions, blood-banking-locations,
 the-edge, ash-heap-resource, before-range-attachments,
