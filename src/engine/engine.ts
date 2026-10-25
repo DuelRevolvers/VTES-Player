@@ -10893,11 +10893,19 @@ export class VtesEngine implements EngineOps {
         // "If at any point any Methuselah uses a card or effect, the
         // acting Methuselah again gets the impulse back" (p. 8) — for
         // windows driven by the impulse cycle. The combat alternation
-        // steps (range/press/strike/damage) sequence themselves.
+        // steps (range/press/strike/damage) sequence themselves. Every
+        // frame that carries a `cycle` is listed: the referendum was
+        // missing, so an ability used in polling (Yoruba Shrine) left the
+        // caller's earlier pass counted and polling ended without them.
         const t = this.top();
         if (
           t &&
-          (t.kind === "action" || t.kind === "blockAttempt" || t.kind === "cardPlay")
+          (t.kind === "action" ||
+            t.kind === "blockAttempt" ||
+            t.kind === "cardPlay" ||
+            t.kind === "referendum" ||
+            t.kind === "oust" ||
+            t.kind === "torpor")
         ) {
           cycleRewind(t.cycle);
         }

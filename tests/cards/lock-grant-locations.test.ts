@@ -303,6 +303,7 @@ describe("The Black Throne (100172)", () => {
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // C → polling
       ["Alice", "pass"], // Alice polls first, then Bob
       ["Bob", "ability:The Black Throne"], // lock for +2 votes
+      ["Alice", "pass"], // using an effect hands the impulse back (p. 8)
       ["Bob", "vote:grant:bt:against"], // the card is its own source (p. 28)
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);

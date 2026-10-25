@@ -1050,6 +1050,13 @@ a fail-side test pins Privileged Position.
 - `NEEDS_CALLING_VAMPIRE`: the caller riders are not offered on a referendum
   with no calling vampire (a blood hunt).
 
+**Follow-up (0.11.51): testing the two untested cases found two more
+defects**, both on Yoruba Shrine. Using an in-play ability during polling
+did not hand the impulse back to the caller (p. 8): the rewind in
+`useAbility` listed frame kinds and the referendum, oust and torpor frames
+were missing. And the Shrine never unlocked the calling vampire, because it
+looked only for an action frame. Details: `referendum-outcomes-design.md` §6.
+
 ### Wave 109 — changing a vampire's votes (4 cards), 2026-10-24
 
 **Cards:** Pulling Strings and Kindred Coercion (T2, Dominate), Under the

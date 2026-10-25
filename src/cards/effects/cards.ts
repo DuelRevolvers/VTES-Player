@@ -24159,6 +24159,19 @@ const yorubaShrine: CardHandler = {
   },
   useAbility(entry, _owner, _choice, ops) {
     ops.lockPermanent(entry.card.id);
+    // "…unlock the acting minion" in the polling step: the political action
+    // resolved and left the stack before the referendum was called, so no
+    // action frame is there to find — the acting minion is the vampire
+    // calling the referendum. Read off the action frame alone, a referendum
+    // failed and its caller stayed locked.
+    const top = ops.state.frames[ops.state.frames.length - 1];
+    if (top && top.kind === "referendum") {
+      if (top.callingMinion && findMinion(ops.state, top.callingMinion)) {
+        ops.emit({ type: "MinionUnlocked", minion: top.callingMinion });
+      }
+      ops.failReferendum();
+      return;
+    }
     const af = ops.state.frames.find((f) => f.kind === "action");
     if (af && af.kind === "action") {
       // "…unlock the acting minion": the announcement's lock is undone.
@@ -24167,7 +24180,6 @@ const yorubaShrine: CardHandler = {
       }
       ops.failAction();
     }
-    ops.failReferendum();
   },
 };
 

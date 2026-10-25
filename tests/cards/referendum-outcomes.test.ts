@@ -572,6 +572,89 @@ describe("the siblings: what the two engine changes reach beyond the five", () =
   });
 });
 
+describe("the two cases §6 left untested", () => {
+  /** Alice's anarch V1 diablerizes Bob's torpid W and Carol's N is a prince,
+   *  so a blood hunt is called: a referendum with no calling vampire. Each
+   *  caller rider is in the hand of a seat that could play it on a political
+   *  action — Aura with the caller's seat, the other two with Bob's M. */
+  function ridersInHand(state: GameState): void {
+    minion(state, "M").disciplines = { pre: "superior" };
+    state.seats[0]!.hand.push({ id: "aura", name: "Aura of Invincibility" });
+    state.seats[1]!.hand.push({ id: "tr", name: "Treachery" }, { id: "pp", name: "Poison Pill" });
+  }
+  const RIDERS: Array<[string, string]> = [
+    ["Alice", "play:Aura of Invincibility"],
+    ["Bob", "play:Treachery"],
+    ["Bob", "play:Poison Pill"],
+  ];
+
+  it("a blood hunt offers none of the caller riders — it has no calling vampire", () => {
+    const state = threeSeatGame();
+    Object.assign(minion(state, "V1"), { sect: "anarch", capacity: 6, blood: 4 });
+    Object.assign(minion(state, "W"), { inTorpor: true, blood: 1, capacity: 3 });
+    minion(state, "N").title = "prince";
+    ridersInHand(state);
+    const engine = new VtesEngine(state, testRegistry);
+    engine.choose("diablerize:V1:W");
+    const seen = drive(engine, state, []);
+    // The blood hunt is the only referendum here. (`BloodHuntCalled` is
+    // emitted only when one PASSES, and this walker votes no one.)
+    expect(state.eventLog.some((e) => e.type === "DiablerieCommitted")).toBe(true);
+    expect(state.eventLog.some((e) => e.type === "ReferendumResolved")).toBe(true);
+    // The polling step was open to both seats holding a rider.
+    const polling = seen.filter((s) => s.window === "referendum.polling");
+    expect(polling.some((s) => s.seat === "Alice")).toBe(true);
+    expect(polling.some((s) => s.seat === "Bob")).toBe(true);
+    for (const [seat, id] of RIDERS) expect(offered(seen, seat, id), id).toBe(false);
+  });
+
+  it("the CONTROL: the same hands on a political action are offered all three", () => {
+    const state = votingGame();
+    ridersInHand(state);
+    const seen = drive(new VtesEngine(state, testRegistry), state, [CALL]);
+    for (const [seat, id] of RIDERS) expect(offered(seen, seat, id), id).toBe(true);
+  });
+
+  it("Yoruba Shrine fails a referendum the votes would pass — a FAILURE, so the fail side opens", () => {
+    // Alice calls Expulsion naming Bob's W, a ready Banu Haqim; Bob locks
+    // the Shrine before any vote is cast.
+    const state = threeSeatGame();
+    minion(state, "V1").title = "prince";
+    state.seats[0]!.hand.push({ id: "ex1", name: "Expulsion" });
+    minion(state, "W").clan = "Banu Haqim";
+    state.seats[1]!.permanents.push({
+      card: { id: "ys", name: "Yoruba Shrine" },
+      locked: false,
+      usedThisPhase: false,
+      statics: {},
+      tags: ["location"],
+    });
+    state.seats[1]!.hand.push({ id: "pb", name: "Political Backlash" });
+    const engine = new VtesEngine(state, testRegistry);
+    const seen = drive(engine, state, [
+      ["Alice", "play:Expulsion"],
+      ["Alice", "terms:W"],
+      ["Bob", "ability:Yoruba Shrine:ys:cancel"],
+      ["Alice", "vote:V1:for"],
+      ["Bob", "play:Political Backlash"],
+    ]);
+    // "…unlock the acting minion": in polling, that is the calling vampire.
+    expect(state.eventLog.some((e) => e.type === "MinionUnlocked" && e.minion === "V1")).toBe(true);
+    expect(minion(state, "V1").locked).toBe(false);
+    // Using the Shrine handed the impulse back to Alice (p. 8), so polling
+    // finished with her vote in it — and the votes said pass.
+    const r = resolved(state);
+    expect(r.votesFor).toBeGreaterThan(0);
+    expect(r.passed).toBe(false);
+    expect(state.eventLog.some((e) => e.type === "MinionExpelled")).toBe(false);
+    expect(state.eventLog.some((e) => e.type === "ReferendumCancelled")).toBe(false);
+    // A failure, not a cancellation: the fail window opened and Political
+    // Backlash charged the acting Methuselah.
+    expect(seen.some((s) => s.window === "referendum.afterResolution")).toBe(true);
+    expect(pool(state, "Alice")).toBe(8);
+  });
+});
+
 describe("a referendum passing AUTOMATICALLY takes none of them [PIB 20150105]", () => {
   it("resolves with no polling decision at all, the four cards still in hand", () => {
     const state = votingGame();

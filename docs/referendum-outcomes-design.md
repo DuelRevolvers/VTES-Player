@@ -227,7 +227,17 @@ from the plan, or was found while building:
 - **The caller riders are refused when there is no calling vampire**
   (`NEEDS_CALLING_VAMPIRE`). Before that, Treachery's superior half was
   playable in a blood hunt and would have burned yes-voters on a pass.
-- **Not tested:** the blood-hunt and Yoruba Shrine cases. The blood-hunt
-  bar rests on `callingMinion === null`, and Yoruba Shrine fails a
-  referendum through the same `forcedFail` that Vox Domini sets, which the
-  tests cover.
+- **The blood-hunt and Yoruba Shrine cases were tested in 0.11.51, and the
+  Shrine test found two defects.** The blood hunt was fine: none of the
+  four caller riders is offered, with a political-action control offering
+  all of them from the same hands. Yoruba Shrine was not:
+  - **An ability used in polling did not hand the impulse back (p. 8).**
+    `useAbility` rewound the cycle for actions, block attempts, card plays
+    and some combat steps, but not for a referendum, oust or torpor frame.
+    So a caller who had passed stayed passed, and polling ended without
+    their vote. All three now rewind. The Black Throne's test had pinned the
+    old order and was corrected.
+  - **The Shrine never unlocked the calling vampire.** Its `useAbility`
+    looked only for an action frame, and the political action has left the
+    stack before polling begins. In polling, "the acting minion" is
+    `callingMinion` now.
