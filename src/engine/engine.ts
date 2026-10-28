@@ -670,6 +670,15 @@ export class VtesEngine implements EngineOps {
           gained.disciplines[ev.discipline] === undefined ? "basic" : "superior";
         break;
       }
+      case "DiablerieCommitted": {
+        // The diablerist's stamp, for "has committed diablerie since your
+        // last turn" (Rogue) — stamped here, like the victory-point receipt
+        // below, so a replayed log stamps it too.
+        const d = findMinion(this.state, ev.diablerist);
+        const turn = this.state.frames[0];
+        if (d && turn?.kind === "turn") d.lastDiablerieTurn = turn.turnNumber;
+        break;
+      }
       case "VictoryPointGained": {
         const seat = getSeat(this.state, ev.seat);
         seat.victoryPoints += 1;

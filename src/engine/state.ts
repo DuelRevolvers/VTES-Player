@@ -231,6 +231,11 @@ export interface MinionState {
    *  diablerises, cleared for EVERY minion the next time any Gehenna
    *  event is played. docs/gehenna-taxes-design.md §2 */
   ignoresGehennaTax?: boolean;
+  /** The `turnNumber` of this vampire's latest diablerie, for "has
+   *  committed diablerie since your last turn" (Rogue). Written as the
+   *  diablerie happens, because nothing else remembers who diablerized
+   *  whom. docs/marked-vampires-design.md §3 */
+  lastDiablerieTurn?: number;
   /** "…unlocks at the end of the turn" (NRA PAC) — recorded on the minion
    *  when the equip succeeds, because the promise outlives the card that
    *  made it [LSJ 20080619]. docs/table-rule-events-design.md §2 */

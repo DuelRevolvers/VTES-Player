@@ -340,6 +340,12 @@ function fourSeatGame(seed: number): GameState {
     "Saulot's Avenging Fist",
     "Frontal Assault",
     "Priority Contract",
+    // Marked vampires (docs/marked-vampires-design.md, wave 111).
+    "Warrant",
+    "Blood Hunt",
+    "War Party",
+    "Rogue",
+    "Contract",
     // Cost sources (docs/cost-sources-design.md).
     "Ravnos Carnival",
     "Ravnos Cache",

@@ -36,6 +36,7 @@ import type {
 } from "../../engine/index.ts";
 import {
   receivedVictoryPointSinceLastTurn,
+  committedDiablerieSinceLastTurn,
   blockEligibleSeats,
   auraBlocksPolitical,
   bleedAnnounceTax,
@@ -1698,8 +1699,14 @@ function compileActionCard(spec: CardSpec): CardHandler {
               // p. 6's ready — a vampire in torpor is not one — and
               // "younger" is smaller capacity than the acting vampire.
               if (filter?.kind !== undefined && t.kind !== filter.kind) continue;
-              if (filter !== undefined && !isReady(t)) continue;
+              if (filter !== undefined && filter.inTorporToo !== true && !isReady(t)) continue;
               if (filter?.youngerThanActor === true && capacityOf(t) >= capacityOf(m)) {
+                continue;
+              }
+              // "…on a vampire who is not a prince, a justicar or an Inner
+              // Circle member" (Blood Hunt) — the title it holds NOW, so a
+              // card-held title bars it as a printed one does.
+              if (filter?.notTitles !== undefined && t.title !== null && filter.notTitles.includes(t.title)) {
                 continue;
               }
               // "…cannot be the target of other Methuselahs' actions".
@@ -5859,8 +5866,13 @@ export function attachTargets(
   for (const s of seats) {
     if (s.ousted) continue;
     for (const m of s.minions) {
-      if (!isReady(m)) continue;
+      if (a.inTorporToo !== true && !isReady(m)) continue;
       if (a.kind !== undefined && m.kind !== a.kind) continue;
+      // "…a vampire who has committed diablerie since your last turn"
+      // (Rogue), asked of the seat playing the card.
+      if (a.diablerizedSinceYourLastTurn && !committedDiablerieSinceLastTurn(state, m, seatId)) {
+        continue;
+      }
       if (a.clan !== undefined && m.clan !== a.clan) continue;
       if (a.sect !== undefined && m.sect !== a.sect) continue;
       // "…on a ready vampire who follows the Path of <x>" (Terrifying
@@ -7457,9 +7469,22 @@ export function permanentRushGrant(
         pool = ctx.state.seats.flatMap((s) => (s.ousted ? [] : s.minions));
         break;
     }
-    // Only the seat being asked can act, whatever the card says.
+    // "Any vampire CONTROLLED BY ANOTHER METHUSELAH" (Blood Hunt): the
+    // bearer's own side is not offered the rush. Without the flag it is,
+    // as War Party's "any vampire" prints (owner ruling 2026-10-27).
+    if (g.who.othersOnly) {
+      const b = owner.minion === null ? null : findMinion(ctx.state, owner.minion);
+      if (b && b.controller === acting.id) return [];
+    }
+    // Only the seat being asked can act, whatever the card says. An actor
+    // who cannot pay "a Ⓓ action that costs 1 blood" (Warrant) is not
+    // offered it.
     return pool.filter(
-      (m) => m.controller === acting.id && canAct(m) && matches(m, g.who),
+      (m) =>
+        m.controller === acting.id &&
+        canAct(m) &&
+        matches(m, g.who) &&
+        m.blood >= (g.cost?.blood ?? 0),
     );
   };
   const targets = (
@@ -7489,12 +7514,17 @@ export function permanentRushGrant(
     }
     return out;
   };
-  const stealthFor = (target: MinionState): number => {
+  const stealthFor = (target: MinionState, actor: MinionState): number => {
     let n = g?.stealth ?? 0;
     for (const r of g?.stealthByTarget ?? []) {
       if (r.clan !== undefined && target.clan !== r.clan) continue;
       if (r.sect !== undefined && target.sect !== r.sect) continue;
       n += r.delta;
+    }
+    // "Vampires with Auspex [aus] get +1 stealth on that action" (Rogue) —
+    // the actor's derived disciplines, at either level.
+    for (const r of g?.stealthByActor ?? []) {
+      if (disciplinesOf(actor)[r.discipline] !== undefined) n += r.delta;
     }
     return n;
   };
@@ -7531,8 +7561,9 @@ export function permanentRushGrant(
       const args: Parameters<EngineOps["announceEntryAction"]>[2] = {
         targetMinion: target,
       };
-      const stealth = stealthFor(getMinion(ops.state, target));
+      const stealth = stealthFor(getMinion(ops.state, target), getMinion(ops.state, choice.minion));
       if (stealth !== 0) args.stealth = stealth;
+      if (g?.cost) args.cost = g.cost;
       ops.announceEntryAction(entry, choice.minion, args);
       // "Vampires you control can BURN THIS CARD to attempt to enter
       // combat with the attached minion" (Hunting the Quarry) — the
@@ -8888,6 +8919,34 @@ export function referendumPolarity(primitive: EffectPrimitive | null): Referendu
   return REFERENDUM_POLARITY[primitive.kind as ReferendumPrimitive["kind"]] ?? null;
 }
 
+/** "Choose a Camarilla vampire" (Archon), "choose a younger ready vampire"
+ *  (Warrant): the vampires a `refAttachToChosen` may name — any
+ *  Methuselah's, since the card is normally aimed at somebody else's.
+ *  ONE helper for the terms and the play gate [LSJ 20100129], so the two
+ *  cannot disagree. "Younger" is measured from the calling vampire; with
+ *  no caller to measure from, nothing qualifies.
+ *  docs/marked-vampires-design.md §3 */
+function attachToChosenCandidates(
+  state: GameState,
+  who: Extract<EffectPrimitive, { kind: "refAttachToChosen" }>["who"],
+  caller: MinionId | null,
+): MinionState[] {
+  const c = caller === null ? null : findMinion(state, caller);
+  if (who.younger && !c) return [];
+  const out: MinionState[] = [];
+  for (const s of state.seats) {
+    if (s.ousted) continue;
+    for (const m of s.minions) {
+      if (m.kind !== "vampire" || !isReady(m)) continue;
+      if (who.sect !== undefined && m.sect !== who.sect) continue;
+      if (who.clan !== undefined && m.clan !== who.clan) continue;
+      if (who.younger && c && capacityOf(m) >= capacityOf(c)) continue;
+      out.push(m);
+    }
+  }
+  return out;
+}
+
 /** Political action cards: only vampires may play them (p. 10); one
  *  political action per vampire per turn (p. 24); undirected +1 stealth;
  *  success calls the referendum, whose terms and effects come from the
@@ -8951,6 +9010,16 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
         // card-announced action is the card name.
         if (!canRepeatAction(ctx.state, m, spec.name)) continue;
         if (!meetsRequirements(m, spec)) continue;
+        // "Cannot be used or played if the conditions for the terms of the
+        // referendum cannot be met (e.g. no legal selection)"
+        // [LSJ 20100129] — per calling vampire, since Warrant's "younger"
+        // is measured from it; the same helper as the terms.
+        if (
+          primitive?.kind === "refAttachToChosen" &&
+          attachToChosenCandidates(ctx.state, primitive.who, m.id).length === 0
+        ) {
+          continue;
+        }
         const mode = spec.modes[0] ?? { level: "basic" as const, discipline: null, effects: [] };
         const cost = costOf(spec, ctx, m, mode);
         if (seat.pool < cost.pool || m.blood < cost.blood) continue;
@@ -9068,21 +9137,13 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
           }
         }
       } else if (primitive.kind === "refAttachToChosen") {
-        // "Choose a Camarilla vampire" — any Methuselah's, since the card
-        // is normally aimed at somebody else's (§2).
-        for (const s of state.seats) {
-          if (s.ousted) continue;
-          for (const m of s.minions) {
-            if (m.kind !== "vampire" || !isReady(m)) continue;
-            if (primitive.who.sect !== undefined && m.sect !== primitive.who.sect) continue;
-            if (primitive.who.clan !== undefined && m.clan !== primitive.who.clan) continue;
-            options.push({
-              id: `terms:${m.id}`,
-              kind: "chooseTerms",
-              label: `Choose ${m.name}`,
-              params: { minion: m.id },
-            });
-          }
+        for (const m of attachToChosenCandidates(state, primitive.who, frame.callingMinion ?? null)) {
+          options.push({
+            id: `terms:${m.id}`,
+            kind: "chooseTerms",
+            label: `Choose ${m.name}`,
+            params: { minion: m.id },
+          });
         }
       } else if (primitive.kind === "refMoveLocation") {
         for (const l of allLocations(state)) {
@@ -9504,6 +9565,10 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
             attachTo: bearer,
             statics: spec.permanent?.statics ?? {},
             tags: spec.permanent?.tags ?? [],
+            // On somebody else's vampire, but it answers to the Methuselah
+            // who called it (p. 16) — the Priority Contract record. Left
+            // out, the bearer's controller read as its controller.
+            controller: frame.caller,
           });
           break;
         }

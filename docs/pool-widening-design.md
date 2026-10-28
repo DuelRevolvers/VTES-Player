@@ -1006,6 +1006,37 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 111 — marked vampires (5 cards), 2026-10-27
+
+**Cards:** Warrant (political action), Blood Hunt and War Party (actions),
+Rogue and Contract (masters), all T1. Each goes on a minion and lets OTHER
+minions enter combat with it. Design and owner rulings:
+`marked-vampires-design.md`. Version 0.11.53.
+
+**The mechanic** is the existing `permanent.rushGrant` with a bearer
+target. New pieces: `rushGrant.cost` (Warrant's 1 blood),
+`rushGrant.who.othersOnly` (Blood Hunt), `rushGrant.stealthByActor`
+(Rogue's Auspex), `refAttachToChosen.who.younger`, `targetFilter.notTitles`,
+`inTorporToo` on both attach filters (p. 44), and
+`MinionState.lastDiablerieTurn`, stamped by the `DiablerieCommitted`
+reducer, with `committedDiablerieSinceLastTurn` beside the Lextalionis
+helper.
+
+**Defect 1 — a passed `refAttachToChosen` recorded no controller.** On a
+rival's vampire, Archon read as controlled by the bearer's player, not the
+caller (p. 16). Nothing in Archon reads it, so nothing showed. Fixed.
+
+**Defect 2 — Archon could be called with no legal choice.** The
+[LSJ 20100129] gate existed for Lextalionis only. `attachToChosenCandidates`
+now serves the terms and the play gate for every `refAttachToChosen`.
+
+**Found, not fixed — a granted action does not count as requiring its
+card's clan** [LSJ 20080604]. The readers of "an action requiring X" look
+only at a card played from hand. Contract is whole (no reader asks about
+Banu Haqim), but The Gate of Acheron's counter action should count as
+requiring Hecata, and four Hecata readers exist. Raised with the owner
+(`marked-vampires-design.md` §8).
+
 ### Wave 110 — referendum outcomes (5 cards), 2026-10-24
 
 **Cards:** Treachery (T2, Presence), Poison Pill, Political Backlash, Aura

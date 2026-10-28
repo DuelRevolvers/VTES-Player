@@ -178,6 +178,21 @@ export function receivedVictoryPointSinceLastTurn(
   return last === undefined || got > last;
 }
 
+/** "A vampire who has committed diablerie since your last turn" (Rogue):
+ *  the same window as the victory-point test above — "your last turn does
+ *  not qualify, your current turn does" [LSJ 20020429].
+ *  docs/marked-vampires-design.md §3 */
+export function committedDiablerieSinceLastTurn(
+  state: GameState,
+  m: MinionState,
+  since: SeatId,
+): boolean {
+  const got = m.lastDiablerieTurn;
+  if (got === undefined) return false;
+  const last = getSeat(state, since).lastTurnEnded;
+  return last === undefined || got > last;
+}
+
 /** Next standing seat clockwise — "when your prey is ousted, the next
  *  Methuselah to your left becomes your new prey" (p. 15). */
 export function preyOf(state: GameState, seat: SeatId): SeatId {

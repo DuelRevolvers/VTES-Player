@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-25T05:04:58.246Z",
+ "fetchedAt": "2026-10-28T00:27:10.885Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -1666,6 +1666,30 @@
     "image": "https://static.krcg.org/card/bloodfury.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "100202": {
+   "card": {
+    "kind": "library",
+    "id": 100202,
+    "name": "Blood Hunt",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Requires a ready prince or justicar.\nⒹ Put this card on a vampire who is not a prince, a justicar or an Inner Circle member. Any vampire controlled by another Methuselah may enter combat with this vampire as a +1 stealth Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bloodhunt.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -3377,6 +3401,29 @@
     "sets": [
      "Final Nights",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "100420": {
+   "card": {
+    "kind": "library",
+    "id": 100420,
+    "name": "Contract",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Contract.\nChoose an Assamite and put this card on a ready minion. The chosen Assamite can enter combat with the attached minion as a +1 stealth Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/contract.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -13695,6 +13742,27 @@
    },
    "supported": true
   },
+  "101647": {
+   "card": {
+    "kind": "library",
+    "id": 101647,
+    "name": "Rogue",
+    "types": [
+     "Master"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Master: trifle.\nPlay on a vampire who has committed diablerie since your last turn. Any vampire can enter combat with this vampire as a Ⓓ action. Vampires with Auspex [aus] get +1 stealth on that action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/rogue.jpg",
+    "sets": [
+     "2009 Tournament / Storyline promo"
+    ]
+   },
+   "supported": true
+  },
   "101649": {
    "card": {
     "kind": "library",
@@ -17430,6 +17498,30 @@
    },
    "supported": true
   },
+  "102145": {
+   "card": {
+    "kind": "library",
+    "id": 102145,
+    "name": "War Party",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Requires an archbishop, priscus, cardinal or regent.\nⒹ Put this card on a vampire who is not an archbishop, priscus, cardinal or regent. Any vampire may enter combat with that vampire as a +1 stealth Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/warparty.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Black Hand",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "102147": {
    "card": {
     "kind": "library",
@@ -17447,6 +17539,27 @@
     "image": "https://static.krcg.org/card/warningsirens.jpg",
     "sets": [
      "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
+  "102148": {
+   "card": {
+    "kind": "library",
+    "id": 102148,
+    "name": "Warrant",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Choose a younger ready vampire. If this referendum succeeds, put this card on that vampire. Any ready vampire may enter combat with this vampire as a Ⓓ action that costs 1 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/warrant.jpg",
+    "sets": [
+     "Lords of the Night"
     ]
    },
    "supported": true

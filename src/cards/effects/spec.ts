@@ -583,7 +583,18 @@ export type EffectPrimitive =
        *  filters on the chosen target, which `target` alone does not: a
        *  bare "anyMinion" would offer allies and elders too.
        *  docs/block-taxes-design.md §4 */
-      targetFilter?: { kind?: "vampire" | "ally"; youngerThanActor?: boolean };
+      targetFilter?: {
+        kind?: "vampire" | "ally";
+        youngerThanActor?: boolean;
+        /** "…on a vampire who is NOT a prince, a justicar or an Inner
+         *  Circle member" (Blood Hunt) — the current title, printed or
+         *  card-held. docs/marked-vampires-design.md §3 */
+        notTitles?: VampireTitle[];
+        /** "…on A VAMPIRE", not "a ready vampire": a vampire in torpor is
+         *  an eligible target by default (p. 44, "Target"). Without it a
+         *  filter means a READY target, which is Kaymakli Barrier's. */
+        inTorporToo?: boolean;
+      };
       /** "Put this card on this vampire, LOCKED" (Rutor's Hand). */
       locked?: boolean;
       /** "…to represent the unique Anarch title of Baron OF BOSTON"
@@ -1775,7 +1786,12 @@ export type EffectPrimitive =
   /** "Choose a \<filter\> vampire. Successful referendum means this card
    *  is put ON the chosen vampire" (Archon) — `refPutInPlay` with a
    *  bearer chosen in the terms. docs/opposing-statics-design.md §2 */
-  | { kind: "refAttachToChosen"; who: { sect?: Sect; clan?: string } }
+  | {
+      kind: "refAttachToChosen";
+      /** `younger`: "Choose a YOUNGER ready vampire" (Warrant) — younger
+       *  than the calling vampire. docs/marked-vampires-design.md §3 */
+      who: { sect?: Sect; clan?: string; younger?: boolean };
+    }
   /** "Allies and younger vampires get −1 intercept" (Perfect Paragon
    *  superior) — the ACTION-scoped twin of
    *  `PermanentStatics.opposingInterceptPenalty`. The English "and" is a
@@ -2674,6 +2690,12 @@ export interface CardSpec {
        *  Discipline master cards have nothing to give a vampire already at
        *  superior in that Discipline. */
       notSuperiorDiscipline?: string;
+      /** "Play on a vampire WHO HAS COMMITTED DIABLERIE SINCE YOUR LAST
+       *  TURN" (Rogue) — "your current turn does" count [LSJ 20020429].
+       *  docs/marked-vampires-design.md §3 */
+      diablerizedSinceYourLastTurn?: boolean;
+      /** "…on a vampire", not "a ready vampire" (p. 44, "Target"). */
+      inTorporToo?: boolean;
     };
     /** "A vampire can have only one archetype" — at most one card
      *  carrying this key may sit on a given minion. */
@@ -3479,7 +3501,19 @@ export interface CardSpec {
          *  have looked right — and been narrower than the card. */
         clan?: string | string[];
         sect?: Sect;
+        /** "Any vampire CONTROLLED BY ANOTHER METHUSELAH may enter combat
+         *  with this vampire" (Blood Hunt) — not the bearer's controller.
+         *  Without it the bearer's own side may rush it too, as War Party's
+         *  "any vampire" prints (owner ruling 2026-10-27,
+         *  docs/marked-vampires-design.md §5). */
+        othersOnly?: boolean;
       };
+      /** "…as a Ⓓ action THAT COSTS 1 BLOOD" (Warrant) — paid at
+       *  resolution, as `bleedGrant.cost` is (p. 27). */
+      cost?: { blood?: number };
+      /** "Vampires WITH AUSPEX [aus] get +1 stealth on that action"
+       *  (Rogue) — the actor's discipline at any level, derived. */
+      stealthByActor?: Array<{ discipline: string; delta: number }>;
       /** What they may enter combat with; "prey" is the *card
        *  controller's* prey, whoever is acting. */
       target: {

@@ -6838,6 +6838,33 @@ export const cardSpecs: CardSpec[] = [
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
+    // "Master: trifle. Play on a vampire who has committed diablerie since
+    // your last turn. Any vampire can enter combat with this vampire as a
+    // Ⓓ action. Vampires with Auspex [aus] get +1 stealth on that action."
+    // "Your last turn does not qualify, your current turn does"
+    // [LSJ 20020429]. docs/marked-vampires-design.md
+    krcgId: 101647,
+    name: "Rogue",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    trifle: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Rogue"],
+      // "A vampire", not "a ready vampire" (p. 44, "Target").
+      attach: { scope: "any", kind: "vampire", diablerizedSinceYourLastTurn: true, inTorporToo: true },
+      rushGrant: {
+        who: { scope: "any", kind: "vampire" },
+        target: { scope: "bearer" },
+        stealthByActor: [{ discipline: "aus", delta: 1 }],
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
     // "Title. Put this card on a Sabbat vampire you control with capacity 8
     // or more to represent the unique Sabbat title of regent. Sabbat
     // vampires can enter combat with this vampire as a Ⓓ action. If a
@@ -6927,6 +6954,31 @@ export const cardSpecs: CardSpec[] = [
       statics: {},
       tags: ["Priority Contract", "contract"],
       attach: { scope: "prey" },
+      rushGrant: {
+        who: { scope: "chosen" },
+        target: { scope: "bearer" },
+        stealth: 1,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Contract. Choose an Assamite and put this card on a ready minion.
+    // The chosen Assamite can enter combat with the attached minion as a
+    // +1 stealth Ⓓ action." Unlike Priority Contract, ANY Assamite and
+    // ANY ready minion; the Assamite is asked after the minion (the bespoke
+    // `contract` handler). docs/marked-vampires-design.md §3
+    krcgId: 100420,
+    name: "Contract",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Contract", "contract"],
+      attach: { scope: "any" },
       rushGrant: {
         who: { scope: "chosen" },
         target: { scope: "bearer" },
@@ -14038,6 +14090,95 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
+    // "+1 stealth action. Requires a ready prince or justicar.
+    //  Ⓓ Put this card on a vampire who is not a prince, a justicar or an
+    //  Inner Circle member. Any vampire controlled by another Methuselah
+    //  may enter combat with this vampire as a +1 stealth Ⓓ action."
+    // The CARD, not the blood hunt referendum (p. 35): it calls no
+    // referendum. docs/marked-vampires-design.md §4
+    krcgId: 100202,
+    name: "Blood Hunt",
+    cardType: "action",
+    bloodCost: 0,
+    requiresTitle: ["prince", "justicar"],
+    permanent: {
+      where: "bearer",
+      statics: {},
+      // No own-name tag: on a target-attach action that tag is what bars
+      // a second copy on the same vampire, and this card prints no such
+      // limit (the Phantasmagoria precedent).
+      tags: [],
+      rushGrant: {
+        who: { scope: "any", kind: "vampire", othersOnly: true },
+        target: { scope: "bearer" },
+        stealth: 1,
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "attachSelf",
+            // "A vampire", not "a ready vampire": one in torpor is an
+            // eligible target (p. 44, "Target").
+            target: "anyMinion",
+            targetFilter: {
+              kind: "vampire",
+              notTitles: ["prince", "justicar", "innerCircle"],
+              inTorporToo: true,
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires an archbishop, priscus, cardinal or
+    //  regent. Ⓓ Put this card on a vampire who is not an archbishop,
+    //  priscus, cardinal or regent. Any vampire may enter combat with that
+    //  vampire as a +1 stealth Ⓓ action."
+    krcgId: 102145,
+    name: "War Party",
+    cardType: "action",
+    bloodCost: 0,
+    requiresTitle: ["archbishop", "priscus", "cardinal", "regent"],
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [], // no "only one" printed — see Blood Hunt
+      // "Any vampire" — the bearer's own side too, where Blood Hunt prints
+      // "controlled by another Methuselah" (owner ruling 2026-10-27).
+      rushGrant: {
+        who: { scope: "any", kind: "vampire" },
+        target: { scope: "bearer" },
+        stealth: 1,
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "attachSelf",
+            target: "anyMinion",
+            targetFilter: {
+              kind: "vampire",
+              notTitles: ["archbishop", "priscus", "cardinal", "regent"],
+              inTorporToo: true,
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
     // "Master. Put this card on any minion. While it is not this minion's
     //  turn, using an effect to unlock this minion or to allow this minion
     //  to block as if unlocked costs an additional pool. This minion may
@@ -14483,6 +14624,39 @@ export const cardSpecs: CardSpec[] = [
         level: "basic",
         discipline: null,
         effects: [{ kind: "refAttachToChosen", who: { sect: "camarilla" } }],
+      },
+    ],
+  },
+  // --- Marked vampires: cards that let OTHERS enter combat with the
+  //     bearer (docs/marked-vampires-design.md) ---
+  {
+    // "Choose a younger ready vampire. If this referendum succeeds, put
+    // this card on that vampire. Any ready vampire may enter combat with
+    // this vampire as a Ⓓ action that costs 1 blood."
+    krcgId: 102148,
+    name: "Warrant",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Warrant"],
+      // "Any ready vampire" — the bearer's own side too, by the text
+      // (owner ruling 2026-10-27, design §5).
+      rushGrant: {
+        who: { scope: "any", kind: "vampire" },
+        target: { scope: "bearer" },
+        cost: { blood: 1 },
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // Younger than the CALLING vampire; with none at the table the
+        // card cannot be called [LSJ 20100129].
+        effects: [{ kind: "refAttachToChosen", who: { younger: true } }],
       },
     ],
   },
@@ -25597,6 +25771,48 @@ const frontalAssault: CardHandler = {
 };
 
 /**
+ * Contract (100420) — "Choose an Assamite and put this card on a ready
+ * minion." Priority Contract's two picks, widened: ANY Assamite (the card
+ * does not say "you control") and ANY ready minion. The compiled attach
+ * play picks the minion and a choice frame then asks for the Assamite,
+ * because the pair list reaches ~60 rows at a full table and a master card
+ * fixes nothing at announcement (docs/marked-vampires-design.md §3). The
+ * chosen Assamite's controller is the one who can take the rush.
+ */
+const assamitesInPlay = (state: GameState): MinionState[] =>
+  state.seats
+    .flatMap((s) => (s.ousted ? [] : s.minions))
+    // "Assamite" is the V5 Banu Haqim clan (the Priority Contract trap).
+    .filter((m) => m.kind === "vampire" && m.clan === "Banu Haqim");
+const contractBase = compileSpec(specByName("Contract"));
+const contract: CardHandler = {
+  ...contractBase,
+  options(card, ctx) {
+    // "Choose an Assamite" — with none in play there is nothing to choose,
+    // so the card cannot be played.
+    if (assamitesInPlay(ctx.state).length === 0) return [];
+    return contractBase.options?.(card, ctx) ?? [];
+  },
+  resolve(play, ops) {
+    contractBase.resolve?.(play, ops);
+    ops.raiseChoice({ seat: play.seat, cardName: "Contract", cardId: play.card.id, key: "assamite" });
+  },
+  choiceOptions(frame, state) {
+    return assamitesInPlay(state).map((m) => ({
+      id: `choice:Contract:${frame.cardId}:assamite:${m.id}`,
+      kind: "answerChoice" as const,
+      label: `Contract: choose ${m.name}`,
+      params: { minion: m.id },
+    }));
+  },
+  applyChoice(frame, choice, ops) {
+    const chosen = choice.params["minion"];
+    const entry = findEntryById(ops.state, frame.cardId);
+    if (entry && chosen) entry.chosen = chosen;
+  },
+};
+
+/**
  * Priority Contract (101487) — two picks at play time, so its options
  * enumerate (chosen Assamite × prey minion) pairs rather than the single
  * target `attach` produces; the Assamite lands in `entry.chosen`, which
@@ -27303,6 +27519,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     dummyCorporation,
     frontalAssault,
     priorityContract,
+    contract,
     regent,
     ravnosCarnival,
     ravnosCache,
