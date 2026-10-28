@@ -851,8 +851,9 @@ Each has cost an hour of "why is my card not offered":
   every `refAttachToChosen`: Archon, Warrant), which refuses the call.
 - A granted action does not count as requiring its card's clan
   [LSJ 20080604]: `af.card` is null for it. Unobservable for Contract;
-  observable for The Gate of Acheron against the Hecata readers. Open
-  item (`docs/marked-vampires-design.md` §8).
+  observable for The Gate of Acheron against the Hecata readers. Fix
+  DESIGNED and reviewed 2026-10-27, not built
+  (`docs/granted-action-requirements-design.md`).
 - Diablerie's Red List trophies are unmodelled (TODO in
   `commitDiablerie`); steps 2 and 4 are built.
 - The `.44 Magnum` bespoke handler does not honour the
@@ -960,7 +961,8 @@ block-tax, fail-block, no-combat, unlock-and-block, end-action,
 after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
 choosing-a-minion, hunt-payouts, stealable-locations, out-of-turn-cancels,
-bleed-redirects, master-intercept, hunt-success, marked-vampires.
+bleed-redirects, master-intercept, hunt-success, marked-vampires,
+granted-action-requirements.
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,
