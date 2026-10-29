@@ -265,6 +265,13 @@ export type LegalOption =
       source: CardInstanceId;
       minion: MinionId;
       params: Record<string, string>;
+      /** An action TO ENTER COMBAT — what Enrage superior's toll exempts.
+       *  Said by the enumerator, because the option is all the gate has to
+       *  ask before the action exists (docs/bearer-rush-grants-design.md §3). */
+      entersCombat?: true;
+      /** The granted action's own cost, paid on success (p. 27). The gate
+       *  adds it to a toll paid at announcement. */
+      cost?: { blood?: number; pool?: number };
     }
   /** Spend a "1 optional maneuver during that combat" credit. */
   /** Spend a "can prevent N damage during the resulting combat" credit

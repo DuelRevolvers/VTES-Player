@@ -1160,6 +1160,15 @@ function actingConditionHolds(
   return true;
 }
 
+/** "Choose X minions and put this card in play" (Bloodlust), if this mode
+ *  prints it. docs/bearer-rush-grants-design.md §3 */
+function chooseOwnMinionsOf(mode: CardMode): { extra: number } | null {
+  for (const e of mode.effects) {
+    if (e.kind === "putInPlayOnSuccess" && e.chooseOwnMinions) return e.chooseOwnMinions;
+  }
+  return null;
+}
+
 /** The one effect in a mode that needs an announced target, if any. */
 function targetRider(mode: CardMode): EffectPrimitive | null {
   for (const e of mode.effects) {
@@ -1697,7 +1706,7 @@ function compileActionCard(spec: CardSpec): CardHandler {
                 : ctx.state.seats.filter((s) => !s.ousted).flatMap((s) => s.minions);
             const filter = attach.targetFilter;
             for (const t of pool) {
-              if (t.attached.some((p) => p.tags.includes(spec.name))) continue;
+              if (!attach.stacks && t.attached.some((p) => p.tags.includes(spec.name))) continue;
               // "…on a YOUNGER READY VAMPIRE" (Kaymakli Barrier). Ready is
               // p. 6's ready — a vampire in torpor is not one — and
               // "younger" is smaller capacity than the acting vampire.
@@ -1715,6 +1724,17 @@ function compileActionCard(spec: CardSpec): CardHandler {
               // "…cannot be the target of other Methuselahs' actions".
               if (untargetableBy(t, ctx.seat, m)) continue;
               push(mode, { target: t.id });
+            }
+            continue;
+          }
+          const chooseOwn = chooseOwnMinionsOf(mode);
+          if (chooseOwn) {
+            // "Cost: X blood. Choose X minions" (Bloodlust): one option per
+            // X, which the acting vampire must be able to pay (p. 9) and
+            // which must leave enough distinct minions to choose. The
+            // minions themselves are picked before announcement.
+            for (let x = 0; x <= m.blood && x + chooseOwn.extra <= seat.minions.length; x++) {
+              push(mode, { xBlood: String(x) });
             }
             continue;
           }
@@ -2655,7 +2675,7 @@ function compileActionCard(spec: CardSpec): CardHandler {
         bearerFromTarget?: boolean;
         grantsTitle?: VampireTitle;
         grantsTitleCity?: string;
-      } = { statics, tags: [spec.name] };
+      } = { statics, tags: [spec.name, ...(eff.tags ?? [])] };
       if (eff.locked) r.locked = true;
       // "…to represent the unique Anarch title of Baron of Boston" — the
       // "title" tag is what the master path already sets, so a card in
@@ -2670,6 +2690,32 @@ function compileActionCard(spec: CardSpec): CardHandler {
       // one; otherwise that param belongs to a different clause (§9).
       if (eff.target !== undefined) r.bearerFromTarget = true;
       return r;
+    };
+  }
+  // "An action to enter combat" — what Enrage superior's toll exempts,
+  // asked of a play option before any action exists. The announced action
+  // answers the same question from its frame (`entersCombat` in the
+  // engine), and both come down to "a rush target, and nothing saying it
+  // does not fight".
+  handler.entersCombat = (level) =>
+    spec.modes.some(
+      (m) =>
+        (level === null || m.level === level) &&
+        m.effects.some((e) => e.kind === "actionEnterCombat"),
+    );
+  if (spec.modes.some((m) => chooseOwnMinionsOf(m) !== null)) {
+    handler.prePlayPicks = (option, state) => {
+      const extra = chooseOwnMinionsOf(modeOf(spec, option.mode, option.params["variant"]))?.extra;
+      const actor = option.minion ? findMinion(state, option.minion) : null;
+      if (extra === undefined || !actor) return null;
+      const want = Number(option.params["xBlood"] ?? "0") + extra;
+      const picked = (option.params["chosen"] ?? "").split(",").filter(Boolean);
+      // Distinct minions YOU control, ready or in torpor, the acting
+      // vampire among them (design §4).
+      const candidates = getSeat(state, actor.controller)
+        .minions.filter((m) => !picked.includes(m.id))
+        .map((m) => m.id);
+      return { remaining: want - picked.length, candidates };
     };
   }
   // "Put this card in play. It becomes a 1-capacity vampire"
@@ -2718,6 +2764,7 @@ function compileActionCard(spec: CardSpec): CardHandler {
         statics?: PermanentStatics;
         locked?: boolean;
         chosenMinion?: MinionId;
+        chosenMinions?: MinionId[];
       } = {
         tags: eff.tags ?? [spec.name, "location"],
       };
@@ -2726,6 +2773,11 @@ function compileActionCard(spec: CardSpec): CardHandler {
       // vampire chosen at announcement goes onto the entry.
       const chosen = playParams?.["target"];
       if (eff.chooseVampire === true && chosen !== undefined) r.chosenMinion = chosen;
+      // "Choose X minions and put this card in play" (Bloodlust): the
+      // minions picked before announcement, as a list.
+      if (eff.chooseOwnMinions) {
+        r.chosenMinions = (playParams?.["chosen"] ?? "").split(",").filter(Boolean);
+      }
       // "Put this card in play, LOCKED" (Gather) — the card pays a turn
       // before its own ability is available.
       if (eff.locked === true) r.locked = true;
@@ -7397,6 +7449,7 @@ export function permanentBleedGrant(
           source: entry.card.id,
           minion: m.id,
           params: { minion: m.id },
+          ...(g.cost ? { cost: g.cost } : {}),
         });
       }
       return out;
@@ -7477,8 +7530,13 @@ export function permanentRushGrant(
         break;
       }
       case "chosen": {
-        const c = entry.chosen ? findMinion(ctx.state, entry.chosen) : null;
-        pool = c ? [c] : [];
+        // One chosen minion (`chosen`), or several: "choose X minions and
+        // put this card in play" (Bloodlust). Either can have left play.
+        const picked = [...(entry.chosen ? [entry.chosen] : []), ...(entry.chosenMinions ?? [])];
+        pool = picked.flatMap((id) => {
+          const c = findMinion(ctx.state, id);
+          return c ? [c] : [];
+        });
         break;
       }
       case "controller":
@@ -7532,6 +7590,21 @@ export function permanentRushGrant(
       for (const m of s.minions) {
         if (m.id === actor.id || !isReady(m)) continue;
         if (!matches(m, g.target)) continue;
+        // "…with a vampire with capacity 4 or less OR WITH AN ALLY"
+        // (Scourge): the bound is on vampires, so an ally passes it.
+        if (
+          g.target.vampireMaxCapacity !== undefined &&
+          m.kind === "vampire" &&
+          capacityOf(m) > g.target.vampireMaxCapacity
+        ) {
+          continue;
+        }
+        // "…a ready vampire CONTROLLED BY ANOTHER METHUSELAH" (Templar).
+        if (g.target.othersOnly && m.controller === actor.controller) continue;
+        // "…cannot be the target of other Methuselahs' actions" (Secure
+        // Haven). The hand rush (`enumerateRushTargets`) always asked; this
+        // granted one never did, so Archon could rush into a Secure Haven.
+        if (untargetableBy(m, actor.controller, actor)) continue;
         out.push(m);
       }
     }
@@ -7555,6 +7628,9 @@ export function permanentRushGrant(
     actionOptions(entry, owner, ctx) {
       if (!g) return [];
       if (ctx.window !== "turn.minion") return [];
+      // "[pre] … may enter combat with any minion" — the inferior Enrage
+      // grants it, the superior on the same card in play does not.
+      if (g.requiresTag !== undefined && !entry.tags.includes(g.requiresTag)) return [];
       const options: LegalOption[] = [];
       for (const actor of actors(entry, owner, ctx)) {
         // One use per minion per copy per turn (p. 20).
@@ -7573,6 +7649,8 @@ export function permanentRushGrant(
             source: entry.card.id,
             minion: actor.id,
             params: { target: t.id },
+            entersCombat: true,
+            ...(g.cost ? { cost: g.cost } : {}),
           });
         }
       }
@@ -7698,6 +7776,7 @@ export function vulnerableGrant(
           source: entry.card.id,
           minion: m.id,
           params: {},
+          ...(v?.cost ? { cost: v.cost } : {}),
         });
       }
       return options;
@@ -8383,6 +8462,8 @@ function rushGrant(
           source: entry.card.id,
           minion: actor.id,
           params: { target: t },
+          entersCombat: true,
+          ...(rush.cost ? { cost: rush.cost } : {}),
         });
       }
       return options;
@@ -8955,7 +9036,7 @@ function attachToChosenCandidates(
   caller: MinionId | null,
 ): MinionState[] {
   const c = caller === null ? null : findMinion(state, caller);
-  if (who.younger && !c) return [];
+  if ((who.younger || who.sameSectAsCaller) && !c) return [];
   const out: MinionState[] = [];
   for (const s of state.seats) {
     if (s.ousted) continue;
@@ -8964,6 +9045,10 @@ function attachToChosenCandidates(
       if (who.sect !== undefined && m.sect !== who.sect) continue;
       if (who.clan !== undefined && m.clan !== who.clan) continue;
       if (who.younger && c && capacityOf(m) >= capacityOf(c)) continue;
+      // "Choose a vampire OF THE SAME SECT" (Scourge): the caller's sect as
+      // the terms are chosen, and "a vampire" includes the caller. A
+      // caller with no sect has no "same" to match.
+      if (who.sameSectAsCaller && c && (c.sect === null || m.sect !== c.sect)) continue;
       out.push(m);
     }
   }
@@ -9593,6 +9678,13 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
             // out, the bearer's controller read as its controller.
             controller: frame.caller,
           });
+          // "…and UNLOCK THIS ACTING VAMPIRE" (Scourge) — on a pass only,
+          // which is the only way here. Delaying Tactics' guard: a caller
+          // still in play and still locked.
+          if (primitive.unlockCaller && frame.callingMinion) {
+            const c = findMinion(ops.state, frame.callingMinion);
+            if (c?.locked) ops.emit({ type: "MinionUnlocked", minion: c.id });
+          }
           break;
         }
         case "refMoveLocation": {
@@ -17196,7 +17288,28 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     if (frenzy && ctx.window === "card.asPlayed" && !entry.locked) {
       const play = ctx.pendingCard;
       const cf = ctx.combat;
-      if (play && play.isFrenzy && cf) {
+      const offerCancel = (): void => {
+        out.push({
+          id: `ability:${spec.name}:${entry.card.id}:cancel`,
+          kind: "useAbility",
+          label: `${spec.name}: cancel ${play?.card.name ?? "the card"}`,
+          source: entry.card.id,
+          params: { act: "frenzyCancel" },
+        });
+      };
+      const shielded = (id: string): boolean => {
+        const m = findMinion(ctx.state, id);
+        return !!m && m.controller === controller && (frenzy.clan === undefined || m.clan === frenzy.clan);
+      };
+      if (play && play.isFrenzy && play.asAction) {
+        // A frenzy ACTION card "is played on" the minions it names as it is
+        // played: the vampire Enrage goes on, the vampire Deep Song
+        // superior enters combat with, any minion Bloodlust chooses (owner
+        // ruling 2026-10-28, docs/bearer-rush-grants-design.md §5). All are
+        // fixed before the as-played window opens (p. 25).
+        const named = [play.params["target"] ?? "", ...(play.params["chosen"] ?? "").split(",")];
+        if (named.some((id) => id !== "" && shielded(id))) offerCancel();
+      } else if (play && play.isFrenzy && cf) {
         // Which combatant the frenzy card is used ON, derived from its
         // own mode's effects — the query the round-recurring wave built
         // for Tranquility Shield's immunity (§6).
@@ -17204,20 +17317,7 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         const other = playerSide === "acting" ? "opposing" : "acting";
         const target = play.frenzyOnOpponent ? other : playerSide;
         const victim = target === "acting" ? cf.acting : cf.opposing;
-        const m = findMinion(ctx.state, victim);
-        if (
-          m &&
-          m.controller === controller &&
-          (frenzy.clan === undefined || m.clan === frenzy.clan)
-        ) {
-          out.push({
-            id: `ability:${spec.name}:${entry.card.id}:cancel`,
-            kind: "useAbility",
-            label: `${spec.name}: cancel ${play.card.name}`,
-            source: entry.card.id,
-            params: { act: "frenzyCancel" },
-          });
-        }
+        if (shielded(victim)) offerCancel();
       }
     }
     return out;
@@ -17326,7 +17426,10 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     extraUse["frenzyCancel"] = (entry, _owner, _choice, ops) => {
       ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
       // "(cost is still paid)" — no refund, the flag Sudden Reversal
-      // already distinguishes.
+      // already distinguishes. An ACTION card has paid nothing yet (p. 27)
+      // and a cancelled one would pay nothing at all (p. 16); the Grove's
+      // text says it still does, and card text wins (p. 16).
+      ops.payPendingActionCost();
       ops.cancelPendingCard(false);
     };
   }

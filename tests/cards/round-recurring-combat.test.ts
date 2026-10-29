@@ -590,10 +590,13 @@ describe("frenzy classification (docs/round-recurring-combat-design.md §6)", ()
       "Terror Frenzy",
     ]);
     // …and the non-combat ones are named too, so a new frenzy card of
-    // either kind still has to be looked at deliberately.
+    // either kind still has to be looked at deliberately. The ACTION ones
+    // are "played on" the minions they name before any combat exists,
+    // which is how Meditative Grove reads them
+    // (docs/bearer-rush-grants-design.md §5).
     expect(
       frenzy.filter((s) => s.cardType !== "combat").map((s) => s.name).sort(),
-    ).toEqual(["Deep Song"]);
+    ).toEqual(["Bloodlust", "Deep Song", "Enrage"]);
     const target = (name: string, level: string): string => {
       const spec = frenzy.find((s) => s.name === name)!;
       const mode = spec.modes.find((m) => m.level === level)!;

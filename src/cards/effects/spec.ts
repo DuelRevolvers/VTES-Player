@@ -494,6 +494,14 @@ export type EffectPrimitive =
        *  target for directedness, and is written on the entry as
        *  `chosenMinion`. docs/vote-changing-design.md §1 */
       chooseVampire?: boolean;
+      /** "Cost: X blood. Choose X minions and put this card in play"
+       *  (Bloodlust; X+1 at superior, so `extra: 1`). Minions YOU CONTROL:
+       *  the card prints no Ⓓ, and naming another Methuselah's minion would
+       *  direct the action (Glossary, "Directed Action"). One play option
+       *  per X (`xBlood`, paid on success, p. 27); the minions are picked
+       *  before announcement (`prePlayPicks`) and written on the entry as
+       *  `chosenMinions`. docs/bearer-rush-grants-design.md §3 */
+      chooseOwnMinions?: { extra: number };
     }
   /**
    * "Ⓓ Diablerize a vampire in torpor" (Cloak of Blood, Stealing Years) —
@@ -595,6 +603,15 @@ export type EffectPrimitive =
          *  filter means a READY target, which is Kaymakli Barrier's. */
         inTorporToo?: boolean;
       };
+      /** The card prints no "a vampire can have only one" (Enrage), so a
+       *  second copy may go on a vampire that already carries one — two
+       *  players' Enrages on the same vampire is an ordinary board.
+       *  docs/bearer-rush-grants-design.md §6 */
+      stacks?: boolean;
+      /** Extra tags for the entry beside the card name — the printed
+       *  VERSION, when a clause on the card in play belongs to one version
+       *  only (Enrage's rush, `rushGrant.requiresTag`). */
+      tags?: string[];
       /** "Put this card on this vampire, LOCKED" (Rutor's Hand). */
       locked?: boolean;
       /** "…to represent the unique Anarch title of Baron OF BOSTON"
@@ -1789,8 +1806,14 @@ export type EffectPrimitive =
   | {
       kind: "refAttachToChosen";
       /** `younger`: "Choose a YOUNGER ready vampire" (Warrant) — younger
-       *  than the calling vampire. docs/marked-vampires-design.md §3 */
-      who: { sect?: Sect; clan?: string; younger?: boolean };
+       *  than the calling vampire. docs/marked-vampires-design.md §3
+       *  `sameSectAsCaller`: "Choose a vampire OF THE SAME SECT" (Scourge)
+       *  — the calling vampire's, and "a vampire" includes the caller.
+       *  docs/bearer-rush-grants-design.md §4 */
+      who: { sect?: Sect; clan?: string; younger?: boolean; sameSectAsCaller?: boolean };
+      /** "…put this card on the chosen vampire AND UNLOCK THIS ACTING
+       *  VAMPIRE" (Scourge) — on a pass only. */
+      unlockCaller?: boolean;
     }
   /** "Allies and younger vampires get −1 intercept" (Perfect Paragon
    *  superior) — the ACTION-scoped twin of
@@ -3520,7 +3543,19 @@ export interface CardSpec {
         scope: "bearer" | "prey" | "any";
         kind?: "vampire" | "ally";
         notClan?: string;
+        /** "…with a VAMPIRE WITH CAPACITY 4 OR LESS or with an ally"
+         *  (Scourge) — bounds vampires only, so an ally passes. Current
+         *  capacity, read at announcement (p. 25). */
+        vampireMaxCapacity?: number;
+        /** "…with a ready vampire CONTROLLED BY ANOTHER METHUSELAH"
+         *  (Templar) — the target-side twin of `who.othersOnly`. */
+        othersOnly?: boolean;
       };
+      /** The grant belongs to ONE printed version: "[pre] … may enter combat
+       *  with any minion" (Enrage). The version rides on the entry as a tag,
+       *  which is how Distant Friend's card in play remembers its own.
+       *  docs/bearer-rush-grants-design.md §3 */
+      requiresTag?: string;
       stealth?: number;
       /** "…if that vampire is Tremere, this is a +1 stealth action" —
        *  extra stealth decided by the target at announcement. */

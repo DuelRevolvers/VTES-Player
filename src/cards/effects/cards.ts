@@ -14660,6 +14660,194 @@ export const cardSpecs: CardSpec[] = [
       },
     ],
   },
+  // --- Bearer rush grants: cards that let their BEARER, or the minions
+  //     they choose, enter combat (docs/bearer-rush-grants-design.md) ---
+  {
+    // "Requires a titled vampire. Choose a vampire of the same sect. If
+    // this referendum is successful, put this card on the chosen vampire
+    // and unlock this acting vampire. The vampire with this card may enter
+    // combat with a vampire with capacity 4 or less or with an ally as a +1
+    // stealth Ⓓ action."
+    krcgId: 101695,
+    name: "Scourge",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresTitled: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      // No own-name tag: the card prints no "only one".
+      tags: [],
+      // No controller named, so the bearer may rush its own side too (the
+      // wave 111 ruling: follow each card's text, design §4).
+      rushGrant: {
+        who: { scope: "bearer" },
+        target: { scope: "any", vampireMaxCapacity: 4 },
+        stealth: 1,
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        // "A vampire" — the caller included.
+        effects: [
+          { kind: "refAttachToChosen", who: { sameSectAsCaller: true }, unlockCaller: true },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a ready titled Sabbat vampire. Choose a Sabbat vampire. If
+    // this referendum is successful, put this card on the chosen vampire.
+    // This vampire is a Templar. He or she may enter combat with a ready
+    // vampire controlled by another Methuselah as a +1 stealth Ⓓ action.
+    // Any Sabbat vampire may call a referendum to burn this card as a +1
+    // stealth political action."
+    //
+    // Each copy grants its own rush [RTR 20030519] — the per-copy latch —
+    // and the rush and the burn referendum are separate actions the same
+    // vampire may each take in one turn [LSJ 20100909]. "This vampire is a
+    // Templar" has no reader in the pool, and an own-name tag would bar the
+    // second copy the ruling allows.
+    krcgId: 101952,
+    name: "Templar",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    requiresTitled: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [],
+      rushGrant: {
+        who: { scope: "bearer" },
+        target: { scope: "any", kind: "vampire", othersOnly: true },
+        stealth: 1,
+      },
+      vulnerableTo: {
+        who: { kind: "vampire", sect: "sabbat" },
+        stealth: 1,
+        via: "politicalAction",
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [{ kind: "refAttachToChosen", who: { sect: "sabbat" } }],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Frenzy.
+    //  [pre] Put this card on a vampire you control. This vampire has +1
+    //  strength and may enter combat with any minion as a Ⓓ action. Burn
+    //  this card at the end of this turn.
+    //  [PRE] Ⓓ Put this card on any vampire. This vampire must burn 2 blood
+    //  to attempt any action except hunts and actions to enter combat. Burn
+    //  this card after resolving this vampire's action."
+    //
+    // Superior: a vampire who cannot burn 2 cannot attempt the action
+    // [ANK 20180327]; a card cancelled as played costs nothing
+    // [LSJ 20090208], because the toll is charged at announcement.
+    krcgId: 100647,
+    name: "Enrage",
+    cardType: "action",
+    bloodCost: 0,
+    frenzy: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [],
+      // The inferior's clause only — the "inferior" tag is how the card in
+      // play remembers which version it is.
+      rushGrant: {
+        who: { scope: "bearer" },
+        target: { scope: "any" },
+        requiresTag: "inferior",
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pre",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "attachSelf",
+            // "A vampire you control" — the actor, or one in torpor.
+            target: "ownMinion",
+            targetFilter: { kind: "vampire", inTorporToo: true },
+            strength: 1,
+            stacks: true,
+            tags: ["inferior"],
+            statics: { burnAtEndOfTurn: true },
+          },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "pre",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "attachSelf",
+            // "Any vampire": directed only when it is somebody else's.
+            target: "anyMinion",
+            targetFilter: { kind: "vampire", inTorporToo: true },
+            stacks: true,
+            statics: {
+              actionToll: { blood: 2, exempt: ["hunt", "enterCombat"] },
+              burnAfterBearerAction: true,
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Frenzy.
+    //  [pre] Choose X minions and put this card in play. Each chosen minion
+    //  gets an optional press each combat and may enter combat with any
+    //  minion as a Ⓓ action. Burn this card at the end of the turn.
+    //  [PRE] As above, but choose X+1 minions."  Cost: X blood.
+    //
+    // No Ⓓ, so the chosen minions are your own (design §4). X can be 0.
+    krcgId: 100222,
+    name: "Bloodlust",
+    cardType: "action",
+    bloodCost: 0,
+    frenzy: true,
+    permanent: {
+      where: "seat",
+      statics: { burnAtEndOfTurn: true, chosenPressPerCombat: 1 },
+      tags: ["Bloodlust"],
+      rushGrant: { who: { scope: "chosen" }, target: { scope: "any" } },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "pre",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "putInPlayOnSuccess", chooseOwnMinions: { extra: 0 }, tags: ["Bloodlust"] },
+        ],
+      },
+      {
+        level: "superior",
+        discipline: "pre",
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          { kind: "putInPlayOnSuccess", chooseOwnMinions: { extra: 1 }, tags: ["Bloodlust"] },
+        ],
+      },
+    ],
+  },
   {
     // "Successful referendum means this card is put in play. While your
     // prey controls a vampire in torpor, vampires you control get +1
@@ -17136,8 +17324,11 @@ export const cardSpecs: CardSpec[] = [
     cardType: "politicalAction",
     bloodCost: 0,
     unique: true,
+    // "A titled Sabbat vampire" is any Sabbat title, printed or held — a
+    // spelled list left out regent, which the Regent master grants. The
+    // Cold War shape. docs/bearer-rush-grants-design.md §6
     requiresSect: ["sabbat"],
-    requiresTitle: ["bishop", "archbishop", "priscus", "cardinal"],
+    requiresTitled: true,
     permanent: {
       where: "seat",
       statics: {},

@@ -346,6 +346,11 @@ function fourSeatGame(seed: number): GameState {
     "War Party",
     "Rogue",
     "Contract",
+    // Bearer rush grants (docs/bearer-rush-grants-design.md, wave 112).
+    "Scourge",
+    "Templar",
+    "Enrage",
+    "Bloodlust",
     // Cost sources (docs/cost-sources-design.md).
     "Ravnos Carnival",
     "Ravnos Cache",

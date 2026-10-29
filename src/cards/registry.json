@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-28T00:27:10.885Z",
+ "fetchedAt": "2026-10-29T02:04:55.822Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -1759,6 +1759,30 @@
      "Gehenna",
      "Echoes of Gehenna"
     ]
+   },
+   "supported": true
+  },
+  "100222": {
+   "card": {
+    "kind": "library",
+    "id": 100222,
+    "name": "Bloodlust",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Frenzy.\n[pre] Choose X minions and put this card in play. Each chosen minion gets an optional press each combat and may enter combat with any minion as a Ⓓ action. Burn this card at the end of the turn.\n[PRE] As above, but choose X+1 minions.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/bloodlust.jpg",
+    "sets": [
+     "Lords of the Night"
+    ],
+    "rawCost": "X"
    },
    "supported": true
   },
@@ -5467,6 +5491,30 @@
     "sets": [
      "The Unaligned",
      "Twenty-Fifth Anniversary"
+    ]
+   },
+   "supported": true
+  },
+  "100647": {
+   "card": {
+    "kind": "library",
+    "id": 100647,
+    "name": "Enrage",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "pre"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Frenzy.\n[pre] Put this card on a vampire you control. This vampire has +1 strength and may enter combat with any minion as a Ⓓ action. Burn this card at the end of this turn.\n[PRE] Ⓓ Put this card on any vampire. This vampire must burn 2 blood to attempt any action except hunts and actions to enter combat. Burn this card after resolving this vampire's action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/enrage.jpg",
+    "sets": [
+     "Sword of Caine",
+     "Keepers of Tradition"
     ]
    },
    "supported": true
@@ -14167,6 +14215,27 @@
    },
    "supported": true
   },
+  "101695": {
+   "card": {
+    "kind": "library",
+    "id": 101695,
+    "name": "Scourge",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a titled vampire.\nChoose a vampire of the same sect. If this referendum is successful, put this card on the chosen vampire and unlock this acting vampire. The vampire with this card may enter combat with a vampire with capacity 4 or less or with an ally as a +1 stealth Ⓓ action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/scourge.jpg",
+    "sets": [
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "101698": {
    "card": {
     "kind": "library",
@@ -15821,6 +15890,29 @@
     "image": "https://static.krcg.org/card/telepathicvotecounting.jpg",
     "sets": [
      "New Blood"
+    ]
+   },
+   "supported": true
+  },
+  "101952": {
+   "card": {
+    "kind": "library",
+    "id": 101952,
+    "name": "Templar",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a ready titled Sabbat vampire.\nChoose a Sabbat vampire. If this referendum is successful, put this card on the chosen vampire. This vampire is a Templar. He or she may enter combat with a ready vampire controlled by another Methuselah as a +1 stealth Ⓓ action. Any Sabbat vampire may call a referendum to burn this card as a +1 stealth political action.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/templar.jpg",
+    "sets": [
+     "Sabbat War",
+     "Black Hand",
+     "Third Edition"
     ]
    },
    "supported": true

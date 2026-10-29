@@ -1068,6 +1068,24 @@ export interface PermanentStatics {
    *  announcement beside the torpor tax, which is the one existing tax of
    *  this shape. §4 */
   directedActionBloodTax?: number;
+  /** "This vampire must burn 2 blood to attempt any action EXCEPT HUNTS AND
+   *  ACTIONS TO ENTER COMBAT" (Enrage superior). Charged at announcement by
+   *  the one helper all three announce paths call, and gated where the
+   *  minion phase's options are built: a vampire who cannot pay is not
+   *  offered the action [ANK 20180327].
+   *  docs/bearer-rush-grants-design.md §3 */
+  actionToll?: { blood: number; exempt: Array<"hunt" | "enterCombat"> };
+  /** "Burn this card after resolving this vampire's action" (Enrage
+   *  superior) — the BEARER's next action, whatever its outcome, and never
+   *  the action that put the card in play. */
+  burnAfterBearerAction?: boolean;
+  /** "Burn this card at the end of this turn" (Enrage inferior, Bloodlust)
+   *  — swept once as the turn ends. */
+  burnAtEndOfTurn?: boolean;
+  /** "Each CHOSEN minion gets an optional press each combat" (Bloodlust) —
+   *  a seat-level card naming its minions in `chosenMinions`, summed when
+   *  a combat begins beside `pressPerCombat`. */
+  chosenPressPerCombat?: number;
   /** "The attached vampire must burn 1 additional blood to announce a bleed
    *  action (if it is not canceled as played) AGAINST YOU" (Tainted Vitae)
    *  — "you" is this card's CONTROLLER, not the bearer's. Read through
@@ -1435,6 +1453,11 @@ export interface PermanentInPlay {
    *  `linkedMinion`, which a card put in play by an action already spends on
    *  the ACTOR. docs/vote-changing-design.md §1 */
   chosenMinion?: MinionId;
+  /** The minions a seat-level card CHOSE, plural — "choose X minions and put
+   *  this card in play" (Bloodlust). Picked before the action is announced
+   *  (p. 25) and written down as the card arrives.
+   *  docs/bearer-rush-grants-design.md §3 */
+  chosenMinions?: MinionId[];
   /** Face up (public) or face down — the owner may look at them at any
    *  time, nobody else may (Shilmulo Tarot). Masked in `redactFor`. */
   storedFaceUp?: boolean;
@@ -1847,7 +1870,7 @@ export type GameEvent =
    */
   | { type: "CardsRevealed"; to: SeatId; cards: CardInstanceId[] }
   // Influence phase (p. 35–36) and torpor transitions.
-  | { type: "PermanentEnteredPlay"; seat: SeatId; cardId: CardInstanceId; name: string; attachedTo: MinionId | null; statics: PermanentStatics; tags: string[]; life?: number; counters?: number; aura?: PermanentAura; auras?: PermanentAura[]; costSource?: PermanentCostSource; counterSink?: PermanentCounterSink; controller?: SeatId; preventsUnlock?: MinionId; unblockable?: { minion: MinionId; exceptBleed?: boolean }; againstSeat?: SeatId; linkedMinion?: MinionId; chosenMinion?: MinionId }
+  | { type: "PermanentEnteredPlay"; seat: SeatId; cardId: CardInstanceId; name: string; attachedTo: MinionId | null; statics: PermanentStatics; tags: string[]; life?: number; counters?: number; aura?: PermanentAura; auras?: PermanentAura[]; costSource?: PermanentCostSource; counterSink?: PermanentCounterSink; controller?: SeatId; preventsUnlock?: MinionId; unblockable?: { minion: MinionId; exceptBleed?: boolean }; againstSeat?: SeatId; linkedMinion?: MinionId; chosenMinion?: MinionId; chosenMinions?: MinionId[] }
   | { type: "CountersChanged"; cardId: CardInstanceId; delta: number }
   /** `removed`: the card leaves play WITHOUT reaching the ash heap —
    *  "removed from the game … cannot be retrieved or affected in any way"

@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 326 test files, 3618 tests**, with `npm run typecheck`,
+**Green baseline: 327 test files, 3654 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -928,7 +928,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-228 files under `docs/`, one per mechanic that took a decision. **Read the
+231 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -957,7 +957,8 @@ after-resolution, other-vampire-modifiers, second-minion-modifiers,
 minion-target-actions, permanent-target-actions, avoiding-the-block, conditional-reactions, reading-the-outcome, bleed-payoffs,
 choosing-a-minion, hunt-payouts, stealable-locations, out-of-turn-cancels,
 bleed-redirects, master-intercept, hunt-success, marked-vampires,
-granted-action-requirements.
+granted-action-requirements, bearer-rush-grants (pre-play pickers, the one
+action-toll helper).
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

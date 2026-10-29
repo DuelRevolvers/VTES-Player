@@ -145,6 +145,47 @@ const HAND_SIZE_DOWN = "handSizeDown";
  *  ENGINE-owned choice key like the discard-down — it is a rule of the
  *  game, and no card is involved in it at all. */
 const DIABLERIE_DISCIPLINE = "diablerieDiscipline";
+/** "Choose X minions" (Bloodlust): the picks a play makes BEFORE it is
+ *  announced (`CardHandler.prePlayPicks`). Engine-owned because the card is
+ *  still in hand — there is no play frame yet for a handler to answer
+ *  from — and the answer ends by playing the card.
+ *  docs/bearer-rush-grants-design.md §5 */
+const PRE_PLAY_PICK = "prePlayPick";
+
+/**
+ * "An action to enter combat": the test that starts a successful rush's
+ * combat, and the exemption Enrage superior's toll grants. ONE predicate,
+ * so the toll cannot exempt an action that never fights or charge one that
+ * does. Only rush (a cardEffect with a minion target) enters combat; a
+ * card that names a minion only for directedness says `noCombatOnSuccess`,
+ * and a granted action with its own effect key resolves elsewhere.
+ * docs/bearer-rush-grants-design.md §3
+ */
+function entersCombat(a: {
+  actionKind: ActionKind;
+  targetMinion: MinionId | null;
+  noCombatOnSuccess?: boolean;
+  grantedEffect: { key: string } | null;
+}): boolean {
+  return (
+    a.actionKind === "cardEffect" &&
+    a.targetMinion !== null &&
+    !a.noCombatOnSuccess &&
+    (a.grantedEffect === null || a.grantedEffect.key === "enterCombat")
+  );
+}
+
+/** What an action costs its actor to ATTEMPT under "must burn 2 blood to
+ *  attempt any action except hunts and actions to enter combat" (Enrage
+ *  superior) — summed over the bearer's cards, so two copies charge 4. */
+function actionTollFor(m: MinionState, kind: "hunt" | "enterCombat" | "other"): number {
+  let n = 0;
+  for (const p of m.attached) {
+    const t = p.statics.actionToll;
+    if (t && (kind === "other" || !t.exempt.includes(kind))) n += t.blood;
+  }
+  return n;
+}
 /**
  * The two questions an aim rider asks (Target Head, Target Hand).
  *
@@ -809,6 +850,7 @@ export class VtesEngine implements EngineOps {
         if (ev.againstSeat !== undefined) entry.againstSeat = ev.againstSeat;
         if (ev.linkedMinion !== undefined) entry.linkedMinion = ev.linkedMinion;
         if (ev.chosenMinion !== undefined) entry.chosenMinion = ev.chosenMinion;
+        if (ev.chosenMinions !== undefined) entry.chosenMinions = [...ev.chosenMinions];
         if (ev.unblockable !== undefined) entry.unblockable = ev.unblockable;
         // p. 16: a master is controlled by the Methuselah who played it,
         // even on another Methuselah's minion.
@@ -2564,6 +2606,14 @@ export class VtesEngine implements EngineOps {
     // instead (docs/borrowed-minions-design.md §2), which is why this names its
     // moment rather than sweeping every loan it can see.
     this.returnBorrowedMinions(null, "endOfTurn");
+    // "Burn this card at the end of this turn" (Enrage inferior, Bloodlust).
+    // The ids are collected first: burning edits the lists being walked.
+    const expiring = this.allEntries()
+      .filter(({ entry }) => entry.statics.burnAtEndOfTurn)
+      .map(({ entry }) => entry.card.id);
+    for (const id of expiring) {
+      if (this.findEntry(id)) this.burnPermanent(id);
+    }
     // "Since your last turn means between the END of your last turn and
     // now" [LSJ 20020429] (Lextalionis).
     getSeat(this.state, tf.seat).lastTurnEnded = tf.turnNumber;
@@ -3744,6 +3794,22 @@ export class VtesEngine implements EngineOps {
     // the ally is not in play yet to be asked.
     // docs/wraith-zombie-design.md §4
     const announcedTags = this.handler(play.card.name).permanentTags ?? [];
+    // Reached only once the card has survived its as-played window, so a
+    // card cancelled as played pays no toll [LSJ 20090208].
+    this.chargeActionTolls(
+      m,
+      directed,
+      params.actionKind === "hunt"
+        ? "hunt"
+        : entersCombat({
+              actionKind: params.actionKind,
+              targetMinion: params.targetMinion ?? null,
+              ...(params.noCombat ? { noCombatOnSuccess: true } : {}),
+              grantedEffect: null,
+            })
+          ? "enterCombat"
+          : "other",
+    );
     this.emit({
       type: "ActionAnnounced",
       actionId,
@@ -4256,6 +4322,18 @@ export class VtesEngine implements EngineOps {
     };
     for (const { entry, owner } of this.allEntries()) {
       this.registry[entry.card.name]?.onActionResolved?.(entry, owner, info, this);
+    }
+    // "Burn this card after resolving this vampire's action" (Enrage
+    // superior) — whatever the outcome, and never on the action that put
+    // the card there: played on its own acting vampire, it would otherwise
+    // burn on its own resolution. A card cancelled as it was played opened
+    // no action, so it never reaches here [LSJ 20090208].
+    const actor = findMinion(this.state, af.acting);
+    const spent = (actor?.attached ?? [])
+      .filter((p) => p.statics.burnAfterBearerAction && p.card.id !== af.card?.instance.id)
+      .map((p) => p.card.id);
+    for (const id of spent) {
+      if (this.findEntry(id)) this.burnPermanent(id);
     }
   }
 
@@ -4816,6 +4894,13 @@ export class VtesEngine implements EngineOps {
       let n = 0;
       for (const p of getMinion(this.state, minionId).attached) {
         n += p.statics.pressPerCombat ?? 0;
+      }
+      // "Each CHOSEN minion gets an optional press each combat" (Bloodlust)
+      // — a seat-level card, so it is not among the minion's attachments.
+      for (const s of this.state.seats) {
+        for (const p of s.permanents) {
+          if (p.chosenMinions?.includes(minionId)) n += p.statics.chosenPressPerCombat ?? 0;
+        }
       }
       return n;
     };
@@ -6042,6 +6127,22 @@ export class VtesEngine implements EngineOps {
       target = targetController;
       directed = true;
     }
+    // A granted action is an action (p. 20): Kaymakli Barrier's surcharge
+    // and Enrage superior's toll reach it. Both were charged only on the
+    // built-in path, which this one never calls.
+    this.chargeActionTolls(
+      m,
+      directed,
+      actionKind === "hunt"
+        ? "hunt"
+        : entersCombat({
+              actionKind,
+              targetMinion,
+              grantedEffect: args.effect ? { key: args.effect.key } : null,
+            })
+          ? "enterCombat"
+          : "other",
+    );
     this.emit({
       type: "ActionAnnounced",
       actionId,
@@ -7042,6 +7143,17 @@ export class VtesEngine implements EngineOps {
       throw new Error(`${by.card.name} cancels a card but does not declare cancelsAsPlayed`);
     }
     this.markCanceled(top, refundCost);
+  }
+
+  payPendingActionCost(): void {
+    const top = this.top();
+    if (!top || top.kind !== "cardPlay" || !top.asAction || !top.minion) return;
+    const m = findMinion(this.state, top.minion);
+    if (!m) return;
+    const price = this.priceOf(this.handler(top.card.name), top.mode, top.params["variant"], m);
+    const blood = Math.min(m.blood, price.blood + Number(top.params["xBlood"] ?? "0"));
+    if (blood > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: blood });
+    if (price.pool > 0) this.emit({ type: "PoolBurned", seat: top.seat, amount: price.pool });
   }
 
   /** The cancel itself, with no question about who asked for it — the
@@ -8835,6 +8947,8 @@ export class VtesEngine implements EngineOps {
       // "Choose a vampire and put this card in play" (Distant Friend): the
       // vampire chosen at announcement, written down as the card arrives.
       if (entry.chosenMinion !== undefined) ev.chosenMinion = entry.chosenMinion;
+      // "Choose X minions and put this card in play" (Bloodlust).
+      if (entry.chosenMinions !== undefined) ev.chosenMinions = entry.chosenMinions;
       this.emit(ev);
       // "Put this card in play, LOCKED" (Gather) — after the entry event,
       // which is the only order in which there is a card to lock.
@@ -9167,7 +9281,11 @@ export class VtesEngine implements EngineOps {
           findMinion(this.state, af.acting),
         );
         this.consumeOncePlayCostMods(handler, af.card.mode, variant);
-        const blood = Math.max(0, price.blood - paid.blood);
+        // "Cost: X blood" on an ACTION card (Bloodlust) — X rides in the
+        // option like Kindred Coercion's, but is paid here, on success,
+        // rather than as the card is played.
+        const xBlood = Number(af.card.params["xBlood"] ?? "0");
+        const blood = Math.max(0, price.blood + xBlood - paid.blood);
         const pool = Math.max(0, price.pool - paid.pool);
         if (blood > 0) {
           this.emit({ type: "BloodBurned", minion: af.acting, amount: blood });
@@ -9628,10 +9746,7 @@ export class VtesEngine implements EngineOps {
     // that names a minion only for directedness (Mind Numb). That second
     // opt-out did not exist: `grantedEffect` is null for every hand play,
     // so a stun would have rushed its victim (docs/stun-design.md §6).
-    const rushLike =
-      !af.noCombatOnSuccess &&
-      (af.grantedEffect === null || af.grantedEffect.key === "enterCombat");
-    if (success && af.actionKind === "cardEffect" && af.targetMinion && rushLike) {
+    if (success && af.targetMinion && entersCombat(af)) {
       const actor = findMinion(this.state, af.acting);
       const target = findMinion(this.state, af.targetMinion);
       // "…with a LOCKED minion", re-read HERE. A target that unlocked
@@ -10242,6 +10357,8 @@ export class VtesEngine implements EngineOps {
         // bleed you" (Minor Boon), or an announcement tax she cannot pay
         // (Tainted Vitae). This gate asked neither. docs/boons-design.md §4
         m.blood >= bleedAnnounceTax(m, preySeat) &&
+        // …and a toll she cannot pay on top of it (Enrage superior).
+        this.tollAffordable(m, "other", bleedAnnounceTax(m, preySeat)) &&
         m.attached.some(
           (p) => p.statics.mustBleed && (!p.statics.mustBleed.whileControlsLocked || controlsLocked),
         ),
@@ -10380,7 +10497,56 @@ export class VtesEngine implements EngineOps {
       }
     }
     options.push({ id: "end", kind: "endMinionPhase", label: "End minion phase" });
-    return options;
+    // "A vampire that can't burn 2 blood can't attempt an action other than
+    // a hunt or an action to enter combat" [ANK 20180327] — ONE gate over
+    // every action the phase offers, whichever enumerator built it.
+    return options.filter((o) => this.affordsActionToll(o));
+  }
+
+  /** Whether `m` can pay its action toll AND the action's own blood cost.
+   *  The toll burns at announcement and the cost is paid on success
+   *  (p. 27), so a vampire who covers only the toll cannot finish the
+   *  action it was let start (docs/bearer-rush-grants-design.md §4). */
+  private tollAffordable(m: MinionState, kind: "hunt" | "enterCombat" | "other", cost: number): boolean {
+    const toll = actionTollFor(m, kind);
+    return toll === 0 || m.blood >= toll + cost;
+  }
+
+  /** The toll gate for one minion-phase option: what kind of action it
+   *  would announce and what blood it costs, read from the option. */
+  private affordsActionToll(o: LegalOption): boolean {
+    if (o.kind === "takeAction") {
+      const m = findMinion(this.state, o.minion);
+      if (!m) return true;
+      if (o.action === "hunt") return true;
+      let cost = 0;
+      if (o.action === "bleed") cost = bleedAnnounceTax(m, preyOf(this.state, m.controller));
+      if (o.action === "leaveTorpor") cost = 2 + this.tableStatic("torporActionTax");
+      if (o.action === "rescue" && o.targetMinion) {
+        const victim = findMinion(this.state, o.targetMinion);
+        if (victim) {
+          const fromActor = o.rescueActorPortion ?? 2;
+          const { discount } = rescueDiscountFor(m, victim);
+          cost = Math.max(0, fromActor - discount) + this.olderRescueTax(m, victim);
+        }
+      }
+      return this.tollAffordable(m, "other", cost);
+    }
+    if (o.kind === "playCard") {
+      const h = this.registry[o.name];
+      const m = o.minion ? findMinion(this.state, o.minion) : null;
+      if (!m || !h?.isActionCard) return true;
+      const kind = h.huntAction ? "hunt" : h.entersCombat?.(o.mode) ? "enterCombat" : "other";
+      // "Cost: X blood" (Bloodlust) rides in the option beside the printed cost.
+      const cost = (o.cost?.blood ?? 0) + Number(o.params["xBlood"] ?? "0");
+      return this.tollAffordable(m, kind, cost);
+    }
+    if (o.kind === "useEntryAction") {
+      const m = findMinion(this.state, o.minion);
+      if (!m) return true;
+      return this.tollAffordable(m, o.entersCombat ? "enterCombat" : "other", o.cost?.blood ?? 0);
+    }
+    return true;
   }
 
   private blockOptions(af: ActionFrame, seat: SeatId): LegalOption[] {
@@ -11048,6 +11214,9 @@ export class VtesEngine implements EngineOps {
         return;
       }
       case "playCard":
+        // "Choose X minions" (Bloodlust) is asked first, the card still in
+        // hand; the last answer plays it.
+        if (this.raisePrePlayPick(option)) return;
         this.playCard(option);
         return;
       case "payToCancel": {
@@ -11846,6 +12015,39 @@ export class VtesEngine implements EngineOps {
     if (pd.amount > mendable) this.vampireToTorpor(m.id, pd.source);
   }
 
+  /**
+   * The tolls a minion's own cards charge it for ATTEMPTING an action, at
+   * announcement — ONE helper for all three announce paths (built-in
+   * actions, action cards, granted actions), because a toll written into
+   * one path is skipped by the other two. Kaymakli Barrier's was, for every
+   * directed action card and every granted rush, since it arrived.
+   * docs/bearer-rush-grants-design.md §6
+   *
+   * Both pay what the minion has and never go below zero; the minion phase
+   * gate (`affordsActionToll`) keeps an Enrage superior bearer who cannot
+   * pay from being offered the action at all [ANK 20180327].
+   */
+  private chargeActionTolls(
+    m: MinionState,
+    directed: boolean,
+    kind: "hunt" | "enterCombat" | "other",
+  ): void {
+    // "DIRECTED actions cost this vampire an additional blood" (Kaymakli
+    // Barrier) — a surcharge carried by a card ON THE ACTOR.
+    if (directed) {
+      const own = m.attached.reduce(
+        (n, p) => n + (p.statics.directedActionBloodTax ?? 0),
+        0,
+      );
+      const tax = Math.min(own, m.blood);
+      if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
+    }
+    // "…must burn 2 blood to attempt any action except hunts and actions to
+    // enter combat" (Enrage superior).
+    const toll = Math.min(actionTollFor(m, kind), m.blood);
+    if (toll > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: toll });
+  }
+
   private announceAction(
     tf: TurnFrame,
     minionId: string,
@@ -11919,18 +12121,8 @@ export class VtesEngine implements EngineOps {
       const tax = Math.min(this.tableStatic("torporActionTax"), m.blood);
       if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
     }
-    // "DIRECTED actions cost this vampire an additional blood" (Kaymakli
-    // Barrier) — a surcharge carried by a card ON THE ACTOR, charged here
-    // beside the torpor tax because that is the one tax of this shape and
-    // its guards (pay what you have, never below zero) are the right ones.
-    if (directed) {
-      const own = m.attached.reduce(
-        (n, p) => n + (p.statics.directedActionBloodTax ?? 0),
-        0,
-      );
-      const tax = Math.min(own, m.blood);
-      if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
-    }
+    // No built-in action enters combat; a hunt is exempt by name.
+    this.chargeActionTolls(m, directed, kind === "hunt" ? "hunt" : "other");
     this.emit({
       type: "ActionAnnounced",
       actionId,
@@ -12339,6 +12531,29 @@ export class VtesEngine implements EngineOps {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Raise the next pre-announcement pick a play still owes, if any, and say
+   * so. Nobody else is asked anything between the picks — a choice frame
+   * has no impulse cycle — so asking them one at a time before the play is
+   * rules-neutral, the Garibaldi-Meucci argument (docs/cheap-tail-design.md
+   * §1), and p. 25 still finds every detail fixed at announcement.
+   * docs/bearer-rush-grants-design.md §5
+   */
+  private raisePrePlayPick(option: Extract<LegalOption, { kind: "playCard" }>): boolean {
+    const picks = this.registry[option.name]?.prePlayPicks?.(option, this.state);
+    // No candidates left cannot happen (the enumerator caps X by the minions
+    // there are), and a picker with no options would wedge the game.
+    if (!picks || picks.remaining <= 0 || picks.candidates.length === 0) return false;
+    this.raiseChoice({
+      seat: this.currentSeatOfTop(),
+      cardName: option.name,
+      cardId: option.card,
+      key: PRE_PLAY_PICK,
+      params: { option: JSON.stringify(option) },
+    });
+    return true;
   }
 
   private playCard(option: Extract<LegalOption, { kind: "playCard" }>): void {
@@ -12751,6 +12966,17 @@ export class VtesEngine implements EngineOps {
    * after-resolution probes each drifted. §4
    */
   private choiceOptionsFor(frame: ChoiceFrame): LegalOption[] {
+    if (frame.key === PRE_PLAY_PICK) {
+      const option = JSON.parse(frame.params["option"] ?? "{}") as Extract<LegalOption, { kind: "playCard" }>;
+      const picks = this.registry[option.name]?.prePlayPicks?.(option, this.state);
+      const done = (option.params["chosen"] ?? "").split(",").filter(Boolean).length;
+      return (picks?.candidates ?? []).map((id) => ({
+        id: `choice:${frame.cardName}:${frame.cardId}:${PRE_PLAY_PICK}:${id}`,
+        kind: "answerChoice" as const,
+        label: `${frame.cardName}: choose ${findMinion(this.state, id)?.name ?? id} (${done + 1} of ${done + picks!.remaining})`,
+        params: { minion: id },
+      }));
+    }
     if (frame.key === HAND_SIZE_DOWN) {
       return getSeat(this.state, frame.seat).hand.map((c) => ({
         id: `choice:${frame.cardName}:${frame.cardId}:${HAND_SIZE_DOWN}:${c.id}`,
@@ -12916,6 +13142,15 @@ export class VtesEngine implements EngineOps {
     frame: ChoiceFrame,
     option: Extract<LegalOption, { kind: "answerChoice" }>,
   ): void {
+    if (frame.key === PRE_PLAY_PICK) {
+      const play = JSON.parse(frame.params["option"] ?? "{}") as Extract<LegalOption, { kind: "playCard" }>;
+      const chosen = [...(play.params["chosen"] ?? "").split(",").filter(Boolean), option.params["minion"] ?? ""];
+      const next = { ...play, params: { ...play.params, chosen: chosen.filter(Boolean).join(",") } };
+      // Another pick owed? Ask it. Otherwise the play goes ahead with every
+      // detail fixed, and the as-played window opens on it as usual.
+      if (!this.raisePrePlayPick(next)) this.playCard(next);
+      return;
+    }
     if (frame.key === HAND_SIZE_DOWN) {
       const card = option.params["card"];
       if (card) this.discardFromHand(frame.seat, card, false);

@@ -1006,6 +1006,41 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 112 — bearer rush grants (4 cards), 2026-10-28
+
+**Cards:** Scourge and Templar (political actions, T1), Enrage and
+Bloodlust (Presence actions, T2). Each lets its bearer, or the minions it
+chooses, enter combat as a Ⓓ action — the sibling of wave 111. Design and
+owner rulings: `bearer-rush-grants-design.md`. Version 0.11.55.
+
+**The mechanic** is `permanent.rushGrant` again. New pieces:
+`target.vampireMaxCapacity` (Scourge), `target.othersOnly` (Templar),
+`requiresTag` (only Enrage inferior grants the rush), `chosenMinions` on a
+seat card (Bloodlust), `refAttachToChosen.who.sameSectAsCaller` and
+`unlockCaller`, the statics `actionToll`, `burnAfterBearerAction`,
+`burnAtEndOfTurn` and `chosenPressPerCombat`, and one new kernel piece:
+**pickers that run before a hand play is announced** (`prePlayPicks`, the
+engine-owned `prePlayPick` choice key). Meditative Grove now cancels a
+frenzy ACTION card played on a Salubri you control, which changes Deep
+Song superior (owner ruling).
+
+**Defect 1 — Kaymakli Barrier was charged on one announce path of three.**
+Directed action cards and granted actions skipped its surcharge. One
+helper, `chargeActionTolls`, now serves all three, and Enrage superior's
+toll uses it.
+
+**Defect 2 — granted rushes ignored Secure Haven.** `permanentRushGrant`
+never asked `untargetableBy`. Archon, Warrant and Blood Hunt could rush an
+untargetable vampire. Fixed.
+
+**Defect 3 — War of Ages refused a regent.** Its spelled title list left
+regent out; it now uses `requiresTitled`, as Cold War does.
+
+**Raised with the owner, not changed:** the Grove's "(cost is still paid)"
+against p. 16 for a cancelled action card (built as card text wins), and
+whether `attachSelf`'s targeted branch should bar a second copy by default
+(design §9.2).
+
 ### 0.11.54 — what a granted action requires (0 new cards), 2026-10-27
 
 **No card admitted; nine already-supported cards now do what they print.**

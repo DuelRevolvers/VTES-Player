@@ -420,6 +420,11 @@ export interface EngineOps {
   /** Cancel the card whose as-played window we are in (p. 7). With
    *  refund, its already-paid cost is returned (Sudden Reversal). */
   cancelPendingCard(refundCost: boolean): void;
+  /** "(Cost is still paid)" (Meditative Grove) when the pending card is an
+   *  ACTION card, whose cost is otherwise deferred to resolution (p. 27)
+   *  and never paid once it is cancelled (p. 16). Card text wins (p. 16).
+   *  A no-op for any other card, which paid as it was played. */
+  payPendingActionCost(): void;
   /** Grant bonus votes in the current referendum. `to` says WHOSE they
    *  are, and every caller must say: "this vampire gets +2 votes" is the
    *  vampire's, cast with its group (p. 28, p. 47), where "you get +3
@@ -1093,6 +1098,21 @@ export interface CardHandler {
    *  a vampire who must hunt may play it and Restricted Vitae's bar reaches
    *  it. docs/hunt-success-design.md §1 */
   huntAction?: boolean;
+  /** Whether this mode is an ACTION TO ENTER COMBAT — what Enrage
+   *  superior's toll exempts. Asked by the minion phase's toll gate, which
+   *  has only the play option; the charge itself reads the announced
+   *  action (docs/bearer-rush-grants-design.md §3). */
+  entersCombat?(mode: DisciplineLevel | null): boolean;
+  /** "Choose X minions" (Bloodlust): choices the PLAY makes before it is
+   *  announced, because p. 25 fixes every detail there. The engine raises
+   *  one picker per remaining pick with the card still in hand, folding
+   *  each answer into `params.chosen`, and plays the card once none
+   *  remain. Null when this play needs no picks.
+   *  docs/bearer-rush-grants-design.md §5 */
+  prePlayPicks?(
+    option: Extract<LegalOption, { kind: "playCard" }>,
+    state: GameState,
+  ): { remaining: number; candidates: MinionId[] } | null;
   /** "If the action to equip with / recruit THIS CARD is successful, unlock
    *  the acting minion at the end of the turn" (Baseball Bat, Repo Man) /
    *  "…during the next discard phase" (Powder of Rigidity). Read where the
@@ -1379,6 +1399,8 @@ export interface CardHandler {
     /** "Choose a vampire and put this card in play" (Distant Friend) — the
      *  vampire chosen at announcement, read from `params`. */
     chosenMinion?: MinionId;
+    /** "Choose X minions and put this card in play" (Bloodlust). */
+    chosenMinions?: MinionId[];
     tags: string[];
     /** Statics the card grants while it sits there ("your prey plays with
      *  an open hand", Revelations superior). Hard-coded empty until
