@@ -1006,6 +1006,38 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### 0.11.54 — what a granted action requires (0 new cards), 2026-10-27
+
+**No card admitted; nine already-supported cards now do what they print.**
+Design and owner answers: `granted-action-requirements-design.md`.
+
+- **§3, clans:** a granted action requires the clans its grant LISTS
+  [LSJ 20080604], recorded as `ActionFrame.grantRequires` and read only
+  through `actionRequiresClans`. Cappadocian Crypt and "Mother" Anja now
+  answer The Gate of Acheron's and Pit of Contemplation's counter actions,
+  and not the Gate's burn action.
+- **§4, political:** a granted referendum stamps `af.political` and the
+  announcement's `cardTypes`. Aaradhya, Oluwafunmilayo, **Rebel** and the
+  bots' `view.action.political` now see it.
+- **§5, titles:** `TITLE_SECT` (pp. 39–40, all ten titles) feeds the
+  central `requiresSects`. Powerbase: Los Angeles and Garibaldi-Meucci
+  Museum now see the four baron cards.
+
+**What building found:**
+
+- **Mother Anja read "Hecata OR Oblivion" as AND.** `unlockAfterAction`
+  tested the two lists as separate gates, so she fired only for a card
+  requiring both — never for an Oblivion card without a Hecata icon. She
+  is the only spec with both lists. Cappadocian Crypt, with the same
+  words, was already a union.
+- **Rebel was a third reader of "political action"**, which the design
+  missed. It read the played card's printed type.
+- **The design's Deck Builder side effect does not happen.** The
+  catalogue parses "Requires an Anarch" from the TEXT at build time
+  (`build-catalog.mts`), not from `requiresSects`, so the builder still
+  does not show the baron cards as needing an Anarch. A follow-up, not a
+  rules defect: the play gate checks the title.
+
 ### Wave 111 — marked vampires (5 cards), 2026-10-27
 
 **Cards:** Warrant (political action), Blood Hunt and War Party (actions),

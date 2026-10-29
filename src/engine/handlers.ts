@@ -158,6 +158,11 @@ export interface EngineOps {
         cardInstanceId: CardInstanceId;
         fromCardInPlay?: boolean;
       };
+      /** The clans the grant's sentence lists as who may act: the action
+       *  counts as requiring them [LSJ 20080604]. Spec grants derive it
+       *  with `grantRequirement`; bespoke grants pass it by hand.
+       *  docs/granted-action-requirements-design.md §3 */
+      requires?: { clans: string[] };
     },
   ): void;
   /** Ability-based prevention (War Ghoul's "prevent 1 each round"):

@@ -19121,7 +19121,9 @@ export const cryptSpecs: CardSpec[] = [
   condCrypt(201601, "Martina Srnankova (G6)", [{ intercept: 1, actionKinds: ["bleed"] }]),
   condCrypt(201656, "Oluwafunmilayo (G6)", [
     // A political action announces as `cardEffect`; what tells it apart is
-    // the printed type of the announcing card (the Depravity precedent).
+    // the announcement's `cardTypes` — the announcing card's printed type
+    // (the Depravity precedent), or `politicalAction` stamped by a card in
+    // play that GRANTS one (docs/granted-action-requirements-design.md §4).
     { intercept: 1, actionCardTypes: ["politicalAction"] },
   ]),
   condCrypt(201668, "Castellan (G7)", [
@@ -24534,6 +24536,8 @@ const saulotsHealingTouch: CardHandler = {
     ops.announceEntryAction(entry, choice.minion, {
       effect: { key: "heal", params: { target } },
       stealth: 1,
+      // "This Salubri can add 1 blood or life …" [LSJ 20080604].
+      requires: { clans: ["Salubri"] },
     });
   },
   resolveGrantedAction(_entry, af, ops) {
@@ -24784,8 +24788,10 @@ const powerbaseLosAngeles: CardHandler = {
     // Only while this location is locked for its grant, and only for its
     // controller's own discards.
     if (!entry.locked || info.seat !== owner.seat) return;
-    const spec = cardSpecs.find((s) => s.name === info.cardName);
-    if (!spec?.requiresSect?.includes("anarch")) return;
+    // The central query, never the spec field: Open War "requires a baron"
+    // and so requires an Anarch [LSJ 20080603], which `requiresSect` alone
+    // never said. docs/granted-action-requirements-design.md §5
+    if (!(ops.registry[info.cardName]?.requiresSects?.() ?? []).includes("anarch")) return;
     const hasAnarch = getSeat(ops.state, owner.seat).minions.some(
       (m) => m.kind === "vampire" && m.sect === "anarch" && isReady(m) && m.locked,
     );
@@ -25119,6 +25125,8 @@ const caveOfApples: CardHandler = {
     ops.announceEntryAction(entry, choice.minion, {
       effect: { key: "corrupt", params: { victim } },
       targetMinion: victim,
+      // "Followers of Set you control can …" [LSJ 20080604].
+      requires: { clans: ["Ministry"] },
     });
   },
   resolveGrantedAction(entry, af, ops) {
@@ -25252,6 +25260,9 @@ const pitOfContemplation: CardHandler = {
     ops.announceEntryAction(entry, choice.minion, {
       effect: { key: "addCounter" },
       stealth: 1,
+      // "Hecata you control can add 1 counter": an action requiring Hecata
+      // [LSJ 20080604]. The burn action lists nobody and requires nothing.
+      requires: { clans: ["Hecata"] },
     });
   },
   resolveGrantedAction(entry, af, ops) {
@@ -26134,10 +26145,10 @@ const rebel: CardHandler = {
     if (info.blocker !== owner.minion) return;
     const acting = findMinion(ops.state, info.acting);
     const af = ops.action();
-    const cardName = af?.card?.instance.name;
-    const isPolitical =
-      cardName !== undefined &&
-      cardSpecs.find((s) => s.name === cardName)?.cardType === "politicalAction";
+    // The frame's flag, not the card's printed type: a political action is
+    // a type of action whatever provided it (p. 24), and a granted one has
+    // no card. docs/granted-action-requirements-design.md §4
+    const isPolitical = af?.political === true;
     const isTitled = acting !== null && acting.kind === "vampire" && acting.title !== null;
     if (!isPolitical && !isTitled) return;
     entry.usedThisTurn = true;
@@ -27299,6 +27310,8 @@ const weekOfNightmares: CardHandler = {
     ops.announceEntryAction(entry, choice.minion, {
       effect: { key: "stealRavnosBlood", params: { target } },
       stealth: 1,
+      // "Any Ravnos can steal 1 blood …" [LSJ 20080604].
+      requires: { clans: ["Ravnos"] },
     });
   },
   resolveGrantedAction(_entry, af, ops) {

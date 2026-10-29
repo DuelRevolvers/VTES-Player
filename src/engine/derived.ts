@@ -776,6 +776,36 @@ export function huntGain(state: GameState, minion: MinionState): number {
   return Math.max(0, Math.min(huntAmountFor(state, minion), capacityOf(minion) - minion.blood));
 }
 
+/**
+ * The clans an action REQUIRES, for every "an action requiring <clan>"
+ * reader (Cappadocian Crypt, "Mother" Anja Giovanni, Keegan). Announced
+ * with a card: the card's requirement. GRANTED by a card in play: the
+ * clans the grant's own sentence lists [LSJ 20080604], never the granting
+ * card's icon. A built-in action requires nothing.
+ * docs/granted-action-requirements-design.md §3.3
+ */
+export function actionRequiresClans(af: ActionFrame, registry: HandlerRegistry): string[] {
+  if (af.card) return registry[af.card.instance.name]?.requiresClans?.() ?? [];
+  return af.grantRequires?.clans ?? [];
+}
+
+/**
+ * The card types an action counts as, for "a political action" and
+ * "recruit and employ actions" readers: the announcing card's types, plus
+ * `politicalAction` for ANY political action — a type of action whatever
+ * provided it (p. 24), and a card in play grants one with no card
+ * announced at all. docs/granted-action-requirements-design.md §4
+ */
+export function actionCardTypes(af: ActionFrame, registry: HandlerRegistry): PlayCostCardType[] {
+  const card = af.card;
+  const types = card
+    ? (registry[card.instance.name]?.costTypes?.(card.mode, card.params["variant"]) ?? [])
+    : [];
+  return af.political && !types.includes("politicalAction")
+    ? [...types, "politicalAction"]
+    : types;
+}
+
 /** Inherent stealth (e.g. hunt's +1, p. 21) is emitted as a
  *  StealthModified event at announcement, so one fold covers everything.
  *  Stealth may go below 0 (p. 26). */

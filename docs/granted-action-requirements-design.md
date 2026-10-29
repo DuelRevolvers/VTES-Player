@@ -1,7 +1,7 @@
 # Granted-action requirements — design
 
-**Status: DESIGNED AND REVIEWED (owner, 2026-10-27), NOT BUILT.** The
-three answers are recorded in §8.
+**Status: BUILT in 0.11.54** (owner review 2026-10-27; answers in §8,
+what building changed in §9).
 Raised by `docs/marked-vampires-design.md` §8 (wave 111), which this
 corrects in two places (§2).
 
@@ -219,3 +219,28 @@ One build pass, one version bump (0.11.54), with the usual four checks plus
 
 **Owner answers (2026-10-27):** 1, clans only. 2, the same pass. 3, the
 whole p. 39 table.
+
+## 9. What building changed
+
+- **The record is `ActionFrame.grantRequires`, not
+  `grantedEffect.requires`.** A rush grant (Contract, Open War) has a null
+  `grantedEffect`, so §3.1's placement could not hold its requirement.
+- **Mother Anja's two lists became a union.** `unlockAfterAction` tested
+  "requiring Hecata OR Oblivion" as two gates, so she fired only for a
+  card requiring both. §6's Anja positive could not pass without the fix,
+  and the card text is not ambiguous. Pinned by an Umbrous Clutch test.
+- **Rebel is a third §4 reader.** "If they block … a political action"
+  read the played card's type; it now reads `af.political`.
+- **The table covers all ten titles**, Sabbat included (p. 40), as a
+  `Record<VampireTitle, Sect>` named `TITLE_SECT` in `state.ts`.
+- **§5's Deck Builder side effect does not happen.** The catalogue parses
+  sect requirements from card text (`scripts/build-catalog.mts`), not
+  from `requiresSects`. Left as a follow-up.
+- **Bespoke grants that pass `requires` by hand:** Pit of Contemplation
+  (Hecata), Cave of Apples (Ministry), Week of Nightmares (Ravnos),
+  Saulot's Healing Touch (Salubri). Spec grants derive it from `who.clan`
+  in five compilers: counter, bleed, rush, political and the
+  `vulnerableTo` burn.
+- **Tests:** `tests/cards/granted-action-requirements.test.ts`, 17 tests.
+  Against the unfixed source, the 11 positives fail and the 6 negatives
+  pass.

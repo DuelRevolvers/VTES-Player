@@ -5997,6 +5997,7 @@ export class VtesEngine implements EngineOps {
       political?: boolean;
       /** The card whose referendum a successful political action calls. */
       referendumSource?: { cardName: string; cardInstanceId: CardInstanceId };
+      requires?: { clans: string[] };
     },
   ): void {
     const m = getMinion(this.state, minionId);
@@ -6051,6 +6052,10 @@ export class VtesEngine implements EngineOps {
       directed,
       cardName: entry.card.name,
       ...(targetMinion !== null ? { targetMinion } : {}),
+      // A political action is a type of action whatever provided it
+      // (p. 24), and `cardTypes` is what the conditional statics ask
+      // (Oluwafunmilayo's "+1 intercept against political actions").
+      ...(args.political ? { cardTypes: ["politicalAction" as const] } : {}),
     });
     if (actionKind === "bleed") this.chargeBleedAnnounceTax(m, target);
     const frame: ActionFrame = {
@@ -6058,6 +6063,10 @@ export class VtesEngine implements EngineOps {
       actionId,
       actionKind,
       card: null,
+      ...(args.political ? { political: true } : {}),
+      ...(args.requires && args.requires.clans.length > 0
+        ? { grantRequires: { clans: [...args.requires.clans] } }
+        : {}),
       acting: m.id,
       actingSeat: seat,
       target,

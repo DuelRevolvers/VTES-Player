@@ -97,6 +97,29 @@ export type VampireTitle =
 export const CITY_TITLES: VampireTitle[] = ["prince", "baron", "archbishop"];
 
 /**
+ * The sect each title can only be held by (pp. 39–40): "Baron is a title
+ * that can only be held by an Anarch", only Camarilla vampires hold
+ * primogen, prince, justicar and Inner Circle, only Sabbat vampires the
+ * five Sabbat titles. So a card that requires a title requires that sect
+ * too [LSJ 20080603: Open War "requires an Anarch, for eg. Powerbase: Los
+ * Angeles"]. A `Record`, so a new title is a compile error until it says.
+ * Independent votes "are not tied to a sect" and are not titles here.
+ * docs/granted-action-requirements-design.md §5
+ */
+export const TITLE_SECT: Record<VampireTitle, Sect> = {
+  primogen: "camarilla",
+  prince: "camarilla",
+  justicar: "camarilla",
+  innerCircle: "camarilla",
+  baron: "anarch",
+  bishop: "sabbat",
+  archbishop: "sabbat",
+  priscus: "sabbat",
+  cardinal: "sabbat",
+  regent: "sabbat",
+};
+
+/**
  * The clans the V5 crypt contains — DERIVED from the registry, not
  * guessed, the same treatment `CITY_TITLES` gets and for the same reason
  * (the "Assamite" filter that matched nothing).
@@ -2293,8 +2316,12 @@ export interface ActionFrame {
   /** Non-null when the action was announced with an action card. */
   card: ActionCardRef | null;
   /**
-   * This action was announced with a POLITICAL ACTION card, so success
-   * calls a referendum (p. 24, p. 27).
+   * This action is a POLITICAL ACTION, so success calls a referendum
+   * (p. 24, p. 27): announced with a political action card, or granted as
+   * one by a card in play. A political action is a type of action whatever
+   * provided it (p. 24), and before 0.11.54 only the first set this, so
+   * Aaradhya, Oluwafunmilayo and the bots all saw a granted referendum as
+   * a plain action. docs/granted-action-requirements-design.md §4
    *
    * On the frame rather than looked up from the card's handler on each
    * read, because `viewFor` is the consumer and it is given a state
@@ -2426,6 +2453,16 @@ export interface ActionFrame {
     key: string;
     params: Record<string, string>;
   } | null;
+  /** A GRANTED action "is considered to be an action requiring the listed
+   *  clan" [LSJ 20080604] — the clans in the grant's own sentence ("Hecata
+   *  you control can add 1 counter"), never the granting card's icon: The
+   *  Gate of Acheron's burn action requires nothing. On the frame rather
+   *  than `grantedEffect` because a rush grant has no effect, and per
+   *  action rather than per card because one card grants both kinds. Read
+   *  only through `actionRequiresClans`. Clans only, by owner decision:
+   *  nothing in the pool reads a granted sect, capacity or title.
+   *  docs/granted-action-requirements-design.md §3 */
+  grantRequires?: { clans: string[] };
   /** "…as a Ⓓ action that costs 2 pool" — a granted action's own cost,
    *  paid at resolution and only on success (p. 27). */
   grantedCost: { pool?: number; blood?: number } | null;

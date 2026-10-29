@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 325 test files, 3601 tests**, with `npm run typecheck`,
+**Green baseline: 326 test files, 3618 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -849,11 +849,6 @@ Each has cost an hour of "why is my card not offered":
 - A referendum whose terms have no legal choice passes with no effect —
   except where the play gate enforces [LSJ 20100129] (Lextalionis and
   every `refAttachToChosen`: Archon, Warrant), which refuses the call.
-- A granted action does not count as requiring its card's clan
-  [LSJ 20080604]: `af.card` is null for it. Unobservable for Contract;
-  observable for The Gate of Acheron against the Hecata readers. Fix
-  DESIGNED and reviewed 2026-10-27, not built
-  (`docs/granted-action-requirements-design.md`).
 - Diablerie's Red List trophies are unmodelled (TODO in
   `commitDiablerie`); steps 2 and 4 are built.
 - The `.44 Magnum` bespoke handler does not honour the

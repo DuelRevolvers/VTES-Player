@@ -35,6 +35,8 @@ import type {
   WindowId,
 } from "../../engine/index.ts";
 import {
+  actionCardTypes,
+  actionRequiresClans,
   receivedVictoryPointSinceLastTurn,
   committedDiablerieSinceLastTurn,
   blockEligibleSeats,
@@ -49,6 +51,7 @@ import {
   costSourceAvailable,
   uncontrolledCanTakeCounters,
   CITY_TITLES,
+  TITLE_SECT,
   CLANS,
   DISCIPLINES,
   disciplinesOf,
@@ -7280,6 +7283,22 @@ export function searchEquipGrant(
 }
 
 /**
+ * The requirement a GRANTED action confers: it "is considered to be an
+ * action requiring the listed clan" [LSJ 20080604], and the list is the
+ * grant's own WHO — the same filter that decides who may act, so the two
+ * cannot disagree. Clans only, by owner decision (2026-10-27): nothing in
+ * the pool reads a granted sect, capacity or title. Spread into the
+ * `announceEntryAction` args. docs/granted-action-requirements-design.md §3.2
+ */
+export function grantRequirement(
+  who: { clan?: string | string[] } | undefined,
+): { requires?: { clans: string[] } } {
+  const clan = who?.clan;
+  if (clan === undefined) return {};
+  return { requires: { clans: Array.isArray(clan) ? [...clan] : [clan] } };
+}
+
+/**
  * "<who> can add N counters to this card as a [+M stealth] action" — a
  * granted action whose whole effect is an accumulator (The Gate of
  * Acheron). Pit of Contemplation's identical clause is hand-rolled and
@@ -7323,6 +7342,9 @@ export function permanentCounterGrant(
       ops.announceEntryAction(entry, choice.minion, {
         effect: { key: "addCounter" },
         ...(g.stealth ? { stealth: g.stealth } : {}),
+        // "Hecata you control with capacity 4 or more can add 1 counter"
+        // (The Gate of Acheron): this action requires Hecata.
+        ...grantRequirement(g.who),
       });
     },
     resolveGrantedAction(entry, af, ops) {
@@ -7387,6 +7409,7 @@ export function permanentBleedGrant(
         actionKind: "bleed",
         ...(g.stealth ? { stealth: g.stealth } : {}),
         ...(g.cost ? { cost: g.cost } : {}),
+        ...grantRequirement(g.who),
       });
       // "…gets +N bleed if the target Methuselah controls no ready
       // unlocked minions" — evaluated now, at announcement, when the
@@ -7564,7 +7587,7 @@ export function permanentRushGrant(
       const stealth = stealthFor(getMinion(ops.state, target), getMinion(ops.state, choice.minion));
       if (stealth !== 0) args.stealth = stealth;
       if (g?.cost) args.cost = g.cost;
-      ops.announceEntryAction(entry, choice.minion, args);
+      ops.announceEntryAction(entry, choice.minion, { ...args, ...grantRequirement(g?.who) });
       // "Vampires you control can BURN THIS CARD to attempt to enter
       // combat with the attached minion" (Hunting the Quarry) — the
       // grant spends the card that offers it, at ANNOUNCEMENT, because
@@ -7720,7 +7743,7 @@ export function vulnerableGrant(
       const stealth = (v.stealth ?? 0) + stealthFor(actor);
       if (stealth !== 0) args.stealth = stealth;
       if (v.cost) args.cost = v.cost;
-      ops.announceEntryAction(entry, choice.minion, args);
+      ops.announceEntryAction(entry, choice.minion, { ...args, ...grantRequirement(v.who) });
     },
     resolveGrantedAction(entry, af, ops) {
       // The political variant burns nothing on success: the referendum it
@@ -7861,7 +7884,7 @@ export function politicalGrant(
         },
       };
       if (g.stealth) args.stealth = g.stealth;
-      ops.announceEntryAction(entry, choice.minion, args);
+      ops.announceEntryAction(entry, choice.minion, { ...args, ...grantRequirement(g.who) });
     },
     applyReferendum(frame, ops) {
       if (!g) return;
@@ -10051,7 +10074,15 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // "…one card in your ash heap REQUIRING AN ANARCH" (Garibaldi-Meucci
   // Museum) — the exact sibling of requiresClans and requiresDisciplines,
   // added centrally so every spec answers it. docs/ash-heap-design.md §6
-  handler.requiresSects = () => spec.requiresSect ?? [];
+  // A required TITLE requires its sect too (pp. 39–40, [LSJ 20080603]):
+  // Open War "requires a baron" and so requires an Anarch.
+  // docs/granted-action-requirements-design.md §5
+  handler.requiresSects = () => [
+    ...new Set([
+      ...(spec.requiresSect ?? []),
+      ...(spec.requiresTitle ?? []).map((t) => TITLE_SECT[t]),
+    ]),
+  ];
   // Recurring pool drains and their removal clauses
   // (docs/pool-drain-design.md). Added centrally, because the six cards
   // that carry them are a Master, two Actions and a Political Action —
@@ -12322,27 +12353,40 @@ function addCryptAbilities(
       const af = ops.action();
       const card = af?.card;
       if (ua.actionCardTypes || ua.requiresClan || ua.requiresDiscipline || ua.requiresPath) {
-        if (!card) return;
-        const h = ops.registry[card.instance.name];
-        // The chosen mode, for the queries that vary by it.
-        const mode = (card.params["mode"] ?? null) as "basic" | "superior" | null;
-        const variant = card.params["variant"];
+        if (!af) return;
+        // The type and clan tests are asked of the ACTION, not the card: a
+        // granted referendum is a political action (p. 24), and a granted
+        // action requires the clans its grant lists [LSJ 20080604] —
+        // neither has a card. docs/granted-action-requirements-design.md
         if (ua.actionCardTypes) {
-          const types = h?.costTypes?.(mode, variant) ?? [];
+          const types = actionCardTypes(af, ops.registry);
           if (!ua.actionCardTypes.some((t) => types.includes(t))) return;
         }
-        if (ua.requiresClan) {
-          const clans = h?.requiresClans?.() ?? [];
-          if (!ua.requiresClan.some((c) => clans.includes(c))) return;
+        // "Requiring Hecata OR Oblivion [obl]" ("Mother" Anja Giovanni): a
+        // UNION when both are named, as Cappadocian Crypt reads the same
+        // words. Until 0.11.54 the two were separate gates, so Anja fired
+        // only for a card requiring BOTH — never for an Oblivion card
+        // without a Hecata icon, and never for a granted action, which
+        // lists no discipline. A grant lists no discipline, so that half
+        // still needs a card.
+        if (ua.requiresClan || ua.requiresDiscipline) {
+          const clans = actionRequiresClans(af, ops.registry);
+          const clanOk = (ua.requiresClan ?? []).some((c) => clans.includes(c));
+          let discOk = false;
+          if (ua.requiresDiscipline && card) {
+            // The chosen mode, for the queries that vary by it.
+            const mode = (card.params["mode"] ?? null) as "basic" | "superior" | null;
+            const disc =
+              ops.registry[card.instance.name]?.requiresDisciplines?.(mode, card.params["variant"]) ??
+              [];
+            discOk = ua.requiresDiscipline.some((d) => disc.includes(d));
+          }
+          if (!clanOk && !discOk) return;
         }
-        if (ua.requiresDiscipline) {
-          const disc = h?.requiresDisciplines?.(mode, variant) ?? [];
-          if (!ua.requiresDiscipline.some((d) => disc.includes(d))) return;
-        }
-        // Paths are printed on the CRYPT card, so "an action requiring
-        // the Path of …" is a property of the acting vampire, not of the
-        // card (docs/path-cards-design.md §0).
-        if (ua.requiresPath !== undefined && actor.path !== ua.requiresPath) return;
+        // Paths are printed on the CRYPT card, so "an action requiring the
+        // Path of …" is a property of the acting vampire, not of the card
+        // (docs/path-cards-design.md §0) — but it still asks for a card.
+        if (ua.requiresPath !== undefined && (!card || actor.path !== ua.requiresPath)) return;
       }
 
       const target = ua.unlocks === "actor" ? actor : bearer;
@@ -16755,16 +16799,20 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       const card = af?.card;
       const ok =
         af !== null &&
-        card !== null &&
-        card !== undefined &&
         (!afterBlood.successOnly || af.resolvedSuccess === true) &&
         (() => {
-          const h = ctx.registry[card.instance.name];
-          if (!h) return false;
           // "requiring Hecata OR Oblivion [obl]" — either list matching is
-          // enough, which is what the card says.
-          const clans = h.requiresClans?.() ?? [];
-          const disc = h.requiresDisciplines?.(card.mode, card.params["variant"]) ?? [];
+          // enough, which is what the card says. The clan half is asked of
+          // the ACTION: a granted one requires the clans its grant lists
+          // [LSJ 20080604]. A grant lists no discipline, so that half needs
+          // a card. docs/granted-action-requirements-design.md §3.3
+          const clans = actionRequiresClans(af, ctx.registry);
+          const disc = card
+            ? (ctx.registry[card.instance.name]?.requiresDisciplines?.(
+                card.mode,
+                card.params["variant"],
+              ) ?? [])
+            : [];
           return (
             (afterBlood.requiresClan ?? []).some((c) => clans.includes(c)) ||
             (afterBlood.requiresDiscipline ?? []).some((d) => disc.includes(d))

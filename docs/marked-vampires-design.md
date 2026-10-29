@@ -231,7 +231,10 @@ ally; controlled by another Methuselah). They make a natural wave 112.
 - **The rules glossary had to learn "contract".** Contract prints
   "Contract." on a line of its own, which the vocabulary test reads as a
   sub-type. Priority Contract's "Unique contract. Trifle." hid the word.
-- **Not fixed: a granted action does not count as requiring its card's
+- **FIXED in 0.11.54** (`granted-action-requirements-design.md`, which
+  corrects this bullet: the requirement is the clan the GRANT lists, not
+  the card's, and two readers ask about a Hecata action, not four).
+  **Not fixed at wave 111: a granted action does not count as requiring its card's
   clan** [LSJ 20080604]. The ruling's own examples are Open War (an action
   requiring an Anarch) and The Gate of Acheron (requiring Hecata). Every
   reader of "an action requiring X" asks about the card played from hand
