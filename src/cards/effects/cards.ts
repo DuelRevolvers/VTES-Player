@@ -7,7 +7,7 @@
  */
 
 import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, vampireMayVote, vampireVotes } from "../../engine/index.ts";
+import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -27481,15 +27481,23 @@ const weekOfNightmares: CardHandler = {
       ) {
         continue;
       }
+      // "It can target a vampire with no blood. If no blood is stolen, the
+      // hunt is unsuccessful, even if the action stays successful"
+      // [LSJ 20050720-2] — which is how a Ravnos with no blood can make its
+      // mandatory hunt off an empty one. docs/granted-hunts-design.md §3
       for (const victim of allRavnos(ctx.state)) {
-        if (victim.id === actor.id || victim.blood < 1) continue;
+        if (victim.id === actor.id) continue;
+        // The steal names its victim, so "cannot be the target of other
+        // Methuselahs' actions" (Secure Haven) reaches it.
+        if (untargetableBy(victim, actor.controller, actor)) continue;
         options.push({
           id: `act:Week of Nightmares:${entry.card.id}:steal:${actor.id}:${victim.id}`,
           kind: "useEntryAction",
-          label: `${actor.name}: steal 1 blood from ${victim.name}`,
+          label: `${actor.name}: hunt — steal blood from ${victim.name}`,
           source: entry.card.id,
           minion: actor.id,
           params: { target: victim.id },
+          huntAction: true,
         });
       }
     }
@@ -27498,20 +27506,21 @@ const weekOfNightmares: CardHandler = {
   useActionOption(entry, _owner, choice, ops) {
     const target = choice.params["target"];
     if (!target) throw new Error("Week of Nightmares: no victim");
+    // A HUNT, aimed at the victim: directed at its controller when that is
+    // another Methuselah (p. 25), and paid by the engine's `payHunt` —
+    // "steal 1" plus hunt value, capped at what the victim has, with every
+    // successful-hunt trigger [RTR 20030519] [LSJ 20100915]. The effect key
+    // is kept only as the once-per-turn record; there is no
+    // `resolveGrantedAction`, or the victim would pay twice.
+    // docs/granted-hunts-design.md §3
     ops.announceEntryAction(entry, choice.minion, {
       effect: { key: "stealRavnosBlood", params: { target } },
+      actionKind: "hunt",
+      targetMinion: target,
       stealth: 1,
       // "Any Ravnos can steal 1 blood …" [LSJ 20080604].
       requires: { clans: ["Ravnos"] },
     });
-  },
-  resolveGrantedAction(_entry, af, ops) {
-    if (af.grantedEffect?.key !== "stealRavnosBlood") return;
-    const target = af.grantedEffect.params["target"];
-    const victim = target ? findMinion(ops.state, target) : null;
-    if (!victim || victim.blood < 1) return;
-    ops.emit({ type: "BloodBurned", minion: victim.id, amount: 1 });
-    ops.emit({ type: "BloodGained", minion: af.acting, amount: 1 });
   },
 };
 

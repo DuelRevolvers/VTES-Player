@@ -269,6 +269,11 @@ export type LegalOption =
        *  Said by the enumerator, because the option is all the gate has to
        *  ask before the action exists (docs/bearer-rush-grants-design.md §3). */
       entersCombat?: true;
+      /** A HUNT action (Week of Nightmares' steal). Said by the enumerator
+       *  for the same reason: the toll gate, Restricted Vitae's bar and the
+       *  mandatory-hunt branch all ask before the action exists.
+       *  docs/granted-hunts-design.md §3 */
+      huntAction?: true;
       /** The granted action's own cost, paid on success (p. 27). The gate
        *  adds it to a toll paid at announcement. */
       cost?: { blood?: number; pool?: number };

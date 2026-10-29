@@ -6115,6 +6115,11 @@ export class VtesEngine implements EngineOps {
     // One political action per vampire per turn (p. 24), recorded at
     // announcement like `bledThisTurn`.
     if (args.political) m.calledPoliticalThisTurn = true;
+    // A granted HUNT is a hunt (Week of Nightmares): Thirst's "who did not
+    // hunt" is answered by announcing one, as on the built-in path. Its
+    // blood is paid by `payHunt`, which resolution calls for a hunt with no
+    // card. docs/granted-hunts-design.md §3
+    if (actionKind === "hunt") m.huntedThisPhase = true;
     const targetMinion = args.targetMinion ?? null;
     const targetPermanent = args.targetPermanent ?? null;
     const targetController =
@@ -10302,16 +10307,32 @@ export class VtesEngine implements EngineOps {
     // false for one — so this is every vampire owing a hunt that can still
     // make one (a 0-blood vampire, or one under XTC-Laced Blood).
     const hungry = actors.filter((m) => mustHunt(m));
+    // "…one mandatory action they cannot take, then they are 'stuck' and
+    // cannot perform any action (this does not prevent your other minions
+    // from performing actions, however)" (p. 19). A hungry vampire whose
+    // hunt options come out EMPTY is stuck: it is offered nothing, and it
+    // does not hold the others back. Derived on every read — a second
+    // Ravnos entering play ends it. `canAct` answers the Change of Target
+    // case of the same rule, because card enumerators call it directly.
+    // docs/granted-hunts-design.md §3
+    const stuck = new Set<MinionId>();
     if (hungry.length > 0) {
       for (const m of hungry) {
-        options.push({
-          id: `hunt:${m.id}`,
-          kind: "takeAction",
-          label: `${m.name}: hunt (mandatory)`,
-          minion: m.id,
-          action: "hunt",
-          gain: huntGain(this.state, m),
-        });
+        // "…and do not hunt as normal" (Week of Nightmares) — asked here as
+        // in the ordinary branch. Only this branch had forgotten it, so a
+        // Ravnos with no blood hunted as normal. The non-standard hunts
+        // below stay: "other non-standard hunt actions are still permitted"
+        // [LSJ 20090606].
+        if (!auraBlocksHunt(this.state, m)) {
+          options.push({
+            id: `hunt:${m.id}`,
+            kind: "takeAction",
+            label: `${m.name}: hunt (mandatory)`,
+            minion: m.id,
+            action: "hunt",
+            gain: huntGain(this.state, m),
+          });
+        }
         // "Vampires who must hunt can steal 1 blood from a younger vampire
         // as a Ⓓ hunt action" (Restricted Vitae) — a second way to make
         // the same mandatory hunt. docs/hunt-success-design.md §5
@@ -10337,7 +10358,18 @@ export class VtesEngine implements EngineOps {
           options.push(o);
         }
       }
-      return options;
+      // …and so is a GRANTED hunt (Week of Nightmares' steal): "a +1
+      // stealth hunt action" is the Ravnos's way to make the hunt the aura
+      // took its basic one from. docs/granted-hunts-design.md §3
+      for (const o of this.entryActionOptionsFor(tf.seat)) {
+        if (o.kind === "useEntryAction" && o.huntAction === true && hungryIds.has(o.minion)) {
+          options.push(o);
+        }
+      }
+      for (const m of hungry) {
+        if (!options.some((o) => "minion" in o && o.minion === m.id)) stuck.add(m.id);
+      }
+      if (options.length > 0) return options;
     }
     // "If you control a LOCKED MINION, <this vampire> MUST bleed as a Ⓓ
     // action unless she must hunt" (Elen Kamjian) — the second instance of
@@ -10351,6 +10383,7 @@ export class VtesEngine implements EngineOps {
     const preySeat = preyOf(this.state, tf.seat);
     const mustBleed = actors.filter(
       (m) =>
+        !stuck.has(m.id) &&
         !m.bledThisTurn &&
         canRepeatAction(this.state, m, "bleed") &&
         // A bleed she cannot announce is not one she must make — "cannot
@@ -10430,7 +10463,13 @@ export class VtesEngine implements EngineOps {
     );
     // Actions granted by cards in play (rush design §2.5) and in-play
     // abilities usable in the minion phase (The Barrens, ruling p. 47).
-    options.push(...this.entryActionOptionsFor(tf.seat));
+    // A granted HUNT is barred by Restricted Vitae like a hunt action card;
+    // nobody reaching this branch must hunt, or they would be stuck.
+    options.push(
+      ...this.entryActionOptionsFor(tf.seat).filter(
+        (o) => !(restricted && o.kind === "useEntryAction" && o.huntAction === true),
+      ),
+    );
     options.push(...this.abilityOptionsFor(tf.seat, "turn.minion"));
     // A vampire in torpor can perform no action except leave torpor
     // (p. 34): cost 2 blood (paid at resolution, so they must have it),
@@ -10499,8 +10538,20 @@ export class VtesEngine implements EngineOps {
     options.push({ id: "end", kind: "endMinionPhase", label: "End minion phase" });
     // "A vampire that can't burn 2 blood can't attempt an action other than
     // a hunt or an action to enter combat" [ANK 20180327] — ONE gate over
-    // every action the phase offers, whichever enumerator built it.
-    return options.filter((o) => this.affordsActionToll(o));
+    // every action the phase offers, whichever enumerator built it. A stuck
+    // vampire "cannot perform any action" (p. 19), whichever enumerator
+    // offered it one; an in-play ability is not an action and stays.
+    return options.filter((o) => this.affordsActionToll(o) && !this.stuckActs(o, stuck));
+  }
+
+  /** Whether `o` is an ACTION by a stuck vampire (p. 19). */
+  private stuckActs(o: LegalOption, stuck: ReadonlySet<MinionId>): boolean {
+    if (stuck.size === 0) return false;
+    if (o.kind === "takeAction" || o.kind === "useEntryAction") return stuck.has(o.minion);
+    if (o.kind === "playCard") {
+      return o.minion !== null && stuck.has(o.minion) && this.registry[o.name]?.isActionCard === true;
+    }
+    return false;
   }
 
   /** Whether `m` can pay its action toll AND the action's own blood cost.
@@ -10544,7 +10595,8 @@ export class VtesEngine implements EngineOps {
     if (o.kind === "useEntryAction") {
       const m = findMinion(this.state, o.minion);
       if (!m) return true;
-      return this.tollAffordable(m, o.entersCombat ? "enterCombat" : "other", o.cost?.blood ?? 0);
+      const kind = o.huntAction ? "hunt" : o.entersCombat ? "enterCombat" : "other";
+      return this.tollAffordable(m, kind, o.cost?.blood ?? 0);
     }
     return true;
   }

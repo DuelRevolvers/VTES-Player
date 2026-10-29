@@ -1,9 +1,10 @@
 # Granted hunts — Week of Nightmares' steal
 
-Designed 2026-10-29. **Status: APPROVED 2026-10-29.** The owner answered
-both §4 questions with the recommendation: the steal is a hungry Ravnos's
-mandatory hunt, a Ravnos with no hunt it can make is stuck, and a steal
-from a rival's Ravnos is directed at that rival (p. 25).
+Designed 2026-10-29. **Status: BUILT (0.11.57).** The owner answered both
+§4 questions with the recommendation on 2026-10-29: the steal is a hungry
+Ravnos's mandatory hunt, a Ravnos with no hunt it can make is stuck, and a
+steal from a rival's Ravnos is directed at that rival (p. 25). §7 records
+what the build changed from this design.
 
 Week of Nightmares (102166) prints a hunt action, and the engine announces it
 as an ordinary card action. When the card was built, that difference was
@@ -179,3 +180,29 @@ not a card it plays.
   pointer here.
 - `CLAUDE.md`: the green baseline, and this doc in the index under
   "Actions and blocking".
+
+## 7. As built (0.11.57)
+
+§3 was built as written, in `engine.ts` (`minionPhaseOptions`,
+`announceEntryAction`, the toll gate, and a new `stuckActs`), `options.ts`
+(`huntAction` on `useEntryAction`) and `weekOfNightmares` in `cards.ts`.
+What differs, or was found while building:
+
+- **D9, found while building: the steal ignored Secure Haven.** Once the
+  steal names its victim, "cannot be the target of other Methuselahs'
+  actions" reaches it, so the enumerator asks `untargetableBy`. This is
+  the same gap 0.11.55 closed in `permanentRushGrant`.
+- **The stuck filter covers actions only.** `stuckActs` removes a stuck
+  vampire's basic actions, action cards and granted actions. An in-play
+  ability isn't an action (p. 19 says "cannot perform any action"), so it
+  stays. The mandatory-bleed branch (Elen Kamjian) also skips a stuck
+  vampire, because it returns before the final filter.
+- **Ruling 2 is tested with Restricted Vitae's steal, not Psychophagia.**
+  Psychophagia requires a Hecata, so no Ravnos can play it. A hungry Ravnos
+  under both cards is offered both steals and no basic hunt.
+- **Tests:** 11 in `tests/cards/granted-hunts.test.ts`. Against the old
+  engine, 9 fail. The 2 that pass pin behaviour that was already right:
+  the once-per-turn limit, and a steal from your own Ravnos being
+  undirected.
+- **Soak:** `npm run simulate -- --games 200 --seed 7` gave 0 errors,
+  because the stuck rule runs in every minion phase of every game.

@@ -111,10 +111,10 @@ CLAUDE.md.
 
 ## 5. Deviations recorded
 
-- Week of Nightmares' blood steal is "a +1 stealth **hunt** action"; the
-  engine announces it as a granted `cardEffect` action with +1 stealth, so
-  a card that keys off hunt actions specifically would not see it. No card
-  in the V5 pool does.
+- ~~Week of Nightmares' blood steal is announced as a `cardEffect`, not a
+  hunt.~~ **Closed in 0.11.57.** Restricted Vitae and p. 19's mandatory hunt
+  both read hunt actions now, so the deviation was a set of defects. The
+  steal is a real hunt: `docs/granted-hunts-design.md`.
 - `onLeavePlay` fires from `burnPermanent` only. A card removed by ousting
   (the p. 43 sweep) or shuffled into a library does not get the call; no
   card in the pool needs it there today.

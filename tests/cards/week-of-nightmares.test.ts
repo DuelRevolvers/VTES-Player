@@ -116,8 +116,8 @@ describe("Week of Nightmares (102166)", () => {
 
     runTrace(engine, [
       ["Alice", "act:Week of Nightmares:won:steal:V1:W"],
-      // Undirected (no minion target on the frame), so prey then predator
-      // get the block window (p. 25).
+      // A hunt aimed at Bob's W, so directed at Bob (p. 25).
+      // docs/granted-hunts-design.md
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // announce
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // effects
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
