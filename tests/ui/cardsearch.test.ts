@@ -27,6 +27,7 @@ import registry from "../../src/cards/registry.json";
 import type { CatalogCard, CatalogFile } from "../../src/cards/catalog.ts";
 import { DISCIPLINE_NAMES, VIRTUE_CODES } from "../../src/cards/catalog.ts";
 import type { CardRegistry } from "../../src/cards/types.ts";
+import { TITLE_SECT } from "../../src/engine/state.ts";
 import {
   cardDetailMarkup,
   costLine,
@@ -885,12 +886,46 @@ describe("the sect requirement parse", () => {
     if (bear) expect(bear.requiresSects).toEqual(["Anarch"]);
     for (const c of lib) {
       // Nothing may claim a sect it only ever mentions as "non-<sect>".
+      // A Requires sentence demands a sect by naming it or by naming one
+      // of its titles: Closed Session requires a prince and also prints
+      // "non-Camarilla".
       for (const sect of c.requiresSects) {
+        const titles = Object.entries(TITLE_SECT)
+          .filter(([, s]) => s === sect.toLowerCase())
+          .map(([t]) => (t === "innerCircle" ? "inner circle" : t));
         const onlyNegated =
           new RegExp(`non-${sect}`, "i").test(c.text) &&
-          !new RegExp(`Requires[^.]*\\b${sect}\\b`, "i").test(c.text);
+          !new RegExp(`Requires[^.]*\\b(?:${[sect, ...titles].join("|")})\\b`, "i").test(c.text);
         expect(onlyNegated).toBe(false);
       }
+    }
+  });
+
+  it("reads a TITLE requirement as its title's sect", () => {
+    // "Requires a baron" needs an Anarch (pp. 39–40). The engine has read
+    // titles this way since 0.11.54 (`TITLE_SECT`); the catalogue named
+    // sects only, so these cards had no sect at all.
+    const sectOf = (name: string): string[] =>
+      cards.find((c) => c.kind === "library" && c.name === name)!.requiresSects;
+    expect(sectOf("Bait and Switch")).toEqual(["Anarch"]); // a baron
+    expect(sectOf("Anathema")).toEqual(["Camarilla"]); // a prince or justicar
+    expect(sectOf("Blood Feast")).toEqual(["Sabbat"]); // a ready archbishop, priscus, cardinal or regent
+    // Two words, with "member" after them.
+    expect(sectOf("Wrath of the Inner Circle")).toEqual(["Camarilla"]);
+    // "non-sterile" sits between the article and the title.
+    expect(sectOf("Childe of the Revolution")).toEqual(["Anarch"]);
+    // The list stops at a word that is not a title: "cardinal, regent or
+    // Inquisitor".
+    expect(sectOf("Auto-da-fé")).toEqual(["Sabbat"]);
+  });
+
+  it("does not read a title MENTIONED outside a Requires sentence", () => {
+    // Fear of Mekhet goes ON a justicar; Framing an Ancient Grudge CHOOSES
+    // a prince. Neither is a rule about who may play the card.
+    for (const name of ["Fear of Mekhet", "Framing an Ancient Grudge"]) {
+      const card = cards.find((c) => c.name === name)!;
+      expect(card.text).toMatch(/\b(?:justicar|prince)\b/i);
+      expect(card.requiresSects).toEqual([]);
     }
   });
 

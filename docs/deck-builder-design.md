@@ -933,3 +933,34 @@ And the table renders into the same root with its own `#zoom` once a game
 starts, so every handler stands down unless the screen is the Deck
 Builder. The browser's native tooltip was removed from card cells too, as
 the table did, because it lingers over the card under the preview.
+
+## §17 — A title is a sect requirement (0.11.56)
+
+**"Requires a baron" needs an Anarch**, because baron is an Anarch title
+(pp. 39–40). The engine has read titles this way since 0.11.54, through
+`TITLE_SECT` in `src/engine/state.ts`. The catalogue's parse (§13) named
+sects only, so **63 cards** that print a title list had no sect at all:
+the sect scope never hid them, and a deck with no vampire of the right
+sect was never warned about them.
+
+`scripts/build-catalog.mts` now reads the title list with the same
+anchoring as the sect parse: sentence-initial "Requires", an article,
+optional "ready" and "non-sterile", then titles separated by commas and
+"or". The sect comes from `TITLE_SECT` itself, so the engine and the
+catalogue use one table. Measured against the previous catalogue, the 63
+cards went from no sect to one, and no other field of any card changed.
+
+**Three phrasings needed care, and each is tested:** "Inner Circle
+member" is two words plus a noun; "non-sterile" sits between the article
+and the title; and Auto-da-fé's list ends in "Inquisitor", which isn't a
+title, so the list stops there. A title MENTIONED outside a Requires
+sentence (Fear of Mekhet goes on a justicar) is still not a requirement.
+
+**Limit:** the TITLE itself isn't checked. A Camarilla crypt with no
+prince still sees a "Requires a prince" card, because the crypt side of
+the catalogue carries no titles to compare against.
+
+The negation test in `tests/ui/cardsearch.test.ts` had assumed a
+demanded sect is NAMED in the Requires sentence. It now accepts the
+sect's titles too, because Closed Session requires a prince and also
+prints "non-Camarilla".

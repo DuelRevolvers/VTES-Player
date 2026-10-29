@@ -222,7 +222,9 @@ ally; controlled by another Methuselah). They make a natural wave 112.
   with 0 blood must hunt (p. 21, `mustHunt`), so it is offered nothing
   else, and a cost of 1 blood only bites at 0. The gate stays as a
   backstop, as the bleed grant's does. The test drives a rush to its end
-  and checks that the 1 blood is paid.
+  and checks that the 1 blood is paid. **Closed with no change, owner
+  decision 2026-10-29:** no game can reach the gate, so neither deleting
+  it nor testing it against a state the rules forbid changes play.
 - **An own-name tag bars a second copy.** On an action that attaches to a
   chosen target, the code skips a minion whose attached cards carry the
   card's name in `tags`. Blood Hunt and War Party print no limit, so their

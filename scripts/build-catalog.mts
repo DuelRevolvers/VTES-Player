@@ -22,6 +22,8 @@ import path from "node:path";
 import { loadRawCards, isCryptRaw, parseCost, type RawKrcgCard } from "./krcg-common.mts";
 import type { CatalogCard, CatalogFile, CatalogStatus } from "../src/cards/catalog.ts";
 import type { CardRegistry } from "../src/cards/types.ts";
+import { TITLE_SECT } from "../src/engine/state.ts";
+import type { VampireTitle } from "../src/engine/state.ts";
 
 const RAW = path.join(process.cwd(), "data", "vtes-raw.json");
 const REGISTRY = path.join(process.cwd(), "src", "cards", "registry.json");
@@ -77,16 +79,63 @@ const REQUIRES_SECT = new RegExp(
   "gi",
 );
 
+/**
+ * A TITLE is a sect requirement too. "Requires a baron" needs an Anarch,
+ * because baron is an Anarch title (pp. 39–40), and the engine has read
+ * it that way since 0.11.54 through `TITLE_SECT`. The parse above names
+ * sects only, so 63 cards that print a title list had no sect here, and
+ * the Deck Builder neither scoped them nor warned about them.
+ *
+ * Same anchoring as the sect parse: sentence-initial "Requires", an
+ * article, optional "ready" and "non-sterile", then the LIST of titles
+ * ("a ready archbishop, priscus, cardinal or regent"). The list stops at
+ * the first word that is not a title, so Auto-da-fé's "cardinal, regent
+ * or Inquisitor" takes the two titles and leaves the Inquisitor.
+ *
+ * The sect comes from `TITLE_SECT`, the engine's one table, so the two
+ * cannot disagree. The title itself is not recorded: a Camarilla crypt
+ * with no prince still sees a "Requires a prince" card. The crypt side of
+ * the catalogue carries no titles to check it against.
+ */
+const TITLE_WORDS: Record<string, VampireTitle> = {
+  primogen: "primogen",
+  prince: "prince",
+  justicar: "justicar",
+  "inner circle": "innerCircle",
+  baron: "baron",
+  bishop: "bishop",
+  archbishop: "archbishop",
+  priscus: "priscus",
+  cardinal: "cardinal",
+  regent: "regent",
+};
+const TITLE = "(?:primogen|prince|justicar|inner\\s+circle(?:\\s+member)?|baron|archbishop|bishop|priscus|cardinal|regent)\\b";
+const REQUIRES_TITLE = new RegExp(
+  `(?:^|[.\\n]\\s*)Requires\\s+(?:an?|the)\\s+(?:ready\\s+)?(?:non-sterile\\s+)?(${TITLE}(?:(?:\\s*,\\s*|\\s+)(?:or\\s+)?${TITLE})*)`,
+  "gi",
+);
+const ONE_TITLE = new RegExp(TITLE, "gi");
+
 function requiredSects(card: RawKrcgCard): string[] {
   if (isCryptRaw(card)) return [];
   const text = card.card_text ?? "";
   const out = new Set<string>();
+  // Capitalised to one spelling: the cards print both "Anarch" and
+  // "anarch", and a set holding both would make the filter miss half of
+  // them.
+  const add = (sect: string): void => {
+    out.add(sect[0]!.toUpperCase() + sect.slice(1).toLowerCase());
+  };
   for (const m of text.matchAll(REQUIRES_SECT)) {
-    // Capitalised to one spelling: the cards print both "Anarch" and
-    // "anarch", and a set holding both would make the filter miss half
-    // of them.
     for (const found of [m[1], m[2]]) {
-      if (found) out.add(found[0]!.toUpperCase() + found.slice(1).toLowerCase());
+      if (found) add(found);
+    }
+  }
+  for (const m of text.matchAll(REQUIRES_TITLE)) {
+    for (const t of m[1]!.matchAll(ONE_TITLE)) {
+      const word = t[0].toLowerCase().replace(/\s+/g, " ").replace(/ member$/, "");
+      const title = TITLE_WORDS[word];
+      if (title) add(TITLE_SECT[title]);
     }
   }
   return [...out].sort();
