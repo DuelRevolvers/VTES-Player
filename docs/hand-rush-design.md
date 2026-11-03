@@ -1,0 +1,357 @@
+# Hand rush cards (wave 114)
+
+**Status: DESIGNED, waiting for owner review (2026-11-03).** No kernel code
+is written. §5 lists the decisions that need the owner.
+
+## 0. The family
+
+Seven action cards from the hand, each of which enters combat as a Ⓓ
+action. `docs/equipment-rush-design.md` §0.1 found them, and §8 named them
+as the next wave.
+
+| Card | Id | Requirement | Rush target | Other clauses |
+| --- | --- | --- | --- | --- |
+| Big Game | 100159 | None | A ready minion of another Methuselah | Do not replace until after the action; a Red List branch |
+| Games of Instinct | 100801 | A ready Sabbat vampire | An older vampire of another Methuselah | The one ready combatant gains blood equal to the other's capacity |
+| Harass | 100886 | None | A vampire with 3 or fewer blood, or a locked minion | 1 optional press, only usable to continue |
+| Monomancy | 101241 | A ready Sabbat vampire; +1 stealth | A ready Sabbat vampire of another Methuselah | The target may end combat before range in round 1; if it does, the card goes on the target with -1 bleed |
+| Purity of the Beast | 101522 | A ready vampire; +1 stealth | An ally controlled by your prey | +2 strength in that combat |
+| Rumble | 101661 | A Sabbat vampire | A ready minion of another Methuselah | +1 hand size in that combat; burn 1 pool if the actor isn't ready at the end of the action |
+| Taunt the Caged Beast | 101947 | `[ani]` / `[ANI]` | `[ani]`: any vampire. `[ANI]`: two other seats' vampires fight each other | `[ani]`: an optional maneuver. `[ANI]`: the one ready combatant gains 4 blood |
+
+Six cards are tranche T1, because they need no discipline. Taunt the Caged
+Beast is T2, because the V5 crypt has Animalism.
+
+**The pool can produce every target.** The V5 crypt has 48 Sabbat vampires
+across 11 clans, and the pool has 44 allies. "Older" means a higher
+capacity (p. 5), and V5 capacities run from 2 to 10. The one exception is
+Big Game's Red List branch (§5 Q1).
+
+**The shared primitive is `actionEnterCombat`.** Eleven pool cards use it
+already, such as Bum's Rush, Ambush, Abuse of Power and Pillars Fall. Most
+of this wave is new target filters, riders and end-of-combat payoffs on
+that one primitive.
+
+## 1. Printed text and rulings
+
+Text is from `data/vtes-raw.json`. Rulings are from the KRCG card data in
+the same file.
+
+- **Big Game:** "Do not replace until after this action. Ⓓ Enter combat
+  with a ready minion controlled by another Methuselah. If that minion is a
+  Red List minion, this minion gets an optional maneuver or press in that
+  combat and unlocks at the end of the action if he or she is still ready."
+  - [ANK 20180518]: "that minion" is the target, and "this minion" is the
+    acting minion.
+  - [LSJ 20001120]: the card isn't replaced if the action is blocked. It's
+    replaced when the action ends, after all combats.
+  - [LSJ 20101021]: it's replaced after all "after resolution" cards and
+    effects, such as Freak Drive.
+- **Games of Instinct:** "Requires a ready Sabbat vampire. Ⓓ Enter combat
+  with an older vampire controlled by another Methuselah. At the end of that
+  combat, if only one combatant is ready, that ready vampire gains blood
+  equal to the opposing vampire's capacity from the blood bank."
+  - [LSJ 20100324]: the blood is gained after combat ends, so no combat
+    card can be played afterwards. The acting player chooses the order of
+    after-combat effects.
+- **Harass:** "Ⓓ Enter combat with a vampire who has 3 or fewer blood or
+  with a locked minion. This acting minion gets 1 optional press, only
+  usable to continue combat, during that combat."
+  - [LSJ 20070411] [LSJ 20090514]: if the action isn't blocked, and the
+    target now has more than 3 blood and is unlocked, then the action
+    fizzles. Any cost is paid and the action counts as successful, but it
+    has no effect.
+- **Monomancy:** "+1 stealth action. Requires a ready Sabbat vampire. Ⓓ
+  Enter combat with a ready Sabbat vampire controlled by another
+  Methuselah. That vampire may end combat before range is chosen during the
+  first round of combat. If he or she does so, put this card on him or her;
+  that vampire gets -1 bleed."
+  - [RTR 20020501]: the card isn't put on the target if the target uses
+    some other effect to end combat.
+- **Purity of the Beast:** "+1 stealth action. Requires a ready vampire. Ⓓ
+  Enter combat with an ally controlled by your prey. The acting vampire
+  gets +2 strength in that combat." No rulings.
+- **Rumble:** "Requires a Sabbat vampire. Ⓓ Enter combat with a ready
+  minion controlled by another Methuselah. In that combat, your hand size
+  is increased by one. If this acting vampire is not ready at the end of
+  the action, you burn 1 pool." No rulings.
+- **Taunt the Caged Beast:** "`[ani]` Ⓓ Enter combat with any vampire, with
+  an optional maneuver in that combat. `[ANI]` Choose a ready vampire
+  controlled by your predator and another controlled by your prey (not
+  usable when only one other Methuselah is in the game). The chosen
+  vampires enter combat. If only one is ready at the end of that combat, he
+  or she gains 4 blood."
+  - [LSJ 20070319]: in the `[ANI]` combat, the prey's vampire goes first
+    for maneuvers, strikes and presses.
+
+Rulebook citations:
+
+- p. 5: a vampire with a higher capacity is older. Blood over capacity is
+  moved to the blood bank.
+- p. 27: a blocked action's combat is part of block resolution.
+- p. 41: Red List is a trait. No V5 crypt card has it.
+- p. 48: if the vampire was blocked, Freak Drive is played after combat.
+
+## 2. What already exists
+
+The survey checked the tree for each clause before designing against it.
+The following pieces exist and are reused unchanged:
+
+- **Ready targets only, never the actor.** `enumerateRushTargets` in
+  `compile.ts` (~1271) already excludes torpid minions (p. 30) and the
+  acting minion. Own minions are legal, which makes the action undirected.
+- **`othersOnly`** ("controlled by another Methuselah") exists, but only on
+  the granted-rush shape. The hand primitive doesn't accept it yet.
+- **The fizzle.** `lockedOk` in `finishAction` (`engine.ts` ~9794)
+  re-reads Ambush's "locked" at resolution, and `grantOk` sits beside it.
+- **Riders.** `maneuver`, `press` and `strength` exist on `RushRiders`.
+  Purity of the Beast's +2 strength and Taunt's `[ani]` maneuver need
+  nothing new.
+- **A continue-only press.** `CombatFrame.pressesContinueOnly` exists for
+  combat cards that print `press, continueOnly: true`.
+- **A combat-scoped hand size.** `handSizeBonus` (Rage of Apedemak) is held
+  on the combat frame, and the p. 7 discard-down runs when the frame pops.
+- **End-of-combat payoffs.** `outcome.when: "oneCombatantReady"` exists
+  (Abuse of Power). The card can be held aside instead of burned, then put
+  on a vampire (Pillars Fall's `attachToActor`).
+- **A combat between two minions that aren't the actor.** Hedonism's
+  `queuedCombats` pushes a combat between any two minions after the action
+  frame pops, re-checks that both are ready, and carries an outcome.
+- **Requirements.** `requiresSect` and `requiresVampire` exist.
+- **Age.** `capacityOf` already answers "older" for Under the Skin and the
+  vote-cancel offers.
+- **"Do not replace until after this action."** `delayedReplace:
+  "afterAction"` exists (Bum's Rush), but see §3, defect D1.
+
+## 3. Engine defects found
+
+The survey found two ordering defects in the rush path that is already in
+the pool. Neither has a test that would show it.
+
+**D1. "Do not replace until after this action" replaces before the rush
+combat.** `resolveActionInner` draws `af.drawAfter` (`engine.ts` ~9603).
+Only later does `finishAction` push the successful rush's combat (~9815).
+[LSJ 20001120] says the card is replaced "after all combats". Bum's Rush
+does this wrong today: its player has the replacement card in hand during
+the rush combat.
+
+**D2. The after-resolution window opens before a successful rush's
+combat.** The window opens in `resolveActionInner`, and the rush combat is
+pushed in `finishAction`, after it. So Freak Drive can unlock a successful
+rusher before the rusher fights. The order was kept on purpose when the
+window was built (`after-resolution-design.md` §2: "The ordering is
+unchanged"). It preserved the old order. It isn't a reading of the rules.
+The rules point the other way:
+
+- p. 27 makes a blocked action's combat part of resolution, and the engine
+  already pushes that combat with the action frame still on the stack.
+- p. 48 puts Freak Drive after the combat of a blocked action.
+- [LSJ 20001120] and [LSJ 20101021] together give the order as combats,
+  then after-resolution effects, then the replacement draw.
+
+A successful rush's combat is the action's effect, so it belongs inside
+resolution in the same way. §5 Q2 asks how to fix this.
+
+## 4. The design
+
+### 4.1 One target predicate
+
+`actionEnterCombat` gains the following filter fields:
+
+- `othersOnly`: "controlled by another Methuselah" (Big Game, Games of
+  Instinct, Monomancy and Rumble).
+- `targets: "ally"`: Purity of the Beast. This joins `"minion"` and
+  `"vampire"`.
+- `controlledBy: "prey"`: Purity of the Beast.
+- `sect`: "a Sabbat vampire" (Monomancy).
+- `olderOnly`: "an older vampire" (Games of Instinct), read with
+  `capacityOf` against the actor, as Under the Skin reads it.
+- `maxBlood` with `orAnyLocked`: Harass's "a vampire who has 3 or fewer
+  blood or a locked minion".
+
+All of the filter fields live in one function, `rushTargetOk`. Enumeration
+calls it, and so does the fizzle check at resolution, which replaces
+`lockedOk` with one call. Harass's ruling is then a consequence of the
+function, not a special case, and Ambush keeps its fizzle. This follows the
+lesson "One question asked in two places will drift."
+
+Harass is the reason resolution must re-read every term. Blood and lock
+state change between announcement and resolution. The other terms rarely
+change, but reading them all in one place costs nothing.
+
+### 4.2 Two new riders
+
+`RushRiders` gains the following riders:
+
+- `pressContinueOnly: number`, which adds to `cf.pressesContinueOnly`
+  (Harass).
+- `handSize: number`, which adds to the combat frame's existing hand-size
+  bonus for the card's player (Rumble). "Your hand size" means the
+  Methuselah's, as with Rage of Apedemak.
+
+Both are rush riders, so they apply only to the combat the card announced.
+A blocked Rumble fights the blocker without the bonus. That's the
+`rushRiders` reading from `rush-outcome-design.md` §2.
+
+### 4.3 Two new end-of-combat payoffs
+
+`OutcomeEffect` gains `readyGainsBlood`, used with `when:
+"oneCombatantReady"`:
+
+- `{ amount: 4 }` for Taunt the Caged Beast `[ANI]`.
+- `{ opposingCapacity: true }` for Games of Instinct.
+
+"That ready vampire" can be either combatant, including the target. The
+card names no exception, which is the reading Abuse of Power took
+(`rush-outcome-design.md` §3). The opposing vampire might have been burned
+in the combat, so its capacity is read from its card, not from a live
+minion. Blood over capacity goes back to the bank (p. 5), which the
+engine's existing gain already does. The ready combatant must be a vampire.
+If it's an ally, nothing is gained, because the card says "vampire".
+
+### 4.4 Monomancy's end-combat option
+
+This clause needs new engine work. During the rush combat, the TARGET is
+offered an option that comes from a card that isn't in play.
+
+- `actionEnterCombat` gains `opposingMayEnd: { statics }`, and the rush
+  combat frame carries it as a rider.
+- In `combat.beforeRange`, in round 1 only, the opposing minion's
+  controller gets the option `endcombat:Monomancy:<cardInstanceId>`. It ends
+  combat through the same helper that the equipment `burnToEndCombat`
+  ability uses.
+- The action card is held aside rather than burned, as Pillars Fall's card
+  is. If the target takes the option, the card goes on the target with
+  `statics.bleed: -1`. In every other case it burns when the combat ends.
+  [RTR 20020501] then holds automatically, because only this option
+  attaches the card.
+
+The option id is a new built-in prefix, because `ability:` is for cards in
+play. It joins the option-id list in `CLAUDE.md`.
+
+### 4.5 The end-of-action tail
+
+Rumble's "if this acting vampire is not ready at the end of the action" is
+read at the end of the ACTION, not the combat. So it applies to a blocked
+Rumble too: if the actor went to torpor fighting the blocker, you burn 1
+pool. "Not ready" includes a burned actor.
+
+`ActionFrame.atActionEnd` holds the riders that run when the action ends.
+The delayed replacement draw moves onto the same list, which fixes D1 for
+Bum's Rush. The five other pool cards that print "Do not replace until
+after this action" move with it: Arson, Pack Tactics, Elder Intervention,
+New Management and Baseball Bat. Where the tail runs depends on §5 Q2.
+
+### 4.6 Taunt the Caged Beast `[ANI]`
+
+The superior mode is an undirected action, because it prints no Ⓓ.
+
+- **The gate.** The mode is offered only when the table has two other
+  seats, so that predator and prey are different Methuselahs. It also needs
+  a ready vampire on each side. Both vampires are chosen at announcement
+  (p. 25) and ride in the option id.
+- **The combat.** On success, the combat is queued through Hedonism's
+  `queuedCombats`, which re-checks that both vampires are still ready. The
+  prey's vampire takes the first slot (`cf.acting`), because it goes first
+  [LSJ 20070319]. That slot sets the order only. Neither vampire is the
+  acting minion of the action, and the actor of the action doesn't fight.
+- **The payoff.** It's §4.3's `readyGainsBlood: { amount: 4 }`.
+
+### 4.7 Requirements
+
+Games of Instinct and Monomancy use `requiresSect: ["Sabbat"]` with the
+existing ready check. Rumble uses `requiresSect: ["Sabbat"]`; its
+requirement doesn't say "ready", but a torpid vampire can't act anyway.
+Purity of the Beast uses `requiresVampire`.
+
+## 5. Questions for the owner
+
+**Q1. Big Game: admit it now, or wait for Red List minions?** Red List is a
+trait (p. 41), and no V5 crypt card has it. The card's rush works in
+today's pool, but its Red List branch can never fire. That branch needs two
+new mechanics: a Red List trait check, and a single credit that can be
+spent as a maneuver or as a press. A test can reach them only through a
+made-up fixture minion.
+
+- **Recommended: wait.** Build Big Game when §7 opens a group with Red List
+  vampires, so that its new mechanics can be tested with real cards. The
+  other six cards don't depend on it. Its replacement clause is fixed for
+  Bum's Rush anyway (D1).
+- **Alternative: admit it now**, with the branch built and tested on a
+  fixture. It's whole, but half of it is dead code until §7.
+
+**Q2. Where should a successful rush's combat run (D2)?**
+
+- **Recommended: inside resolution.** Push the combat with the action frame
+  still on the stack, which is where a blocked action's combat already runs
+  (p. 27). The order becomes: the combat, then the after-resolution window,
+  then the end-of-action tail. That fixes D1 and D2 together, and the tail
+  has one place to run, `finishAction`. The cost is that every
+  successful-rush trace test that expects Freak Drive before the combat
+  changes. That ordering was wrong, so the tests were asserting the defect.
+- **Alternative: keep the order, and fix only D1.** The tail rides on the
+  rush combat frame and runs when the frame pops. Freak Drive keeps its
+  current, early window.
+
+A political action's referendum also runs after the window today. It's
+outside this wave, and the question is recorded here only.
+
+**Q3. Approve the readings in §4.** The readings that need approval are
+the following:
+
+1. One predicate re-reads every target term at resolution. A failed term
+   fizzles the action, as the Ambush and Harass rulings describe (§4.1).
+2. Rumble's hand-size bonus and Harass's press apply only to the rush's own
+   combat, never to a block combat (§4.2).
+3. "That ready vampire" can be either combatant, and an ally gains nothing
+   (§4.3).
+4. Rumble's pool burn also applies when the action is blocked (§4.5).
+5. In Taunt `[ANI]`, the prey's vampire takes the first slot, and neither
+   combatant counts as the acting minion (§4.6).
+
+### 5.1 The owner's answers (November 3, 2026)
+
+- **Q1: wait.** Big Game leaves this wave and is built when §7 opens a
+  group with Red List vampires. The wave is six cards.
+- **Q2: inside resolution.** A successful rush's combat runs with the
+  action frame still on the stack, before the after-resolution window and
+  the end-of-action tail. This fixes D1 and D2 together.
+- **Q3: all five readings approved** as §4 describes them.
+
+## 6. What isn't in this wave
+
+- **Big Game** (§5.1, Q1).
+- **Freak Drive and a political action's referendum** (§5 Q2).
+- **Allies that rush:** the second §8 family in
+  `equipment-rush-design.md`.
+
+## 7. Tests
+
+`tests/cards/hand-rush.test.ts`, with a positive and a negative case for
+every filter:
+
+- **Targets.** Each card offers exactly its legal targets: never its own
+  minions under `othersOnly`, never a younger or same-capacity vampire for
+  Games of Instinct, never a non-Sabbat for Monomancy, never a vampire for
+  Purity of the Beast, and never another seat's ally.
+- **Harass.** The fizzle when the target gains blood and unlocks before
+  resolution, and no fizzle when either term still holds. The press can
+  continue the combat and can't end it.
+- **Games of Instinct.** Either combatant gains: the actor when the target
+  goes to torpor, and the target when the actor does. The capacity is read
+  from a burned opponent. Blood over capacity returns to the bank.
+- **Monomancy.** The option is offered to the target only, in round 1 only,
+  and before range only. Taking it attaches the card with -1 bleed. Ending
+  combat some other way burns the card.
+- **Rumble.** The hand size is +1 during the rush combat, and the
+  discard-down runs after it. The pool burn happens when the actor goes to
+  torpor in the rush combat and when it goes to torpor fighting a blocker.
+  There is no burn when the actor is still ready.
+- **Taunt the Caged Beast.** The `[ANI]` mode isn't offered with two seats.
+  The prey's vampire acts first. The 4 blood goes to the ready one, and
+  nobody gains when both are ready.
+- **The defects.** Bum's Rush draws its replacement after the rush combat
+  (D1). Under Q2's recommendation, Freak Drive is offered after the rush
+  combat, not before it (D2).
+- **The fuzz.** All admitted cards join the fuzz decks, with a tally of
+  what is actually offered.
