@@ -74,6 +74,9 @@ import {
   predatorOf,
   preyOf,
   playOptionId,
+  cannotDiablerize,
+  equipmentMovable,
+  halvedCost,
 } from "../../engine/index.ts";
 import type {
   CardMode,
@@ -599,21 +602,7 @@ export function playFromHandChoices(
         continue;
       }
       if (filter.noAggravated && h.weaponProfile?.aggravated) continue;
-      // Own-copy uniqueness, and "a minion can have only one vehicle".
-      if (h.isUnique && seatControlsCopy(ctx.state, ctx.seat, card.name)) continue;
-      if (tags.includes("vehicle") && bearer.attached.some((p) => p.tags.includes("vehicle"))) {
-        continue;
-      }
-      // "This vampire cannot recruit allies or employ retainers"
-      // (Depravity) — a restriction on the BEARER, matched against the
-      // incoming card's printed type.
-      if (
-        bearer.attached.some((p) =>
-          (p.statics.cannotPlayCardTypes ?? []).some((t) => types.includes(t)),
-        )
-      ) {
-        continue;
-      }
+      if (bearerRefuses(ctx.state, ctx.seat, bearer, h, card.name, tags, types)) continue;
       for (const mode of h.modesPlayableBy?.(bearer, filter.ignoreRequirements) ?? []) {
         const cost = playCostFor(
           ctx.state,
@@ -657,6 +646,81 @@ export function playFromHandChoices(
         }
       }
     }
+  }
+  return out;
+}
+
+/** What refuses an incoming permanent whatever brought it in — from the
+ *  hand (`playFromHandChoices`) or out of the library (Alastor's fetch) —
+ *  so the two cannot disagree. */
+function bearerRefuses(
+  state: GameState,
+  seat: SeatId,
+  bearer: MinionState,
+  h: CardHandler,
+  cardName: string,
+  tags: string[],
+  types: PlayCostCardType[],
+): boolean {
+  // Own-copy uniqueness, and "a minion can have only one vehicle".
+  if (h.isUnique && seatControlsCopy(state, seat, cardName)) return true;
+  if (tags.includes("vehicle") && bearer.attached.some((p) => p.tags.includes("vehicle"))) {
+    return true;
+  }
+  // "This vampire cannot recruit allies or employ retainers" (Depravity) —
+  // a restriction on the BEARER, matched against the incoming card's
+  // printed type.
+  return bearer.attached.some((p) =>
+    (p.statics.cannotPlayCardTypes ?? []).some((t) => types.includes(t)),
+  );
+}
+
+/**
+ * "Search your library for an equipment card and put this card and the
+ * equipment on the chosen vampire (ignore requirements; shuffle
+ * afterward); pay half the cost rounded down of the equipment" (Alastor).
+ * One option per card the search could find and pay for; the requirement
+ * waiver is the hand version's `modesPlayableBy(bearer, true)`, and a card
+ * with a discipline version comes in as its INFERIOR one [RBK equip]. The
+ * chosen vampire pays a blood cost [LSJ 20040518] and the caller a pool
+ * cost, from pool to spare (p. 9). docs/equipment-rush-design.md §3
+ */
+function fetchEquipmentChoices(
+  state: GameState,
+  registry: HandlerRegistry,
+  seatId: SeatId,
+  bearer: MinionState,
+): Array<{ card: CardInstanceId; name: string; mode: DisciplineLevel | null; cost: { blood: number; pool: number } }> {
+  const seat = getSeat(state, seatId);
+  const out: Array<{ card: CardInstanceId; name: string; mode: DisciplineLevel | null; cost: { blood: number; pool: number } }> = [];
+  for (const card of seat.library) {
+    if (!searchMatches(card, registry, ["equipment"], false)) continue;
+    const h = registry[card.name];
+    if (!h) continue;
+    const modes = h.modesPlayableBy?.(bearer, true) ?? [];
+    if (modes.length === 0) continue;
+    const mode = modes.includes("basic") ? "basic" : (modes[0] ?? null);
+    const types = h.costTypes?.(mode, undefined) ?? [];
+    if (bearerRefuses(state, seatId, bearer, h, card.name, h.permanentTags ?? [], types)) continue;
+    const full = playCostFor(
+      state,
+      {
+        name: h.name,
+        bloodCost: h.bloodCost,
+        poolCost: h.poolCost ?? 0,
+        types,
+        requires: h.requiresDisciplines?.(mode, undefined) ?? [],
+      },
+      bearer,
+      null,
+      null,
+      bearer.id,
+      seatId,
+    );
+    const cost = halvedCost(full);
+    if (bearer.blood < cost.blood) continue;
+    if (cost.pool > 0 && seat.pool <= cost.pool) continue; // never oust yourself (p. 9)
+    out.push({ card: card.id, name: card.name, mode, cost });
   }
   return out;
 }
@@ -1505,7 +1569,8 @@ function enumerateActionTargets(
     for (const seat of state.seats) {
       if (seat.ousted) continue;
       for (const m of seat.minions) {
-        if (m.kind !== "vampire" || !m.inTorpor) continue;
+        // "…cannot commit diablerie" (Alastor) bars the card's action too.
+        if (m.kind !== "vampire" || !m.inTorpor || cannotDiablerize(actor)) continue;
         // "an OLDER vampire in torpor" (Stealing Years).
         if (e.olderOnly === true && capacityOf(m) <= actorCapacity) continue;
         if (untargetableBy(m, seatId, actor)) continue;
@@ -3355,6 +3420,10 @@ function compileCombatCard(spec: CardSpec): CardHandler {
                   strip.kind === "strikeStealEquipment" ? "weapon" : "equipment";
                 for (const p of foe?.attached ?? []) {
                   if (!p.tags.includes(wants)) continue;
+                  // A steal MOVES the card; a destroy does not.
+                  if (strip.kind === "strikeStealEquipment" && foe && !equipmentMovable(foe, p)) {
+                    continue;
+                  }
                   options.push(makeOption(spec, card, m, mode, { equipment: p.card.id }));
                 }
                 break;
@@ -9049,6 +9118,10 @@ function attachToChosenCandidates(
       // the terms are chosen, and "a vampire" includes the caller. A
       // caller with no sect has no "same" to match.
       if (who.sameSectAsCaller && c && (c.sect === null || m.sect !== c.sect)) continue;
+      // "A vampire can have only one Alastor."
+      if (who.notHoldingTag !== undefined && m.attached.some((p) => p.tags.includes(who.notHoldingTag!))) {
+        continue;
+      }
       out.push(m);
     }
   }
@@ -9684,6 +9757,19 @@ function compilePoliticalAction(spec: CardSpec): CardHandler {
           if (primitive.unlockCaller && frame.callingMinion) {
             const c = findMinion(ops.state, frame.callingMinion);
             if (c?.locked) ops.emit({ type: "MinionUnlocked", minion: c.id });
+          }
+          // "…search your library for an equipment card" (Alastor): the
+          // caller searches after the card is on, and finding nothing is
+          // an answer [LSJ 20050331-2].
+          if (primitive.fetchEquipment) {
+            ops.raiseChoice({
+              seat: frame.caller,
+              cardName: spec.name,
+              cardId: frame.cardInstanceId,
+              key: "fetchEquipment",
+              params: { bearer },
+              optional: false,
+            });
           }
           break;
         }
@@ -12352,6 +12438,8 @@ export function compileSpec(spec: CardSpec): CardHandler {
   addAllyAbilities(spec, handler);
   addAllyBurnRules(spec, handler);
   addRetainerAbilities(spec, handler);
+  addUnlockUpkeep(spec, handler);
+  addUnlockDamageOwnMinion(spec, handler);
   addEquipmentAbilities(spec, handler);
   addDeclinedBleedBonus(spec, handler);
   addOptionCost(spec, handler);
@@ -12630,6 +12718,62 @@ function addCryptAbilities(
     };
   }
 
+  // "…search your library for an equipment card and put this card and the
+  // equipment on the chosen vampire" (Alastor) — raised by the referendum
+  // pass, answered here. The options and the payment both go through
+  // `fetchEquipmentChoices`, so what is offered is what can be paid.
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "refAttachToChosen" && e.fetchEquipment))) {
+    choiceByKey["fetchEquipment"] = {
+      options: (frame, state, registry) => {
+        const bearer = findMinion(state, frame.params["bearer"] ?? "");
+        const found = bearer ? fetchEquipmentChoices(state, registry, frame.seat, bearer) : [];
+        const price = (c: { blood: number; pool: number }): string =>
+          c.blood === 0 && c.pool === 0
+            ? "free"
+            : [c.blood > 0 ? `${c.blood} blood` : "", c.pool > 0 ? `${c.pool} pool` : ""]
+                .filter((s) => s !== "")
+                .join(" and ");
+        return [
+          ...found.map((f) => ({
+            id: `choice:${spec.name}:${frame.cardId}:fetchEquipment:${f.card}`,
+            kind: "answerChoice" as const,
+            label: `Put ${f.name} on ${bearer?.name ?? "the vampire"} (${price(f.cost)})`,
+            params: { pick: f.card },
+          })),
+          // "You are free not to find any" (p. 48), and Alastor stays on.
+          {
+            id: `choice:${spec.name}:${frame.cardId}:fetchEquipment:none`,
+            kind: "answerChoice" as const,
+            label: "Find nothing",
+            params: { pick: "none" },
+          },
+        ];
+      },
+      apply: (frame, choice, ops) => {
+        const pick = choice.params["pick"];
+        const bearer = findMinion(ops.state, frame.params["bearer"] ?? "");
+        if (pick && pick !== "none" && bearer) {
+          // Re-derived, not trusted: the same list the options came from.
+          const f = fetchEquipmentChoices(ops.state, ops.registry, frame.seat, bearer).find(
+            (x) => x.card === pick,
+          );
+          if (f) {
+            ops.playCardFromHand({
+              cardId: f.card,
+              seat: frame.seat,
+              minion: bearer.id,
+              mode: f.mode,
+              from: { zone: "library" },
+              halfCost: true,
+            });
+          }
+        }
+        // "…shuffle afterward" (p. 14) — whether or not anything was found.
+        ops.shuffleLibrary(frame.seat);
+      },
+    };
+  }
+
   // "<This vampire> can <do Y> as a [+N stealth] [Ⓓ] action [that costs 1
   // blood]" — six crypt cards, one clause (docs/crypt-wave-5.md §1).
   // A card may grant SEVERAL actions (Gregory Winter, Amam the Devourer —
@@ -12733,6 +12877,7 @@ function addCryptAbilities(
               if (ga.fromTorporOnly && !m.inTorpor) continue;
               for (const p of m.attached) {
                 if (!p.tags.includes("equipment")) continue;
+                if (!equipmentMovable(m, p)) continue;
                 out.push({
                   key: `equip:${p.card.id}`,
                   label: `steal ${p.card.name} from ${m.name}`,
@@ -13003,6 +13148,11 @@ function addCryptAbilities(
           const actor = findMinion(ops.state, af.acting);
           // Both can have left play between announcement and resolution.
           if (!cardId || !actor) return;
+          // A torpid bearer rescued in between is ready again, and the Eye
+          // of Hazimel stays put (§3) — re-derived here, not trusted.
+          const holder = bearerOf(ops.state, cardId);
+          const held = holder?.attached.find((x) => x.card.id === cardId);
+          if (holder && held && !equipmentMovable(holder, held)) return;
           ops.moveAttachment(cardId, actor.id, seat);
           return;
         }
@@ -14483,6 +14633,128 @@ function addDeclinedBleedBonus(spec: CardSpec, handler: CardHandler): void {
 }
 
 /**
+ * "During your unlock phase, the employer burns N blood, or this retainer
+ * is burned" (Robert Carter, docs/retainer-upkeep-design.md §3) and "burn
+ * 1 pool or burn this equipment" (Eye of Hazimel). One rule, whatever the
+ * card type: it is a question about the card in play
+ * (docs/equipment-rush-design.md §3). A real question only while the price
+ * can be paid; otherwise the card is simply burned, because a frame with
+ * one answer is a frame nobody should be asked. Pool is paid only from
+ * pool to SPARE, the Spectral Servitor reading (§4).
+ */
+function addUnlockUpkeep(spec: CardSpec, handler: CardHandler): void {
+  const up = spec.permanent?.unlockUpkeep;
+  if (!up) return;
+  const blood = up.blood ?? 0;
+  const pool = up.pool ?? 0;
+  const canPay = (state: GameState, seat: SeatId, bearer: MinionState | null): boolean =>
+    (blood === 0 || (bearer !== null && bearer.blood >= blood)) &&
+    (pool === 0 || getSeat(state, seat).pool > pool);
+  const price = [blood > 0 ? `${blood} blood` : "", pool > 0 ? `${pool} pool` : ""]
+    .filter((s) => s !== "")
+    .join(" and ");
+  const priorUnlock = handler.onAnyUnlock?.bind(handler);
+  handler.onAnyUnlock = (entry, owner, unlockingSeat, ops) => {
+    priorUnlock?.(entry, owner, unlockingSeat, ops);
+    const controller = entry.controller ?? owner.seat;
+    if (unlockingSeat !== controller) return;
+    const m = owner.minion ? findMinion(ops.state, owner.minion) ?? null : null;
+    if (!canPay(ops.state, controller, m)) {
+      ops.burnPermanent(entry.card.id);
+      return;
+    }
+    ops.raiseChoice({
+      seat: controller,
+      cardName: spec.name,
+      cardId: entry.card.id,
+      key: "upkeep",
+    });
+  };
+  const priorOptions = handler.choiceOptions?.bind(handler);
+  handler.choiceOptions = (frame, state, registry) => {
+    if (frame.key !== "upkeep") return priorOptions?.(frame, state, registry) ?? [];
+    return [
+      {
+        id: `choice:${spec.name}:${frame.cardId}:upkeep:pay`,
+        kind: "answerChoice" as const,
+        label: `${spec.name}: burn ${price} to keep it`,
+        params: { pay: "yes" },
+      },
+      {
+        id: `choice:${spec.name}:${frame.cardId}:upkeep:burn`,
+        kind: "answerChoice" as const,
+        label: `${spec.name}: let it burn`,
+        params: { pay: "no" },
+      },
+    ];
+  };
+  const priorApply = handler.applyChoice?.bind(handler);
+  handler.applyChoice = (frame, choice, ops) => {
+    if (frame.key !== "upkeep") {
+      priorApply?.(frame, choice, ops);
+      return;
+    }
+    const bearer = bearerOf(ops.state, frame.cardId ?? "") ?? null;
+    if (choice.params["pay"] === "yes" && canPay(ops.state, frame.seat, bearer)) {
+      if (blood > 0 && bearer) ops.emit({ type: "BloodBurned", minion: bearer.id, amount: blood });
+      if (pool > 0) ops.emit({ type: "PoolBurned", seat: frame.seat, amount: pool });
+      return;
+    }
+    if (frame.cardId) ops.burnPermanent(frame.cardId);
+  };
+}
+
+/**
+ * "If the bearer is ready during your unlock phase, this weapon inflicts 3
+ * unpreventable damage on a ready minion you control" (Talbot's Chainsaw).
+ * Mandatory, and the bearer is a legal choice (§4); weapon damage that the
+ * bearer does not inflict and that is not environmental [LSJ 20090304-1],
+ * which outside combat is damage with no source and no prevention window.
+ * One ready minion is still asked — the frame names whom it hits.
+ * docs/equipment-rush-design.md §3
+ */
+function addUnlockDamageOwnMinion(spec: CardSpec, handler: CardHandler): void {
+  const hit = spec.permanent?.statics.unlockDamageOwnMinion;
+  if (!hit) return;
+  const victims = (state: GameState, seat: SeatId): MinionState[] =>
+    getSeat(state, seat).minions.filter((m) => isReady(m));
+  const priorUnlock = handler.onAnyUnlock?.bind(handler);
+  handler.onAnyUnlock = (entry, owner, unlockingSeat, ops) => {
+    priorUnlock?.(entry, owner, unlockingSeat, ops);
+    const controller = entry.controller ?? owner.seat;
+    if (unlockingSeat !== controller) return;
+    const bearer = owner.minion ? findMinion(ops.state, owner.minion) : null;
+    if (!bearer || !isReady(bearer)) return;
+    if (victims(ops.state, controller).length === 0) return;
+    ops.raiseChoice({
+      seat: controller,
+      cardName: spec.name,
+      cardId: entry.card.id,
+      key: "unlockDamage",
+    });
+  };
+  const priorOptions = handler.choiceOptions?.bind(handler);
+  handler.choiceOptions = (frame, state, registry) => {
+    if (frame.key !== "unlockDamage") return priorOptions?.(frame, state, registry) ?? [];
+    return victims(state, frame.seat).map((m) => ({
+      id: `choice:${spec.name}:${frame.cardId}:unlockDamage:${m.id}`,
+      kind: "answerChoice" as const,
+      label: `${spec.name}: ${hit.amount} unpreventable damage to ${m.name}`,
+      params: { minion: m.id },
+    }));
+  };
+  const priorApply = handler.applyChoice?.bind(handler);
+  handler.applyChoice = (frame, choice, ops) => {
+    if (frame.key !== "unlockDamage") {
+      priorApply?.(frame, choice, ops);
+      return;
+    }
+    const m = choice.params["minion"];
+    if (m) ops.applyEnvironmentalDamage(m, hit.amount, false);
+  };
+}
+
+/**
  * What a RETAINER's card text gives its employer once it is in play
  * (docs/retainer-wave-design.md). Grafted, never assigned over, for the
  * reason `addLocationAbilities` records.
@@ -14502,62 +14774,6 @@ function addRetainerAbilities(spec: CardSpec, handler: CardHandler): void {
       const m = owner.minion ? findMinion(ops.state, owner.minion) : null;
       if (!m || !m.inTorpor || !canGainBlood(m)) return;
       ops.emit({ type: "BloodGained", minion: m.id, amount: tb });
-    };
-  }
-
-  // "During your unlock phase, the employer burns N blood, or this
-  // retainer is burned" (§3). A real question only while the employer can
-  // pay; otherwise the card is simply burned, because a frame with one
-  // answer is a frame nobody should be asked.
-  const up = ra.unlockUpkeep;
-  if (up) {
-    const priorUnlock = handler.onAnyUnlock?.bind(handler);
-    handler.onAnyUnlock = (entry, owner, unlockingSeat, ops) => {
-      priorUnlock?.(entry, owner, unlockingSeat, ops);
-      const controller = entry.controller ?? owner.seat;
-      if (unlockingSeat !== controller) return;
-      const m = owner.minion ? findMinion(ops.state, owner.minion) : null;
-      if (!m || m.blood < up.blood) {
-        ops.burnPermanent(entry.card.id);
-        return;
-      }
-      ops.raiseChoice({
-        seat: controller,
-        cardName: spec.name,
-        cardId: entry.card.id,
-        key: "retainerUpkeep",
-      });
-    };
-    const priorOptions = handler.choiceOptions?.bind(handler);
-    handler.choiceOptions = (frame, state, registry) => {
-      if (frame.key !== "retainerUpkeep") return priorOptions?.(frame, state, registry) ?? [];
-      return [
-        {
-          id: `choice:${spec.name}:${frame.cardId}:retainerUpkeep:pay`,
-          kind: "answerChoice" as const,
-          label: `${spec.name}: burn ${up.blood} blood to keep them`,
-          params: { pay: "yes" },
-        },
-        {
-          id: `choice:${spec.name}:${frame.cardId}:retainerUpkeep:burn`,
-          kind: "answerChoice" as const,
-          label: `${spec.name}: let them burn`,
-          params: { pay: "no" },
-        },
-      ];
-    };
-    const priorApply = handler.applyChoice?.bind(handler);
-    handler.applyChoice = (frame, choice, ops) => {
-      if (frame.key !== "retainerUpkeep") {
-        priorApply?.(frame, choice, ops);
-        return;
-      }
-      const bearer = bearerOf(ops.state, frame.cardId ?? "");
-      if (choice.params["pay"] === "yes" && bearer) {
-        ops.emit({ type: "BloodBurned", minion: bearer.id, amount: up.blood });
-        return;
-      }
-      if (frame.cardId) ops.burnPermanent(frame.cardId);
     };
   }
 
@@ -16520,6 +16736,7 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
                 // sitting on the vampire, and none of those transfer.
                 if (ctx.registry[p.card.name]?.isEquipment !== true) continue;
               }
+              if (!equipmentMovable(from, p)) continue;
               for (const to of eligible) {
                 if (to.id === from.id) continue;
                 out.push({

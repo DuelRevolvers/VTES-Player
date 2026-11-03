@@ -7,7 +7,7 @@
  */
 
 import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
+import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, disciplinesOf, handSizeOf, minionHasTag, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes, equipmentMovable } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -2893,7 +2893,7 @@ export const cardSpecs: CardSpec[] = [
       where: "bearer",
       statics: { bleed: 2 },
       tags: ["ghoul"],
-      retainerAbilities: { unlockUpkeep: { blood: 1 } },
+      unlockUpkeep: { blood: 1 },
     },
     usable: [],
     modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
@@ -14870,6 +14870,122 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [{ kind: "refPutInPlay" }] }],
   },
+  // --- Equipment rush: cards on a vampire that let the bearer enter
+  //     combat (docs/equipment-rush-design.md). Each rush fizzles if the
+  //     card has left the actor by resolution [RTR 19960221]. ---
+  {
+    // "Requires a justicar or Inner Circle member. Choose a ready Camarilla
+    // vampire. Successful referendum means you search your library for an
+    // equipment card and put this card and the equipment on the chosen
+    // vampire (ignore requirements; shuffle afterward); pay half the cost
+    // rounded down of the equipment. The attached vampire can enter combat
+    // with a vampire as a +1 stealth Ⓓ action. The attached vampire cannot
+    // commit diablerie. A vampire can have only one Alastor."
+    //
+    // The chosen vampire pays a blood cost [LSJ 20040518]; finding nothing
+    // still attaches Alastor [LSJ 20050331-2]; a discipline card comes in
+    // as its inferior version [RBK equip]; "a vampire" means no allies
+    // (§4).
+    krcgId: 100038,
+    name: "Alastor",
+    cardType: "politicalAction",
+    bloodCost: 0,
+    requiresTitle: ["justicar", "innerCircle"],
+    permanent: {
+      where: "bearer",
+      statics: { cannotDiablerize: true },
+      tags: ["Alastor"],
+      rushGrant: {
+        who: { scope: "bearer" },
+        target: { scope: "any", kind: "vampire" },
+        stealth: 1,
+      },
+    },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "refAttachToChosen",
+            who: { sect: "camarilla", notHoldingTag: "Alastor" },
+            fetchEquipment: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Unique. The bearer gets +1 bleed and +1 strength. The bearer can
+    // enter combat with a minion as a Ⓓ action. This vampire gets superior
+    // Potence and superior Chimerstry, and combat cards cost this vampire 1
+    // fewer blood. While the bearer is ready, this equipment cannot be
+    // moved or stolen. If this equipment is burned, it inflicts 5
+    // unpreventable environmental damage on the bearer. During your unlock
+    // phase, burn 1 pool or burn this equipment."
+    //
+    // Chimerstry is admitted and live only when a Chimerstry card joins the
+    // pool (§4); the 5 damage follows every burn, its own upkeep included.
+    krcgId: 100678,
+    name: "Eye of Hazimel",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {
+        bleed: 1,
+        strength: 1,
+        disciplineGrants: [
+          { discipline: "pot", level: "superior" },
+          { discipline: "chi", level: "superior" },
+        ],
+        playCostMod: { amount: -1, pays: "blood", cardTypes: ["combat"], minions: "bearer" },
+        immovableWhileReady: true,
+        burnDamagesBearer: { amount: 5 },
+      },
+      // "equipment" and "unique" are added centrally (buildHandlerRegistry).
+      tags: [],
+      rushGrant: { who: { scope: "bearer" }, target: { scope: "any" } },
+      unlockUpkeep: { pool: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique weapon. Strike: 3 damage. If the bearer is ready during your
+    // unlock phase, this weapon inflicts 3 unpreventable damage on a ready
+    // minion you control. The bearer cannot hunt. The bearer can enter
+    // combat with a minion as a +1 stealth Ⓓ action. The bearer gets 1
+    // press (mandatory), only usable to continue combat during the first
+    // round, and can prevent 1 damage each combat."
+    //
+    // The rush and the prevention do not force a strike with it
+    // [LSJ 19971215]; the unlock damage is weapon damage, neither the
+    // bearer's nor environmental [LSJ 20090304-1].
+    krcgId: 101931,
+    name: "Talbot's Chainsaw",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 3,
+    unique: true,
+    weapon: { damage: 3, ranged: false, aggravated: false },
+    permanent: {
+      where: "bearer",
+      statics: {
+        cannotHunt: true,
+        mandatoryFirstRoundPress: true,
+        unlockDamageOwnMinion: { amount: 3 },
+      },
+      tags: ["weapon"],
+      rushGrant: { who: { scope: "bearer" }, target: { scope: "any" }, stealth: 1 },
+      preventByStrikeSource: { fromGun: 1, otherwise: 1 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // --- Political actions (docs/politics-design.md); the per-card tail is
   //     docs/referendum-terms-design.md ---
   {
@@ -22243,6 +22359,9 @@ function cardsControlledBy(state: GameState, seat: SeatId): Array<{ id: string; 
       if (m.controller === seat) out.push({ id: m.id, name: m.name });
       for (const a of m.attached) {
         if (a.card.id === m.id) continue;
+        // A sale moves the card to the buyer's minion, so an Eye of
+        // Hazimel on a ready bearer is not for sale (equipmentMovable).
+        if (!equipmentMovable(m, a)) continue;
         if ((a.controller ?? m.controller) === seat) out.push({ id: a.card.id, name: a.card.name });
       }
     }

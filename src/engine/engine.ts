@@ -42,6 +42,8 @@ import {
   actionKeyOf,
   canRepeatAction,
   heldHostage,
+  cannotDiablerize,
+  halvedCost,
   playCostFor,
   untargetableBy,
   playCostModApplies,
@@ -4788,7 +4790,7 @@ export class VtesEngine implements EngineOps {
         // path below is not reached today — but p. 24 gives the
         // opportunity to a blocking VAMPIRE, and a gone one is not that.
         const blocker = findMinion(this.state, ba.blocker);
-        if (blocker?.kind === "vampire") {
+        if (blocker?.kind === "vampire" && !cannotDiablerize(blocker)) {
           this.state.frames.push({
             kind: "diablerieOffer",
             diablerist: ba.blocker,
@@ -6009,6 +6011,23 @@ export class VtesEngine implements EngineOps {
     }
   }
 
+  /** "The bearer gets 1 press (mandatory), only usable to continue combat
+   *  during the first round" (Talbot's Chainsaw) — owed while it is round
+   *  1, nothing has pressed to continue yet, the side may press at all,
+   *  and this side has not spent it. A press to END cancels it like any
+   *  other (p. 30; owner ruling 2026-11-02), and then it is spent.
+   *  docs/equipment-rush-design.md §3 */
+  private mandatoryPressOwed(cf: CombatFrame, side: "acting" | "opposing"): boolean {
+    if (cf.step !== "press" || cf.round !== 1 || cf.willContinue) return false;
+    if ((cf.moveDisciplines?.[side] ?? null) !== null || cf.restrict[side].press) return false;
+    if (cf.mandatoryPressSpent?.includes(side)) return false;
+    const m = findMinion(this.state, side === "acting" ? cf.acting : cf.opposing);
+    const foe = findMinion(this.state, side === "acting" ? cf.opposing : cf.acting);
+    // A press is owed only into a combat that can continue.
+    if (!m || !foe || !isReady(m) || !isReady(foe)) return false;
+    return m.attached.some((p) => p.statics.mandatoryFirstRoundPress === true);
+  }
+
   grantContinueOnlyPress(minion: MinionId, count: number): void {
     const cf = this.requireCombat();
     cf.pressesContinueOnly ??= { acting: 0, opposing: 0 };
@@ -6172,6 +6191,9 @@ export class VtesEngine implements EngineOps {
       ...(args.political ? { political: true } : {}),
       ...(args.requires && args.requires.clans.length > 0
         ? { grantRequires: { clans: [...args.requires.clans] } }
+        : {}),
+      ...(m.attached.some((a) => a.card.id === entry.card.id)
+        ? { grantedBy: entry.card.id }
         : {}),
       acting: m.id,
       actingSeat: seat,
@@ -6414,6 +6436,8 @@ export class VtesEngine implements EngineOps {
      *  are identical, only the pile differs.
      *  docs/library-search-design.md §7 */
     from?: { zone: "hand" | "library" } | { zone: "store"; holder: CardInstanceId };
+    /** "…pay half the cost rounded down" (Alastor), via `halvedCost`. */
+    halfCost?: boolean;
   }): void {
     const seat = getSeat(this.state, args.seat);
     const zone = args.from?.zone ?? "hand";
@@ -6443,7 +6467,8 @@ export class VtesEngine implements EngineOps {
       mode: args.mode,
     });
 
-    const price = this.priceOf(handler, args.mode, undefined, bearer, bearer.id, seat.id);
+    const full = this.priceOf(handler, args.mode, undefined, bearer, bearer.id, seat.id);
+    const price = args.halfCost ? { ...full, ...halvedCost(full) } : full;
     this.consumeOncePlayCostMods(handler, args.mode, undefined);
     // "…can pay up to half the cost rounded down with their blood"
     // (Contraband superior): blood substitutes for pool, one for one.
@@ -6498,14 +6523,21 @@ export class VtesEngine implements EngineOps {
       { seat: this.controllerOfEntry(cardId) ?? entry.owner ?? this.state.seats[0]!.id, minion: null },
       this,
     );
-    if (entry.tags.includes("title")) {
-      const bearer = this.state.seats
-        .flatMap((s) => s.minions)
-        .find((m) => m.attached.some((p) => p.card.id === cardId));
-      if (bearer) this.emit({ type: "TitleLost", minion: bearer.id });
+    // The bearer is found BEFORE the card leaves: a title and the Eye of
+    // Hazimel's damage both need it, and afterwards there is none to find.
+    const bearer = this.state.seats
+      .flatMap((s) => s.minions)
+      .find((m) => m.attached.some((p) => p.card.id === cardId));
+    if (entry.tags.includes("title") && bearer) {
+      this.emit({ type: "TitleLost", minion: bearer.id });
     }
     this.emit({ type: "PermanentBurned", cardId, name: entry.card.name });
     this.releaseDrawForLeavingCard(cardId);
+    // "If this equipment is burned, it inflicts 5 unpreventable
+    // environmental damage on the bearer" (Eye of Hazimel) — every burn,
+    // its own upkeep included (§4). docs/equipment-rush-design.md §3
+    const hurt = entry.statics.burnDamagesBearer;
+    if (hurt && bearer) this.applyEnvironmentalDamage(bearer.id, hurt.amount, false);
   }
 
   /**
@@ -9760,7 +9792,14 @@ export class VtesEngine implements EngineOps {
       // occurs [Ambush ruling]. Fleetness superior has the same clause
       // and had the same gap.
       const lockedOk = !af.rushRequiresLockedTarget || target?.locked === true;
-      if (actor && isReady(actor) && target && isReady(target) && lockedOk) {
+      // "…fizzles if the equipment is not on the acting minion when the
+      // action resolves unblocked" [RTR 19960221] — the same fizzle, one
+      // more condition: a card on the actor that provided the rush has to
+      // still be on the actor. docs/equipment-rush-design.md §3
+      const grantOk =
+        af.grantedBy === undefined ||
+        (actor?.attached.some((a) => a.card.id === af.grantedBy) ?? false);
+      if (actor && isReady(actor) && target && isReady(target) && lockedOk && grantOk) {
         // "The target vampire is considered the ACTING MINION during that
         // combat" (Deep Song superior): the inversion is these two pairs
         // in the other order, because every "who is acting" question in a
@@ -10503,14 +10542,17 @@ export class VtesEngine implements EngineOps {
         // "…cannot be the target of other Methuselahs' actions" (Secure
         // Haven) — a diablerie and a rescue both name a minion.
         if (untargetableBy(victim, actor.controller, actor)) continue;
-        options.push({
-          id: `diablerize:${actor.id}:${victim.id}`,
-          kind: "takeAction",
-          label: `${actor.name}: diablerise ${victim.name}`,
-          minion: actor.id,
-          action: "diablerize",
-          targetMinion: victim.id,
-        });
+        // Alastor bars the diablerie and not the rescue beside it.
+        if (!cannotDiablerize(actor)) {
+          options.push({
+            id: `diablerize:${actor.id}:${victim.id}`,
+            kind: "takeAction",
+            label: `${actor.name}: diablerise ${victim.name}`,
+            minion: actor.id,
+            action: "diablerize",
+            targetMinion: victim.id,
+          });
+        }
         // The 2-blood cost may be paid by the actor, the rescued
         // vampire, or split (p. 23) — fixed at announcement.
         // "Rescuing a non-Tremere vampire costs this Salubri -2 blood"
@@ -10776,7 +10818,10 @@ export class VtesEngine implements EngineOps {
           cf.step === "range" ? "combat.range" : "combat.press";
         const seat = cf.awaiting === "acting" ? cf.actingSeat : cf.opposingSeat;
         const label = cf.step === "range" ? "No maneuver" : "No press";
-        const options: LegalOption[] = [passOption(label)];
+        // "1 press (MANDATORY)…" (Talbot's Chainsaw): owed, the bearer has
+        // no `pass` — only the press, or a card that continues for it.
+        const owed = this.mandatoryPressOwed(cf, cf.awaiting);
+        const options: LegalOption[] = owed ? [] : [passOption(label)];
         // "…may use maneuvers or presses ONLY IF THEY REQUIRE Obfuscate,
         // Blood Sorcery or Flight this action" (Target Leg). A CREDIT —
         // a rush rider's maneuver, a weapon's, a press from a card in
@@ -10813,18 +10858,19 @@ export class VtesEngine implements EngineOps {
         // "…only usable to END combat" (Qetu): the mirror pool, which can
         // only ever buy the `press:end` option below.
         const endOnly = cf.pressesEndOnly?.[cf.awaiting] ?? 0;
+        const mandatory = owed ? 1 : 0;
         if (
           !gated &&
           cf.step === "press" &&
           !cf.restrict[cf.awaiting].press &&
-          cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly + endOnly > 0
+          cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly + endOnly + mandatory > 0
         ) {
           // A press credit continues combat — or cancels a press to
           // continue (p. 32).
           if (!cf.willContinue) {
             // An END-only credit buys nothing here: there is no press to
             // continue for it to cancel yet.
-            if (cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly > 0) {
+            if (cf.presses[cf.awaiting] + cf.pressesCombat[cf.awaiting] + continueOnly + mandatory > 0) {
               options.push({
                 id: "press:continue",
                 kind: "usePress",
@@ -11571,7 +11617,11 @@ export class VtesEngine implements EngineOps {
         // then per-combat ones (retainer statics).
         const restricted = top.pressesContinueOnly;
         const endOnly = top.pressesEndOnly;
-        if (option.toContinue && restricted && restricted[side] > 0) restricted[side] -= 1;
+        // The Chainsaw's press is the most restricted of all — one round,
+        // one direction — so an owed one is spent before any other.
+        if (option.toContinue && this.mandatoryPressOwed(top, side)) {
+          (top.mandatoryPressSpent ??= []).push(side);
+        } else if (option.toContinue && restricted && restricted[side] > 0) restricted[side] -= 1;
         else if (!option.toContinue && endOnly && endOnly[side] > 0) endOnly[side] -= 1;
         else if (top.presses[side] > 0) top.presses[side] -= 1;
         else top.pressesCombat[side] -= 1;

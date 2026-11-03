@@ -89,14 +89,14 @@ describe("Robert Carter (101644)", () => {
 
   it("asks the employer to pay, and burns Carter when they decline", () => {
     const engine = atUnlock(3);
-    const pay = "choice:Robert Carter:rc:retainerUpkeep:pay";
+    const pay = "choice:Robert Carter:rc:upkeep:pay";
     expect(ids(engine)).toContain(pay);
     runTrace(engine, [["Alice", pay]]);
     expect(find(engine.state, "V1").blood).toBe(2);
     expect(find(engine.state, "V1").attached.length).toBe(1);
 
     const declined = atUnlock(3);
-    runTrace(declined, [["Alice", "choice:Robert Carter:rc:retainerUpkeep:burn"]]);
+    runTrace(declined, [["Alice", "choice:Robert Carter:rc:upkeep:burn"]]);
     expect(find(declined.state, "V1").attached).toEqual([]);
   });
 

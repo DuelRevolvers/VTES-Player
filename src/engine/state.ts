@@ -1228,6 +1228,33 @@ export interface PermanentStatics {
    *  discipline escape hatch, read through `disciplinesOf` so a granted
    *  level counts. docs/after-resolution-design.md §5 */
   untargetableExceptDiscipline?: string;
+  /** "The bearer cannot hunt" (Talbot's Chainsaw) — read by
+   *  `auraBlocksHunt`, which every hunt path already asks.
+   *  docs/equipment-rush-design.md §3 */
+  cannotHunt?: boolean;
+  /** "The attached vampire cannot commit diablerie" (Alastor), read
+   *  through `cannotDiablerize`. */
+  cannotDiablerize?: boolean;
+  /** "While the bearer is ready, this equipment cannot be moved or stolen"
+   *  (Eye of Hazimel), read through `equipmentMovable` by every option
+   *  that moves equipment. */
+  immovableWhileReady?: boolean;
+  /** "If this equipment is burned, it inflicts N unpreventable
+   *  environmental damage on the bearer" (Eye of Hazimel), read by
+   *  `burnPermanent`. */
+  burnDamagesBearer?: { amount: number };
+  /** "If the bearer is ready during your unlock phase, this weapon
+   *  inflicts N unpreventable damage on a ready minion you control"
+   *  (Talbot's Chainsaw). Weapon damage: the bearer does not inflict it and
+   *  it is not environmental [LSJ 20090304-1]. */
+  unlockDamageOwnMinion?: { amount: number };
+  /** "The bearer gets 1 press (mandatory), only usable to continue combat
+   *  during the first round" (Talbot's Chainsaw). An opposing press to end
+   *  still cancels it (p. 30; owner ruling 2026-11-02). */
+  mandatoryFirstRoundPress?: boolean;
+  /** Several grants on one card — "superior Potence and superior
+   *  Chimerstry" (Eye of Hazimel). Additive with `disciplineGrant`. */
+  disciplineGrants?: Array<{ discipline: string; level: DisciplineLevel }>;
 }
 
 /** "Instead of <X> as normal, burn 1 counter from this card"
@@ -2486,6 +2513,13 @@ export interface ActionFrame {
    *  nothing in the pool reads a granted sect, capacity or title.
    *  docs/granted-action-requirements-design.md §3 */
   grantRequires?: { clans: string[] };
+  /** The card ON THE ACTING MINION that provides this action, recorded at
+   *  announcement. "The action provided by the equipment to the attached
+   *  minion fizzles if the equipment is not on the acting minion when the
+   *  action resolves unblocked" [RTR 19960221] — read for every card on the
+   *  minion, not only equipment (owner ruling 2026-11-02). Absent when the
+   *  granting card sits anywhere else. docs/equipment-rush-design.md §3 */
+  grantedBy?: CardInstanceId;
   /** "…as a Ⓓ action that costs 2 pool" — a granted action's own cost,
    *  paid at resolution and only on success (p. 27). */
   grantedCost: { pool?: number; blood?: number } | null;
@@ -3389,6 +3423,13 @@ export interface CombatFrame {
    *  `pressesCombat`, offered only for `press:continue` and SPENT FIRST,
    *  the `closeManeuvers` rule. docs/weapon-riders-design.md §4 */
   pressesContinueOnly?: { acting: number; opposing: number };
+  /** The sides that have spent "1 press (MANDATORY), only usable to
+   *  continue combat during the first round" (Talbot's Chainsaw). Whether
+   *  the press is still OWED is derived on every read
+   *  (`mandatoryPressOwed`); only the spending is recorded, because a press
+   *  to end can cancel it (p. 30) and the bearer is then asked again.
+   *  docs/equipment-rush-design.md §3 */
+  mandatoryPressSpent?: Array<"acting" | "opposing">;
   /** The mirror: "1 optional press each combat, ONLY USABLE TO END
    *  COMBAT" (Qetu) — offered only for `press:end` and spent first there,
    *  by the same "most restricted credit first" rule.

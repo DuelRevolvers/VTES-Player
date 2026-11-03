@@ -1810,10 +1810,26 @@ export type EffectPrimitive =
        *  `sameSectAsCaller`: "Choose a vampire OF THE SAME SECT" (Scourge)
        *  — the calling vampire's, and "a vampire" includes the caller.
        *  docs/bearer-rush-grants-design.md §4 */
-      who: { sect?: Sect; clan?: string; younger?: boolean; sameSectAsCaller?: boolean };
+      /** `notHoldingTag`: "A vampire can have only one Alastor" — a vampire
+       *  already holding a card with this tag is not among the terms, so
+       *  the [LSJ 20100129] gate refuses a call nobody can receive.
+       *  docs/equipment-rush-design.md §4 */
+      who: {
+        sect?: Sect;
+        clan?: string;
+        younger?: boolean;
+        sameSectAsCaller?: boolean;
+        notHoldingTag?: string;
+      };
       /** "…put this card on the chosen vampire AND UNLOCK THIS ACTING
        *  VAMPIRE" (Scourge) — on a pass only. */
       unlockCaller?: boolean;
+      /** "…search your library for an equipment card and put this card and
+       *  the equipment on the chosen vampire (ignore requirements; shuffle
+       *  afterward); pay half the cost rounded down of the equipment"
+       *  (Alastor). Finding nothing still attaches the card
+       *  [LSJ 20050331-2]. docs/equipment-rush-design.md §3 */
+      fetchEquipment?: boolean;
     }
   /** "Allies and younger vampires get −1 intercept" (Perfect Paragon
    *  superior) — the ACTION-scoped twin of
@@ -3324,11 +3340,6 @@ export interface CardSpec {
        *  Servant). Automatic — the card says "gains", not "you can".
        *  docs/retainer-upkeep-design.md §2 */
       torporBloodAtMinionPhase?: number;
-      /** "During your unlock phase, \<this retainer\>'s employer burns N
-       *  blood, OR \<the retainer\> is burned" (Robert Carter) — an
-       *  upkeep, and a real choice only while the employer can afford it.
-       *  docs/retainer-upkeep-design.md §3 */
-      unlockUpkeep?: { blood: number };
       /** "During your minion phase, you may LOOK AT ONE CARD PICKED AT
        *  RANDOM from your prey's hand" (Fortune Teller). The look is the
        *  event (`CardsRevealed`), and the pick goes through
@@ -3336,6 +3347,13 @@ export interface CardSpec {
        *  docs/retainer-upkeep-design.md §4 */
       peekPreyRandomCard?: boolean;
     };
+    /** "During your unlock phase, \<this retainer\>'s employer burns N
+     *  blood, OR \<the retainer\> is burned" (Robert Carter) and "burn 1
+     *  pool or burn this equipment" (Eye of Hazimel) — an upkeep, and a real
+     *  choice only while the price can be paid. On the card in play rather
+     *  than the retainer statics: the rule is not about the card type.
+     *  docs/retainer-upkeep-design.md §3, docs/equipment-rush-design.md §3 */
+    unlockUpkeep?: { blood?: number; pool?: number };
     /** "Once each combat, the bearer can prevent N damage from GUN
      *  strikes or M damage from any other source" (Kevlar Vest) — the
      *  first prevention that reads what dealt the damage.

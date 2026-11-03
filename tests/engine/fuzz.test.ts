@@ -351,6 +351,10 @@ function fourSeatGame(seed: number): GameState {
     "Templar",
     "Enrage",
     "Bloodlust",
+    // Equipment rush (docs/equipment-rush-design.md, wave 113).
+    "Alastor",
+    "Eye of Hazimel",
+    "Talbot's Chainsaw",
     // Cost sources (docs/cost-sources-design.md).
     "Ravnos Carnival",
     "Ravnos Cache",

@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-10-29T02:04:55.822Z",
+ "fetchedAt": "2026-11-03T02:04:43.507Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -336,6 +336,30 @@
     "image": "https://static.krcg.org/card/alamut.jpg",
     "sets": [
      "New Blood II"
+    ]
+   },
+   "supported": true
+  },
+  "100038": {
+   "card": {
+    "kind": "library",
+    "id": 100038,
+    "name": "Alastor",
+    "types": [
+     "Political Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a justicar or Inner Circle member.\nChoose a ready Camarilla vampire. Successful referendum means you search your library for an equipment card and put this card and the equipment on the chosen vampire (ignore requirements; shuffle afterward); pay half the cost rounded down of the equipment. The attached vampire can enter combat with a vampire as a +1 stealth Ⓓ action. The attached vampire cannot commit diablerie. A vampire can have only one Alastor.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/alastor.jpg",
+    "sets": [
+     "Gehenna",
+     "Kindred Most Wanted",
+     "Keepers of Tradition",
+     "Thirtieth Anniversary"
     ]
    },
    "supported": true
@@ -5715,6 +5739,28 @@
     "image": "https://static.krcg.org/card/extremisboon.jpg",
     "sets": [
      "Black Hand"
+    ]
+   },
+   "supported": true
+  },
+  "100678": {
+   "card": {
+    "kind": "library",
+    "id": 100678,
+    "name": "Eye of Hazimel",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Unique.\nThe bearer gets +1 bleed and +1 strength. The bearer can enter combat with a minion as a Ⓓ action. This vampire gets superior Potence [POT] and superior Chimerstry [CHI], and combat cards cost this vampire 1 fewer blood. While the bearer is ready, this equipment cannot be moved or stolen. If this equipment is burned, it inflicts 5 unpreventable environmental damage on the bearer. During your unlock phase, burn 1 pool or burn this equipment.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/eyeofhazimel.jpg",
+    "sets": [
+     "Fall 2002 Storyline promo",
+     "Print on Demand"
     ]
    },
    "supported": true
@@ -15658,6 +15704,31 @@
      "Ancient Hearts",
      "Tenth Anniversary",
      "Print on Demand"
+    ]
+   },
+   "supported": true
+  },
+  "101931": {
+   "card": {
+    "kind": "library",
+    "id": 101931,
+    "name": "Talbot's Chainsaw",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 3,
+    "bloodCost": null,
+    "cardText": "Unique weapon.\nStrike: 3 damage. If the bearer is ready during your unlock phase, this weapon inflicts 3 unpreventable damage on a ready minion you control. The bearer cannot hunt. The bearer can enter combat with a minion as a +1 stealth Ⓓ action. The bearer gets 1 press (mandatory), only usable to continue combat during the first round, and can prevent 1 damage each combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/talbotschainsaw.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition",
+     "Twenty-Fifth Anniversary"
     ]
    },
    "supported": true

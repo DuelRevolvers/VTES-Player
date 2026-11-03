@@ -1006,6 +1006,41 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 113 — equipment rush (3 cards), 2026-11-02
+
+**Cards:** Alastor (political action), Eye of Hazimel and Talbot's
+Chainsaw (equipment), all T1. Each sits on a vampire and lets the bearer
+enter combat as a Ⓓ action. Design and owner rulings:
+`equipment-rush-design.md`. Version 0.11.58. Library 926, crypt 217,
+total 1,143.
+
+**The mechanic** is `permanent.rushGrant` again, which reached an
+equipment entry unchanged. New pieces:
+- **[RTR 19960221]**: `ActionFrame.grantedBy` records a granting card on
+  the actor, and the rush fizzles beside `lockedOk` if the card has left.
+  It covers every card on the minion, not only equipment (owner ruling).
+- `statics.cannotHunt` on an attached card, read by `auraBlocksHunt`.
+- `cannotDiablerize`, gated at all three sites that offer a diablerie.
+- `immovableWhileReady` through one predicate, `equipmentMovable`, at
+  every move: the strike steal, the granted steal (re-checked at
+  resolution), carrying gear, and the auction.
+- `burnDamagesBearer` in `burnPermanent`.
+- `permanent.unlockUpkeep { blood?, pool? }`, moved out of the retainer
+  statics (Robert Carter's choice key is now `upkeep`).
+- `unlockDamageOwnMinion`.
+- A mandatory first-round press, which a press to end can cancel (owner
+  ruling).
+- `disciplineGrants`, for more than one grant on a card.
+- Alastor's `fetchEquipment`: a half-cost library play through one
+  `halvedCost` helper, sharing `bearerRefuses` with `playFromHandChoices`.
+
+**No engine defect this wave.** One was suspected and was false. A tag
+test for `"equipment"` looked as if it missed 57 of 62 equipment specs,
+but `buildHandlerRegistry` already adds the tag centrally
+(`last-equipment-modifiers-design.md` §1), and it honours Living Manse's
+opt-out, which the "fix" would have broken. It was reverted. "It's
+missing" is a claim to check, the same as "it already exists".
+
 ### Wave 112 — bearer rush grants (4 cards), 2026-10-28
 
 **Cards:** Scourge and Templar (political actions, T1), Enrage and

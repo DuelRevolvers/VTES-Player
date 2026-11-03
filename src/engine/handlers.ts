@@ -766,6 +766,8 @@ export interface EngineOps {
      *  a search (Magic of the Smith) and a card's out-of-play STORE for
      *  Fleshforge Chamber. docs/library-search-design.md §7 */
     from?: { zone: "hand" | "library" } | { zone: "store"; holder: CardInstanceId };
+    /** "…pay half the cost rounded down of the equipment" (Alastor). */
+    halfCost?: boolean;
   }): void;
   /** "You must shuffle it afterwards" (p. 14) — after every search,
    *  including one that found nothing. */

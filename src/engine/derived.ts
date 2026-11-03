@@ -136,9 +136,10 @@ export function disciplinesOf(m: MinionState): Record<string, DisciplineLevel> {
   if (m.disciplineBoostUntilUnlock) boosts.push(m.disciplineBoostUntilUnlock);
   // "…HAS superior Celerity [CEL]" — a grant at a level, not a step up
   // (docs/discipline-granting-equipment-design.md §1).
-  const grants = m.attached.flatMap((p) =>
-    p.statics.disciplineGrant ? [p.statics.disciplineGrant] : [],
-  );
+  const grants = m.attached.flatMap((p) => [
+    ...(p.statics.disciplineGrant ? [p.statics.disciplineGrant] : []),
+    ...(p.statics.disciplineGrants ?? []),
+  ]);
   if (boosts.length === 0 && grants.length === 0) return m.disciplines;
   const out: Record<string, DisciplineLevel> = { ...m.disciplines };
   for (const d of boosts) {
@@ -1028,6 +1029,10 @@ export function currentStealth(state: GameState, actionId: ActionId): number {
 /** "<clan> … do not hunt as normal" (Week of Nightmares) — an aura that
  *  takes the hunt action away rather than modifying it. */
 export function auraBlocksHunt(state: GameState, minion: MinionState): boolean {
+  // "The bearer cannot hunt" (Talbot's Chainsaw): a bar on a card ON the
+  // minion, which `auraFlag` cannot see — it reads play areas only.
+  // docs/equipment-rush-design.md §3
+  if (minion.attached.some((p) => p.statics.cannotHunt === true)) return true;
   return auraFlag(state, minion, "cannotHunt");
 }
 
@@ -1098,6 +1103,31 @@ export function canRepeatAction(
 
 export function heldHostage(m: MinionState): boolean {
   return (m.counters?.["hostage"] ?? 0) > 0;
+}
+
+/** "The attached vampire cannot commit diablerie" (Alastor) — asked at
+ *  every site that OFFERS a diablerie: the built-in action, a card's
+ *  diablerie action and the offer after a blocked leave-torpor. The
+ *  options are gated, never the commit, so nothing is drawn that does
+ *  nothing. docs/equipment-rush-design.md §3 */
+export function cannotDiablerize(m: MinionState): boolean {
+  return m.attached.some((p) => p.statics.cannotDiablerize === true);
+}
+
+/** "…pay half the cost rounded down of the equipment" (Alastor) — ONE
+ *  place for the arithmetic, read where the fetch is offered and again
+ *  where `playCardFromHand` pays it. docs/equipment-rush-design.md §3 */
+export function halvedCost(c: { blood: number; pool: number }): { blood: number; pool: number } {
+  return { blood: Math.floor(c.blood / 2), pool: Math.floor(c.pool / 2) };
+}
+
+/** "While the bearer is ready, this equipment cannot be moved or stolen"
+ *  (Eye of Hazimel) — ONE question for the four paths that move equipment
+ *  (a strike's steal, a granted steal, carrying gear, an auction), asked
+ *  where each OFFERS the move. A bearer in torpor can lose it (§4).
+ *  docs/equipment-rush-design.md §3 */
+export function equipmentMovable(bearer: MinionState, p: PermanentInPlay): boolean {
+  return !(p.statics.immovableWhileReady === true && isReady(bearer));
 }
 
 /** "A minion with one or more stun counters does not unlock as normal at

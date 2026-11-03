@@ -302,8 +302,9 @@ The four cards join the fuzz decks with Presence.
 
 ## 8. Left for later
 
-Not surveyed yet. Other legacy cards that grant their bearer a rush may
-exist; the next wave in this family starts with that search.
+Surveyed on 2026-11-02 in `docs/equipment-rush-design.md` §0.1: three more
+cards in this family can enter the pool (Alastor, Eye of Hazimel, Talbot's
+Chainsaw), and the rest are inert, out of scope or another family.
 
 ## 9. As built (0.11.55)
 

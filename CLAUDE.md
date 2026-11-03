@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 328 test files, 3667 tests**, with `npm run typecheck`,
+**Green baseline: 329 test files, 3699 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -959,7 +959,10 @@ choosing-a-minion, hunt-payouts, stealable-locations, out-of-turn-cancels,
 bleed-redirects, master-intercept, hunt-success, marked-vampires,
 granted-action-requirements, bearer-rush-grants (pre-play pickers, the one
 action-toll helper), granted-hunts (Week of Nightmares' steal as a real
-hunt; the p. 19 stuck rule in the option generator).
+hunt; the p. 19 stuck rule in the option generator), equipment-rush
+(wave 113, built 0.11.58: a card on the bearer that provides a rush, the
+[RTR 19960221] fizzle for any card on the actor, `equipmentMovable`, the
+shared `addUnlockUpkeep`).
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,
