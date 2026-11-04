@@ -30,6 +30,7 @@ import type {
   PlayContext,
   PlayCostCardType,
   ReferendumFrame,
+  RushTargetFilter,
   Sect,
   VampireTitle,
   WindowId,
@@ -73,6 +74,7 @@ import {
   untargetableBy,
   predatorOf,
   preyOf,
+  rushTargetOk,
   playOptionId,
   cannotDiablerize,
   equipmentMovable,
@@ -1271,9 +1273,7 @@ function targetRider(mode: CardMode): EffectPrimitive | null {
 function enumerateRushTargets(
   state: GameState,
   actor: MinionState,
-  e:
-    | Extract<EffectPrimitive, { kind: "actionEnterCombat" }>
-    | { targets: "minion" | "vampire"; lockedOnly?: boolean; othersOnly?: boolean },
+  e: RushTargetFilter,
 ): string[] {
   const targets: string[] = [];
   for (const s of state.seats) {
@@ -1283,14 +1283,53 @@ function enumerateRushTargets(
       if (!isReady(m)) continue;
       // "…cannot be the target of other Methuselahs' actions" (Secure Haven).
       if (untargetableBy(m, actor.controller, actor)) continue;
-      if (e.targets === "vampire" && m.kind !== "vampire") continue;
-      if (e.lockedOnly && !m.locked) continue;
-      // "…controlled by ANOTHER Methuselah" (Muddled Vampire Hunter).
-      if ("othersOnly" in e && e.othersOnly && m.controller === actor.controller) continue;
+      // Every term the card prints — the same function resolution asks
+      // again, so the two cannot drift (docs/hand-rush-design.md §4.1).
+      if (!rushTargetOk(state, actor, m, e)) continue;
       targets.push(m.id);
     }
   }
   return targets;
+}
+
+/** The term part of an `actionEnterCombat`, as the one predicate reads it. */
+function rushTargetFilterOf(
+  e: Extract<EffectPrimitive, { kind: "actionEnterCombat" }>,
+): RushTargetFilter {
+  return {
+    targets: e.targets,
+    ...(e.lockedOnly ? { lockedOnly: true } : {}),
+    ...(e.othersOnly ? { othersOnly: true } : {}),
+    ...(e.controlledBy ? { controlledBy: e.controlledBy } : {}),
+    ...(e.sect !== undefined ? { sect: e.sect } : {}),
+    ...(e.olderOnly ? { olderOnly: true } : {}),
+    ...(e.maxBlood !== undefined ? { maxBlood: e.maxBlood } : {}),
+    ...(e.orAnyLocked ? { orAnyLocked: true } : {}),
+  };
+}
+
+/**
+ * "Choose a ready vampire controlled by your predator and another
+ * controlled by your prey (not usable when only one other Methuselah is in
+ * the game)" (Taunt the Caged Beast `[ANI]`). Both are chosen at
+ * announcement (p. 25), so each pair is its own option. Choosing a vampire
+ * is targeting it, so a vampire another Methuselah's actions cannot target
+ * is not offered. docs/hand-rush-design.md §4.6
+ */
+function pairCombatChoices(state: GameState, actor: MinionState): Array<Record<string, string>> {
+  const seat = actor.controller;
+  const pred = predatorOf(state, seat);
+  const prey = preyOf(state, seat);
+  if (pred === prey || pred === seat) return [];
+  const readyVampires = (s: SeatId): MinionState[] =>
+    getSeat(state, s).minions.filter(
+      (m) => m.kind === "vampire" && isReady(m) && !untargetableBy(m, seat, actor),
+    );
+  const out: Array<Record<string, string>> = [];
+  for (const a of readyVampires(prey)) {
+    for (const b of readyVampires(pred)) out.push({ prey: a.id, pred: b.id });
+  }
+  return out;
 }
 
 /**
@@ -1803,6 +1842,10 @@ function compileActionCard(spec: CardSpec): CardHandler {
             }
             continue;
           }
+          if (mode.effects.some((e) => e.kind === "actionPairCombat")) {
+            for (const p of pairCombatChoices(ctx.state, m)) push(mode, p);
+            continue;
+          }
           const rider = targetRider(mode);
           const removeFromAsh = mode.effects.find(
             (e) => e.kind === "actionRemoveFromAshHeap",
@@ -1899,6 +1942,11 @@ function compileActionCard(spec: CardSpec): CardHandler {
         if (r.press) riders.press = (riders.press ?? 0) + r.press;
         if (r.strength) riders.strength = (riders.strength ?? 0) + r.strength;
         if (r.noCombatEndsFirstRound) riders.noCombatEndsFirstRound = true;
+        if (r.pressContinueOnly) {
+          riders.pressContinueOnly = (riders.pressContinueOnly ?? 0) + r.pressContinueOnly;
+        }
+        if (r.handSize) riders.handSize = (riders.handSize ?? 0) + r.handSize;
+        if (r.opposingMayEnd) riders.opposingMayEnd = true;
       };
       for (const e of mode.effects) {
         if (e.kind === "actionBleed") {
@@ -1916,9 +1964,31 @@ function compileActionCard(spec: CardSpec): CardHandler {
           if (!target) throw new Error(`${spec.name}: no rush target`);
           params.targetMinion = target;
           if (e.riders) addRiders(e.riders);
-          // "…with a LOCKED minion" is a gate at announcement AND at
-          // resolution; the target can unlock in between.
-          if (e.lockedOnly) params.requiresLockedTarget = true;
+          // Every target term is a gate at announcement AND at resolution:
+          // the target can unlock, gain blood or change capacity in
+          // between (docs/hand-rush-design.md §4.1).
+          params.rushTargetFilter = rushTargetFilterOf(e);
+          // "If this acting vampire is not ready at the end of the action,
+          // you burn 1 pool" (Rumble).
+          if (e.burnPoolIfActorNotReady) {
+            params.poolBurnIfActorNotReady = e.burnPoolIfActorNotReady;
+          }
+          // "That vampire may end combat before range is chosen … If he or
+          // she does so, put this card on him or her" (Monomancy): the offer
+          // rides on the rush combat, and the attachment is the card's
+          // outcome, held aside until the combat is over (§4.4).
+          if (e.opposingMayEnd && play.minion) {
+            addRiders({ opposingMayEnd: true });
+            params.combatOutcome = {
+              kind: "outcome",
+              actor: play.minion,
+              seat: play.seat,
+              cardId: play.card.id,
+              name: spec.name,
+              when: "opposingTookEnd",
+              effect: { kind: "attachToOpposing", statics: e.opposingMayEnd.statics, tags: [spec.name] },
+            };
+          }
           // "…and LOCK a vampire" (Deep Song superior) — on success, and
           // consistent with the inversion below: an acting minion is
           // normally locked at announcement (p. 25).
@@ -2455,6 +2525,26 @@ function compileActionCard(spec: CardSpec): CardHandler {
                 ops.emit({ type: "LeftTorpor", minion: stolen.id });
               }
             }
+            break;
+          }
+          case "actionPairCombat": {
+            // "The chosen vampires enter combat" (Taunt the Caged Beast
+            // `[ANI]`) — both chosen at announcement, queued so the combat
+            // re-checks that both are still ready. The PREY's vampire takes
+            // the first slot because it goes first [LSJ 20070319]; neither
+            // is the acting minion of this action (§4.6).
+            const first = af.card?.params["prey"];
+            const second = af.card?.params["pred"];
+            if (!first || !second || !af.card) break;
+            ops.queueCombat(first, second, {
+              kind: "outcome",
+              actor: first,
+              seat: af.actingSeat,
+              cardId: af.card.instance.id,
+              name: spec.name,
+              when: "oneCombatantReady",
+              effect: { kind: "readyGainsBlood", amount: e.readyGainsBlood },
+            });
             break;
           }
           case "attachToOpponent": {

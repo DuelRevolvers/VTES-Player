@@ -1,7 +1,13 @@
 # Hand rush cards (wave 114)
 
-**Status: DESIGNED, waiting for owner review (2026-11-03).** No kernel code
-is written. §5 lists the decisions that need the owner.
+**Status: BUILT (0.11.59, 2026-11-03)** as designed, with the owner's
+answers in §5.1. Six cards; Big Game waits. Two notes from the build:
+the delayed replacement stays on `ActionFrame.drawAfter`, drawn in
+`finishAction` beside Rumble's `poolBurnIfActorNotReady`, rather than a
+new `atActionEnd` list (§4.5). And Taunt's `[ANI]` combat is queued
+through `queuedCombats` as §4.6 says, so it runs after the action frame
+pops. Its actor doesn't fight, so the window order can't change anything
+for it.
 
 ## 0. The family
 

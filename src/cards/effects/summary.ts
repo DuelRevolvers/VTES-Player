@@ -180,6 +180,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
 
   // Positional advantage in a fight, which is not damage by itself.
   actionEnterCombat: "combat",
+  actionPairCombat: "combat",
   actorCombatRider: "combat",
   addStrength: "combat",
   additionalStrike: "combat",

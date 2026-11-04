@@ -50,6 +50,7 @@ import {
   predatorOf,
   preyOf,
   prospectiveBleed,
+  rushTargetOk,
   sequencingOrder,
   startingLifeBonus,
   titleContestKey,
@@ -174,6 +175,17 @@ function entersCombat(a: {
     a.targetMinion !== null &&
     !a.noCombatOnSuccess &&
     (a.grantedEffect === null || a.grantedEffect.key === "enterCombat")
+  );
+}
+
+/** Does this rush outcome keep the played card aside, out of the ash heap,
+ *  until its combat is over? It may yet go into play: on the actor (Pillars
+ *  Fall) or on the target (Monomancy). The outcome rider burns it when the
+ *  condition misses. docs/rush-outcome-design.md §2 */
+function holdsCardForOutcome(o: AfterCombatRider | null): boolean {
+  return (
+    o?.kind === "outcome" &&
+    (o.effect.kind === "attachToActor" || o.effect.kind === "attachToOpposing")
   );
 }
 
@@ -1598,6 +1610,13 @@ export class VtesEngine implements EngineOps {
         if (top.step === "blocked") {
           // Combat has finished; the blocked action fails (§3.5).
           this.resolveAction(top, false);
+          continue;
+        }
+        if (top.step === "rushCombat") {
+          // A successful rush's combat has finished — and with it, every
+          // question it raised. On to the after-resolution window, then the
+          // end of the action. docs/hand-rush-design.md §5.1
+          this.openAfterResolution(top, true);
           continue;
         }
         if (top.step === "afterResolution" && cycleQuiescent(top.cycle)) {
@@ -3850,6 +3869,11 @@ export class VtesEngine implements EngineOps {
             ...(params.rushRiders.noCombatEndsFirstRound
               ? { noCombatEndsFirstRound: true }
               : {}),
+            ...(params.rushRiders.pressContinueOnly
+              ? { pressContinueOnly: params.rushRiders.pressContinueOnly }
+              : {}),
+            ...(params.rushRiders.handSize ? { handSize: params.rushRiders.handSize } : {}),
+            ...(params.rushRiders.opposingMayEnd ? { opposingMayEnd: true } : {}),
           }
         : null,
       // "At the end of that combat, …" — fixed at announcement (p. 25)
@@ -3859,7 +3883,10 @@ export class VtesEngine implements EngineOps {
       ...(params.noCombat ? { noCombatOnSuccess: true } : {}),
       ...(params.invertCombatRoles ? { invertCombatRoles: true } : {}),
       ...(params.lockTarget ? { lockTargetOnSuccess: true } : {}),
-      ...(params.requiresLockedTarget ? { rushRequiresLockedTarget: true } : {}),
+      ...(params.rushTargetFilter ? { rushTargetFilter: params.rushTargetFilter } : {}),
+      ...(params.poolBurnIfActorNotReady
+        ? { poolBurnIfActorNotReady: params.poolBurnIfActorNotReady }
+        : {}),
       grantedEffect: null,
       grantedCost: null,
       // "…can use those counters to pay some or all of the cost" — the
@@ -4472,13 +4499,18 @@ export class VtesEngine implements EngineOps {
             // mirror, and the only condition that fires on a FAILURE.
             r.when === "opposingStillReady"
             ? otherReady
-            : actorReady && !otherReady;
+            : // "If he or she does so" (Monomancy): only the card's own
+              // offer counts, never another way of ending combat
+              // [RTR 20020501].
+              r.when === "opposingTookEnd"
+              ? cf.opposingMayEnd?.taken === true
+              : actorReady && !otherReady;
     const e = r.effect;
     if (!holds) {
       // A card held back for a possible attachment goes to the ash heap
       // after all when the condition misses (p. 27) — see the `entered`
       // suppression at action resolution.
-      if (e.kind === "attachToActor") {
+      if (e.kind === "attachToActor" || e.kind === "attachToOpposing") {
         this.emit({ type: "CardBurned", cardId: r.cardId, name: r.name, seat: r.seat });
       }
       return;
@@ -4529,6 +4561,39 @@ export class VtesEngine implements EngineOps {
         });
         return;
       }
+      case "attachToOpposing": {
+        // "…put this card on him or her; that vampire gets -1 bleed"
+        // (Monomancy). Not a choice: the target chose when it ended the
+        // combat. It sits on the target's vampire and stays the card's
+        // player's card (p. 16), the `attachToOpponent` treatment.
+        const bearer = otherM;
+        if (!bearer) {
+          this.emit({ type: "CardBurned", cardId: r.cardId, name: r.name, seat: r.seat });
+          return;
+        }
+        this.putPermanentInPlay({
+          card: { id: r.cardId, name: r.name },
+          seat: bearer.controller,
+          attachTo: bearer.id,
+          statics: e.statics,
+          tags: e.tags,
+          controller: r.seat,
+        });
+        return;
+      }
+      case "readyGainsBlood": {
+        // "…that ready vampire gains …" — EITHER combatant, the actor or
+        // the target; the card names no exception (§4.3). The condition
+        // has already said exactly one is ready. An ally gains nothing:
+        // the card says "vampire".
+        const ready = actorReady ? findMinion(this.state, r.actor) : otherM;
+        if (!ready || ready.kind !== "vampire") return;
+        const loser = actorReady ? other : r.actor;
+        const amount = e.opposingCapacity ? this.combatantCapacity(loser) : (e.amount ?? 0);
+        // The p. 5 cap is the reducer's: the excess goes back to the bank.
+        if (amount > 0) this.emit({ type: "BloodGained", minion: ready.id, amount });
+        return;
+      }
       case "bloodToUncontrolled": {
         const seat = getSeat(this.state, r.seat);
         const targets = seat.uncontrolled.filter(
@@ -4556,6 +4621,20 @@ export class VtesEngine implements EngineOps {
         return;
       }
     }
+  }
+
+  /** "…the opposing vampire's capacity" (Games of Instinct), asked after
+   *  the combat — when that vampire may have been BURNED in it. In play, it
+   *  is the derived capacity; burnt, it is the one its ash-heap entry
+   *  recorded as it left (docs/ash-heap-resource-design.md §2). */
+  private combatantCapacity(id: MinionId): number {
+    const m = findMinion(this.state, id);
+    if (m) return capacityOf(m);
+    for (const s of this.state.seats) {
+      const card = (s.ashHeap ?? []).find((c) => c.id === id && c.crypt);
+      if (card) return card.capacity ?? 0;
+    }
+    return 0;
   }
 
   /** Notify in-play cards that a combat ended (Monster). */
@@ -4970,7 +5049,7 @@ export class VtesEngine implements EngineOps {
         opposing: combatPresses(opposing),
       },
       pressesContinueOnly: {
-        acting: continuePresses(acting),
+        acting: continuePresses(acting) + (riders?.pressContinueOnly ?? 0),
         opposing: continuePresses(opposing),
       },
       pressesEndOnly: {
@@ -9537,12 +9616,7 @@ export class VtesEngine implements EngineOps {
     // payoff may put the card itself into play once the combat is over
     // (Pillars Fall). `applyOutcomeRider` burns it if the condition misses
     // or the player declines. docs/rush-outcome-design.md §2
-    if (
-      af.card &&
-      success &&
-      af.combatOutcome?.kind === "outcome" &&
-      af.combatOutcome.effect.kind === "attachToActor"
-    ) {
+    if (af.card && success && holdsCardForOutcome(af.combatOutcome)) {
       entered = true;
     }
     if (af.card && !entered) {
@@ -9599,15 +9673,29 @@ export class VtesEngine implements EngineOps {
       }
       this.applyEnvironmentalDamage(d.minion, d.amount, d.aggravated);
     }
-    // "Do not replace until after this action" comes due now.
-    for (const seatId of af.drawAfter) this.drawToReplace(seatId);
-    // "Only usable AFTER ACTION RESOLUTION" (Freak Drive and its family):
-    // an impulse before the frame leaves the stack, so a card can still
-    // read what the action was and how it went. Opened only when some seat
-    // can actually use it — a recorded deviation, the same one already
-    // taken for combat.damageResolution (docs/after-resolution-design.md §3).
     af.resolvedSuccess = success;
-    if (af.step !== "afterResolution") {
+    // A successful rush fights NOW, inside resolution — where a blocked
+    // action's combat already runs (p. 27) — so the combat comes before the
+    // after-resolution window and the end-of-action tail [LSJ 20001120]
+    // [LSJ 20101021]. `settle` resumes at `rushCombat` once it is over.
+    // docs/hand-rush-design.md §3, §5.1
+    if (success && this.startRushCombat(af)) return;
+    this.openAfterResolution(af, success);
+  }
+
+  /**
+   * "Only usable AFTER ACTION RESOLUTION" (Freak Drive and its family): an
+   * impulse before the frame leaves the stack, so a card can still read
+   * what the action was and how it went. Opened only when some seat can
+   * actually use it — a recorded deviation, the same one already taken for
+   * combat.damageResolution (docs/after-resolution-design.md §3).
+   *
+   * Probed once per action. A rush continued as if unblocked (Go-getter)
+   * fights after this window has already closed, and comes back here.
+   */
+  private openAfterResolution(af: ActionFrame, success: boolean): void {
+    if (!af.afterResolutionOpened) {
+      af.afterResolutionOpened = true;
       // The step has to be set BEFORE probing: a card's own usable rule
       // asserts it is in this window, so asking first would always answer
       // "nobody can play anything". Set it, ask, and put it back if the
@@ -9624,17 +9712,116 @@ export class VtesEngine implements EngineOps {
   }
 
   /**
+   * A successful rush enters combat with its target — if the target is
+   * still ready, and still what the card named. The target does NOT lock
+   * (only blockers lock, p. 27). Pushed with the action frame still on the
+   * stack, which is where a blocked action's combat runs; `settle` picks the
+   * action back up at `rushCombat` when the combat pops.
+   *
+   * Only rush (a cardEffect action) starts combat on success; diablerise
+   * and rescue also carry a targetMinion but resolve differently, and so
+   * does a granted action that merely targets a minion without entering
+   * combat (Cave of Apples' corruption placement) — or a card from HAND
+   * that names a minion only for directedness (Mind Numb). That second
+   * opt-out did not exist: `grantedEffect` is null for every hand play,
+   * so a stun would have rushed its victim (docs/stun-design.md §6).
+   *
+   * Returns whether a combat was pushed.
+   */
+  private startRushCombat(af: ActionFrame): boolean {
+    if (!af.targetMinion || !entersCombat(af)) return false;
+    const actor = findMinion(this.state, af.acting);
+    const target = findMinion(this.state, af.targetMinion);
+    // Every term the card printed about its target, re-read HERE. A target
+    // that stopped qualifying between announcement and resolution makes the
+    // action fizzle: the cost is paid and the action counts as successful,
+    // but no combat occurs [Ambush ruling] [LSJ 20070411].
+    const filterOk =
+      !af.rushTargetFilter ||
+      (!!actor && !!target && rushTargetOk(this.state, actor, target, af.rushTargetFilter));
+    // "…fizzles if the equipment is not on the acting minion when the
+    // action resolves unblocked" [RTR 19960221] — the same fizzle, one
+    // more condition: a card on the actor that provided the rush has to
+    // still be on the actor. docs/equipment-rush-design.md §3
+    const grantOk =
+      af.grantedBy === undefined ||
+      (actor?.attached.some((a) => a.card.id === af.grantedBy) ?? false);
+    if (actor && isReady(actor) && target && isReady(target) && filterOk && grantOk) {
+      // "The target vampire is considered the ACTING MINION during that
+      // combat" (Deep Song superior): the inversion is these two pairs
+      // in the other order, because every "who is acting" question in a
+      // combat reads `cf.acting` (docs/last-buildable-design.md §3).
+      // "…and LOCK a vampire" — before the combat, so the frame opens
+      // with the target already locked.
+      if (af.lockTargetOnSuccess && !target.locked) {
+        this.emit({ type: "MinionLocked", minion: target.id });
+      }
+      const [a, aSeat, b, bSeat] = af.invertCombatRoles
+        ? ([target.id, target.controller, af.acting, af.actingSeat] as const)
+        : ([af.acting, af.actingSeat, target.id, target.controller] as const);
+      this.pushCombat(
+        a,
+        aSeat,
+        b,
+        bSeat,
+        af.rushRiders,
+        false, // a rush combat — the target did not block
+        af.combatOutcome,
+        af.acting,
+      );
+      af.step = "rushCombat";
+      const cf = this.combatFrame()!;
+      // "That vampire may end combat before range is chosen during the
+      // first round" (Monomancy) — the card is not in play, so the offer
+      // rides on the frame. docs/hand-rush-design.md §4.4
+      if (af.rushRiders?.opposingMayEnd && af.card) {
+        cf.opposingMayEnd = {
+          minion: target.id,
+          cardName: af.card.instance.name,
+          cardId: af.card.instance.id,
+          taken: false,
+        };
+      }
+      // "In that combat, your hand size is increased by one" (Rumble) — the
+      // combat-scoped grant Rage of Apedemak already uses, which draws up
+      // now (p. 7) and sheds the excess when this frame pops.
+      if (af.rushRiders?.handSize && af.card) {
+        this.addHandSizeBonus({
+          seat: af.actingSeat,
+          amount: af.rushRiders.handSize,
+          scope: "combat",
+          cardName: af.card.instance.name,
+          cardId: af.card.instance.id,
+        });
+      }
+      return true;
+    }
+    if (af.card && holdsCardForOutcome(af.combatOutcome)) {
+      // The combat never happened (a combatant left play, or the action
+      // fizzled), so the rider that would have burned the held-aside card
+      // never runs. Burn it now, or it vanishes.
+      this.emit({
+        type: "CardBurned",
+        cardId: af.card.instance.id,
+        name: af.card.instance.name,
+        seat: af.actingSeat,
+      });
+    }
+    return false;
+  }
+
+  /**
    * "This vampire burns 1 blood to CONTINUE THE ACTION AS IF UNBLOCKED"
    * (Go-getter superior).
    *
    * The `action.afterResolution` window is the only place it can be played
    * — p. 27 puts the block's combat INSIDE resolution — and by then the
-   * action's tail has run: the card is burned, the block penalties are
-   * paid, the replacement draws are done. So continuing runs the SUCCESS
-   * EFFECTS ONLY, through `applySuccessEffects`, the same function the
-   * ordinary path calls. The tail is simply not in the function being
-   * called twice, which is what makes a "tail already run" guard
-   * unnecessary (docs/ledger-closeout.md §11).
+   * card is burned and the block penalties are paid. So continuing runs
+   * the SUCCESS EFFECTS ONLY, through `applySuccessEffects`, the same
+   * function the ordinary path calls — and a rush's combat, which is its
+   * success effect. The end-of-action tail (the replacement draws) has not
+   * run yet: it is in `finishAction`, which this reaches exactly once
+   * (docs/ledger-closeout.md §11, docs/hand-rush-design.md §5.1).
    *
    * The flag is cleared BEFORE it is acted on, so a second Go-getter
    * played into any window this re-opens cannot loop.
@@ -9646,6 +9833,7 @@ export class VtesEngine implements EngineOps {
     this.applySuccessEffects(af);
     // Cards keyed on "after a SUCCESSFUL action" read this.
     af.resolvedSuccess = true;
+    if (this.startRushCombat(af)) return;
     this.finishAction(af, true);
   }
 
@@ -9656,6 +9844,21 @@ export class VtesEngine implements EngineOps {
    * the two (docs/after-resolution-design.md §2).
    */
   private finishAction(af: ActionFrame, success: boolean): void {
+    // THE END OF THE ACTION: after every combat it caused and after the
+    // after-resolution window [LSJ 20001120] [LSJ 20101021]. Every way out
+    // of an action passes through here, which is why the tail lives here
+    // and nowhere else. docs/hand-rush-design.md §4.5
+    // "If this acting vampire is not ready at the end of the action, you
+    // burn 1 pool" (Rumble) — blocked or not, and a burned actor is not
+    // ready either.
+    if (af.poolBurnIfActorNotReady) {
+      const actor = findMinion(this.state, af.acting);
+      if ((!actor || !isReady(actor)) && !getSeat(this.state, af.actingSeat).ousted) {
+        this.emit({ type: "PoolBurned", seat: af.actingSeat, amount: af.poolBurnIfActorNotReady });
+      }
+    }
+    // "Do not replace until after this action" comes due now.
+    for (const seatId of af.drawAfter) this.drawToReplace(seatId);
     // Wake effects last "for the duration of the action" (p. 44).
     for (const seat of this.state.seats) {
       for (const m of seat.minions) m.awake = false;
@@ -9771,71 +9974,6 @@ export class VtesEngine implements EngineOps {
       const victim = findMinion(this.state, af.targetMinion);
       if (actor && isReady(actor) && victim && victim.inTorpor) {
         this.commitDiablerie(af.acting, af.targetMinion);
-      }
-    }
-    // A successful rush enters combat with its target — if the target is
-    // still ready; the target does NOT lock (only blockers lock, p. 27).
-    // Pushed after the action frame pops so combat sits alone on top.
-    // Only rush (a cardEffect action) starts combat on success; diablerise
-    // and rescue also carry a targetMinion but resolve differently, and so
-    // does a granted action that merely targets a minion without entering
-    // combat (Cave of Apples' corruption placement) — or a card from HAND
-    // that names a minion only for directedness (Mind Numb). That second
-    // opt-out did not exist: `grantedEffect` is null for every hand play,
-    // so a stun would have rushed its victim (docs/stun-design.md §6).
-    if (success && af.targetMinion && entersCombat(af)) {
-      const actor = findMinion(this.state, af.acting);
-      const target = findMinion(this.state, af.targetMinion);
-      // "…with a LOCKED minion", re-read HERE. A target that unlocked
-      // between announcement and resolution makes the action fizzle: the
-      // cost is paid and the action counts as successful, but no combat
-      // occurs [Ambush ruling]. Fleetness superior has the same clause
-      // and had the same gap.
-      const lockedOk = !af.rushRequiresLockedTarget || target?.locked === true;
-      // "…fizzles if the equipment is not on the acting minion when the
-      // action resolves unblocked" [RTR 19960221] — the same fizzle, one
-      // more condition: a card on the actor that provided the rush has to
-      // still be on the actor. docs/equipment-rush-design.md §3
-      const grantOk =
-        af.grantedBy === undefined ||
-        (actor?.attached.some((a) => a.card.id === af.grantedBy) ?? false);
-      if (actor && isReady(actor) && target && isReady(target) && lockedOk && grantOk) {
-        // "The target vampire is considered the ACTING MINION during that
-        // combat" (Deep Song superior): the inversion is these two pairs
-        // in the other order, because every "who is acting" question in a
-        // combat reads `cf.acting` (docs/last-buildable-design.md §3).
-        // "…and LOCK a vampire" — before the combat, so the frame opens
-        // with the target already locked.
-        if (af.lockTargetOnSuccess && !target.locked) {
-          this.emit({ type: "MinionLocked", minion: target.id });
-        }
-        const [a, aSeat, b, bSeat] = af.invertCombatRoles
-          ? ([target.id, target.controller, af.acting, af.actingSeat] as const)
-          : ([af.acting, af.actingSeat, target.id, target.controller] as const);
-        this.pushCombat(
-          a,
-          aSeat,
-          b,
-          bSeat,
-          af.rushRiders,
-          false, // a rush combat — the target did not block
-          af.combatOutcome,
-          af.acting,
-        );
-      } else if (
-        af.card &&
-        af.combatOutcome?.kind === "outcome" &&
-        af.combatOutcome.effect.kind === "attachToActor"
-      ) {
-        // The combat never happened (a combatant left play between
-        // resolution and here), so the rider that would have burned the
-        // held-aside card never runs. Burn it now, or it vanishes.
-        this.emit({
-          type: "CardBurned",
-          cardId: af.card.instance.id,
-          name: af.card.instance.name,
-          seat: af.actingSeat,
-        });
       }
     }
   }
@@ -10790,6 +10928,31 @@ export class VtesEngine implements EngineOps {
     return out;
   }
 
+  /**
+   * "That vampire may end combat before range is chosen during the first
+   * round of combat" (Monomancy) — offered to the rush TARGET's controller,
+   * from a card that is not in play, so it is a frame rider like the
+   * unlock offer above rather than an ability. Taking it is what attaches
+   * the card; ending combat any other way does not [RTR 20020501].
+   * docs/hand-rush-design.md §4.4
+   */
+  private opposingEndOptions(cf: CombatFrame, seat: SeatId, window: WindowId): LegalOption[] {
+    const o = cf.opposingMayEnd;
+    if (!o || o.taken || window !== "combat.beforeRange" || cf.round !== 1) return [];
+    if (cf.acting !== o.minion && cf.opposing !== o.minion) return [];
+    const m = findMinion(this.state, o.minion);
+    if (!m || m.controller !== seat) return [];
+    return [
+      {
+        id: `endcombat:${o.cardName}:${o.cardId}`,
+        kind: "useAbility",
+        label: `${m.name}: end combat (${o.cardName})`,
+        source: "opposingMayEnd",
+        params: {},
+      },
+    ];
+  }
+
   private combatDecision(cf: CombatFrame): DecisionPoint {
     switch (cf.step) {
       case "beforeRange":
@@ -10808,6 +10971,7 @@ export class VtesEngine implements EngineOps {
         return this.dp(seat, window, [
           passOption(),
           ...this.unlockForBloodOptions(cf, seat),
+          ...this.opposingEndOptions(cf, seat, window),
           ...this.handlerOptions(seat, window),
           ...this.abilityOptionsFor(seat, window),
         ]);
@@ -11174,6 +11338,15 @@ export class VtesEngine implements EngineOps {
           top.unlockForBlood[side] = 0; // one offer, spent either way
           if (cost > 0) this.emit({ type: "BloodBurned", minion: id, amount: cost });
           this.emit({ type: "MinionUnlocked", minion: id });
+          return;
+        }
+        // "That vampire may end combat before range is chosen" (Monomancy):
+        // recorded, so the card's outcome attaches it, then ended through
+        // the same landing the equipment version uses.
+        if (option.source === "opposingMayEnd") {
+          if (top.kind !== "combat" || !top.opposingMayEnd) throw new Error("end offer outside combat");
+          top.opposingMayEnd.taken = true;
+          this.endCombatFromOutside();
           return;
         }
         const dpSeat = this.currentSeatOfTop();

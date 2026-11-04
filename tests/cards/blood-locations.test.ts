@@ -360,6 +360,14 @@ describe("Cappadocian Crypt (102298)", () => {
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // A
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // C → resolves
     ]);
+    // Umbrous Clutch is a rush, and its combat runs INSIDE resolution, so
+    // the after-resolution window opens once that combat is over
+    // (docs/hand-rush-design.md §5.1).
+    expect(engine.decision()!.window).toBe("combat.beforeRange");
+    for (let i = 0; i < 40 && engine.decision()!.window !== "action.afterResolution"; i++) {
+      const options = engine.decision()!.options.map((o) => o.id);
+      engine.choose(options.includes("pass") ? "pass" : options.includes("strike:hand") ? "strike:hand" : options[0]!);
+    }
     const dp = engine.decision()!;
     expect(dp.window).toBe("action.afterResolution");
     const ids = dp.options.filter((o) => o.id.startsWith("ability:Cappadocian Crypt"));

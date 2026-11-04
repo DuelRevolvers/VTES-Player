@@ -36,6 +36,7 @@ import type {
   PlayCostMod,
   ReferendumAfterEffect,
   ReferendumFrame,
+  RushTargetFilter,
   Sect,
   SeatId,
   StrikeKind,
@@ -1049,6 +1050,9 @@ export interface CardActionParams {
     press?: number;
     strength?: number;
     noCombatEndsFirstRound?: boolean;
+    pressContinueOnly?: number;
+    handSize?: number;
+    opposingMayEnd?: boolean;
   };
   /** "At the end of that combat, if <who is standing>, <payoff>" — a
    *  rider installed on the rush's own combat (docs/rush-outcome-design.md
@@ -1077,8 +1081,13 @@ export interface CardActionParams {
   /** "Ⓓ Enter combat with AND LOCK a vampire" (Deep Song superior) — the
    *  lock happens on success, with the combat. */
   lockTarget?: boolean;
-  /** "…with a LOCKED minion" — re-checked at resolution (Ambush). */
-  requiresLockedTarget?: boolean;
+  /** Every term the card prints about its rush target — re-checked at
+   *  resolution by `rushTargetOk` (Ambush, Harass).
+   *  docs/hand-rush-design.md §4.1 */
+  rushTargetFilter?: RushTargetFilter;
+  /** "If this acting vampire is not ready at the end of the action, you
+   *  burn N pool" (Rumble). */
+  poolBurnIfActorNotReady?: number;
   /** "Unlock a vampire" (Precognizant Mobility) — this action names a minion
    *  but prints NO Ⓓ, so naming another Methuselah's vampire must not make it
    *  directed at them (p. 25: the Ⓓ is what directs an action, not the

@@ -2348,7 +2348,17 @@ export interface TurnFrame {
 /** Action states A/B/C (p. 27), plus "blocked" and the post-resolution
  *  impulse the after-resolution family plays into
  *  (docs/after-resolution-design.md §2). */
-export type ActionStep = "announce" | "A" | "B" | "C" | "blocked" | "afterResolution";
+/** `rushCombat`: a successful rush is fighting its target, with this frame
+ *  still on the stack — where a blocked action's combat already runs
+ *  (p. 27). docs/hand-rush-design.md §5.1 */
+export type ActionStep =
+  | "announce"
+  | "A"
+  | "B"
+  | "C"
+  | "blocked"
+  | "rushCombat"
+  | "afterResolution";
 
 /** The action card an action was announced with — set aside, out of play,
  *  until resolution (p. 25); burned at resolution or on block (p. 27). */
@@ -2423,7 +2433,15 @@ export interface ActionFrame {
    *  occurs)"* [Ambush ruling]. The target can unlock between the two
    *  moments, and without this the rush would fight a minion the card
    *  could never have named. */
-  rushRequiresLockedTarget?: boolean;
+  rushTargetFilter?: RushTargetFilter;
+  /** "If this acting vampire is not ready at the END OF THE ACTION, you
+   *  burn 1 pool" (Rumble) — read in `finishAction`, so a blocked Rumble
+   *  pays too. docs/hand-rush-design.md §4.5 */
+  poolBurnIfActorNotReady?: number;
+  /** The after-resolution window has been probed for this action. A rush
+   *  continued as if unblocked (Go-getter) fights AFTER that window, and
+   *  must not open it a second time. */
+  afterResolutionOpened?: boolean;
   /** How the action turned out, recorded as it resolves so a card played
    *  in the after-resolution window can gate on "only usable if the
    *  action was successful" / "…was blocked" after the fact. */
@@ -2866,6 +2884,39 @@ export interface RushRiders {
    *  round" (Hunter's Mark superior) — the combat-scoped sibling of
    *  `PermanentStatics.opposingCannotCombatEnds`. */
   noCombatEndsFirstRound?: boolean;
+  /** "1 optional press, only usable to CONTINUE combat, during that
+   *  combat" (Harass) — lands in `cf.pressesContinueOnly`. */
+  pressContinueOnly?: number;
+  /** "In that combat, your hand size is increased by one" (Rumble) — a
+   *  combat-scoped grant for the card's player. */
+  handSize?: number;
+  /** "That vampire may end combat before range is chosen during the first
+   *  round" (Monomancy) — offered to the TARGET, from a card not in play.
+   *  docs/hand-rush-design.md §4.4 */
+  opposingMayEnd?: boolean;
+}
+
+/** "Ⓓ Enter combat with <which minion>" — every term a rush card prints
+ *  about its target. Read by ONE predicate, `rushTargetOk`, at
+ *  announcement and again at resolution, so a target that stopped
+ *  qualifying in between fizzles the action [Ambush, Harass rulings].
+ *  docs/hand-rush-design.md §4.1 */
+export interface RushTargetFilter {
+  targets: "minion" | "vampire" | "ally";
+  /** "…a LOCKED minion" (Ambush, Fleetness superior). */
+  lockedOnly?: boolean;
+  /** "…controlled by ANOTHER Methuselah". */
+  othersOnly?: boolean;
+  /** "…an ally controlled by your PREY" (Purity of the Beast). */
+  controlledBy?: "prey";
+  /** "…a Sabbat vampire" (Monomancy) — lowercase, as `MinionState.sect`. */
+  sect?: string;
+  /** "…an OLDER vampire" (Games of Instinct): a higher capacity (p. 5). */
+  olderOnly?: boolean;
+  /** "…a vampire who has 3 or fewer blood" (Harass), and with
+   *  `orAnyLocked`, "…or a locked minion". */
+  maxBlood?: number;
+  orAnyLocked?: boolean;
 }
 
 export type OutcomeCondition =
@@ -2881,7 +2932,11 @@ export type OutcomeCondition =
    *  Court) — the mirror of opposingNotReady: the ambush did not work,
    *  and the price is paid for trying.
    *  docs/crypt-and-uncontrolled-design.md §5 */
-  | "opposingStillReady";
+  | "opposingStillReady"
+  /** "If he or she does so" (Monomancy): the target ended the combat
+   *  through the card's own offer — and through nothing else
+   *  [RTR 20020501]. Read off `CombatFrame.opposingMayEnd`. */
+  | "opposingTookEnd";
 
 export type OutcomeEffect =
   /** "…the controller of the opposing minion burns N pool". */
@@ -2897,7 +2952,15 @@ export type OutcomeEffect =
    *  the actor takes it, and a null source is what "environmental" has
    *  meant since Daring the Dawn.
    *  docs/crypt-and-uncontrolled-design.md §5 */
-  | { kind: "selfDamage"; amount: number };
+  | { kind: "selfDamage"; amount: number }
+  /** "…that ready vampire gains N blood" (Taunt the Caged Beast `[ANI]`)
+   *  or "…blood equal to the opposing vampire's capacity" (Games of
+   *  Instinct) — either combatant, but only a vampire.
+   *  docs/hand-rush-design.md §4.3 */
+  | { kind: "readyGainsBlood"; amount?: number; opposingCapacity?: boolean }
+  /** "…put this card on him or her" (Monomancy) — the TARGET, which stays
+   *  the card's player's card on another Methuselah's vampire (p. 16). */
+  | { kind: "attachToOpposing"; statics: PermanentStatics; tags: string[] };
 
 export interface PendingDamage {
   minion: MinionId;
@@ -3423,6 +3486,11 @@ export interface CombatFrame {
    *  `pressesCombat`, offered only for `press:continue` and SPENT FIRST,
    *  the `closeManeuvers` rule. docs/weapon-riders-design.md §4 */
   pressesContinueOnly?: { acting: number; opposing: number };
+  /** "That vampire may end combat before range is chosen during the first
+   *  round" (Monomancy) — the rush's TARGET is offered it, from a card that
+   *  is not in play. `taken` is what the card's outcome reads: only this
+   *  offer attaches the card [RTR 20020501]. docs/hand-rush-design.md §4.4 */
+  opposingMayEnd?: { minion: MinionId; cardName: string; cardId: CardInstanceId; taken: boolean };
   /** The sides that have spent "1 press (MANDATORY), only usable to
    *  continue combat during the first round" (Talbot's Chainsaw). Whether
    *  the press is still OWED is derived on every read

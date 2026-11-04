@@ -662,9 +662,29 @@ export type EffectPrimitive =
   // (docs/rush-actions-design.md).
   | {
       kind: "actionEnterCombat";
-      targets: "minion" | "vampire";
+      /** `ally`: "Ⓓ Enter combat with an ally controlled by your prey"
+       *  (Purity of the Beast). */
+      targets: "minion" | "vampire" | "ally";
       /** Fleetness superior: "a locked minion". */
       lockedOnly?: boolean;
+      /** The rest of the target terms, every one read by `rushTargetOk` at
+       *  announcement AND at resolution (docs/hand-rush-design.md §4.1):
+       *  "…controlled by another Methuselah", "…controlled by your prey",
+       *  "…a Sabbat vampire", "…an older vampire", and Harass's "…a vampire
+       *  who has 3 or fewer blood or a locked minion". */
+      othersOnly?: boolean;
+      controlledBy?: "prey";
+      sect?: string;
+      olderOnly?: boolean;
+      maxBlood?: number;
+      orAnyLocked?: boolean;
+      /** "If this acting vampire is not ready at the end of the action, you
+       *  burn N pool" (Rumble) — blocked or not (§4.5). */
+      burnPoolIfActorNotReady?: number;
+      /** "That vampire may end combat before range is chosen during the
+       *  first round of combat. If he or she does so, put this card on him
+       *  or her" (Monomancy) — with the statics it carries there (§4.4). */
+      opposingMayEnd?: { statics: PermanentStatics };
       /** "Ⓓ Enter combat with AND LOCK a vampire" (Deep Song superior). */
       lockTarget?: boolean;
       /** "The target vampire is considered the ACTING MINION during that
@@ -679,6 +699,10 @@ export type EffectPrimitive =
         /** "The opposing minion cannot strike: combat ends during the
          *  first round of that combat" (Hunter's Mark superior). */
         noCombatEndsFirstRound?: boolean;
+        /** "1 optional press, only usable to continue combat" (Harass). */
+        pressContinueOnly?: number;
+        /** "In that combat, your hand size is increased by one" (Rumble). */
+        handSize?: number;
       };
       /** "At the end of that combat, if <who is standing>, <payoff>"
        *  (Abuse of Power, Pillars Fall, Hunting the Beast).
@@ -690,9 +714,21 @@ export type EffectPrimitive =
           /** "…put this card on this acting vampire" — the played card
            *  becomes a permanent on the actor, with these statics. */
           | { kind: "attachToActor"; statics: PermanentStatics; tags?: string[] }
-          | { kind: "bloodToUncontrolled"; amount: number; clan?: string };
+          | { kind: "bloodToUncontrolled"; amount: number; clan?: string }
+          /** "…that ready vampire gains blood equal to the opposing
+           *  vampire's capacity" (Games of Instinct). */
+          | { kind: "readyGainsBlood"; amount?: number; opposingCapacity?: boolean };
       };
     }
+  /** "Choose a ready vampire controlled by your predator and another
+   *  controlled by your prey (not usable when only one other Methuselah is
+   *  in the game). The chosen vampires enter combat. If only one is ready
+   *  at the end of that combat, he or she gains N blood" (Taunt the Caged
+   *  Beast `[ANI]`). An undirected action whose actor does not fight: both
+   *  vampires are chosen at announcement (p. 25), and on success they are
+   *  queued into a combat with the PREY's vampire in the first slot, since
+   *  it goes first [LSJ 20070319]. docs/hand-rush-design.md §4.6 */
+  | { kind: "actionPairCombat"; readyGainsBlood: number }
   /** "This Anarch gets 1 optional maneuver / +1 strength during that
    *  combat" as a clause of its OWN, separate from the rush that starts
    *  it (Make the Misere, where the rush is unconditional and each rider

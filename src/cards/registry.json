@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-03T02:04:43.507Z",
+ "fetchedAt": "2026-11-04T00:16:24.897Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -7002,6 +7002,28 @@
    },
    "supported": true
   },
+  "100801": {
+   "card": {
+    "kind": "library",
+    "id": 100801,
+    "name": "Games of Instinct",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a ready Sabbat vampire.\nⒹ Enter combat with an older vampire controlled by another Methuselah. At the end of that combat, if only one combatant is ready, that ready vampire gains blood equal to the opposing vampire's capacity from the blood bank.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/gamesofinstinct.jpg",
+    "sets": [
+     "Gehenna",
+     "Kindred Most Wanted"
+    ]
+   },
+   "supported": true
+  },
   "100807": {
    "card": {
     "kind": "library",
@@ -7548,6 +7570,34 @@
     "sets": [
      "Jyhad",
      "Vampire: The Eternal Struggle"
+    ]
+   },
+   "supported": true
+  },
+  "100886": {
+   "card": {
+    "kind": "library",
+    "id": 100886,
+    "name": "Harass",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Ⓓ Enter combat with a vampire who has 3 or fewer blood or with a locked minion. This acting minion gets 1 optional press, only usable to continue combat, during that combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/harass.jpg",
+    "sets": [
+     "Camarilla Edition",
+     "Anarchs",
+     "Black Hand",
+     "Legacies of Blood",
+     "Third Edition",
+     "Lords of the Night",
+     "Keepers of Tradition",
+     "Sabbat Preconstructed"
     ]
    },
    "supported": true
@@ -10351,6 +10401,29 @@
    },
    "supported": true
   },
+  "101241": {
+   "card": {
+    "kind": "library",
+    "id": 101241,
+    "name": "Monomancy",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Requires a ready Sabbat vampire.\nⒹ Enter combat with a ready Sabbat vampire controlled by another Methuselah. That vampire may end combat before range is chosen during the first round of combat. If he or she does so, put this card on him or her; that vampire gets -1 bleed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/monomancy.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101242": {
    "card": {
     "kind": "library",
@@ -12902,6 +12975,29 @@
    },
    "supported": true
   },
+  "101522": {
+   "card": {
+    "kind": "library",
+    "id": 101522,
+    "name": "Purity of the Beast",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "+1 stealth action. Requires a ready vampire.\nⒹ Enter combat with an ally controlled by your prey. The acting vampire gets +2 strength in that combat.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/purityofthebeast.jpg",
+    "sets": [
+     "Ancient Hearts",
+     "Final Nights",
+     "Third Edition"
+    ]
+   },
+   "supported": true
+  },
   "101523": {
    "card": {
     "kind": "library",
@@ -13923,6 +14019,28 @@
     "sets": [
      "Jyhad",
      "Vampire: The Eternal Struggle"
+    ]
+   },
+   "supported": true
+  },
+  "101661": {
+   "card": {
+    "kind": "library",
+    "id": 101661,
+    "name": "Rumble",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Requires a Sabbat vampire.\nⒹ Enter combat with a ready minion controlled by another Methuselah. In that combat, your hand size is increased by one. If this acting vampire is not ready at the end of the action, you burn 1 pool.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/rumble.jpg",
+    "sets": [
+     "Third Edition",
+     "Heirs to the Blood"
     ]
    },
    "supported": true
@@ -15864,6 +15982,30 @@
      "New Blood II",
      "New Blood III",
      "Sabbat V5"
+    ]
+   },
+   "supported": true
+  },
+  "101947": {
+   "card": {
+    "kind": "library",
+    "id": 101947,
+    "name": "Taunt the Caged Beast",
+    "types": [
+     "Action"
+    ],
+    "clans": [],
+    "disciplines": [
+     "ani"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[ani] Ⓓ Enter combat with any vampire, with an optional maneuver in that combat.\n[ANI] Choose a ready vampire controlled by your predator and another controlled by your prey (not usable when only one other Methuselah is in the game). The chosen vampires enter combat. If only one is ready at the end of that combat, he or she gains 4 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/tauntthecagedbeast.jpg",
+    "sets": [
+     "Sword of Caine",
+     "Keepers of Tradition"
     ]
    },
    "supported": true

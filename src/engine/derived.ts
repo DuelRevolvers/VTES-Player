@@ -21,6 +21,7 @@ import type {
   PlayCostCardType,
   PlayCostMod,
   ReferendumFrame,
+  RushTargetFilter,
   SeatId,
 } from "./state.ts";
 import type { HandlerRegistry } from "./handlers.ts";
@@ -52,6 +53,40 @@ export function capacityOf(m: MinionState): number {
     if (ifClan !== undefined && m.clan === ifClan.clan) capacity += ifClan.amount;
   }
   return capacity;
+}
+
+/**
+ * Does `m` satisfy every term a rush card prints about its target?
+ *
+ * Asked twice — when the option is enumerated and again when the action
+ * resolves unblocked — because blood, lock state and capacity all move in
+ * between. A target that no longer qualifies makes the action fizzle: the
+ * cost is paid and it counts as successful, but no combat occurs
+ * [Ambush ruling] [LSJ 20070411]. One function, so the two readings
+ * cannot drift. Readiness and untargetability are the caller's: they are
+ * rules about any rush, not terms on the card. docs/hand-rush-design.md §4.1
+ */
+export function rushTargetOk(
+  state: GameState,
+  actor: MinionState,
+  m: MinionState,
+  f: RushTargetFilter,
+): boolean {
+  if (f.targets === "vampire" && m.kind !== "vampire") return false;
+  if (f.targets === "ally" && m.kind !== "ally") return false;
+  if (f.lockedOnly && !m.locked) return false;
+  if (f.othersOnly && m.controller === actor.controller) return false;
+  if (f.controlledBy === "prey" && m.controller !== preyOf(state, actor.controller)) return false;
+  if (f.sect !== undefined && m.sect !== f.sect) return false;
+  // "Older" is a higher capacity (p. 5) — the derived one.
+  if (f.olderOnly && capacityOf(m) <= capacityOf(actor)) return false;
+  if (f.maxBlood !== undefined) {
+    // "…a VAMPIRE who has 3 or fewer blood or a locked MINION": an ally's
+    // life never counts as blood here, but a locked ally qualifies.
+    const low = m.kind === "vampire" && m.blood <= f.maxBlood;
+    if (!low && !(f.orAnyLocked && m.locked)) return false;
+  }
+  return true;
 }
 
 /**

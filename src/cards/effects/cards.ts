@@ -16183,6 +16183,181 @@ export const cardSpecs: CardSpec[] = [
       },
     ],
   },
+  // --- Wave 114: hand rush cards ---
+  // Every target term goes through `rushTargetOk`, at announcement and
+  // again at resolution; the rush combat runs inside resolution.
+  // docs/hand-rush-design.md
+  {
+    // "Requires a ready Sabbat vampire. Ⓓ Enter combat with an older
+    //  vampire controlled by another Methuselah. At the end of that combat,
+    //  if only one combatant is ready, that ready vampire gains blood equal
+    //  to the opposing vampire's capacity from the blood bank."
+    // "That ready vampire" is EITHER combatant (§4.3), and the gain comes
+    // after combat ends, so no combat card follows it [LSJ 20100324].
+    krcgId: 100801,
+    name: "Games of Instinct",
+    cardType: "action",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "actionEnterCombat",
+            targets: "vampire",
+            othersOnly: true,
+            olderOnly: true,
+            outcome: {
+              when: "oneCombatantReady",
+              effect: { kind: "readyGainsBlood", opposingCapacity: true },
+            },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Ⓓ Enter combat with a vampire who has 3 or fewer blood or with a
+    //  locked minion. This acting minion gets 1 optional press, only usable
+    //  to continue combat, during that combat."
+    // Unblocked, a target that now has more than 3 blood AND is unlocked
+    // makes the action fizzle [LSJ 20070411] [LSJ 20090514].
+    krcgId: 100886,
+    name: "Harass",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "actionEnterCombat",
+            targets: "minion",
+            maxBlood: 3,
+            orAnyLocked: true,
+            riders: { pressContinueOnly: 1 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a ready Sabbat vampire. Ⓓ Enter combat
+    //  with a ready Sabbat vampire controlled by another Methuselah. That
+    //  vampire may end combat before range is chosen during the first
+    //  round of combat. If he or she does so, put this card on him or her;
+    //  that vampire gets -1 bleed."
+    // Only the card's own offer attaches it [RTR 20020501] (§4.4).
+    krcgId: 101241,
+    name: "Monomancy",
+    cardType: "action",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "actionEnterCombat",
+            targets: "vampire",
+            othersOnly: true,
+            sect: "sabbat",
+            opposingMayEnd: { statics: { bleed: -1 } },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "+1 stealth action. Requires a ready vampire. Ⓓ Enter combat with an
+    //  ally controlled by your prey. The acting vampire gets +2 strength in
+    //  that combat."
+    krcgId: 101522,
+    name: "Purity of the Beast",
+    cardType: "action",
+    bloodCost: 0,
+    requiresVampire: true,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "actionEnterCombat",
+            targets: "ally",
+            controlledBy: "prey",
+            riders: { strength: 2 },
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "Requires a Sabbat vampire. Ⓓ Enter combat with a ready minion
+    //  controlled by another Methuselah. In that combat, your hand size is
+    //  increased by one. If this acting vampire is not ready at the end of
+    //  the action, you burn 1 pool."
+    // The hand size is a rider on the rush's own combat; the pool burn is
+    // read at the end of the ACTION, so a blocked Rumble pays it too (§4.5).
+    krcgId: 101661,
+    name: "Rumble",
+    cardType: "action",
+    bloodCost: 0,
+    requiresSect: ["sabbat"],
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          {
+            kind: "actionEnterCombat",
+            targets: "minion",
+            othersOnly: true,
+            riders: { handSize: 1 },
+            burnPoolIfActorNotReady: 1,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    // "[ani] Ⓓ Enter combat with any vampire, with an optional maneuver in
+    //  that combat.
+    //  [ANI] Choose a ready vampire controlled by your predator and another
+    //  controlled by your prey (not usable when only one other Methuselah
+    //  is in the game). The chosen vampires enter combat. If only one is
+    //  ready at the end of that combat, he or she gains 4 blood."
+    // The superior prints no Ⓓ: undirected, and its actor does not fight.
+    // The prey's vampire goes first [LSJ 20070319] (§4.6).
+    krcgId: 101947,
+    name: "Taunt the Caged Beast",
+    cardType: "action",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "ani",
+        effects: [{ kind: "actionEnterCombat", targets: "vampire", riders: { maneuver: 1 } }],
+      },
+      {
+        level: "superior",
+        discipline: "ani",
+        effects: [{ kind: "actionPairCombat", readyGainsBlood: 4 }],
+      },
+    ],
+  },
   {
     // "Requires a Sabbat vampire. Ⓓ Bleed with +1 bleed. Anarchs get -1
     //  intercept during this action. If this vampire is Tzimisce and the

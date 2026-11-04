@@ -95,6 +95,13 @@ function endTurn(engine: VtesEngine, state: GameState): void {
   expect(turnFrame(state).seat).not.toBe(start);
 }
 
+/** Pass until the rush's combat starts or the action is over. The rush
+ *  combat runs INSIDE resolution, with the action frame still on the stack
+ *  (docs/hand-rush-design.md §5.1), so "the action is gone" is only the
+ *  fizzle's stopping point. */
+const rushResolved = (state: GameState) => () =>
+  combat(state) !== undefined || !state.frames.some((f) => f.kind === "action");
+
 /** Announce V1's rush on N and pass the action through to resolution. */
 function rushN(name: string, cardId: string, edit?: (s: GameState) => void, midAction?: (s: GameState) => void) {
   const state = minionPhase("Alice", (s) => {
@@ -104,7 +111,7 @@ function rushN(name: string, cardId: string, edit?: (s: GameState) => void, midA
   const engine = new VtesEngine(state, testRegistry);
   runTrace(engine, [["Alice", `act:${name}:${cardId}:rush:V1:N`]]);
   midAction?.(state);
-  passUntil(engine, () => !state.frames.some((f) => f.kind === "action"));
+  passUntil(engine, rushResolved(state));
   return { state, engine };
 }
 
@@ -176,7 +183,7 @@ describe("the bearer's rush", () => {
       const engine = new VtesEngine(state, testRegistry);
       runTrace(engine, [["Alice", "act:Scourge:sc:rush:V1:N"]]);
       mid?.(state);
-      passUntil(engine, () => !state.frames.some((f) => f.kind === "action"));
+      passUntil(engine, rushResolved(state));
       return state;
     };
     expect(combat(go())).toBeDefined();

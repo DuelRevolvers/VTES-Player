@@ -579,6 +579,13 @@ function fourSeatGame(seed: number): GameState {
     "Hunting the Beast",
     "Hunter's Mark",
     "Make the Misere",
+    // Hand rush cards (docs/hand-rush-design.md).
+    "Games of Instinct",
+    "Harass",
+    "Monomancy",
+    "Purity of the Beast",
+    "Rumble",
+    "Taunt the Caged Beast",
     // Hunting grounds and the other blood locations
     // (docs/blood-locations-design.md).
     "Carfax Abbey",

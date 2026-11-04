@@ -133,7 +133,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 329 test files, 3699 tests**, with `npm run typecheck`,
+**Green baseline: 330 test files, 3732 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -778,6 +778,8 @@ JSON and for read-only queries.
 - `act:<Name>:<cardInstanceId>:<targetMinion>` — granted rush;
   `act:<Name>:<cardInstanceId>:<what>:<actingMinion>` for a non-rush grant
   (`burn`, `counter`, `raid`, …; one card may grant several)
+- `endcombat:<Name>:<cardInstanceId>` — an end-combat offer from a card
+  NOT in play, on the combat frame (Monomancy's target)
 - `maneuver:credit`, `terms:<…>`, `vote:<source>:for|against`
   (source = minion id — a vampire's title AND card-granted votes, one group
   (p. 28) — `blood:<minion>:<offer>`, `edge`, `grant:<cardId>` /
@@ -928,7 +930,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-232 files under `docs/`, one per mechanic that took a decision. **Read the
+234 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -962,7 +964,10 @@ action-toll helper), granted-hunts (Week of Nightmares' steal as a real
 hunt; the p. 19 stuck rule in the option generator), equipment-rush
 (wave 113, built 0.11.58: a card on the bearer that provides a rush, the
 [RTR 19960221] fizzle for any card on the actor, `equipmentMovable`, the
-shared `addUnlockUpkeep`).
+shared `addUnlockUpkeep`), hand-rush (wave 114, built 0.11.59: one rush
+target predicate `rushTargetOk` at announcement and resolution, and a
+successful rush's combat runs INSIDE resolution, step `rushCombat`, before
+the after-resolution window and the end-of-action tail in `finishAction`).
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

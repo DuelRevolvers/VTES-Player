@@ -1006,6 +1006,53 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 114 — hand rush cards (6 cards), 2026-11-03
+
+**Cards:** Games of Instinct, Harass, Monomancy, Purity of the Beast and
+Rumble (T1), and Taunt the Caged Beast (T2, Animalism). Each is an action
+card from the hand that enters combat. Big Game waits for Red List
+vampires (owner ruling, Q1). Design and owner rulings:
+`hand-rush-design.md`. Version 0.11.59. Library 932, crypt 217, total
+1,149.
+
+**The mechanic** is `actionEnterCombat` again. New pieces:
+- **One target predicate**, `rushTargetOk` in `derived.ts`, reads every
+  printed term (`othersOnly`, `targets: "ally"`, `controlledBy: "prey"`,
+  `sect`, `olderOnly`, and `maxBlood` with `orAnyLocked`). Enumeration and
+  resolution both call it, so Harass's fizzle [LSJ 20070411] and Ambush's
+  are the same code. `ActionFrame.rushTargetFilter` replaces
+  `rushRequiresLockedTarget`.
+- Two rush riders: `pressContinueOnly` (Harass) and `handSize` (Rumble,
+  through the combat-scoped `addHandSizeBonus`).
+- Two outcome effects: `readyGainsBlood` (Games of Instinct reads a burned
+  opponent's capacity off its ash-heap entry) and `attachToOpposing`
+  (Monomancy). One helper, `holdsCardForOutcome`, decides which outcomes
+  hold the card aside.
+- Monomancy's end-combat offer, from a card not in play: a frame rider
+  (`CombatFrame.opposingMayEnd`) and a new built-in option,
+  `endcombat:<Name>:<cardInstanceId>`, ended through
+  `endCombatFromOutside`. Only that offer attaches the card
+  [RTR 20020501].
+- `actionPairCombat` (Taunt `[ANI]`): two chosen vampires queued into a
+  combat, with the prey's vampire first [LSJ 20070319].
+- `poolBurnIfActorNotReady` (Rumble), read in `finishAction`.
+
+**Two engine defects, both fixed** (§3 of the design doc):
+- **D1:** "Do not replace until after this action" drew before a
+  successful rush's combat, so Bum's Rush replaced itself before it
+  fought [LSJ 20001120].
+- **D2:** the after-resolution window opened before a successful rush's
+  combat, so Freak Drive could unlock a rusher before the fight.
+
+The fix (owner ruling, Q2): a successful rush's combat now runs inside
+resolution, with the action frame still on the stack (new step
+`rushCombat`), which is where a blocked action's combat already ran
+(p. 27). The order is the combat, then the after-resolution window, then
+the end-of-action tail in `finishAction` (the replacement draws and
+Rumble's burn). Go-getter's continued rush goes through the same path and
+doesn't reopen the window. Two existing test files had asserted the old
+order (`equipment-rush`, and Cappadocian Crypt in `blood-locations`).
+
 ### Wave 113 — equipment rush (3 cards), 2026-11-02
 
 **Cards:** Alastor (political action), Eye of Hazimel and Talbot's
