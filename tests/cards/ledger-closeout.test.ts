@@ -492,6 +492,54 @@ describe("Go-getter (102355) — [OBF] continues a blocked action", () => {
     expect(burns.length).toBeLessThanOrEqual(1);
   });
 
+  it("a continued POLITICAL action calls its referendum once, inside the action (0.11.61)", () => {
+    // hand-rush-design §5.3: the continued action calls its referendum the
+    // same way an unblocked one does, then only finishes.
+    const state = threeSeatGame();
+    const v1 = state.seats[0]!.minions[0]!;
+    v1.clan = "Ravnos";
+    v1.disciplines = { obf: "superior" };
+    v1.blood = 4;
+    state.seats[0]!.hand.push(
+      { id: "au1", name: "Anarchist Uprising" },
+      { id: "gg1", name: "Go-getter" },
+    );
+    // An undirected action has +1 stealth (p. 22), so the blocker needs 2.
+    withIntercept(state.seats[1]!.minions[0]!, 2);
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:Anarchist Uprising"]]);
+    if (!walkTo(engine, "block:W", 30)) throw new Error("W could not block the political action");
+    runTrace(engine, [["Bob", "block:W"]]);
+    expect(walkTo(engine, "play:Go-getter:superior", 90)).toBe(true);
+    const id = optionIds(engine).find((o) => o.startsWith("play:Go-getter:superior"))!;
+    runTrace(engine, [["Alice", id]]);
+    step(engine, 120);
+    const log = state.eventLog;
+    const called = log.filter((e) => e.type === "ReferendumCalled");
+    expect(log.some((e) => e.type === "ActionContinued")).toBe(true);
+    expect(called).toHaveLength(1);
+    expect(log.filter((e) => e.type === "ReferendumResolved")).toHaveLength(1);
+    expect(log.findIndex((e) => e.type === "ReferendumCalled")).toBeGreaterThan(
+      log.findIndex((e) => e.type === "ActionContinued"),
+    );
+    // The blocked resolution is the only one, and the action is over.
+    expect(log.filter((e) => e.type === "ActionResolved")).toHaveLength(1);
+    expect(state.frames.some((f) => f.kind === "action" || f.kind === "referendum")).toBe(false);
+  });
+
+  it("a blocked political action with no Go-getter calls no referendum", () => {
+    const state = threeSeatGame();
+    state.seats[0]!.hand.push({ id: "au1", name: "Anarchist Uprising" });
+    withIntercept(state.seats[1]!.minions[0]!, 2);
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:Anarchist Uprising"]]);
+    if (!walkTo(engine, "block:W", 30)) throw new Error("W could not block the political action");
+    runTrace(engine, [["Bob", "block:W"]]);
+    step(engine, 120);
+    expect(state.eventLog.some((e) => e.type === "ActionResolved")).toBe(true);
+    expect(state.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(false);
+  });
+
   it("is not usable during a bleed, even blocked", () => {
     const state = threeSeatGame();
     const v1 = state.seats[0]!.minions[0]!;
