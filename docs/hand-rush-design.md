@@ -324,6 +324,31 @@ the following:
   the end-of-action tail. This fixes D1 and D2 together.
 - **Q3: all five readings approved** as §4 describes them.
 
+### 5.2 D3: two more "after action resolution" clauses (0.11.60)
+
+The Q2 answer reached the window and the replacement draw, but not the
+two other clauses that print "after action resolution". Both still ran
+before a successful rush's combat:
+
+- **The unlock offers** from `addAfterResolutionUnlock`: Paths in Two
+  Worlds, Gifts From Hereafter, and every crypt `unlockAfterAction` (Aline
+  Gädeke, Keegan, "Mother" Anja Giovanni and the rest). They were queued
+  during resolution and flushed on top of the combat frame, so the offer
+  was asked first.
+- **Daring the Dawn's damage** (`afterResolutionDamage`). Applied before
+  the combat, it could send the actor to torpor, and then the rush had no
+  ready actor and started no combat at all.
+
+The fix: when a rush combat starts, `resolveAction` holds both, and
+`afterRushCombat` (the `settle` branch for `rushCombat`) runs them once
+the combat is over, in the same order as the plain path: the damage, the
+window, then the offers. Go-getter's rush skips them, because its action
+already resolved as blocked and ran them then. Tests: the two D3 cases in
+`tests/cards/hand-rush.test.ts`. The Anja union test in
+`tests/cards/granted-action-requirements.test.ts` was pinning the old
+order (Umbrous Clutch is a rush) and now expects the offer after the
+combat.
+
 ## 6. What isn't in this wave
 
 - **Big Game** (§5.1, Q1).

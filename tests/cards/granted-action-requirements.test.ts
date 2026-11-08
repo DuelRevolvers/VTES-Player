@@ -183,7 +183,10 @@ describe("a granted action requires the clan its grant lists [LSJ 20080604]", ()
     ]);
     expect(handlers["Umbrous Clutch"]?.requiresClans?.() ?? []).not.toContain("Hecata");
     expect(succeeded(state)).toBe(true);
-    expect(walkTo(engine, 'choice:"Mother" Anja Giovanni (G6)', 3)).toBe(true);
+    // Umbrous Clutch is a rush, so the offer waits for its combat to end
+    // (docs/hand-rush-design.md §5.2).
+    expect(walkTo(engine, 'choice:"Mother" Anja Giovanni (G6)', 40)).toBe(true);
+    expect(state.eventLog.some((e) => e.type === "CombatEnded")).toBe(true);
   });
 
   it("Keegan has no positive to build: no supported grant lists Gangrel", () => {

@@ -15,7 +15,10 @@
 import { describe, expect, it } from "vitest";
 import type { CombatFrame, GameState, MinionState } from "../../src/engine/index.ts";
 import { VtesEngine } from "../../src/engine/index.ts";
+import { buildHandlerRegistry } from "../../src/cards/effects/cards.ts";
 import { makeAlly, makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
+
+const handlers = buildHandlerRegistry();
 
 function must(state: GameState, id: string): MinionState {
   const m = state.seats.flatMap((s) => s.minions).find((x) => x.id === id);
@@ -574,5 +577,47 @@ describe("the rush combat runs inside resolution (D1, D2)", () => {
     walk(engine, state, () => engine.decision()?.window === "action.afterResolution");
     expect(state.eventLog.some((e) => e.type === "CombatEnded")).toBe(true);
     expect(ids(engine).some((i) => i.startsWith("play:Freak Drive:"))).toBe(true);
+  });
+
+  it("D3: Daring the Dawn's damage lands AFTER the rush combat, not before it", () => {
+    // 2 aggravated damage puts V1 in torpor. Before the combat, that would
+    // leave the rush with no ready actor, and no combat at all.
+    const state = game(["Bum's Rush", "Daring the Dawn"], (s) => {
+      Object.assign(must(s, "V1"), { disciplines: { for: "basic" }, blood: 3 });
+    });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, announce("play:Bum's Rush:basic:V1:W:a0"));
+    walk(engine, state, actionOver(state), { Alice: ["play:Daring the Dawn:basic"] });
+    expect(seat(state, "Alice").hand).toEqual([]); // Daring the Dawn was played
+    expect(combatBegan(state)).toBe(true);
+    expect(must(state, "V1").inTorpor).toBe(true);
+  });
+
+  it("D3: an after-resolution unlock is offered AFTER the rush combat, not before it", () => {
+    // Aline Gädeke: "…can burn 1 blood to unlock after another anarch you
+    // control performs a successful action."
+    const state = game(["Bum's Rush"], (s) => {
+      Object.assign(must(s, "V1"), { sect: "anarch" });
+      const aline = makeMinion("V2", "Alice", { blood: 4, sect: "anarch", locked: true });
+      const entry = handlers["Aline Gädeke (G6)"]!.cryptEntry!();
+      aline.attached.push({
+        card: { id: aline.id, name: "Aline Gädeke (G6)" },
+        controller: "Alice",
+        owner: "Alice",
+        locked: false,
+        usedThisPhase: false,
+        statics: entry.statics,
+        tags: entry.tags,
+      });
+      seat(s, "Alice").minions.push(aline);
+    });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [...announce("play:Bum's Rush:basic:V1:W:a0"), ...unblocked]);
+    expect(engine.decision()!.window).toBe("combat.beforeRange");
+    walk(engine, state, () => ids(engine).some((i) => i.startsWith("choice:Aline")));
+    expect(state.eventLog.some((e) => e.type === "CombatEnded")).toBe(true);
+    expect(combat(state)).toBeUndefined();
+    runTrace(engine, [["Alice", "choice:Aline"]]);
+    expect(must(state, "V2").locked).toBe(false);
   });
 });

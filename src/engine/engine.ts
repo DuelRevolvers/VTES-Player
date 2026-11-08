@@ -1614,9 +1614,10 @@ export class VtesEngine implements EngineOps {
         }
         if (top.step === "rushCombat") {
           // A successful rush's combat has finished — and with it, every
-          // question it raised. On to the after-resolution window, then the
-          // end of the action. docs/hand-rush-design.md §5.1
-          this.openAfterResolution(top, true);
+          // question it raised. On to what was printed for after action
+          // resolution, then the end of the action.
+          // docs/hand-rush-design.md §5.1, §5.2
+          this.afterRushCombat(top);
           continue;
         }
         if (top.step === "afterResolution" && cycleQuiescent(top.cycle)) {
@@ -9300,34 +9301,69 @@ export class VtesEngine implements EngineOps {
     this.deferChoices = true;
     try {
       this.resolveActionInner(af, success);
-      // The offers registered above. Raised here, they are QUEUED (the
-      // action is resolving) and flushed the instant it is over, which is
-      // exactly "after action resolution" — no new window, and no change
-      // to the after-resolution probe, which only sees cards.
-      for (const u of af.afterResolutionUnlocks ?? []) {
-        if (u.ifSuccessful && !success) continue;
-        const payer = findMinion(this.state, u.payer);
-        const target = findMinion(this.state, u.target);
-        // Both can have left play, and an unlocked target has nothing to
-        // gain — the offer is simply not made.
-        if (!payer || !target || payer.blood < u.blood || !target.locked) continue;
-        this.raiseChoice({
-          seat: payer.controller,
-          cardName: u.cardName,
-          cardId: u.cardId,
-          key: "unlockAfterResolution",
-          params: { payer: u.payer, target: u.target },
-          optional: true,
-        });
-      }
+      // A successful rush is still fighting, and its offers wait for the
+      // combat to end (`afterRushCombat`).
+      if (af.step !== "rushCombat") this.raiseAfterResolutionUnlocks(af, success);
     } finally {
-      this.deferChoices = false;
-      // The action frame (and anything it pushed) is settled; now the
-      // questions it raised can be asked, in the order they were raised.
-      const queued = this.deferredChoices;
-      this.deferredChoices = [];
-      for (const c of queued) this.raiseChoice(c);
+      this.flushDeferredChoices();
     }
+  }
+
+  /**
+   * A successful rush's combat is over, so what the cards printed for
+   * "after action resolution" happens now, in `resolveAction`'s order: the
+   * damage, the window, the unlock offers. Until 0.11.60 the damage and the
+   * offers came BEFORE the combat, the same defect as D1 and D2
+   * (docs/hand-rush-design.md §5.2).
+   *
+   * Go-getter's rush comes back here too. Its action already resolved, as
+   * blocked, and its window has come and gone — so it only finishes.
+   */
+  private afterRushCombat(af: ActionFrame): void {
+    if (af.afterResolutionOpened) {
+      this.openAfterResolution(af, true);
+      return;
+    }
+    this.deferChoices = true;
+    try {
+      this.applyAfterResolutionDamage(af);
+      this.openAfterResolution(af, true);
+      this.raiseAfterResolutionUnlocks(af, true);
+    } finally {
+      this.flushDeferredChoices();
+    }
+  }
+
+  /** The offers `addAfterResolutionUnlock` registered. Raised while choices
+   *  are deferred, they are QUEUED and flushed the instant the action is
+   *  over, which is exactly "after action resolution" — no new window, and
+   *  no change to the after-resolution probe, which only sees cards. */
+  private raiseAfterResolutionUnlocks(af: ActionFrame, success: boolean): void {
+    for (const u of af.afterResolutionUnlocks ?? []) {
+      if (u.ifSuccessful && !success) continue;
+      const payer = findMinion(this.state, u.payer);
+      const target = findMinion(this.state, u.target);
+      // Both can have left play, and an unlocked target has nothing to
+      // gain — the offer is simply not made.
+      if (!payer || !target || payer.blood < u.blood || !target.locked) continue;
+      this.raiseChoice({
+        seat: payer.controller,
+        cardName: u.cardName,
+        cardId: u.cardId,
+        key: "unlockAfterResolution",
+        params: { payer: u.payer, target: u.target },
+        optional: true,
+      });
+    }
+  }
+
+  /** The action frame (and anything it pushed) is settled; now the
+   *  questions it raised can be asked, in the order they were raised. */
+  private flushDeferredChoices(): void {
+    this.deferChoices = false;
+    const queued = this.deferredChoices;
+    this.deferredChoices = [];
+    for (const c of queued) this.raiseChoice(c);
   }
 
   /** Spend the counters this action announced it would pay with, and
@@ -9643,9 +9679,21 @@ export class VtesEngine implements EngineOps {
         if (m?.locked) this.emit({ type: "MinionUnlocked", minion: id });
       }
     }
-    // "This vampire takes N unpreventable environmental aggravated damage
-    // after action resolution" (Daring the Dawn) — no combat, so no
-    // prevention window: it resolves straight away.
+    af.resolvedSuccess = success;
+    // A successful rush fights NOW, inside resolution — where a blocked
+    // action's combat already runs (p. 27) — so the combat comes before the
+    // after-resolution damage and window and the end-of-action tail
+    // [LSJ 20001120] [LSJ 20101021]. `settle` resumes at `rushCombat` once
+    // it is over. docs/hand-rush-design.md §3, §5.1, §5.2
+    if (success && this.startRushCombat(af)) return;
+    this.applyAfterResolutionDamage(af);
+    this.openAfterResolution(af, success);
+  }
+
+  /** "This vampire takes N unpreventable environmental aggravated damage
+   *  after action resolution" (Daring the Dawn) — no combat, so no
+   *  prevention window: it resolves straight away. */
+  private applyAfterResolutionDamage(af: ActionFrame): void {
     for (const d of af.afterResolutionDamage) {
       const victim = findMinion(this.state, d.minion);
       if (!victim) continue;
@@ -9673,14 +9721,6 @@ export class VtesEngine implements EngineOps {
       }
       this.applyEnvironmentalDamage(d.minion, d.amount, d.aggravated);
     }
-    af.resolvedSuccess = success;
-    // A successful rush fights NOW, inside resolution — where a blocked
-    // action's combat already runs (p. 27) — so the combat comes before the
-    // after-resolution window and the end-of-action tail [LSJ 20001120]
-    // [LSJ 20101021]. `settle` resumes at `rushCombat` once it is over.
-    // docs/hand-rush-design.md §3, §5.1
-    if (success && this.startRushCombat(af)) return;
-    this.openAfterResolution(af, success);
   }
 
   /**
