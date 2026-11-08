@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-08T21:20:37.584Z",
+ "fetchedAt": "2026-11-08T21:49:39.609Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -31415,6 +31415,132 @@
     {
      "id": 201776,
      "copies": 1
+    }
+   ]
+  },
+  {
+   "set": "Sabbat Preconstructed",
+   "name": "Libertine Ball",
+   "cards": [
+    {
+     "id": 100099,
+     "copies": 4
+    },
+    {
+     "id": 100323,
+     "copies": 4
+    },
+    {
+     "id": 100410,
+     "copies": 7
+    },
+    {
+     "id": 100444,
+     "copies": 1
+    },
+    {
+     "id": 100519,
+     "copies": 2
+    },
+    {
+     "id": 100541,
+     "copies": 1
+    },
+    {
+     "id": 100633,
+     "copies": 9
+    },
+    {
+     "id": 100640,
+     "copies": 6
+    },
+    {
+     "id": 100652,
+     "copies": 3
+    },
+    {
+     "id": 100779,
+     "copies": 3
+    },
+    {
+     "id": 100945,
+     "copies": 1
+    },
+    {
+     "id": 101056,
+     "copies": 6
+    },
+    {
+     "id": 101144,
+     "copies": 4
+    },
+    {
+     "id": 101321,
+     "copies": 4
+    },
+    {
+     "id": 101346,
+     "copies": 3
+    },
+    {
+     "id": 101387,
+     "copies": 3
+    },
+    {
+     "id": 101388,
+     "copies": 2
+    },
+    {
+     "id": 101610,
+     "copies": 3
+    },
+    {
+     "id": 101686,
+     "copies": 2
+    },
+    {
+     "id": 101949,
+     "copies": 4
+    },
+    {
+     "id": 102113,
+     "copies": 4
+    },
+    {
+     "id": 102151,
+     "copies": 1
+    },
+    {
+     "id": 200717,
+     "copies": 1
+    },
+    {
+     "id": 200740,
+     "copies": 1
+    },
+    {
+     "id": 200787,
+     "copies": 3
+    },
+    {
+     "id": 200800,
+     "copies": 1
+    },
+    {
+     "id": 200851,
+     "copies": 1
+    },
+    {
+     "id": 201005,
+     "copies": 1
+    },
+    {
+     "id": 201514,
+     "copies": 2
+    },
+    {
+     "id": 201515,
+     "copies": 2
     }
    ]
   }

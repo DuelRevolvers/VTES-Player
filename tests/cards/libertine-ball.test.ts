@@ -10,6 +10,45 @@
  * The masters are PLAYED FROM HAND, never hand-built as entries, so these
  * tests exercise the compiled specs rather than a copy of them.
  */
+import { preconDeck, supportedPrecons, importDeck } from "../../src/ui/deckimport";
+
+describe("the deck itself (0.11.65: legacy precons in the chooser)", () => {
+  it("is offered in the chooser, playable as printed", () => {
+    const s = supportedPrecons().find(
+      (p) => p.set === "Sabbat Preconstructed" && p.name === "Libertine Ball"
+    );
+    expect(s).toBeDefined();
+    expect(s!.problems).toEqual([]);
+    expect(s!.playable).toBe(true);
+    expect([s!.cryptCount, s!.libraryCount]).toEqual([12, 77]);
+  });
+
+  it("deals every card, and its list survives the deck importer", () => {
+    const d = preconDeck("Sabbat Preconstructed", "Libertine Ball", "A");
+    expect(d).not.toBeNull();
+    expect([d!.crypt.length, d!.library.length]).toEqual([12, 77]);
+    const counts = new Map<string, number>();
+    for (const n of d!.library) counts.set(n, (counts.get(n) ?? 0) + 1);
+    const text = [
+      "Crypt:",
+      "1 Jonathan Gursel",
+      "1 Justine Chen, Innocent",
+      "3 Klaus Konrecht",
+      "1 L'Épuisette",
+      "1 Loonar",
+      "1 Monique Kim",
+      "2 Conchita Morales",
+      "2 Guggenheim",
+      "Library:",
+      ...[...counts].map(([n, c]) => `${c} ${n}`),
+    ].join("\n");
+    const r = importDeck(text, "A");
+    expect(r.report.unsupported).toEqual([]);
+    expect(r.report.ok).toBe(true);
+    expect(r.deck?.crypt.length).toBe(12);
+    expect(r.deck?.library.length).toBe(77);
+  });
+});
 
 import { describe, expect, it } from "vitest";
 import type { GameState, MinionState, ReferendumFrame } from "../../src/engine/index.ts";

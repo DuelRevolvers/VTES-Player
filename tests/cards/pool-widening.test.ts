@@ -81,9 +81,20 @@ describe("what the widening admits", () => {
     expect(laibon.map((c) => c.name)).toEqual([]);
   });
 
-  it("leaves the precons V5-only — a legacy set's decks are half-built here", () => {
+  it("admits a legacy precon only when every card in it is implemented", () => {
     const outside = reg.precons.filter((p) => !sets.includes(p.set));
-    expect(outside.map((p) => `${p.set}: ${p.name}`)).toEqual([]);
+    const half = outside.filter((p) =>
+      p.cards.some(({ id }) => {
+        const e = reg.entries[id];
+        return !e || (e.card.kind === "library" && !e.supported);
+      })
+    );
+    expect(half.map((p) => `${p.set}: ${p.name}`)).toEqual([]);
+    // The positive: Libertine Ball is whole (wave 115), so it is offered.
+    // Without this, an empty `outside` would pass the line above for nothing.
+    expect(outside.map((p) => `${p.set}: ${p.name}`)).toContain(
+      "Sabbat Preconstructed: Libertine Ball"
+    );
   });
 });
 

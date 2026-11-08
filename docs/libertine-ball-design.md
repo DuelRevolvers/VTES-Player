@@ -76,10 +76,18 @@ printed text decides:
 Tests: `tests/cards/libertine-ball.test.ts` (16 tests). Both masters are
 played from the hand, so the tests run the compiled specs.
 
-## §5 Not done: dealing the deck
+## §5 Dealing the deck (0.11.65)
 
-Libertine Ball is 100% implemented, but it isn't in the precon chooser.
-`collectPrecons` takes only V5 sets on purpose
-(`card-status-by-set.md`, "Precon decks outside V5"). Every card in it is now in the registry, so pasting its list into the
-deck importer should work, but no test checks that yet. Adding finished legacy precons to
-the chooser is a separate decision for the owner.
+Owner ruling 2026-11-08: a legacy precon joins the chooser when it is
+100% implemented. `build-registry.mts` now runs `collectPrecons` a second
+time over the legacy sets, and keeps a deck only if every card in it is in
+the registry and every library card is `supported`. A half-built deck
+still stays out, which was the original reason precons were V5-only.
+
+- Libertine Ball plays as **Politician** (`config/deck-playstyles.json`)
+  and has a chooser line in `PRECON_STYLE`.
+- `tests/cards/libertine-ball.test.ts` checks that it's offered, playable
+  as printed (12 crypt, 77 library), and that its list survives
+  `importDeck`.
+- `tests/cards/pool-widening.test.ts` asserts that no legacy precon has an
+  unimplemented card, with Libertine Ball as the positive control.

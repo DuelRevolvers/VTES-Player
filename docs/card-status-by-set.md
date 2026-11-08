@@ -161,7 +161,7 @@ planned buckets, except the Imbued. No date is attached to a bucket — waves la
 
 ## Precon decks
 
-The 32 preconstructed decks the registry derives from the KRCG
+The 33 preconstructed decks the registry derives from the KRCG
 snapshot. **Implemented %** counts CARD COPIES whose card is in the pool and
 built. **Playable as printed** is the deck importer's own verdict: a crypt of
 12+, a library of 60–90, one crypt group or two
@@ -205,19 +205,20 @@ half decks, sold in pairs, and not a defect in the pool.
 | Path of Cathari                   | Sabbat V5                 |    12 |      77 |      **100%** | yes                 | —                             |
 | Path of Death                     | Sabbat V5                 |    12 |      77 |      **100%** | yes                 | —                             |
 | Path of Power and the Inner Voice | Sabbat V5                 |    12 |      77 |      **100%** | yes                 | —                             |
+| Libertine Ball                    | Sabbat Preconstructed     |    12 |      77 |      **100%** | yes                 | —                             |
 
-**18 of 32 playable as printed**, and **32 of
-32 at 100% implemented**. Every card in every precon is a V5 card, so this
+**19 of 33 playable as printed**, and **33 of
+33 at 100% implemented**. Every card in every precon is a V5 card, so this
 table moves only if the V5 pool does — the library waves of §6 widen the pool
 AROUND these decks, not inside them.
 
 ## Precon decks outside V5
 
 The 49 preconstructed decks the rest of the KRCG snapshot ships.
-**None of these are in the pool**: `build-registry.mts` hands `collectPrecons`
-the V5 sets alone, deliberately, so a widened card can never drag its legacy
-set's precons in half-built. This table is a REPORT — it admits nothing and
-changes no config. It is here to answer one question the V5 table cannot:
+**A deck here reaches the precon chooser only at 100%**: `build-registry.mts`
+adds a legacy precon to the registry when every card in it is implemented
+(owner ruling 2026-11-08), so a half-built one never reaches the chooser. This
+table is a REPORT — it admits nothing and changes no config. It is here to answer one question the V5 table cannot:
 **how far is the pool from dealing a real legacy deck?**
 
 **Implemented %** is the same rule as above — card copies whose card is in the

@@ -211,10 +211,10 @@ AROUND these decks, not inside them.
 ## Precon decks outside V5
 
 The ${legacyRows.length} preconstructed decks the rest of the KRCG snapshot ships.
-**None of these are in the pool**: \`build-registry.mts\` hands \`collectPrecons\`
-the V5 sets alone, deliberately, so a widened card can never drag its legacy
-set's precons in half-built. This table is a REPORT — it admits nothing and
-changes no config. It is here to answer one question the V5 table cannot:
+**A deck here reaches the precon chooser only at 100%**: \`build-registry.mts\`
+adds a legacy precon to the registry when every card in it is implemented
+(owner ruling 2026-11-08), so a half-built one never reaches the chooser. This
+table is a REPORT — it admits nothing and changes no config. It is here to answer one question the V5 table cannot:
 **how far is the pool from dealing a real legacy deck?**
 
 **Implemented %** is the same rule as above — card copies whose card is in the

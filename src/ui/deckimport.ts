@@ -556,6 +556,9 @@ const PRECON_STYLE: Record<string, string> = {
   Toreador: "Votes and presence — builds a titled crypt and wins referendums while bleeding for extra.",
   Tremere: "Blood magic control: unblockable damage, pool burn and answers to almost anything.",
   Ventrue: "The classic vote deck — princes and justicars, political actions, and a fat bleed behind them.",
+  // --- Sabbat Preconstructed (legacy, whole since wave 115) ---
+  "Libertine Ball":
+    "Votes and Embraces — grows its crypt with new vampires, then wins referendums with a fat Consanguineous Boon.",
   // --- Anarch ---
   "Banu Haqim": "Assassins: rushes your prey's minions down and bleeds through the gap they leave.",
   Brujah: "Aggressive Anarch beatdown — cheap vampires, rushes, and pressure from turn one.",

@@ -134,7 +134,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 332 test files, 3761 tests**, with `npm run typecheck`,
+**Green baseline: 332 test files, 3763 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -211,8 +211,9 @@ CATALOGUE by data-zoomid, bound once in the constructor (see §16).
 2. **PHASE 8 — widen the pool beyond V5** (`docs/pool-widening-design.md`).
    **The LIBRARY is widening one implemented card at a time; the CRYPT
    one clan at a time** (owner chose library AND crypt, 2026-11-08). Wave
-   115 made Libertine Ball the first legacy precon at 100%; legacy precons
-   are still not in the chooser (`libertine-ball-design.md` §5). The config split, the crypt group
+   115 made Libertine Ball the first legacy precon at 100%; **a legacy
+   precon joins the chooser only at 100%** (owner ruling 2026-11-08,
+   0.11.65, `libertine-ball-design.md` §5). The config split, the crypt group
    rule, the sect/title fixes and the ambiguity-resolving deck importer
    all landed. **Widening is downstream of card work:**
    - **§6 — the library, IN PROGRESS.** Three tranches in order: **T1**
@@ -977,7 +978,9 @@ hunt; the p. 19 stuck rule in the option generator), equipment-rush
 shared `addUnlockUpkeep`), hand-rush (wave 114, built 0.11.59: one rush
 target predicate `rushTargetOk` at announcement and resolution, and a
 successful rush's combat runs INSIDE resolution, step `rushCombat`, before
-the after-resolution window and the end-of-action tail in `finishAction`).
+the after-resolution window and the end-of-action tail in `finishAction`),
+libertine-ball (wave 115, 0.11.64: per-clan crypt groups, `untitledOnly`
+auras; §5 is the rule for legacy precons in the chooser).
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

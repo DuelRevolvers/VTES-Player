@@ -315,10 +315,6 @@ async function main() {
     fetchedAt: new Date().toISOString(),
     pool: poolSets,
     entries: {},
-    // PRECONS STAY V5-ONLY. `collectPrecons` already skips any set not in
-    // `poolSets`, and it is handed `inPool` rather than the widened list —
-    // a widened crypt card would otherwise drag its legacy set's precons
-    // in half-built, since their library cards are not in the pool.
     precons: collectPrecons(inPool, poolSets),
   };
   for (const def of defs) {
@@ -326,6 +322,21 @@ async function main() {
       card: def,
       supported: supported[String(def.id)] === true,
     };
+  }
+  // A LEGACY precon joins the table only when it is WHOLE here: every card
+  // in it is in the registry, and every library card is implemented (the
+  // crypt is gated by `widenedCrypt` already). Owner ruling 2026-11-08
+  // (docs/libertine-ball-design.md §5). A half-built legacy deck still
+  // stays out — the reason precons were V5-only to begin with.
+  const legacySets = [
+    ...new Set(cards.flatMap((c) => Object.keys(c.sets ?? {}))),
+  ].filter((s) => !poolSets.includes(s));
+  for (const deck of collectPrecons(cards, legacySets)) {
+    const whole = deck.cards.every(({ id }) => {
+      const e = registry.entries[id];
+      return e !== undefined && (e.card.kind === "crypt" || e.supported);
+    });
+    if (whole) registry.precons.push(deck);
   }
 
   await writeFile(OUT_REGISTRY, JSON.stringify(registry, null, 1), "utf-8");
