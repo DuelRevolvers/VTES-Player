@@ -242,6 +242,13 @@ CATALOGUE by data-zoomid, bound once in the constructor (see §16).
    sharing a primitive — that is what makes one new primitive pay for four
    or five cards and what makes the negative-space tests meaningful.
 
+   **WAVES TARGET THE INCOMPLETE PRECONS (owner rule, 2026-11-08).** Pick
+   each wave's family from cards in the precons below 100% in
+   `docs/card-status-by-set.md` (all 32 V5 precons are whole, so this
+   means the "Precon decks outside V5" table). Cards outside those decks
+   join a wave only when they share its mechanic. The mechanic rule above
+   still decides how a wave is grouped.
+
 3. **AI.** Weight-tweaking is exhausted, demonstrably
    (`docs/richer-options-design.md` §5–§8). A search agent exists, is
    guarded, and is **not better yet**; the unsolved part is the VALUE
