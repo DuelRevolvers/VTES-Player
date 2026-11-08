@@ -15709,6 +15709,49 @@ export const cardSpecs: CardSpec[] = [
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
+    // "Unique location. Each non-titled Toreador antitribu you control gets
+    //  +1 vote. Any vampire can burn this card as a Ⓓ action that costs 1
+    //  blood." Wave 115 (Libertine Ball). "You control" scopes the vote to
+    //  the controller; "any vampire" includes the controller's own, and the
+    //  KRCG clan icon on a master is not a requirement (p. 10).
+    krcgId: 100779,
+    name: "Foundation Exhibit",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: {},
+      tags: ["location"],
+      aura: { scope: "controller", clan: "Toreador antitribu", untitledOnly: true, votes: 1 },
+      vulnerableTo: { who: { kind: "vampire" }, cost: { blood: 1 } },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // "Unique. Put this card in play with 3 counters. Toreador antitribu
+    //  get +1 bleed. During your discard phase, burn 1 counter from this
+    //  card. Burn this card if it has no counters." Wave 115. No "you
+    //  control", so the bleed is GLOBAL (The Khabar: Community's reading).
+    krcgId: 101346,
+    name: "Palla Grande",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "seat",
+      statics: { startsWithCounters: 3 },
+      tags: [],
+      aura: { scope: "global", clan: "Toreador antitribu", bleed: 1 },
+      discardPhaseCountdown: true,
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
     // "Unique location. Titled Brujah get +1 bleed and +1 vote. Ventrue
     //  get -1 vote."
     // Neither clause says "you control", so both are GLOBAL. Two aura
@@ -19628,6 +19671,16 @@ export const cryptSpecs: CardSpec[] = [
     // "Younger"/"older" are relative to Azucena's own derived capacity.
     { intercept: 1, actingMinion: { clan: "Lasombra", younger: true } },
     { intercept: -1, actingMinion: { clan: "Lasombra", older: true } },
+  ]),
+  // "Sabbat: L'Épuisette gets +1 bleed against a Methuselah who controls a
+  // READY Toreador." Wave 115: Osvaldo's shape, with "ready" — Toreador,
+  // not Toreador antitribu, which is a different clan (p. 4).
+  condCrypt(200800, "L'Épuisette (G4)", [
+    {
+      bleed: 1,
+      actionKinds: ["bleed"],
+      controller: { targetControlsReadyClan: ["Toreador"] },
+    },
   ]),
   condCrypt(201767, "Osvaldo Kühnemann (G6)", [
     {

@@ -1006,6 +1006,33 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 115 — Libertine Ball (3 cards + 8 vampires), 2026-11-08
+
+**The first wave aimed at a legacy precon** (owner rule, 2026-11-08), and
+**the first to open a crypt clan** (§7): Toreador antitribu groups 4–5.
+Cards: Foundation Exhibit and Palla Grande (T1 masters) and L'Épuisette
+(G4). Eight more vampires entered free because they print no ability.
+Libertine Ball is now **100%** implemented, the first legacy precon to get
+there. Design: `libertine-ball-design.md`. Version 0.11.64. Library 934,
+crypt 226, total 1,160.
+
+**The finding:** `config/crypt-groups.json` opened a GROUP for every clan
+at once. Opening groups 4–5 would have admitted 126 vampires from every
+clan in one rebuild. The config is now `open: [{ clan, groups }]` (owner
+ruling, 2026-11-08), and the builder throws on a clan no vampire has, so a
+misspelling can't read as a closed config.
+
+**New pieces, all small:** `PermanentAura.untitledOnly`, read by a new
+`auraReaches` helper that `auraBonus` and `auraFlag` now share (they each
+spelled the clan / sect / title filters out by hand);
+`targetControlsReadyClan` beside Osvaldo's `targetControlsClan`; and
+`permanent.discardPhaseCountdown` in `compileMasterCard`.
+
+**The guards that fired, all correctly:** `CLANS` lacked Toreador
+antitribu (two tests), and `fresh-game.test.ts` built its "legal" deck
+from the lowest crypt ids, which are now group 4, so its crypt mixed
+groups 4, 5 and 6.
+
 ### Wave 114 — hand rush cards (6 cards), 2026-11-03
 
 **Cards:** Games of Instinct, Harass, Monomancy, Purity of the Beast and

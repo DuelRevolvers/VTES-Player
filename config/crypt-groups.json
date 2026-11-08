@@ -2,6 +2,10 @@
   "note": [
     "Crypt groups admitted from OUTSIDE the V5 sets (docs/pool-widening-design.md).",
     "",
+    "ONE CLAN AT A TIME (owner ruling, 2026-11-08): each `open` entry opens",
+    "the named groups of ONE clan (the KRCG clan name). A bare group list used",
+    "to open every clan in the group at once.",
+    "",
     "Vampires only — never Imbued, who are a different card type the engine",
     "has no model for. Library cards are NEVER widened by this file: an",
     "unimplemented library card makes a whole deck unplayable, while an",
@@ -19,10 +23,21 @@
     "That is what makes widening a pipeline that follows the card waves",
     "instead of running ahead of them. docs/pool-widening-design.md §0",
     "",
-    "Empty list = no widening at all, and the registry is byte-identical to",
-    "a V5-only build. It is empty now because the 2026-09-08 widening was",
-    "rolled back: it had admitted 1,104 vampires with inert abilities."
+    "Empty `open` = no widening at all, and the registry is byte-identical to",
+    "a V5-only build. It was emptied once because the 2026-09-08 widening",
+    "admitted 1,104 vampires with inert abilities; wave 115 (0.11.64) reopened",
+    "it for one clan, Toreador antitribu groups 4–5."
   ],
-  "groups": [],
-  "excludeSects": ["Laibon"]
+  "open": [
+    {
+      "clan": "Toreador antitribu",
+      "groups": [
+        4,
+        5
+      ]
+    }
+  ],
+  "excludeSects": [
+    "Laibon"
+  ]
 }

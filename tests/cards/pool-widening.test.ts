@@ -21,7 +21,9 @@ const cards = Object.values(reg.entries).map((e) => e.card);
 const crypt = cards.filter((c) => c.kind === "crypt");
 const library = cards.filter((c) => c.kind === "library");
 const sets = v5Sets as string[];
-const groups = (cryptGroups as { groups: number[] }).groups;
+const open = (cryptGroups as { open: Array<{ clan: string; groups: number[] }> }).open;
+const isOpen = (clan: string, group: number): boolean =>
+  open.some((o) => o.clan === clan && o.groups.includes(group));
 
 /** A card admitted by the widening rather than by the V5 set list. */
 const widened = crypt.filter((c) => !c.sets.some((s) => sets.includes(s)));
@@ -53,9 +55,22 @@ describe("what the widening admits", () => {
     expect(imbued.map((c) => c.name)).toEqual([]);
   });
 
-  it("admits only the configured groups", () => {
-    const wrong = widened.filter((c) => !groups.includes(Number(c.group)));
-    expect(wrong.map((c) => `${c.name} (group ${String(c.group)})`)).toEqual([]);
+  it("admits only the configured groups OF THE CONFIGURED CLAN", () => {
+    // One clan at a time (owner ruling, 2026-11-08): opening Toreador
+    // antitribu group 4 must not let a group-4 Ventrue in beside them.
+    const wrong = widened.filter((c) => !isOpen(c.clan, Number(c.group)));
+    expect(wrong.map((c) => `${c.name} (${c.clan}, group ${String(c.group)})`)).toEqual([]);
+  });
+
+  it("…and every open clan-group actually admits someone — the control", () => {
+    // A misspelt clan or an empty group opens nothing and reads exactly
+    // like a closed config; the builder throws on the first, this catches
+    // the second.
+    for (const o of open) {
+      for (const g of o.groups) {
+        expect(widened.some((c) => c.clan === o.clan && Number(c.group) === g), `${o.clan} G${g}`).toBe(true);
+      }
+    }
   });
 
   it("admits no sect the engine cannot represent", () => {
@@ -79,7 +94,7 @@ describe("what the widened cards carry", () => {
     // above pass by doing nothing. With groups closed, a NON-empty one
     // would mean the rollback did not take. Asserting the state the
     // config asks for catches both.
-    if (groups.length === 0) expect(widened).toEqual([]);
+    if (open.length === 0) expect(widened).toEqual([]);
     else expect(widened.length).toBeGreaterThan(0);
   });
 

@@ -3317,6 +3317,12 @@ export interface CardSpec {
      *  both go through the one `onControllerUnlock` burn so the rule cannot
      *  be honoured in one place and not the other. §5 */
     burnAtControllerUnlock?: boolean;
+    /** "During your discard phase, burn 1 counter from this card. Burn
+     *  this card if it has no counters" (Palla Grande) — a clock that runs
+     *  down on its controller's own turn. The starting counters are the
+     *  `startsWithCounters` static, as for the Gehenna clocks. Mandatory:
+     *  the card says "burn", not "you can". */
+    discardPhaseCountdown?: boolean;
     retainerAbilities?: {
       /** "If this \<sect\> is blocked, they can burn N life from this
        *  retainer BEFORE BLOCK RESOLUTION to lock the blocking minion and

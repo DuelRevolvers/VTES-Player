@@ -7200,6 +7200,7 @@ function compileMasterCard(spec: CardSpec): CardHandler {
   // "During your unlock phase, burn this card" on a SEAT permanent (Festivo
   // dello Estinto) — the same helper the two attached spellings use. §5
   if (spec.permanent?.burnAtControllerUnlock) burnAtControllerUnlock(handler);
+  if (spec.permanent?.discardPhaseCountdown) discardPhaseCountdown(handler);
   const ht = spec.permanent?.huntTax;
   if (ht) {
     handler.onHuntSuccess = (entry, _owner, info, ops) => {
@@ -16333,6 +16334,26 @@ function addCombatAttachBehaviour(spec: CardSpec, handler: CardHandler): void {
  * in the pool that no test could see, because nothing fails when a field is
  * merely ignored. docs/hunt-payouts-design.md §5
  */
+/**
+ * "During your discard phase, burn 1 counter from this card. Burn this card
+ * if it has no counters" (Palla Grande). YOUR discard phase — the card
+ * controller's — and grafted, never assigned over. The burn-when-empty
+ * check runs right after the tick because the tick is the only thing that
+ * takes counters off this card.
+ */
+function discardPhaseCountdown(handler: CardHandler): void {
+  const prior = handler.onDiscardPhase?.bind(handler);
+  handler.onDiscardPhase = (entry, owner, turnSeat, ops) => {
+    prior?.(entry, owner, turnSeat, ops);
+    if (turnSeat !== (entry.controller ?? owner.seat)) return;
+    if (!entryStillInPlay(ops.state, entry.card.id)) return;
+    if ((entry.counters ?? 0) > 0) ops.addCounters(entry.card.id, -1);
+    // Re-read after the event: the reducer, not this closure, owns the count.
+    const now = allPermanents(ops.state).find((p) => p.card.id === entry.card.id);
+    if (now && (now.counters ?? 0) <= 0) ops.burnPermanent(entry.card.id);
+  };
+}
+
 function burnAtControllerUnlock(handler: CardHandler): void {
   const priorUnlock = handler.onControllerUnlock;
   handler.onControllerUnlock = (entry, owner, ops) => {

@@ -150,6 +150,8 @@ export const CLANS: string[] = [
   "Ravnos",
   "Salubri",
   "Toreador",
+  // Wave 115 opened its groups 4–5 (config/crypt-groups.json).
+  "Toreador antitribu",
   "Tremere",
   "Tzimisce",
   "Ventrue",
@@ -652,6 +654,11 @@ export interface ConditionalStatic {
      *  (Osvaldo Kühnemann) — a condition on the action's TARGET seat, so
      *  it needs an action to be meaningful. */
     targetControlsClan?: string[];
+    /** "…against a Methuselah who controls a READY Toreador"
+     *  (L'Épuisette) — the same target-seat read, minus the vampires in
+     *  torpor. Osvaldo's wording has no "ready", so his stays the wider
+     *  set; a minion in torpor is still controlled. */
+    targetControlsReadyClan?: string[];
   };
 }
 
@@ -1307,6 +1314,10 @@ export interface PermanentAura {
    *  aura must not turn an untitled vampire into a vote source.
    *  docs/politics-locations-design.md §2 */
   titledOnly?: boolean;
+  /** "Each NON-TITLED Toreador antitribu you control gets +1 vote"
+   *  (Foundation Exhibit) — the mirror of `titledOnly`. Read with the
+   *  other minion filters in `auraReaches`. */
+  untitledOnly?: boolean;
   /** "PRIMOGEN cannot attempt political actions and get one less vote"
    *  (Beyond Reproach) — ONE named title, where `titledOnly` is any of
    *  them. docs/table-referendums-design.md §2 */

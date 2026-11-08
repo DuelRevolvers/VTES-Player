@@ -16,6 +16,7 @@ import type {
   GameState,
   MinionId,
   MinionState,
+  PermanentAura,
   PermanentInPlay,
   PermanentStatics,
   PlayCostCardType,
@@ -629,6 +630,24 @@ export function openHandsFor(state: GameState, viewer: SeatId): SeatId[] {
 }
 
 /**
+ * Does an aura's MINION filter take this minion in? ONE place for the
+ * clan / sect / title clauses, which used to be spelled twice — in
+ * `auraBonus` and in `auraFlag` — so a new filter (`untitledOnly`,
+ * Foundation Exhibit) cannot reach one reader and miss the other. Scope
+ * (whose minions) is not here: the two readers find the controller
+ * differently.
+ */
+function auraReaches(aura: PermanentAura, minion: MinionState): boolean {
+  if (aura.clan !== undefined && minion.clan !== aura.clan) return false;
+  if (aura.sect !== undefined && minion.sect !== aura.sect) return false;
+  if (aura.titledOnly && minion.title === null) return false;
+  if (aura.untitledOnly && minion.title !== null) return false;
+  // "PRIMOGEN … get one less vote" — one named title.
+  if (aura.title !== undefined && minion.title !== aura.title) return false;
+  return true;
+}
+
+/**
  * Bonus a minion picks up from *other* cards in play that radiate onto it
  * ("Gangrel you control get +1 strength", "Assamites get +1 stealth when
  * bleeding") — as opposed to statics on cards attached to the minion
@@ -655,11 +674,7 @@ export function auraBonus(
     // every existing card reads exactly as before.
     for (const aura of [...(entry.aura ? [entry.aura] : []), ...(entry.auras ?? [])]) {
       if (aura.scope === "controller" && minion.controller !== controller) continue;
-      if (aura.clan !== undefined && minion.clan !== aura.clan) continue;
-      if (aura.sect !== undefined && minion.sect !== aura.sect) continue;
-      if (aura.titledOnly && minion.title === null) continue;
-      // "PRIMOGEN … get one less vote" — one named title.
-      if (aura.title !== undefined && minion.title !== aura.title) continue;
+      if (!auraReaches(aura, minion)) continue;
       // "WHILE your prey controls a vampire in torpor" (Raising the
       // Portcullis) — the first aura condition that reads another seat's
       // board, derived on every read so nothing has to notice when it
@@ -865,7 +880,8 @@ function conditionHolds(
     c.directedAtController !== undefined ||
     c.actionDirected !== undefined ||
     c.actingMinion !== undefined ||
-    c.controller?.targetControlsClan !== undefined;
+    c.controller?.targetControlsClan !== undefined ||
+    c.controller?.targetControlsReadyClan !== undefined;
   if (needsAction && !announced) return false;
   if (announced) {
     if (c.actionKinds && !c.actionKinds.includes(announced.actionKind)) return false;
@@ -898,13 +914,17 @@ function conditionHolds(
       if (f.younger === true && capacityOf(a) >= capacityOf(bearer)) return false;
       if (f.older === true && capacityOf(a) <= capacityOf(bearer)) return false;
     }
-    if (c.controller?.targetControlsClan) {
+    for (const [clans, readyOnly] of [
+      [c.controller?.targetControlsClan, false],
+      [c.controller?.targetControlsReadyClan, true],
+    ] as const) {
+      if (!clans) continue;
       if (announced.target === null) return false;
       const seat = state.seats.find((s) => s.id === announced.target);
-      const clans = c.controller.targetControlsClan;
-      if (!seat || !seat.minions.some((m) => m.clan !== null && clans.includes(m.clan))) {
-        return false;
-      }
+      const has = seat?.minions.some(
+        (m) => m.clan !== null && clans.includes(m.clan) && (!readyOnly || isReady(m)),
+      );
+      if (!has) return false;
     }
   }
   // "The bearer with (superior) Auspex …" (Bowl of Convergence). Derived,
@@ -1103,10 +1123,7 @@ function auraFlag(
         if (aura.scope === "controller" && minion.controller !== (p.controller ?? seat.id)) {
           continue;
         }
-        if (aura.clan !== undefined && minion.clan !== aura.clan) continue;
-        if (aura.sect !== undefined && minion.sect !== aura.sect) continue;
-        if (aura.titledOnly && minion.title === null) continue;
-        if (aura.title !== undefined && minion.title !== aura.title) continue;
+        if (!auraReaches(aura, minion)) continue;
         return true;
       }
     }

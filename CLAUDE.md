@@ -39,9 +39,10 @@ contradicts the rulebook, card text wins** (the Golden Rule, p. 16).
   library card is admitted by `config/supported.json` alone — for the
   library, "implemented" and "may be in the pool" are the same question
   (`docs/pool-widening-design.md` §6).
-- **Crypt** = the V5 sets only. The machinery to widen past them exists
-  and is deliberately switched OFF: `config/crypt-groups.json` is
-  `"groups": []`.
+- **Crypt** = the V5 sets **plus the clans opened ONE AT A TIME** in
+  `config/crypt-groups.json` (`open: [{ clan, groups }]`, owner ruling
+  2026-11-08 — a bare group list opened every clan at once). Open today:
+  **Toreador antitribu groups 4–5** (wave 115). Ask before opening each.
 - **Widening is a PIPELINE, not a switch** (`docs/pool-widening-design.md`).
   Opening a group admits only vampires that are already whole — the
   builder gates on it, so the pool can never get ahead of the card waves.
@@ -105,7 +106,7 @@ asserted over the whole registry by `tests/cards/no-partial-cards.test.ts`.
 
 - **Library: 100% of what is admitted** — the V5 sets plus the legacy
   cards taken by the waves. Growing every wave.
-- **Crypt: V5 only.** Some print an ability and have an implementation;
+- **Crypt: V5 plus the opened clans.** Some print an ability and have an implementation;
   the rest print none and need none. Both kinds are whole; there is no
   third kind.
 - **Fourteen library cards are whole-but-inert** (wave 45): their printed
@@ -133,7 +134,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 331 test files, 3742 tests**, with `npm run typecheck`,
+**Green baseline: 332 test files, 3761 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -208,8 +209,10 @@ CATALOGUE by data-zoomid, bound once in the constructor (see §16).
    nothing in the tree publishes by itself.
 
 2. **PHASE 8 — widen the pool beyond V5** (`docs/pool-widening-design.md`).
-   **The CRYPT is deliberately still V5-only; the LIBRARY is widening,
-   one implemented card at a time.** The config split, the crypt group
+   **The LIBRARY is widening one implemented card at a time; the CRYPT
+   one clan at a time** (owner chose library AND crypt, 2026-11-08). Wave
+   115 made Libertine Ball the first legacy precon at 100%; legacy precons
+   are still not in the chooser (`libertine-ball-design.md` §5). The config split, the crypt group
    rule, the sect/title fixes and the ambiguity-resolving deck importer
    all landed. **Widening is downstream of card work:**
    - **§6 — the library, IN PROGRESS.** Three tranches in order: **T1**

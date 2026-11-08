@@ -32,9 +32,16 @@ import { supportedPrecons } from "../../src/ui/deckimport.ts";
 
 const reg = registry as unknown as CardRegistry;
 
-/** The supported pool, as a deck builder would see it. */
+/** The supported pool, as a deck builder would see it — groups 6–7 only.
+ *  A crypt may use one group or two consecutive ones (p. 4), and since
+ *  wave 115 opened Toreador antitribu groups 4–5 the lowest ids are group
+ *  4, so an unfiltered pick mixed 4, 5 and 6 and was illegal for a reason
+ *  this test is not about. */
 const cryptIds = Object.values(reg.entries)
-  .filter((e) => e.card.kind === "crypt" && e.supported)
+  .filter(
+    (e) =>
+      e.card.kind === "crypt" && e.supported && (e.card.group === 6 || e.card.group === 7),
+  )
   .map((e) => e.card.id)
   .sort((a, b) => a - b);
 const libraryNames = Object.values(reg.entries)

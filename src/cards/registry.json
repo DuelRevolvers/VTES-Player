@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-04T00:16:24.897Z",
+ "fetchedAt": "2026-11-08T21:20:37.584Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -6819,6 +6819,30 @@
    },
    "supported": true
   },
+  "100779": {
+   "card": {
+    "kind": "library",
+    "id": 100779,
+    "name": "Foundation Exhibit",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Toreador antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique location.\nEach non-titled Toreador antitribu you control gets +1 vote. Any vampire can burn this card as a Ⓓ action that costs 1 blood.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/foundationexhibit.jpg",
+    "sets": [
+     "Black Hand",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": true
+  },
   "100782": {
    "card": {
     "kind": "library",
@@ -11243,6 +11267,33 @@
      "Sabbat War",
      "Anarchs",
      "Black Hand"
+    ]
+   },
+   "supported": true
+  },
+  "101346": {
+   "card": {
+    "kind": "library",
+    "id": 101346,
+    "name": "Palla Grande",
+    "types": [
+     "Master"
+    ],
+    "clans": [
+     "Toreador antitribu"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Unique.\nPut this card in play with 3 counters. Toreador antitribu get +1 bleed. During your discard phase, burn 1 counter from this card. Burn this card if it has no counters.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/pallagrande.jpg",
+    "sets": [
+     "Sabbat",
+     "Sabbat War",
+     "Black Hand",
+     "Third Edition",
+     "Sabbat Preconstructed"
     ]
    },
    "supported": true
@@ -21736,6 +21787,28 @@
    },
    "supported": true
   },
+  "200067": {
+   "card": {
+    "kind": "crypt",
+    "id": 200067,
+    "name": "Amber (G5)",
+    "clan": "Toreador antitribu",
+    "capacity": 5,
+    "group": 5,
+    "disciplines": {
+     "Cel": "basic",
+     "Aus": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Sabbat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/amberg5.jpg",
+    "sets": [
+     "Danse Macabre"
+    ]
+   },
+   "supported": false
+  },
   "200132": {
    "card": {
     "kind": "crypt",
@@ -21777,6 +21850,185 @@
     "image": "https://static.krcg.org/card/crowg5.jpg",
     "sets": [
      "Fifth Edition (Anarch)"
+    ]
+   },
+   "supported": false
+  },
+  "200717": {
+   "card": {
+    "kind": "crypt",
+    "id": 200717,
+    "name": "Jonathan Gursel (G4)",
+    "clan": "Toreador antitribu",
+    "capacity": 3,
+    "group": 4,
+    "disciplines": {
+     "Aus": "basic",
+     "Pre": "basic"
+    },
+    "cardText": "Sabbat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/jonathangurselg4.jpg",
+    "sets": [
+     "Third Edition",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "200740": {
+   "card": {
+    "kind": "crypt",
+    "id": 200740,
+    "name": "Justine Chen, Innocent (G4)",
+    "clan": "Toreador antitribu",
+    "capacity": 2,
+    "group": 4,
+    "disciplines": {
+     "Pre": "basic"
+    },
+    "cardText": "Sabbat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/justinecheninnocentg4.jpg",
+    "sets": [
+     "Third Edition",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "200787": {
+   "card": {
+    "kind": "crypt",
+    "id": 200787,
+    "name": "Klaus Konrecht (G4)",
+    "clan": "Toreador antitribu",
+    "capacity": 8,
+    "group": 4,
+    "disciplines": {
+     "For": "basic",
+     "Pot": "basic",
+     "Aus": "superior",
+     "Cel": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Sabbat cardinal.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/klauskonrechtg4.jpg",
+    "sets": [
+     "Third Edition",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "200800": {
+   "card": {
+    "kind": "crypt",
+    "id": 200800,
+    "name": "L'Épuisette (G4)",
+    "clan": "Toreador antitribu",
+    "capacity": 4,
+    "group": 4,
+    "disciplines": {
+     "Aus": "basic",
+     "Cel": "basic",
+     "Pro": "basic"
+    },
+    "cardText": "Sabbat: L'Épuisette gets +1 bleed against a Methuselah who controls a ready Toreador.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/lepuisetteg4.jpg",
+    "sets": [
+     "Kindred Most Wanted",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": true
+  },
+  "200851": {
+   "card": {
+    "kind": "crypt",
+    "id": 200851,
+    "name": "Loonar (G4)",
+    "clan": "Toreador antitribu",
+    "capacity": 4,
+    "group": 4,
+    "disciplines": {
+     "Cel": "basic",
+     "Pre": "superior"
+    },
+    "cardText": "Sabbat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/loonarg4.jpg",
+    "sets": [
+     "Third Edition",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "201005": {
+   "card": {
+    "kind": "crypt",
+    "id": 201005,
+    "name": "Monique Kim (G4)",
+    "clan": "Toreador antitribu",
+    "capacity": 3,
+    "group": 4,
+    "disciplines": {
+     "Aus": "basic",
+     "Cel": "basic"
+    },
+    "cardText": "Sabbat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/moniquekimg4.jpg",
+    "sets": [
+     "Third Edition",
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "201514": {
+   "card": {
+    "kind": "crypt",
+    "id": 201514,
+    "name": "Conchita Morales (G5)",
+    "clan": "Toreador antitribu",
+    "capacity": 5,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "Cel": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Sabbat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/conchitamoralesg5.jpg",
+    "sets": [
+     "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "201515": {
+   "card": {
+    "kind": "crypt",
+    "id": 201515,
+    "name": "Guggenheim (G5)",
+    "clan": "Toreador antitribu",
+    "capacity": 6,
+    "group": 5,
+    "disciplines": {
+     "Aus": "superior",
+     "Cel": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Sabbat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/guggenheimg5.jpg",
+    "sets": [
+     "Sabbat Preconstructed"
     ]
    },
    "supported": false

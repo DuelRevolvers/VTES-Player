@@ -122,7 +122,14 @@ function intersectSets(card: RawKrcgCard, poolSets: string[]): string[] {
 
 /** Crypt admitted from outside the V5 sets — see config/crypt-groups.json. */
 interface CryptWidening {
-  groups: number[];
+  /**
+   * ONE CLAN AT A TIME (owner ruling, 2026-11-08). Each entry opens the
+   * named groups of ONE clan. A bare group list opened every clan in that
+   * group at once — 126 vampires for groups 4 and 5 alone — which is not
+   * how the §7 waves are meant to land. The clan is the KRCG clan name
+   * (`clans[0]`), which is also the registry's `clan`.
+   */
+  open: Array<{ clan: string; groups: number[] }>;
   excludeSects?: string[];
 }
 
@@ -173,12 +180,21 @@ function widenedCrypt(
   cfg: CryptWidening,
   supported: Record<string, boolean>,
 ): RawKrcgCard[] {
-  if (cfg.groups.length === 0) return [];
+  if (cfg.open.length === 0) return [];
+  // A misspelt clan matches nothing and opens nothing, which looks exactly
+  // like a closed config. Refuse it loudly instead.
+  for (const o of cfg.open) {
+    if (!cards.some((c) => (c.types ?? []).includes("Vampire") && c.clans?.[0] === o.clan)) {
+      throw new Error(`config/crypt-groups.json: no vampire has the clan "${o.clan}"`);
+    }
+  }
+  const isOpen = (c: RawKrcgCard): boolean =>
+    cfg.open.some((o) => o.clan === c.clans?.[0] && o.groups.includes(Number(c.group)));
   const excluded = (cfg.excludeSects ?? []).map((s) => s.toLowerCase());
   return cards.filter((c) => {
     if (already.has(c.id)) return false;
     if (!(c.types ?? []).includes("Vampire")) return false;
-    if (!cfg.groups.includes(Number(c.group))) return false;
+    if (!isOpen(c)) return false;
     // WHOLE, OR NOT AT ALL (docs/pool-widening-design.md §0). A vampire
     // comes in when its ability is implemented, or when it prints no
     // ability to implement — never on the strength of its stats with its
@@ -279,8 +295,11 @@ async function main() {
   // that intersection is empty by definition here, and a card that says
   // it belongs to no set at all is worse than uninformative.
   const widenCfg = await readJson<CryptWidening>(CRYPT_GROUPS_CONFIG, {
-    groups: [],
+    open: [],
   });
+  if (!Array.isArray(widenCfg.open)) {
+    throw new Error("config/crypt-groups.json needs an `open` list of { clan, groups }");
+  }
   const poolIds = new Set(inPool.map((c) => c.id));
   const extraCrypt = widenedCrypt(cards, poolIds, widenCfg, supported);
   // Library from outside those sets — gated by `supported.json` alone (§6).

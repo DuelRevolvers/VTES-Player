@@ -597,6 +597,9 @@ function fourSeatGame(seed: number): GameState {
     "Elysium: The Palace of Versailles",
     "Ferraille",
     "New Carthage",
+    // Wave 115 (docs/libertine-ball-design.md).
+    "Foundation Exhibit",
+    "Palla Grande",
     "Día de los Muertos",
     "Black Forest Base",
     // Actions that become permanents
@@ -1517,7 +1520,14 @@ function fourSeatGame(seed: number): GameState {
         }),
         // A vampire already in torpor, so diablerise/rescue and the
         // blood-hunt referendum are exercised from the first turn.
-        makeMinion(`${id}t`, id, { inTorpor: true, blood: 1, capacity: 2 }),
+        // Wave 115: a Toreador antitribu, so Palla Grande's bleed and
+        // Foundation Exhibit's vote reach someone once this one is rescued.
+        makeMinion(`${id}t`, id, {
+          inTorpor: true,
+          blood: 1,
+          capacity: 2,
+          clan: "Toreador antitribu" as const,
+        }),
       ],
       // One vampire mid-influence and one still in the crypt, so random
       // play exercises transfers, crypt draws, and influencing out.
