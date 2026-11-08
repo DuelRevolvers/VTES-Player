@@ -621,3 +621,87 @@ describe("the rush combat runs inside resolution (D1, D2)", () => {
     expect(must(state, "V2").locked).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §5.3: a political action's referendum is INSIDE the action (0.11.61)
+// ---------------------------------------------------------------------------
+
+describe("the referendum is part of the political action (p. 43)", () => {
+  const pass3: Array<[string, string]> = [["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]];
+  const at = (state: GameState, type: string): number =>
+    state.eventLog.findIndex((e) => e.type === type);
+
+  /** V1 calls Anarchist Uprising (no terms); `hand` joins it. */
+  function political(hand: string[], tweak: (s: GameState) => void = () => {}): GameState {
+    const state = threeSeatGame();
+    seat(state, "Alice").hand = ["Anarchist Uprising", ...hand].map((n, i) => ({ id: `a${i}`, name: n }));
+    tweak(state);
+    return state;
+  }
+
+  it("Freak Drive's after-resolution window opens AFTER the referendum, not before it", () => {
+    const state = political(["Freak Drive"], (s) => {
+      Object.assign(must(s, "V1"), { disciplines: { dom: "basic", for: "basic" } });
+    });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:Anarchist Uprising"]]);
+    walk(engine, state, () => ids(engine).some((i) => i.startsWith("play:Freak Drive")));
+    expect(engine.decision()!.window).toBe("action.afterResolution");
+    // The referendum has been called AND tallied by now, and is gone.
+    expect(at(state, "ReferendumCalled")).toBeGreaterThanOrEqual(0);
+    expect(at(state, "ReferendumResolved")).toBeGreaterThan(at(state, "ReferendumCalled"));
+    expect(state.frames.some((f) => f.kind === "referendum")).toBe(false);
+    // …and the action is still running: this is not a window after it.
+    expect(state.frames.at(-1)?.kind).toBe("action");
+  });
+
+  it("Warsaw Station's unlock lands AFTER the referendum, not during it", () => {
+    const state = political([], (s) => {
+      Object.assign(must(s, "V1"), { blood: 2, clan: "Nosferatu" });
+      seat(s, "Alice").permanents.push({
+        card: { id: "ws", name: "Warsaw Station" },
+        controller: "Alice",
+        owner: "Alice",
+        locked: false,
+        usedThisPhase: false,
+        statics: {},
+        tags: ["Warsaw Station"],
+      });
+    });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:Anarchist Uprising"], ...pass3, ...pass3]); // as played, announce
+    runTrace(engine, [["Alice", "ability:Warsaw Station:ws:unlockOnSuccess"]]);
+    runTrace(engine, [...pass3, ...pass3]); // state A, state C → resolves
+    // Polling: the action has resolved, and the acting vampire is still
+    // locked — "after action resolution" is after the referendum.
+    expect(state.frames.at(-1)?.kind).toBe("referendum");
+    expect(must(state, "V1").locked).toBe(true);
+    walk(engine, state, actionOver(state));
+    expect(must(state, "V1").locked).toBe(false);
+    const unlocked = state.eventLog.findIndex((e) => e.type === "MinionUnlocked" && e.minion === "V1");
+    expect(unlocked).toBeGreaterThan(at(state, "ReferendumResolved"));
+  });
+
+  it("Under the Skin superior locks at the END of the action — after the after-resolution window", () => {
+    const state = political(["Under the Skin", "Freak Drive"], (s) => {
+      Object.assign(must(s, "V1"), {
+        title: "primogen",
+        capacity: 6,
+        disciplines: { dom: "basic", aus: "superior", pre: "superior", for: "basic" },
+      });
+      Object.assign(must(s, "W"), { title: "primogen", capacity: 5 });
+      Object.assign(must(s, "N"), { title: "primogen", capacity: 7 });
+    });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:Anarchist Uprising"], ...pass3, ...pass3, ...pass3, ...pass3]);
+    runTrace(engine, [["Alice", "play:Under the Skin:superior:V1:W"], ...pass3]);
+    runTrace(engine, [["Alice", "vote:V1:for"]]);
+    walk(engine, state, () => ids(engine).some((i) => i.startsWith("play:Freak Drive")));
+    expect(state.eventLog.find((e) => e.type === "ReferendumResolved")).toMatchObject({ passed: true });
+    // The referendum has passed, but the action has not ended yet.
+    expect(engine.decision()!.window).toBe("action.afterResolution");
+    expect(must(state, "W").locked).toBe(false);
+    walk(engine, state, actionOver(state));
+    expect(must(state, "W").locked).toBe(true);
+  });
+});

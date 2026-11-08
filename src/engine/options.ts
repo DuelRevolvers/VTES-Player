@@ -27,6 +27,11 @@ export type WindowId =
   /** After the action has resolved, before its frame leaves the stack
    *  (Freak Drive) — docs/after-resolution-design.md. */
   | "action.afterResolution"
+  /** A political action has succeeded and its referendum is not yet
+   *  called — "if a political action is successful, BEFORE THE REFERENDUM"
+   *  (Yawp Court). Opens only when some seat can use it.
+   *  docs/hand-rush-design.md §5.3 */
+  | "action.beforeReferendum"
   | "card.asPlayed"
   | "combat.beforeRange"
   | "combat.range"

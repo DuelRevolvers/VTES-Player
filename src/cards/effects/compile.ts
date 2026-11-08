@@ -17514,10 +17514,11 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     // "If a political action is successful, BEFORE THE REFERENDUM, you
     // can lock this location and a ready unlocked <sect> vampire you
     // control to have that vampire enter combat with the acting vampire"
-    // (Yawp Court, §5).
+    // (Yawp Court, §5). Its own window since 0.11.61: the after-resolution
+    // one comes AFTER the referendum now (docs/hand-rush-design.md §5.3).
     if (
       ambush &&
-      ctx.window === "action.afterResolution" &&
+      ctx.window === "action.beforeReferendum" &&
       ctx.seat === controller &&
       !entry.locked
     ) {
@@ -17537,7 +17538,15 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
         !!af &&
         (!!af.referendumSource ||
           (!!af.card && !!ctx.registry[af.card.instance.name]?.isPoliticalAction));
-      if (af && af.resolvedSuccess === true && referendumPending && target) {
+      // "Your minions cannot enter combat with other minions you control"
+      // (p. 28) — so not on your own political action.
+      if (
+        af &&
+        af.resolvedSuccess === true &&
+        referendumPending &&
+        target &&
+        target.controller !== controller
+      ) {
         for (const m of getSeat(ctx.state, controller).minions) {
           if (m.kind !== "vampire" || m.sect !== ambush.sect) continue;
           if (!isReady(m) || m.locked || m.id === target.id) continue;
@@ -18259,10 +18268,11 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
       if (!af || !mine) return;
       ops.emit({ type: "PermanentLocked", cardId: entry.card.id });
       ops.emit({ type: "MinionLocked", minion: mine });
-      // `queuedCombats` is flushed by `finishAction`, which then pushes
-      // the referendum — so the combat happens BEFORE the vote with no
-      // sequencing change at all (§5).
-      ops.queueCombat(mine, af.acting, {
+      // Entered NOW, on top of the action: the referendum waits for this
+      // window to close, so the combat comes before the vote. Queued, it
+      // would wait for the end of the action — after the referendum.
+      // docs/hand-rush-design.md §5.3
+      ops.enterCombatNow(mine, af.acting, {
         kind: "outcome",
         actor: mine,
         seat: entry.controller ?? owner.seat,

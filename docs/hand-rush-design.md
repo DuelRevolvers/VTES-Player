@@ -347,12 +347,79 @@ already resolved as blocked and ran them then. Tests: the two D3 cases in
 `tests/cards/hand-rush.test.ts`. The Anja union test in
 `tests/cards/granted-action-requirements.test.ts` was pinning the old
 order (Umbrous Clutch is a rush) and now expects the offer after the
-combat.
+combat. `afterRushCombat` is now `afterActionPayoff` (§5.3).
+
+### 5.3 D4: the referendum is inside the political action (0.11.61)
+
+The owner asked for the §5 Q2 note to be fixed. The rulebook settles it:
+the glossary defines the referendum as "the part of a political action"
+in which the terms are set, the votes cast and the effects applied
+(p. 43), and p. 27 calls it as the action succeeds. So everything a card
+prints for "after action resolution" or "after this action" comes after
+the referendum, the same as after a rush's combat.
+
+Before this fix, `finishAction` pushed the referendum after the action
+frame had popped. That put the following ahead of the vote:
+
+- **The after-resolution window** (Freak Drive and its family).
+- **The D3 pair:** Daring the Dawn's damage and the unlock offers.
+- **Warsaw Station's unlock** (`unlockOnSuccess`). D3 missed it, and it ran
+  before a rush's combat too.
+- **"Do not replace until after this action"** draws.
+- **The end of every wake**, which lasts "for the duration of the action"
+  (p. 44).
+
+**The fix.** `callReferendum` pushes the referendum with the action frame
+still on the stack, at the new step `referendum`. When it pops, `settle`
+calls `afterActionPayoff`, which runs the D3 sequence: the unlock, the
+damage, the window, the offers, then `finishAction`. Go-getter's continued
+political action calls its referendum the same way, and afterwards it
+only finishes, as its rush does. `referendumSourceOf` is the one place
+that decides whether an action calls a referendum.
+
+**Yawp Court needed its own window.** It prints "if a political action is
+successful, BEFORE THE REFERENDUM". It used the after-resolution window,
+which no longer comes first. So `beginReferendum` opens a new impulse,
+`action.beforeReferendum` (step `beforeReferendum`), which is opened only
+when some seat can use it, like the after-resolution window. The
+referendum is called when that impulse closes. The ambush can't use
+`queueCombat` any more, because a queued combat waits for the end of the
+action. It uses a new `enterCombatNow`, which pushes the combat on top of
+the action and hands the impulse back to the acting Methuselah (p. 8).
+
+**Three more fixes the move required:**
+
+- **Under the Skin superior** prints "lock that vampire at the end of the
+  action if the referendum passes". It locked at the tally, which was the
+  end of the action before this fix. The lock is now recorded on the action
+  (`lockAtEndOfAction`) and applied in `finishAction`.
+- **Delaying Tactics** (`barRepeatAction`) read the action first and fell
+  back to the referendum. With the action frame now under the referendum,
+  a referendum called from a card in play would have been keyed by its
+  action kind. It now reads the referendum first, which keeps the old
+  behaviour exactly.
+- **Yawp Court ambushing your own vampire.** The ambush was offered on the
+  location controller's own political action, and p. 28 says "your minions
+  cannot enter combat with other minions you control". It's now refused in
+  the option list and in `enterCombatNow`.
+
+**What stays after the action.** A diablerie's blood hunt is still called
+after the action frame pops (`finishAction`). It isn't a political
+action, and this fix doesn't change it.
+
+**Tests.** Three new cases in `tests/cards/hand-rush.test.ts` (Freak
+Drive, Warsaw Station and Under the Skin, each against the referendum).
+In `tests/cards/crypt-and-uncontrolled.test.ts`, the two Yawp Court tests
+now read the event log. The first one had been passing for the wrong
+reason: the referendum had already finished, so no referendum frame was
+on the stack. A new negative test covers the own-vampire case. All six
+fail on 0.11.60 and pass on 0.11.61.
 
 ## 6. What isn't in this wave
 
 - **Big Game** (§5.1, Q1).
-- **Freak Drive and a political action's referendum** (§5 Q2).
+- **Freak Drive** keeps its window, which now comes after a rush's combat
+  (§5 Q2) and after a referendum (§5.3).
 - **Allies that rush:** the second §8 family in
   `equipment-rush-design.md`.
 

@@ -295,16 +295,20 @@ describe("Yawp Court (102199)", () => {
     ]);
     const id = "ability:Yawp Court:yc:ambush:W";
     expect(walkTo(engine, id)).toBe(true);
-    // The window is action.afterResolution — before the referendum.
-    expect(engine.decision()!.window).toBe("action.afterResolution");
-    expect(state.frames.some((f) => f.kind === "referendum")).toBe(false);
+    // Its own window, before the referendum — and the referendum has not
+    // been CALLED, which a frame check alone cannot tell from one already
+    // over (it was, for a while: §5.3 of hand-rush-design.md).
+    expect(engine.decision()!.window).toBe("action.beforeReferendum");
+    expect(state.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(false);
+    expect(state.frames.at(-1)?.kind).toBe("action");
     runTrace(engine, [["Bob", id]]);
     expect(find(state, "W").locked).toBe(true);
     expect(seatOf(state, "Bob").permanents[0]!.locked).toBe(true);
-    // The combat comes first…
+    // The combat starts at once, on top of the still-running action…
+    expect(state.frames.at(-1)?.kind).toBe("combat");
+    expect(state.frames.some((f) => f.kind === "action")).toBe(true);
     expect(walkTo(engine, "strike:hand")).toBe(true);
-    expect(state.frames.some((f) => f.kind === "combat")).toBe(true);
-    expect(state.frames.some((f) => f.kind === "referendum")).toBe(false);
+    expect(state.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(false);
   });
 
   it("…and the referendum is conducted afterwards, as normal", () => {
@@ -325,8 +329,41 @@ describe("Yawp Court (102199)", () => {
     }
     expect(state.frames.some((f) => f.kind === "combat")).toBe(false);
     // …and the referendum is conducted as normal, which is what the
-    // card's last sentence describes rather than instructs (§5).
+    // card's last sentence describes rather than instructs (§5) — called
+    // only once the combat has ENDED.
     expect(walkTo(engine, "terms:")).toBe(true);
+    const ended = state.eventLog.findIndex((e) => e.type === "CombatEnded");
+    const called = state.eventLog.findIndex((e) => e.type === "ReferendumCalled");
+    expect(ended).toBeGreaterThanOrEqual(0);
+    expect(called).toBeGreaterThan(ended);
+  });
+
+  it("NEGATIVE SPACE: not offered on your OWN political action (p. 28)", () => {
+    const state = threeSeatGame();
+    // The court and a ready Sabbat vampire are ALICE's, and Alice calls.
+    seatOf(state, "Alice").permanents.push(location("yc", "Yawp Court", "Alice"));
+    seatOf(state, "Alice").minions.push(
+      makeMinion("S2", "Alice", { sect: "sabbat", blood: 4, strength: 1 }),
+    );
+    Object.assign(find(state, "V1"), { title: "prince", blood: 4, strength: 1 });
+    seatOf(state, "Alice").hand.push({ id: "krc", name: "Kine Resources Contested" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:Kine Resources Contested"]]);
+    // Walk to the terms; the ambush is never offered on the way, and the
+    // window is never even opened, because nobody can use it.
+    let sawTerms = false;
+    for (let i = 0; i < 60; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.options.some((o) => o.id.startsWith("terms:"))) {
+        sawTerms = true;
+        break;
+      }
+      expect(dp.window).not.toBe("action.beforeReferendum");
+      expect(dp.options.some((o) => o.id.includes("Yawp Court"))).toBe(false);
+      runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
+    }
+    expect(sawTerms).toBe(true);
   });
 
   it("NEGATIVE SPACE: not offered on a NON-political action", () => {

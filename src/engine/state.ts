@@ -2351,6 +2351,11 @@ export interface TurnFrame {
 /** `rushCombat`: a successful rush is fighting its target, with this frame
  *  still on the stack — where a blocked action's combat already runs
  *  (p. 27). docs/hand-rush-design.md §5.1 */
+/** `referendum`: a successful political action is polling, with this frame
+ *  still on the stack — the referendum is "the part of a political action"
+ *  (p. 43, glossary). `beforeReferendum`: the impulse between the action's
+ *  success and the referendum being called (Yawp Court).
+ *  docs/hand-rush-design.md §5.3 */
 export type ActionStep =
   | "announce"
   | "A"
@@ -2358,6 +2363,8 @@ export type ActionStep =
   | "C"
   | "blocked"
   | "rushCombat"
+  | "beforeReferendum"
+  | "referendum"
   | "afterResolution";
 
 /** The action card an action was announced with — set aside, out of play,
@@ -2571,6 +2578,12 @@ export interface ActionFrame {
    *  acting minion" (Warsaw Station) — conditional on SUCCESS, unlike
    *  `notBlockPenalties`, which runs either way. */
   unlockOnSuccess: MinionId[];
+  /** "…lock that vampire AT THE END OF THE ACTION if the referendum passes"
+   *  (Under the Skin superior). Filled when the referendum passes, locked in
+   *  `finishAction`: the referendum is inside the action, so the action has
+   *  not ended yet when it is tallied. Optional so saved logs are untouched.
+   *  docs/hand-rush-design.md §5.3 */
+  lockAtEndOfAction?: MinionId[];
   /** "\<This vampire\> can burn N blood to unlock \<self | the acting
    *  ally\> after action resolution" (Paths in Two Worlds superior, Gifts
    *  From Hereafter superior) — unlike `unlockOnSuccess`, it is an OFFER

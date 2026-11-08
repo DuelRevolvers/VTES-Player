@@ -590,10 +590,14 @@ export interface EngineOps {
    *  between them" (Hedonism) — neither is the acting minion, and the
    *  combat waits until this action is off the stack. */
   /** A combat between two minions, entered after the action pops —
-   *  optionally carrying an after-combat rider, which is how Yawp Court
-   *  charges its own vampire for a failed ambush.
+   *  optionally carrying an after-combat rider.
    *  docs/crypt-and-uncontrolled-design.md §5 */
   queueCombat(a: MinionId, b: MinionId, outcome?: AfterCombatRider): void;
+  /** The same combat entered NOW, on top of the asking action, which
+   *  resumes when it pops — Yawp Court's ambush "before the referendum",
+   *  with the rider that charges its own vampire for a failed ambush.
+   *  docs/hand-rush-design.md §5.3 */
+  enterCombatNow(a: MinionId, b: MinionId, outcome?: AfterCombatRider): void;
   /** Hedonism's whole effect: fail the current block attempt, lock the
    *  interposing vampire and the blocker, and (inferior only) queue the
    *  combat between them. */

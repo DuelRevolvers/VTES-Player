@@ -1612,12 +1612,19 @@ export class VtesEngine implements EngineOps {
           this.resolveAction(top, false);
           continue;
         }
-        if (top.step === "rushCombat") {
-          // A successful rush's combat has finished — and with it, every
-          // question it raised. On to what was printed for after action
-          // resolution, then the end of the action.
-          // docs/hand-rush-design.md §5.1, §5.2
-          this.afterRushCombat(top);
+        if (top.step === "beforeReferendum" && cycleQuiescent(top.cycle)) {
+          // Everyone has passed on "before the referendum" (Yawp Court),
+          // and any ambush it started is over: the referendum is called.
+          // docs/hand-rush-design.md §5.3
+          if (!this.callReferendum(top)) this.afterActionPayoff(top);
+          continue;
+        }
+        if (top.step === "rushCombat" || top.step === "referendum") {
+          // A successful rush's combat, or a political action's referendum,
+          // has finished — and with it, every question it raised. On to what
+          // was printed for after action resolution, then the end of the
+          // action. docs/hand-rush-design.md §5.1–§5.3
+          this.afterActionPayoff(top);
           continue;
         }
         if (top.step === "afterResolution" && cycleQuiescent(top.cycle)) {
@@ -3095,10 +3102,18 @@ export class VtesEngine implements EngineOps {
         });
       } else if (pt.kind === "lockOnPass") {
         // "…lock that vampire at the end of the action if the referendum
-        // passes" (Under the Skin superior): the political action ended
-        // with its referendum, which is this point. `findMinion`: it may
-        // have left play during polling.
+        // passes" (Under the Skin superior). The referendum is inside the
+        // political action (p. 43), whose frame is on top again now, so the
+        // action has NOT ended: the lock is recorded on it and comes due in
+        // `finishAction` (docs/hand-rush-design.md §5.3). With no action
+        // frame under it, the referendum WAS the end, and it locks now.
+        // `findMinion`: it may have left play during polling.
         if (!passed) continue;
+        const callingAction = this.action();
+        if (callingAction && callingAction.actionId === rf.actionId) {
+          (callingAction.lockAtEndOfAction ??= []).push(pt.minion);
+          continue;
+        }
         const m = findMinion(this.state, pt.minion);
         if (m && isReady(m) && !m.locked) this.emit({ type: "MinionLocked", minion: m.id });
       } else if (pt.kind === "burnVotedForOnPass") {
@@ -7485,6 +7500,27 @@ export class VtesEngine implements EngineOps {
   }
 
   /**
+   * A combat between two minions entered NOW, on top of the action that is
+   * asking — "before the referendum, … have that vampire enter combat with
+   * the acting vampire" (Yawp Court). `queueCombat` would wait for the end
+   * of the action, which is after the referendum since 0.11.61. The action
+   * resumes its impulse when the combat pops, and that impulse goes back to
+   * the acting Methuselah first, as after any effect (p. 8): `useAbility`
+   * rewinds the cycle of whatever is on top, which is the combat by then.
+   * Either minion not ready, or both one Methuselah's, and there is no
+   * combat (p. 28). docs/hand-rush-design.md §5.3
+   */
+  enterCombatNow(a: MinionId, b: MinionId, outcome?: AfterCombatRider): void {
+    const am = findMinion(this.state, a);
+    const bm = findMinion(this.state, b);
+    if (!am || !bm || !isReady(am) || !isReady(bm)) return;
+    if (am.controller === bm.controller) return;
+    const af = this.action();
+    if (af && this.top() === af) cycleRewind(af.cycle);
+    this.pushCombat(a, am.controller, b, bm.controller, null, false, outcome ?? null);
+  }
+
+  /**
    * Hedonism: "that attempt fails and the blocking minion cannot attempt
    * to block this action again. Lock this vampire and the blocking
    * minion, and queue a combat between them."
@@ -7747,11 +7783,12 @@ export class VtesEngine implements EngineOps {
    *  card's name for a card-announced action, the ActionKind otherwise
    *  (docs/end-action-design.md §4). */
   barRepeatAction(scope: "minion" | "seat"): void {
-    const af = this.action();
-    // A political action's frame has already popped by the polling step —
-    // the referendum outlives it — so "the same political action" is read
-    // off the referendum instead (Delaying Tactics).
-    const rf = af ? null : this.referendumFrame();
+    // During polling, "the same political action" is read off the
+    // REFERENDUM (Delaying Tactics). The action frame is under it since
+    // 0.11.61 (docs/hand-rush-design.md §5.3), but its key is the ActionKind
+    // when the referendum was called from a card in play, not the card.
+    const rf = this.referendumFrame();
+    const af = rf ? null : this.action();
     const key = af ? actionKeyOf(af) : rf?.cardName;
     const seatId = af ? af.actingSeat : rf?.caller;
     const actorId = af ? af.acting : rf?.callingMinion;
@@ -9301,31 +9338,37 @@ export class VtesEngine implements EngineOps {
     this.deferChoices = true;
     try {
       this.resolveActionInner(af, success);
-      // A successful rush is still fighting, and its offers wait for the
-      // combat to end (`afterRushCombat`).
-      if (af.step !== "rushCombat") this.raiseAfterResolutionUnlocks(af, success);
+      // A successful rush is still fighting, or a political action has its
+      // referendum still to come, and its offers wait for that to end
+      // (`afterActionPayoff`).
+      if (af.step !== "rushCombat" && af.step !== "beforeReferendum" && af.step !== "referendum") {
+        this.raiseAfterResolutionUnlocks(af, success);
+      }
     } finally {
       this.flushDeferredChoices();
     }
   }
 
   /**
-   * A successful rush's combat is over, so what the cards printed for
-   * "after action resolution" happens now, in `resolveAction`'s order: the
-   * damage, the window, the unlock offers. Until 0.11.60 the damage and the
-   * offers came BEFORE the combat, the same defect as D1 and D2
-   * (docs/hand-rush-design.md §5.2).
+   * A successful rush's combat is over, or a political action's referendum
+   * is, so what the cards printed for "after action resolution" happens
+   * now, in `resolveAction`'s order: the unlock, the damage, the window,
+   * the unlock offers. Until 0.11.60 the damage and the offers came BEFORE
+   * a rush's combat (docs/hand-rush-design.md §5.2), and until 0.11.61 all
+   * of it came before a referendum, and Warsaw Station's unlock before both
+   * (§5.3).
    *
-   * Go-getter's rush comes back here too. Its action already resolved, as
-   * blocked, and its window has come and gone — so it only finishes.
+   * Go-getter's continued action comes back here too. It already resolved,
+   * as blocked, and its window has come and gone — so it only finishes.
    */
-  private afterRushCombat(af: ActionFrame): void {
+  private afterActionPayoff(af: ActionFrame): void {
     if (af.afterResolutionOpened) {
       this.openAfterResolution(af, true);
       return;
     }
     this.deferChoices = true;
     try {
+      this.applyAfterResolutionUnlock(af, true);
       this.applyAfterResolutionDamage(af);
       this.openAfterResolution(af, true);
       this.raiseAfterResolutionUnlocks(af, true);
@@ -9670,15 +9713,6 @@ export class VtesEngine implements EngineOps {
     // with the frame still on the stack, so a handler can still read what
     // was played during it (docs/archetypes-design.md §3).
     this.notifyActionResolved(af, success);
-    // "After action resolution, if that action was SUCCESSFUL, unlock the
-    // acting Nosferatu" (Warsaw Station) — unlike notBlockPenalties above,
-    // this one is conditional on the outcome.
-    if (success) {
-      for (const id of af.unlockOnSuccess) {
-        const m = findMinion(this.state, id);
-        if (m?.locked) this.emit({ type: "MinionUnlocked", minion: id });
-      }
-    }
     af.resolvedSuccess = success;
     // A successful rush fights NOW, inside resolution — where a blocked
     // action's combat already runs (p. 27) — so the combat comes before the
@@ -9686,8 +9720,26 @@ export class VtesEngine implements EngineOps {
     // [LSJ 20001120] [LSJ 20101021]. `settle` resumes at `rushCombat` once
     // it is over. docs/hand-rush-design.md §3, §5.1, §5.2
     if (success && this.startRushCombat(af)) return;
+    // A successful political action polls NOW, for the same reason: the
+    // referendum is "the part of a political action" (p. 43), so it comes
+    // before everything printed for after action resolution. `settle`
+    // resumes at `referendum` once it is over. docs/hand-rush-design.md §5.3
+    if (success && this.beginReferendum(af)) return;
+    this.applyAfterResolutionUnlock(af, success);
     this.applyAfterResolutionDamage(af);
     this.openAfterResolution(af, success);
+  }
+
+  /** "After action resolution, if that action was SUCCESSFUL, unlock the
+   *  acting Nosferatu" (Warsaw Station) — unlike `notBlockPenalties`, this
+   *  one is conditional on the outcome. After a rush's combat and after a
+   *  referendum, like the rest of "after action resolution" (§5.3). */
+  private applyAfterResolutionUnlock(af: ActionFrame, success: boolean): void {
+    if (!success) return;
+    for (const id of af.unlockOnSuccess) {
+      const m = findMinion(this.state, id);
+      if (m?.locked) this.emit({ type: "MinionUnlocked", minion: id });
+    }
   }
 
   /** "This vampire takes N unpreventable environmental aggravated damage
@@ -9874,6 +9926,9 @@ export class VtesEngine implements EngineOps {
     // Cards keyed on "after a SUCCESSFUL action" read this.
     af.resolvedSuccess = true;
     if (this.startRushCombat(af)) return;
+    // A political action continued as if unblocked calls its referendum,
+    // still inside the action (§5.3); `afterActionPayoff` only finishes it.
+    if (this.beginReferendum(af)) return;
     this.finishAction(af, true);
   }
 
@@ -9897,6 +9952,12 @@ export class VtesEngine implements EngineOps {
         this.emit({ type: "PoolBurned", seat: af.actingSeat, amount: af.poolBurnIfActorNotReady });
       }
     }
+    // "…lock that vampire at the end of the action if the referendum
+    // passes" (Under the Skin superior) — recorded at the tally, due now.
+    for (const id of af.lockAtEndOfAction ?? []) {
+      const m = findMinion(this.state, id);
+      if (m && isReady(m) && !m.locked) this.emit({ type: "MinionLocked", minion: id });
+    }
     // "Do not replace until after this action" comes due now.
     for (const seatId of af.drawAfter) this.drawToReplace(seatId);
     // Wake effects last "for the duration of the action" (p. 44).
@@ -9915,8 +9976,8 @@ export class VtesEngine implements EngineOps {
     // "Lock this vampire and the blocking minion, and queue a combat
     // between them" (Hedonism). Queued, not entered: the action it was
     // played into had to finish first, so this waits until the frame is
-    // off the stack — the same place a political action pushes its
-    // referendum. Checked HERE rather than when the card was played:
+    // off the stack — after the action's own combat or referendum, which
+    // run inside it (§5.3). Checked HERE rather than when the card was played:
     // either minion can be burned or sent to torpor in between, and a
     // combat then simply does not happen.
     for (const q of af.queuedCombats) {
@@ -9939,19 +10000,74 @@ export class VtesEngine implements EngineOps {
       // torpor cannot be diablerised at all (p. 24).
       if (d && v && v.inTorpor) this.commitDiablerie(diablerist, victim);
     }
-    // A successful political action calls its referendum (p. 27) — the
-    // terms are chosen only now, the one exception to
-    // details-at-announcement (p. 25).
-    // The source is either the political action card itself, or a card in
-    // play that granted the action ("vampires can call a referendum to
-    // burn this card") — which has no `af.card` at all, so the old gate
-    // could never see it (docs/pool-drain-design.md §6).
-    const refSource =
+    // A successful diablerise commits the diablerie (blood + burn) and
+    // conducts the blood-hunt referendum — after the frame pops so the
+    // referendum sits alone on top.
+    if (success && af.actionKind === "diablerize" && af.targetMinion) {
+      const actor = findMinion(this.state, af.acting);
+      const victim = findMinion(this.state, af.targetMinion);
+      if (actor && isReady(actor) && victim && victim.inTorpor) {
+        this.commitDiablerie(af.acting, af.targetMinion);
+      }
+    }
+  }
+
+  /** What calls this action's referendum, if it is a political action. The
+   *  one place that question is answered: the before-referendum window and
+   *  the call itself must not disagree. */
+  private referendumSourceOf(
+    af: ActionFrame,
+  ): NonNullable<ActionFrame["referendumSource"]> | null {
+    return (
       af.referendumSource ??
       (af.card && this.handler(af.card.instance.name).isPoliticalAction
         ? { cardName: af.card.instance.name, cardInstanceId: af.card.instance.id }
-        : null);
-    if (success && refSource) {
+        : null)
+    );
+  }
+
+  /**
+   * A successful political action's referendum is coming. First the
+   * impulse "if a political action is successful, BEFORE THE REFERENDUM"
+   * (Yawp Court), opened only when some seat can use it — probed with the
+   * step already set, as `openAfterResolution` does. `settle` calls the
+   * referendum when that window closes; with nobody to use it, it is called
+   * now. Returns whether a referendum is coming at all.
+   * docs/hand-rush-design.md §5.3
+   */
+  private beginReferendum(af: ActionFrame): boolean {
+    if (!this.referendumSourceOf(af)) return false;
+    const previous = af.step;
+    af.step = "beforeReferendum";
+    if (this.anyPlayIn("action.beforeReferendum")) {
+      cycleRewind(af.cycle);
+      return true;
+    }
+    af.step = previous;
+    return this.callReferendum(af);
+  }
+
+  /**
+   * A successful political action calls its referendum (p. 27) — the terms
+   * are chosen only now, the one exception to details-at-announcement
+   * (p. 25). Pushed with the action frame STILL ON THE STACK, at step
+   * `referendum`: the referendum is "the part of a political action"
+   * (p. 43), so what is printed for after action resolution, the
+   * replacement draws and the end of any wake all wait for it. Until
+   * 0.11.61 it was pushed in `finishAction`, after the pop, and all of
+   * those came first (docs/hand-rush-design.md §5.3).
+   *
+   * The source is either the political action card itself, or a card in
+   * play that granted the action ("vampires can call a referendum to burn
+   * this card") — which has no `af.card` at all, so the old gate could
+   * never see it (docs/pool-drain-design.md §6).
+   *
+   * Callers have already checked that the action succeeded. Returns
+   * whether a referendum was pushed.
+   */
+  private callReferendum(af: ActionFrame): boolean {
+    const refSource = this.referendumSourceOf(af);
+    if (refSource) {
       const cardName = refSource.cardName;
       this.emit({
         type: "ReferendumCalled",
@@ -10002,20 +10118,13 @@ export class VtesEngine implements EngineOps {
         refFrame.autoPass = true;
       }
       this.state.frames.push(refFrame);
+      af.step = "referendum";
       // A card may seed per-seat bonus votes for this referendum ("each
       // Malkavian gets +1 vote", p. 28) before polling begins.
       this.handler(cardName).referendumSetup?.(refFrame, this.state);
+      return true;
     }
-    // A successful diablerise commits the diablerie (blood + burn) and
-    // conducts the blood-hunt referendum — after the frame pops so the
-    // referendum sits alone on top.
-    if (success && af.actionKind === "diablerize" && af.targetMinion) {
-      const actor = findMinion(this.state, af.acting);
-      const victim = findMinion(this.state, af.targetMinion);
-      if (actor && isReady(actor) && victim && victim.inTorpor) {
-        this.commitDiablerie(af.acting, af.targetMinion);
-      }
-    }
+    return false;
   }
 
   // -- decision building ----------------------------------------------------
@@ -10034,7 +10143,9 @@ export class VtesEngine implements EngineOps {
             ? "action.announce"
             : top.step === "afterResolution"
               ? "action.afterResolution"
-              : "action.effects";
+              : top.step === "beforeReferendum"
+                ? "action.beforeReferendum"
+                : "action.effects";
         const seat = cycleSeat(top.cycle);
         if (top.bleedBoonApplied && top.step === "C") {
           // "Only modifiers and reactions that can be played 'when the
@@ -10056,8 +10167,10 @@ export class VtesEngine implements EngineOps {
           passOption(),
           ...this.handlerOptions(seat, window),
           ...this.abilityOptionsFor(seat, window),
-          // The action is over: nobody is blocking it any more.
-          ...(top.step === "afterResolution" ? [] : this.blockOptions(top, seat)),
+          // The action has succeeded: nobody is blocking it any more.
+          ...(top.step === "afterResolution" || top.step === "beforeReferendum"
+            ? []
+            : this.blockOptions(top, seat)),
         ]);
       }
       case "blockAttempt": {

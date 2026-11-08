@@ -146,6 +146,14 @@ built two waves apart:
 - The 2 damage is an **`AfterCombatRider`** with `source: null` —
   "environmental", which is what `null` has meant since Daring the Dawn.
 
+> **Superseded in 0.11.61** (`hand-rush-design.md` §5.3). The first two
+> bullets no longer describe the engine. The referendum is now called
+> inside the action, before the after-resolution window. Yawp Court has
+> its own `action.beforeReferendum` impulse, and its combat is entered at
+> once with `enterCombatNow` rather than queued. The reading in the
+> next paragraph still stands: `callReferendum` calls the referendum
+> whatever the combat did.
+
 **Reading on record: "the referendum is conducted as normal" describes
 what happens anyway.** The sentence is reassurance to a human reader that
 the combat does not cancel the vote; the engine pushes the referendum
