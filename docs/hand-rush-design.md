@@ -403,9 +403,9 @@ the action and hands the impulse back to the acting Methuselah (p. 8).
   cannot enter combat with other minions you control". It's now refused in
   the option list and in `enterCombatNow`.
 
-**What stays after the action.** A diablerie's blood hunt is still called
-after the action frame pops (`finishAction`). It isn't a political
-action, and this fix doesn't change it.
+**What stays after the action.** Nothing now. A diablerie's blood hunt was
+left after the action frame in 0.11.61 and moved inside it in 0.11.62
+(§5.4).
 
 **Tests.** Three new cases in `tests/cards/hand-rush.test.ts` (Freak
 Drive, Warsaw Station and Under the Skin, each against the referendum).
@@ -414,6 +414,52 @@ now read the event log. The first one had been passing for the wrong
 reason: the referendum had already finished, so no referendum frame was
 on the stack. A new negative test covers the own-vampire case. All six
 fail on 0.11.60 and pass on 0.11.61.
+
+### 5.4 D5: the diablerie and its blood hunt are inside the action (0.11.62)
+
+The owner's ruling (November 8, 2026) was to follow the rules. They're
+clear on both points:
+
+- **The diablerie is the action's effect.** p. 23, "Diablerise a Vampire in
+  Torpor": "If the action is successful, the victim is diablerised."
+- **The hunt is immediate.** p. 35: "a referendum is automatically and
+  immediately conducted to determine if a blood hunt will be called". The
+  same paragraph says that action modifiers and reaction cards can't be
+  played in it, which only needs saying because it happens during an action.
+
+**What was wrong.** Both the diablerie and the hunt waited for
+`finishAction`, after the action frame popped. The reason was §2 of
+`torpor-prey-design.md`: a frame pushed during resolution used to be thrown
+away with the action. That stopped being true in 0.11.60, when a step that
+waits (`rushCombat`, `referendum`) let resolution stop and resume. So the
+after-resolution window, Warsaw Station's unlock, the replacement draws and
+the end of every wake all came before the victim was even burned.
+
+**The fix.** `commitActionDiablerie` runs straight after the success
+effects in `resolveActionInner`, for the diablerise action and for a card's
+"Ⓓ Diablerize a vampire in torpor" (`pendingDiablerie`). If it pushed a
+hunt, the action stops at step `referendum`, and `settle` resumes it through
+`afterActionPayoff`, the same path a political action takes. With no hunt
+to call (Archon, Fueled by Heart's Blood), the action carries on as normal.
+The check that the diablerist is ready (p. 34) now covers the card path as
+well.
+
+**Step 4 before the hunt.** `commitDiablerie` now pushes the hunt and then
+raises step 4's master-Discipline search. Choice frames are a stack, so the
+search is asked first, on every path. Step 4 is part of the diablerie, and
+the Red List rule (p. 9) also places the diablerie's own payoffs "before the
+blood hunt referendum is called". On the blocked-leave-torpor path the hunt
+used to come first, and `tests/engine/diablerie.test.ts` recorded that
+order; its trace now answers the search first.
+
+**Unchanged.** Absolution of the Diabolist and Lay Low act in the hunt's
+own after-resolution window, which doesn't depend on what is under it.
+
+**Tests.** `tests/engine/diablerie-in-action.test.ts` has four cases. Two of
+them fail on 0.11.61: the hunt polls with the action frame still under it,
+and a wake lasts through the hunt. The step-4 ordering case passes on both
+versions on this path, so it guards the order rather than proving a change.
+The Archon case is the negative: no hunt, and the action still ends.
 
 ## 6. What isn't in this wave
 

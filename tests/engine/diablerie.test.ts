@@ -195,6 +195,9 @@ describe("leave torpor blocked by a vampire", () => {
     runTrace(engine, [
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // block succeeds → offer
       ["Bob", "diablerize:offer:W:V1"], // Bob accepts → diablerise V1
+      // Step 4 (V1 was older): the Discipline search is part of the
+      // diablerie, so it is asked before the hunt it causes (p. 34–35).
+      ["Bob", "choice:diablerieDiscipline:W:diablerieDiscipline:none"],
       // Blood hunt on W (the diablerist); nobody has votes → tie → fails.
       ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"],
     ]);

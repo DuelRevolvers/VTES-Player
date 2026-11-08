@@ -2180,12 +2180,6 @@ export class VtesEngine implements EngineOps {
     // 3. The victim is burned; its cards and counters go with it.
     const victimCapacity = capacityOf(v);
     this.burnMinion(victim);
-    // 4. "If the victim was older, the diablerist may gain a master
-    //    Discipline card." A search, so it is a question — and unlike the
-    //    equipment it has nothing to race: step 4 comes after the burn, so
-    //    the deferred queue asking it once the action settles is exactly
-    //    the right moment.
-    this.offerDiablerieDiscipline(diablerist, victimCapacity);
     // "Blood hunts cannot be called on vampires with capacity GREATER THAN
     // the number of counters on this card who diablerize a YOUNGER
     // vampire" (Fueled by Heart's Blood). Read here, where both capacities
@@ -2201,6 +2195,13 @@ export class VtesEngine implements EngineOps {
       );
     // The blood hunt: an automatic, immediate referendum (p. 35).
     if (!shielded) this.pushBloodHunt(diablerist);
+    // 4. "If the victim was older, the diablerist may gain a master
+    //    Discipline card." A search, so it is a question — raised AFTER the
+    //    hunt is pushed because choice frames are a stack: raised last, it
+    //    is asked first, and step 4 is part of the diablerie, which comes
+    //    before the hunt it causes (p. 34–35). Whether the choice is pushed
+    //    now or queued until the action settles, it lands on top of the hunt.
+    this.offerDiablerieDiscipline(diablerist, victimCapacity);
   }
 
   /**
@@ -9596,9 +9597,8 @@ export class VtesEngine implements EngineOps {
           }
         }
       } else if (af.actionKind === "diablerize" && af.targetMinion) {
-        // Cost none (p. 24). The diablerie resolution + blood hunt run
-        // after the action frame pops (below), so the referendum sits
-        // alone on top of the stack.
+        // Cost none (p. 24). The diablerie itself is committed once the
+        // card's own effects have run (`commitActionDiablerie`).
       }
       // A granted action's own cost ("…that costs 2 pool"), paid at
       // resolution and only on success (p. 27).
@@ -9646,6 +9646,10 @@ export class VtesEngine implements EngineOps {
 
   private resolveActionInner(af: ActionFrame, success: boolean): void {
     let entered = success ? this.applySuccessEffects(af) : false;
+    // The diablerie IS the action's effect (p. 23), and its blood hunt is
+    // conducted "automatically and immediately" (p. 35) — so both happen
+    // here, inside the action, like a political action's referendum (§5.3).
+    const huntCalled = success && this.commitActionDiablerie(af);
     // "They burn 1 blood before action resolution" unless they blocked
     // (Forced Awakening) — applies whether the action succeeded or not.
     // "…become locked BEFORE ACTION RESOLUTION" (Faceless Night). p. 48:
@@ -9714,6 +9718,14 @@ export class VtesEngine implements EngineOps {
     // was played during it (docs/archetypes-design.md §3).
     this.notifyActionResolved(af, success);
     af.resolvedSuccess = success;
+    // The blood hunt is on top of the stack, and everything printed for
+    // after action resolution waits for it. `settle` resumes at `referendum`
+    // once it is over, the same as a political action's.
+    // docs/hand-rush-design.md §5.4
+    if (huntCalled) {
+      af.step = "referendum";
+      return;
+    }
     // A successful rush fights NOW, inside resolution — where a blocked
     // action's combat already runs (p. 27) — so the combat comes before the
     // after-resolution damage and window and the end-of-action tail
@@ -9728,6 +9740,35 @@ export class VtesEngine implements EngineOps {
     this.applyAfterResolutionUnlock(af, success);
     this.applyAfterResolutionDamage(af);
     this.openAfterResolution(af, success);
+  }
+
+  /**
+   * A successful action that diablerises — the "Diablerise a vampire in
+   * torpor" action (p. 23) or a card's "Ⓓ Diablerize a vampire in torpor"
+   * (Cloak of Blood, Stealing Years) — commits the diablerie now, with the
+   * action frame still on the stack. Until 0.11.62 it waited for
+   * `finishAction`, after the pop, so the after-resolution window, the
+   * replacement draws and the end of wakes all came before the victim was
+   * even burned (docs/hand-rush-design.md §5.4). Returns whether a blood
+   * hunt was pushed; a shielded diablerist (Archon, Fueled by Heart's
+   * Blood) has none, and the action carries on as normal.
+   */
+  private commitActionDiablerie(af: ActionFrame): boolean {
+    const pair =
+      af.pendingDiablerie ??
+      (af.actionKind === "diablerize" && af.targetMinion
+        ? { diablerist: af.acting, victim: af.targetMinion }
+        : null);
+    if (!pair) return false;
+    const d = findMinion(this.state, pair.diablerist);
+    const v = findMinion(this.state, pair.victim);
+    // Either can have left play, "only ready vampires can commit
+    // diablerie" (p. 34), and a victim who has left torpor cannot be
+    // diablerised at all (p. 24).
+    if (!d || !isReady(d) || !v || !v.inTorpor) return false;
+    const depth = this.state.frames.length;
+    this.commitDiablerie(pair.diablerist, pair.victim);
+    return this.state.frames.length > depth;
   }
 
   /** "After action resolution, if that action was SUCCESSFUL, unlock the
@@ -9985,30 +10026,6 @@ export class VtesEngine implements EngineOps {
       const b = findMinion(this.state, q.b);
       if (!a || !b || !isReady(a) || !isReady(b)) continue;
       this.pushCombat(a.id, a.controller, b.id, b.controller, null, false, q.outcome ?? null);
-    }
-    // "Ⓓ Diablerize a vampire in torpor" (Cloak of Blood, Stealing Years) —
-    // queued for the same reason the combats above are: the diablerie's fifth
-    // step PUSHES A REFERENDUM (the blood hunt, p. 35), and a frame pushed
-    // while the action frame is still on the stack is discarded with it. The
-    // card's own effects run at resolution; the resolution itself waits until
-    // the action is off the stack. docs/torpor-prey-design.md §2
-    if (af.pendingDiablerie) {
-      const { diablerist, victim } = af.pendingDiablerie;
-      const d = findMinion(this.state, diablerist);
-      const v = findMinion(this.state, victim);
-      // Either can have left play in between, and a victim who has left
-      // torpor cannot be diablerised at all (p. 24).
-      if (d && v && v.inTorpor) this.commitDiablerie(diablerist, victim);
-    }
-    // A successful diablerise commits the diablerie (blood + burn) and
-    // conducts the blood-hunt referendum — after the frame pops so the
-    // referendum sits alone on top.
-    if (success && af.actionKind === "diablerize" && af.targetMinion) {
-      const actor = findMinion(this.state, af.acting);
-      const victim = findMinion(this.state, af.targetMinion);
-      if (actor && isReady(actor) && victim && victim.inTorpor) {
-        this.commitDiablerie(af.acting, af.targetMinion);
-      }
     }
   }
 

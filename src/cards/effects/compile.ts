@@ -2227,9 +2227,10 @@ function compileActionCard(spec: CardSpec): CardHandler {
               if (e.bloodHuntVotes.sect !== undefined) rider.sect = e.bloodHuntVotes.sect;
               eater.bloodHuntVoteRiders = [...(eater.bloodHuntVoteRiders ?? []), rider];
             }
-            // QUEUED, not committed here: step 5 pushes the blood hunt, and a
-            // referendum pushed inside action resolution is popped with the
-            // action (§2). The engine flushes it as the action settles.
+            // QUEUED, not committed here: the engine commits it once this
+            // card's effects are done, still inside the action, and the blood
+            // hunt it pushes runs before anything printed for after action
+            // resolution (docs/hand-rush-design.md §5.4).
             af.pendingDiablerie = { diablerist: eater.id, victim: prey.id };
             if (victimDisciplines.length > 0) {
               ops.raiseChoice({

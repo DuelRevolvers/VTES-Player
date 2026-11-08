@@ -1,7 +1,7 @@
 {
   "name": "vtes-platform",
   "private": true,
-  "version": "0.11.61",
+  "version": "0.11.62",
   "type": "module",
   "description": "VTES online platform with AI players (V5 card pool). Non-commercial Dark Pack fan project.",
   "scripts": {

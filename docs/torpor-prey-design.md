@@ -44,6 +44,12 @@ know it.**
 The flush re-reads both minions: either can have left play in between, and a
 victim who has left torpor cannot be diablerised at all.
 
+**Superseded in 0.11.62.** The diablerie is still queued past the card's own
+effects, but it's no longer flushed in `finishAction`. Since 0.11.60 an
+action can stop at a waiting step and resume, so the hunt is no longer
+thrown away. `commitActionDiablerie` commits it inside the action and stops
+at step `referendum` (`hand-rush-design.md` §5.4).
+
 ## §3 — Reading the victim before the victim is gone
 
 "…and this vampire may gain one level of a Discipline **the victim had**."
