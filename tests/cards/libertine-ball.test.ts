@@ -156,8 +156,19 @@ describe("Toreador antitribu groups 4–5 are open", () => {
   });
 
   it("admits no other legacy clan — the filter is per clan", () => {
+    // The reason, not the list (which grows a clan a wave): every vampire
+    // admitted from outside the V5 sets is of a clan the config opens.
     const open = (cryptGroups as { open: Array<{ clan: string }> }).open.map((o) => o.clan);
-    expect(open).toEqual([TA]);
+    expect(open).toContain(TA);
+    const pool = (registry as { pool: string[] }).pool;
+    const legacy = Object.values(
+      (registry as { entries: Record<string, { card: { kind: string; name: string; clan?: string; sets?: string[] } }> })
+        .entries,
+    )
+      .map((e) => e.card)
+      .filter((c) => c.kind === "crypt" && !(c.sets ?? []).some((s) => pool.includes(s)));
+    expect(legacy.length).toBeGreaterThan(0);
+    expect(legacy.filter((c) => !open.includes(c.clan ?? "")).map((c) => c.name)).toEqual([]);
   });
 });
 

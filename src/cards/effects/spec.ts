@@ -2731,11 +2731,14 @@ export interface CardSpec {
      * docs/politics-locations-design.md §5
      */
     politicalGrant?: {
-      who?: { clan?: string; sect?: Sect; minCapacity?: number };
+      /** `self`: "BENJAMIN can call a referendum…" — only the vampire this
+       *  crypt card IS (docs/first-blood-nosferatu-design.md §3). */
+      who?: { clan?: string; sect?: Sect; minCapacity?: number; self?: boolean };
       stealth?: number;
       oncePerTurn?: boolean;
-      /** What a passed referendum does. */
-      effect: { gainPool: number };
+      /** What a passed referendum does. `handSizeForGame`: "+1 hand size
+       *  until the end of the game" for the caller. */
+      effect: { gainPool: number; handSizeForGame?: number };
     };
     /** Master that attaches to a chosen own vampire of this clan on play
      *  (Sight Beyond Sight), applying `statics` to the bearer. */
@@ -4396,6 +4399,9 @@ export interface CardSpec {
      *  rush is unqualified and reaches its own controller's vampires;
      *  this one may not. docs/plain-allies-design.md §2 */
     othersOnly?: boolean;
+    /** "…a minion controlled by your PREDATOR OR PREY" (Gustaphe
+     *  Brunnelle). docs/first-blood-nosferatu-design.md §4 */
+    controlledBy?: "prey" | "predatorOrPrey";
   };
   /** "Requires a prince or justicar" — the acting vampire's title must be
    *  one of these (p. 28 titles). */

@@ -19682,6 +19682,46 @@ export const cryptSpecs: CardSpec[] = [
       controller: { targetControlsReadyClan: ["Toreador"] },
     },
   ]),
+  // ---- Wave 116: First Blood Nosferatu (docs/first-blood-nosferatu-design.md)
+
+  // "Camarilla: Jeremy can bleed with +1 bleed as a Ⓓ action." His bleed
+  // IS the Ⓓ action, so this is +1 bleed on his BLEED actions — and only
+  // those, which is why it is conditional and not a flat trait (§1).
+  condCrypt(200696, 'Jeremy "Wix" Wyzchovsky (G4)', [
+    { bleed: 1, actionKinds: ["bleed"] },
+  ]),
+  // "Camarilla primogen: Gustaphe can enter combat with a minion controlled
+  // by your predator or prey as a Ⓓ action." (§4)
+  rushCrypt(200549, "Gustaphe Brunnelle (G4)", {
+    targets: "minion",
+    controlledBy: "predatorOrPrey",
+  }),
+  // "Camarilla: The controller of the minion in combat with Harold plays
+  // with an open hand." Open to the WHOLE TABLE (owner ruling 2026-11-10,
+  // §2) — Owl Companion's static, read off Harold himself.
+  flatCrypt(200571, "Harold Tanner (G4)", { revealsOpposingHand: true }),
+  // "Camarilla: Damage Petra inflicts on Baali is aggravated. A vampire
+  // burns 1 blood after using a press to continue combat with her." No
+  // Baali is in the pool yet; the clause is built anyway (owner ruling
+  // 2026-11-10) and tested on a constructed Baali (§5).
+  flatCrypt(201116, "Petra (G4)", {
+    allDamageAggravatedVsClan: "Baali",
+    pressToContinueBloodToll: 1,
+  }),
+  // "Camarilla Prince of Washington, D.C.: Benjamin can call a referendum
+  // to give you +1 hand size until the end of the game as a +1 stealth
+  // political action." Black Forest Base's grant, limited to Benjamin
+  // himself, with a payout no frame outlives (§3).
+  {
+    ...cryptPerm(200190, "Benjamin Rose (G5)", {
+      politicalGrant: {
+        who: { self: true },
+        stealth: 1,
+        effect: { gainPool: 0, handSizeForGame: 1 },
+      },
+    }),
+    referendumEffect: "other",
+  },
   condCrypt(201767, "Osvaldo Kühnemann (G6)", [
     {
       bleed: 1,

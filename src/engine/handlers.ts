@@ -164,6 +164,10 @@ export interface EngineOps {
        *  with `grantRequirement`; bespoke grants pass it by hand.
        *  docs/granted-action-requirements-design.md §3 */
       requires?: { clans: string[] };
+      /** A granted rush's printed target terms, so resolution asks
+       *  `rushTargetOk` again (the [LSJ 20070411] fizzle).
+       *  docs/first-blood-nosferatu-design.md §4 */
+      rushTargetFilter?: RushTargetFilter;
     },
   ): void;
   /** Ability-based prevention (War Ghoul's "prevent 1 each round"):
@@ -911,7 +915,9 @@ export interface EngineOps {
   addHandSizeBonus(args: {
     seat: SeatId;
     amount: number;
-    scope: "turn" | "combat";
+    /** `"game"`: "…until the end of the game" (Benjamin Rose), held on
+     *  the seat. */
+    scope: "turn" | "combat" | "game";
     cardName: string;
     cardId: CardInstanceId;
     /** "…until your next DISCARD PHASE" (Fotini) — lifts as that phase

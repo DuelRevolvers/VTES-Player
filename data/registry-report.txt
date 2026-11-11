@@ -1,11 +1,11 @@
-V5 pool registry — built 2026-11-08T21:49:39.609Z
+V5 pool registry — built 2026-11-11T00:24:11.302Z
 Sets: Fifth Edition, Fifth Edition (Anarch), Fifth Edition (Companion), Sabbat V5, New Blood, New Blood II, New Blood III
 
-Unique cards:   1160
-  Crypt:        226
+Unique cards:   1168
+  Crypt:        234
   Library:      934
-Supported:      1034 / 1160
-Precon decks:   33
+Supported:      1039 / 1168
+Precon decks:   34
 
 Library by type:
   Master             246
@@ -20,11 +20,11 @@ Library by type:
   Event              21
 
 Crypt by clan:
+  Nosferatu          24
   Lasombra           19
   Brujah             19
   Ministry           18
   Hecata             18
-  Nosferatu          16
   Ventrue            15
   Tremere            15
   Tzimisce           15

@@ -985,6 +985,10 @@ export interface PermanentStatics {
    *  the card's "any damage" deliberately outruns.
    *  docs/mummies-design.md §4 */
   allDamageAggravatedVsClan?: string;
+  /** "A vampire burns 1 blood after using a press to continue combat with
+   *  HER" (Petra) — read off the OTHER combatant by
+   *  `pressToContinueToll`. docs/first-blood-nosferatu-design.md §5 */
+  pressToContinueBloodToll?: number;
   /** "During your minion phase, \<this ally\> can unlock" (Tutu) — a
    *  free unlock offered once each of its controller's minion phases.
    *  docs/mummies-design.md §5 */
@@ -1552,6 +1556,12 @@ export interface SeatState {
   /** Remaining crypt draw pile (top = index 0). */
   crypt: MinionState[];
   hand: CardInstance[];
+  /** "+1 hand size UNTIL THE END OF THE GAME" (Benjamin Rose's
+   *  referendum): a grant no frame outlives, so it sits on the seat. It is
+   *  not a static on a card in play, because it stays when its source
+   *  leaves play. Optional so old fixtures and saves are untouched.
+   *  docs/first-blood-nosferatu-design.md §3 */
+  handSizeBonus?: HandSizeGrant[];
   /** Face-down draw pile; cards played from hand are replaced from here
    *  (p. 7). Empty library just means no more replacement. */
   library: CardInstance[];
@@ -2931,8 +2941,10 @@ export interface RushTargetFilter {
   lockedOnly?: boolean;
   /** "…controlled by ANOTHER Methuselah". */
   othersOnly?: boolean;
-  /** "…an ally controlled by your PREY" (Purity of the Beast). */
-  controlledBy?: "prey";
+  /** "…an ally controlled by your PREY" (Purity of the Beast);
+   *  `predatorOrPrey`: "…a minion controlled by your predator or prey"
+   *  (Gustaphe Brunnelle). */
+  controlledBy?: "prey" | "predatorOrPrey";
   /** "…a Sabbat vampire" (Monomancy) — lowercase, as `MinionState.sect`. */
   sect?: string;
   /** "…an OLDER vampire" (Games of Instinct): a higher capacity (p. 5). */

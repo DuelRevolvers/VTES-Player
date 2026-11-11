@@ -95,7 +95,7 @@ function intoCombat(setup: (s: GameState) => void = () => {}) {
 // ---------------------------------------------------------------------------
 
 describe("Owl Companion (101340) — the open hand", () => {
-  it("opens the OPPOSING controller's hand to the retainer's controller", () => {
+  it("opens the OPPOSING controller's hand to the WHOLE TABLE", () => {
     const { state } = intoCombat((s) => {
       employ(s, "V1", "owl", "Owl Companion");
       seatOf(s, "Bob").hand = [{ id: "b1", name: "Deflection" }];
@@ -109,11 +109,12 @@ describe("Owl Companion (101340) — the open hand", () => {
     const bob = view.seats.find((s) => s.id === "Bob")!;
     expect(Array.isArray(bob.hand)).toBe(true);
 
-    // CONTROL: Carol is not in the combat and sees nothing.
+    // Carol is not in the combat and sees it too: an open hand is open to
+    // the table (owner ruling 2026-11-10, docs/first-blood-nosferatu-design.md §2).
     const carol = redactFor(state, "Carol");
-    expect(carol.seats.find((s) => s.id === "Bob")!.hand.every((c) => c.name === "")).toBe(
-      true,
-    );
+    expect(carol.seats.find((s) => s.id === "Bob")!.hand.map((c) => c.name)).toEqual([
+      "Deflection",
+    ]);
     // …and Alice's own hand is not opened to Bob by her own owl.
     const bobView = redactFor(state, "Bob");
     expect(bobView.seats.find((s) => s.id === "Alice")!.hand.every((c) => c.name === "")).toBe(

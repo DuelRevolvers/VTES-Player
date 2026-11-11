@@ -42,7 +42,8 @@ contradicts the rulebook, card text wins** (the Golden Rule, p. 16).
 - **Crypt** = the V5 sets **plus the clans opened ONE AT A TIME** in
   `config/crypt-groups.json` (`open: [{ clan, groups }]`, owner ruling
   2026-11-08 — a bare group list opened every clan at once). Open today:
-  **Toreador antitribu groups 4–5** (wave 115). Ask before opening each.
+  **Toreador antitribu groups 4–5** (wave 115) and **Nosferatu groups
+  4–5** (wave 116). Ask before opening each.
 - **Widening is a PIPELINE, not a switch** (`docs/pool-widening-design.md`).
   Opening a group admits only vampires that are already whole — the
   builder gates on it, so the pool can never get ahead of the card waves.
@@ -134,7 +135,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 332 test files, 3763 tests**, with `npm run typecheck`,
+**Green baseline: 333 test files, 3781 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -980,7 +981,9 @@ target predicate `rushTargetOk` at announcement and resolution, and a
 successful rush's combat runs INSIDE resolution, step `rushCombat`, before
 the after-resolution window and the end-of-action tail in `finishAction`),
 libertine-ball (wave 115, 0.11.64: per-clan crypt groups, `untitledOnly`
-auras; §5 is the rule for legacy precons in the chooser).
+auras; §5 is the rule for legacy precons in the chooser),
+first-blood-nosferatu (wave 116, 0.11.66: an open hand is open to the
+whole table; granted rushes re-ask their target terms at resolution).
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

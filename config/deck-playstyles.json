@@ -2,6 +2,7 @@
   "_comment": "Which PLAYSTYLE each precon plays (docs/ai-playstyles-design.md). Hand-maintained: generated from what each deck's cards actually DO - the effect families, not the card types - then owned by hand, because a threshold that is right for 30 decks is wrong for two. Keyed \"<set>|<name>\", the same identity DeckSource uses. A deck that is not here - an imported or pasted one - falls back to balanced; the lookup must be TOTAL.",
   "styles": {
     "Sabbat Preconstructed|Libertine Ball": "politician",
+    "First Blood|Nosferatu": "bruiser",
     "Fifth Edition|Hecata": "builder",
     "Fifth Edition|Lasombra": "balanced",
     "Fifth Edition|Malkavian": "stalker",

@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-08T21:49:39.609Z",
+ "fetchedAt": "2026-11-11T00:24:11.302Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -21831,6 +21831,54 @@
    },
    "supported": true
   },
+  "200185": {
+   "card": {
+    "kind": "crypt",
+    "id": 200185,
+    "name": "Beetleman (G4)",
+    "clan": "Nosferatu",
+    "capacity": 4,
+    "group": 4,
+    "disciplines": {
+     "Obf": "basic",
+     "Ani": "superior"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/beetlemang4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": false
+  },
+  "200190": {
+   "card": {
+    "kind": "crypt",
+    "id": 200190,
+    "name": "Benjamin Rose (G5)",
+    "clan": "Nosferatu",
+    "capacity": 7,
+    "group": 5,
+    "disciplines": {
+     "Ani": "basic",
+     "Pot": "basic",
+     "Aus": "superior",
+     "Obf": "superior"
+    },
+    "cardText": "Camarilla Prince of Washington, D.C.: Benjamin can call a referendum to give you +1 hand size until the end of the game as a +1 stealth political action.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/benjaminroseg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "200303": {
    "card": {
     "kind": "crypt",
@@ -21853,6 +21901,103 @@
     ]
    },
    "supported": false
+  },
+  "200473": {
+   "card": {
+    "kind": "crypt",
+    "id": 200473,
+    "name": "Foureyes (G4)",
+    "clan": "Nosferatu",
+    "capacity": 3,
+    "group": 4,
+    "disciplines": {
+     "Obf": "basic",
+     "Pot": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/foureyesg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
+  "200549": {
+   "card": {
+    "kind": "crypt",
+    "id": 200549,
+    "name": "Gustaphe Brunnelle (G4)",
+    "clan": "Nosferatu",
+    "capacity": 8,
+    "group": 4,
+    "disciplines": {
+     "Obf": "basic",
+     "Ani": "superior",
+     "Dom": "superior",
+     "Pot": "superior"
+    },
+    "cardText": "Camarilla primogen: Gustaphe can enter combat with a minion controlled by your predator or prey as a Ⓓ action.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/gustaphebrunnelleg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "200571": {
+   "card": {
+    "kind": "crypt",
+    "id": 200571,
+    "name": "Harold Tanner (G4)",
+    "clan": "Nosferatu",
+    "capacity": 6,
+    "group": 4,
+    "disciplines": {
+     "Ani": "basic",
+     "Dom": "basic",
+     "Obf": "basic",
+     "Pot": "superior"
+    },
+    "cardText": "Camarilla: The controller of the minion in combat with Harold plays with an open hand.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/haroldtannerg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "Heirs to the Blood",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "200696": {
+   "card": {
+    "kind": "crypt",
+    "id": 200696,
+    "name": "Jeremy \"Wix\" Wyzchovsky (G4)",
+    "clan": "Nosferatu",
+    "capacity": 5,
+    "group": 4,
+    "disciplines": {
+     "Ani": "basic",
+     "Obf": "basic",
+     "Pot": "basic"
+    },
+    "cardText": "Camarilla: Jeremy can bleed with +1 bleed as a Ⓓ action.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/jeremywixwyzchovskyg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
   },
   "200717": {
    "card": {
@@ -21988,6 +22133,51 @@
     ]
    },
    "supported": false
+  },
+  "201054": {
+   "card": {
+    "kind": "crypt",
+    "id": 201054,
+    "name": "Nichodemus (G5)",
+    "clan": "Nosferatu",
+    "capacity": 2,
+    "group": 5,
+    "disciplines": {
+     "Pot": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/nichodemusg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
+  "201116": {
+   "card": {
+    "kind": "crypt",
+    "id": 201116,
+    "name": "Petra (G4)",
+    "clan": "Nosferatu",
+    "capacity": 5,
+    "group": 4,
+    "disciplines": {
+     "Aus": "basic",
+     "Ani": "superior",
+     "Obf": "superior"
+    },
+    "cardText": "Camarilla: Damage Petra inflicts on Baali is aggravated. A vampire burns 1 blood after using a press to continue combat with her.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/petrag4.jpg",
+    "sets": [
+     "Gehenna",
+     "Heirs to the Blood",
+     "First Blood"
+    ]
+   },
+   "supported": true
   },
   "201514": {
    "card": {
@@ -31414,6 +31604,120 @@
     },
     {
      "id": 201776,
+     "copies": 1
+    }
+   ]
+  },
+  {
+   "set": "First Blood",
+   "name": "Nosferatu",
+   "cards": [
+    {
+     "id": 100029,
+     "copies": 6
+    },
+    {
+     "id": 100046,
+     "copies": 3
+    },
+    {
+     "id": 100070,
+     "copies": 1
+    },
+    {
+     "id": 100093,
+     "copies": 1
+    },
+    {
+     "id": 100199,
+     "copies": 3
+    },
+    {
+     "id": 100301,
+     "copies": 5
+    },
+    {
+     "id": 100308,
+     "copies": 3
+    },
+    {
+     "id": 100362,
+     "copies": 3
+    },
+    {
+     "id": 100390,
+     "copies": 3
+    },
+    {
+     "id": 100698,
+     "copies": 1
+    },
+    {
+     "id": 100760,
+     "copies": 3
+    },
+    {
+     "id": 100863,
+     "copies": 3
+    },
+    {
+     "id": 100995,
+     "copies": 2
+    },
+    {
+     "id": 101015,
+     "copies": 1
+    },
+    {
+     "id": 101070,
+     "copies": 1
+    },
+    {
+     "id": 101073,
+     "copies": 1
+    },
+    {
+     "id": 101125,
+     "copies": 3
+    },
+    {
+     "id": 101321,
+     "copies": 2
+    },
+    {
+     "id": 101439,
+     "copies": 1
+    },
+    {
+     "id": 101550,
+     "copies": 2
+    },
+    {
+     "id": 101808,
+     "copies": 1
+    },
+    {
+     "id": 200185,
+     "copies": 1
+    },
+    {
+     "id": 200190,
+     "copies": 1
+    },
+    {
+     "id": 200549,
+     "copies": 1
+    },
+    {
+     "id": 200571,
+     "copies": 1
+    },
+    {
+     "id": 200696,
+     "copies": 1
+    },
+    {
+     "id": 201116,
      "copies": 1
     }
    ]

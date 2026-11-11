@@ -8100,6 +8100,7 @@ export function politicalGrant(
         if (g.who?.clan !== undefined && m.clan !== g.who.clan) continue;
         if (g.who?.sect !== undefined && m.sect !== g.who.sect) continue;
         if (g.who?.minCapacity !== undefined && capacityOf(m) < g.who.minCapacity) continue;
+        if (g.who?.self && m.id !== owner.minion) continue;
         options.push({
           id: `act:${spec.name}:${entry.card.id}:referendum:${m.id}`,
           kind: "useEntryAction",
@@ -8132,6 +8133,17 @@ export function politicalGrant(
       // acting minion, so its controller is the calling seat.
       if (g.effect.gainPool > 0) {
         ops.emit({ type: "PoolGained", seat: frame.caller, amount: g.effect.gainPool });
+      }
+      // "…to give YOU +1 hand size until the end of the game" (Benjamin
+      // Rose): "you" is his controller, the calling seat.
+      if (g.effect.handSizeForGame && frame.cardInstanceId) {
+        ops.addHandSizeBonus({
+          seat: frame.caller,
+          amount: g.effect.handSizeForGame,
+          scope: "game",
+          cardName: spec.name,
+          cardId: frame.cardInstanceId,
+        });
       }
     },
   };
@@ -8632,11 +8644,25 @@ function rushGrant(
     useActionOption(entry, _owner, choice, ops) {
       const target = choice.params["target"];
       if (!target) throw new Error(`${spec.name}: no rush target`);
+      const rush = spec.rush;
       ops.announceEntryAction(entry, choice.minion, {
         targetMinion: target,
         // "…as a Ⓓ action that costs 1 life" (Rotting Behemoth) — paid at
         // resolution, only on success (p. 27).
-        ...(spec.rush?.cost ? { cost: spec.rush.cost } : {}),
+        ...(rush?.cost ? { cost: rush.cost } : {}),
+        // The printed target terms, asked again at resolution: a target
+        // that stopped qualifying fizzles the rush [LSJ 20070411]. Before
+        // 0.11.66 a granted rush was never re-asked.
+        ...(rush
+          ? {
+              rushTargetFilter: {
+                targets: rush.targets,
+                ...(rush.lockedOnly ? { lockedOnly: true } : {}),
+                ...(rush.othersOnly ? { othersOnly: true } : {}),
+                ...(rush.controlledBy ? { controlledBy: rush.controlledBy } : {}),
+              },
+            }
+          : {}),
       });
     },
   };

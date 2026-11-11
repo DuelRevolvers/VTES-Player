@@ -78,6 +78,13 @@ export function rushTargetOk(
   if (f.lockedOnly && !m.locked) return false;
   if (f.othersOnly && m.controller === actor.controller) return false;
   if (f.controlledBy === "prey" && m.controller !== preyOf(state, actor.controller)) return false;
+  if (
+    f.controlledBy === "predatorOrPrey" &&
+    m.controller !== preyOf(state, actor.controller) &&
+    m.controller !== predatorOf(state, actor.controller)
+  ) {
+    return false;
+  }
   if (f.sect !== undefined && m.sect !== f.sect) return false;
   // "Older" is a higher capacity (p. 5) — the derived one.
   if (f.olderOnly && capacityOf(m) <= capacityOf(actor)) return false;
@@ -505,6 +512,9 @@ export function handSizeOf(state: GameState, seatId: SeatId): number {
       if (g.seat === seatId) size += g.amount;
     }
   }
+  // "…until the end of the game" — held on the seat, since no frame lives
+  // that long (docs/first-blood-nosferatu-design.md §3).
+  for (const g of getSeat(state, seatId).handSizeBonus ?? []) size += g.amount;
   return size;
 }
 
@@ -608,23 +618,10 @@ export function openHandsFor(state: GameState, viewer: SeatId): SeatId[] {
     const open = opposingCombatStatics(state, s.id).some(
       (st) => st.revealsOpposingHand,
     );
-    if (!open) continue;
-    // …and it is open to the RETAINER's controller, not to the table.
-    for (const f of state.frames) {
-      if (f.kind !== "combat") continue;
-      for (const [me, foe] of [
-        [f.acting, f.opposing],
-        [f.opposing, f.acting],
-      ] as const) {
-        const victim = findMinion(state, me);
-        const bearer = findMinion(state, foe);
-        if (!victim || !bearer || victim.controller !== s.id) continue;
-        if (bearer.controller !== viewer) continue;
-        if (bearer.attached.some((p) => p.statics.revealsOpposingHand)) {
-          out.push(s.id);
-        }
-      }
-    }
+    // …and an open hand is open to the WHOLE TABLE, not only to the
+    // controller of the card that opened it (owner ruling 2026-11-10, Harold
+    // Tanner and Owl Companion; docs/first-blood-nosferatu-design.md §2).
+    if (open) out.push(s.id);
   }
   return out;
 }

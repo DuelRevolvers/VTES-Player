@@ -109,6 +109,7 @@ import type {
   PlayCostMod,
   ReferendumAfterEffect,
   ReferendumFrame,
+  RushTargetFilter,
   Sect,
   SeatId,
   Strike,
@@ -6151,6 +6152,24 @@ export class VtesEngine implements EngineOps {
       seat: side === "acting" ? cf.actingSeat : cf.opposingSeat,
       toContinue,
     });
+    if (toContinue) this.pressToContinueToll(cf, side);
+  }
+
+  /**
+   * "A vampire burns 1 blood AFTER USING A PRESS TO CONTINUE combat with
+   * her" (Petra). Asked at both places a press is used — a press card and
+   * a spent press credit — so neither path can skip it. A VAMPIRE pays; an
+   * ally pressing against her owes nothing, as printed.
+   * docs/first-blood-nosferatu-design.md §5
+   */
+  private pressToContinueToll(cf: CombatFrame, side: "acting" | "opposing"): void {
+    const presser = findMinion(this.state, side === "acting" ? cf.acting : cf.opposing);
+    const foe = findMinion(this.state, side === "acting" ? cf.opposing : cf.acting);
+    if (!presser || !foe || presser.kind !== "vampire") return;
+    let toll = 0;
+    for (const p of foe.attached) toll += p.statics.pressToContinueBloodToll ?? 0;
+    const amount = Math.min(toll, presser.blood);
+    if (amount > 0) this.emit({ type: "BloodBurned", minion: presser.id, amount });
   }
 
   /** "If that minion does not block the action, burn N POOL after action
@@ -6198,6 +6217,7 @@ export class VtesEngine implements EngineOps {
       /** The card whose referendum a successful political action calls. */
       referendumSource?: { cardName: string; cardInstanceId: CardInstanceId };
       requires?: { clans: string[] };
+      rushTargetFilter?: RushTargetFilter;
     },
   ): void {
     const m = getMinion(this.state, minionId);
@@ -6285,6 +6305,9 @@ export class VtesEngine implements EngineOps {
       actionKind,
       card: null,
       ...(args.political ? { political: true } : {}),
+      // A granted rush's printed target terms, asked again at resolution
+      // (the [LSJ 20070411] fizzle), as for a rush played from the hand.
+      ...(args.rushTargetFilter ? { rushTargetFilter: args.rushTargetFilter } : {}),
       ...(args.requires && args.requires.clans.length > 0
         ? { grantRequires: { clans: [...args.requires.clans] } }
         : {}),
@@ -11976,6 +11999,7 @@ export class VtesEngine implements EngineOps {
           seat: side === "acting" ? top.actingSeat : top.opposingSeat,
           toContinue: option.toContinue,
         });
+        if (option.toContinue) this.pressToContinueToll(top, side);
         return;
       }
     }
@@ -13345,13 +13369,24 @@ export class VtesEngine implements EngineOps {
   addHandSizeBonus(args: {
     seat: SeatId;
     amount: number;
-    scope: "turn" | "combat";
+    scope: "turn" | "combat" | "game";
     cardName: string;
     cardId: CardInstanceId;
     /** "…until your next DISCARD PHASE" (Fotini) — lifts earlier than the
      *  frame that holds it. */
     until?: "discardPhase";
   }): void {
+    if (args.scope === "game") {
+      // "…until the end of the game": no frame lives that long, so the
+      // grant sits on the seat (docs/first-blood-nosferatu-design.md §3).
+      const seat = getSeat(this.state, args.seat);
+      seat.handSizeBonus = [
+        ...(seat.handSizeBonus ?? []),
+        { seat: args.seat, amount: args.amount, cardName: args.cardName, cardId: args.cardId },
+      ];
+      this.reconcileHandSize(args.seat);
+      return;
+    }
     const frame =
       args.scope === "combat"
         ? this.combatFrame()

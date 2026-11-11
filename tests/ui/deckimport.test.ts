@@ -252,7 +252,10 @@ describe("what this client can play", () => {
     expect(playable.length).toBeGreaterThan(0);
     for (const p of all.filter((p) => !p.playable)) {
       expect(p.problems.length).toBeGreaterThan(0);
-      expect(p.set).toMatch(/New Blood/);
+      // The reason, not a set name: the New Blood starters and (0.11.66)
+      // First Blood are half decks by design, and nothing else may be
+      // held back.
+      expect(p.halfDeck, `${p.set}: ${p.name}`).toBe(true);
     }
     // The library is fully implemented, so nothing is held back for that.
     for (const p of all) expect(p.unsupported).toEqual([]);

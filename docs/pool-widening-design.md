@@ -1006,6 +1006,40 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 116 — First Blood Nosferatu (5 vampires + 3 free), 2026-11-10
+
+**The second crypt clan opened** (§7): Nosferatu groups 4–5, owner's word
+2026-11-10. Five vampires print an ability and are implemented: Jeremy
+"Wix" Wyzchovsky, Gustaphe Brunnelle, Harold Tanner, Petra and Benjamin
+Rose. Three more entered free, Beetleman among them; 15 other Nosferatu in
+those groups stay out behind the builder gate. First Blood Nosferatu is
+**100%** and joins the chooser as a labelled half deck. Design:
+`first-blood-nosferatu-design.md`. Version 0.11.66. Library 934, crypt 234,
+total 1,168.
+
+**The findings:**
+
+- **A granted rush was never re-asked at resolution.** A rush played from
+  the hand re-checked its target terms (the [LSJ 20070411] fizzle), but a
+  rush GRANTED by a card in play (`rushGrant`, every rush vampire and
+  ally) passed no filter, so resolution never asked. It now passes
+  `rushTargetFilter` like the hand path.
+- **An open hand was open to one seat.** `openHandsFor` showed Owl
+  Companion's open hand only to the owl's controller. Owner ruling
+  2026-11-10: an open hand is open to the whole table. Owl Companion's
+  test was changed to match, and Harold Tanner reuses the same static.
+
+**New pieces:** `RushTargetFilter.controlledBy: "predatorOrPrey"`; a
+game-long hand-size grant on the seat (`SeatState.handSizeBonus`, scope
+`"game"` in `addHandSizeBonus`); `politicalGrant.who.self` and
+`effect.handSizeForGame`; and `pressToContinueBloodToll`, asked at both
+places a press is used.
+
+**Two tests pinned a count rather than a reason**, and the second clan
+broke both: Libertine Ball's "no other legacy clan" test expected the open
+list to be exactly one clan, and the deck-import test expected every
+non-playable precon to be New Blood. Each now asserts the rule instead.
+
 ### Wave 115 — Libertine Ball (3 cards + 8 vampires), 2026-11-08
 
 **The first wave aimed at a legacy precon** (owner rule, 2026-11-08), and
