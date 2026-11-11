@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-11T00:24:11.302Z",
+ "fetchedAt": "2026-11-11T00:51:25.325Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -21902,6 +21902,30 @@
    },
    "supported": false
   },
+  "200421": {
+   "card": {
+    "kind": "crypt",
+    "id": 200421,
+    "name": "Emily Carson (G5)",
+    "clan": "Ventrue",
+    "capacity": 5,
+    "group": 5,
+    "disciplines": {
+     "For": "basic",
+     "Pre": "basic",
+     "Dom": "superior"
+    },
+    "cardText": "Camarilla primogen: During your discard phase, Emily can burn the Edge to unlock.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/emilycarsong5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "200473": {
    "card": {
     "kind": "crypt",
@@ -21920,6 +21944,32 @@
     "sets": [
      "Keepers of Tradition Reprint",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
+  "200533": {
+   "card": {
+    "kind": "crypt",
+    "id": 200533,
+    "name": "Graham Gottesman (G5)",
+    "clan": "Ventrue",
+    "capacity": 7,
+    "group": 5,
+    "disciplines": {
+     "Obf": "basic",
+     "Pre": "basic",
+     "Tha": "basic",
+     "Dom": "superior",
+     "For": "superior"
+    },
+    "cardText": "Camarilla Prince of Miami.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/grahamgottesmang5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
     ]
    },
    "supported": false
@@ -21949,6 +21999,29 @@
    },
    "supported": true
   },
+  "200562": {
+   "card": {
+    "kind": "crypt",
+    "id": 200562,
+    "name": "Hamid Mansour (G5)",
+    "clan": "Ventrue",
+    "capacity": 4,
+    "group": 5,
+    "disciplines": {
+     "Dom": "basic",
+     "For": "basic",
+     "Pre": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/hamidmansourg5.jpg",
+    "sets": [
+     "Anthology",
+     "Shadows of Berlin"
+    ]
+   },
+   "supported": false
+  },
   "200571": {
    "card": {
     "kind": "crypt",
@@ -21975,6 +22048,48 @@
    },
    "supported": true
   },
+  "200657": {
+   "card": {
+    "kind": "crypt",
+    "id": 200657,
+    "name": "Jack Tredegar (G5)",
+    "clan": "Ventrue",
+    "capacity": 2,
+    "group": 5,
+    "disciplines": {
+     "Pre": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/jacktredegarg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
+  "200660": {
+   "card": {
+    "kind": "crypt",
+    "id": 200660,
+    "name": "Jackson Asher (G4)",
+    "clan": "Ventrue",
+    "capacity": 2,
+    "group": 4,
+    "disciplines": {
+     "Dom": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/jacksonasherg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
   "200696": {
    "card": {
     "kind": "crypt",
@@ -21991,6 +22106,30 @@
     "cardText": "Camarilla: Jeremy can bleed with +1 bleed as a Ⓓ action.",
     "advanced": false,
     "image": "https://static.krcg.org/card/jeremywixwyzchovskyg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "200707": {
+   "card": {
+    "kind": "crypt",
+    "id": 200707,
+    "name": "João Bilé (G4)",
+    "clan": "Ventrue",
+    "capacity": 5,
+    "group": 4,
+    "disciplines": {
+     "Pre": "basic",
+     "Dom": "superior",
+     "For": "superior"
+    },
+    "cardText": "Camarilla: While João has no title, he cannot block titled vampires. He gets +1 stealth during actions to put vampires in play.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/joaobileg4.jpg",
     "sets": [
      "Keepers of Tradition Reprint",
      "Keepers of Tradition",
@@ -22090,6 +22229,32 @@
    },
    "supported": true
   },
+  "200848": {
+   "card": {
+    "kind": "crypt",
+    "id": 200848,
+    "name": "Lodin (Olaf Holte) (G5)",
+    "clan": "Ventrue",
+    "capacity": 8,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "Pro": "basic",
+     "Dom": "superior",
+     "For": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Camarilla Prince of Chicago: Once each combat, Lodin can prevent 1 damage from an opposing minion's strike.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/lodinolafholteg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "200851": {
    "card": {
     "kind": "crypt",
@@ -22108,6 +22273,30 @@
     "sets": [
      "Third Edition",
      "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "200862": {
+   "card": {
+    "kind": "crypt",
+    "id": 200862,
+    "name": "Louis Fortier (G4)",
+    "clan": "Ventrue",
+    "capacity": 5,
+    "group": 4,
+    "disciplines": {
+     "Aus": "basic",
+     "Dom": "basic",
+     "For": "basic",
+     "Obf": "basic",
+     "Pre": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/louisfortierg4.jpg",
+    "sets": [
+     "Twilight Rebellion"
     ]
    },
    "supported": false
@@ -22133,6 +22322,30 @@
     ]
    },
    "supported": false
+  },
+  "201026": {
+   "card": {
+    "kind": "crypt",
+    "id": 201026,
+    "name": "Mustafa, The Heir (G4)",
+    "clan": "Ventrue",
+    "capacity": 6,
+    "group": 4,
+    "disciplines": {
+     "Cel": "basic",
+     "Dom": "basic",
+     "For": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Camarilla Prince of Istanbul: During the polling step of a political action, each older Toreador controlled by another Methuselah can move 1 blood from themselves to Mustafa to force him to cast his votes and ballots as that Toreador's controller chooses.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/mustafatheheirg4.jpg",
+    "sets": [
+     "Gehenna",
+     "First Blood"
+    ]
+   },
+   "supported": true
   },
   "201054": {
    "card": {
@@ -22174,6 +22387,52 @@
     "sets": [
      "Gehenna",
      "Heirs to the Blood",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "201193": {
+   "card": {
+    "kind": "crypt",
+    "id": 201193,
+    "name": "Robin Withers (G4)",
+    "clan": "Ventrue",
+    "capacity": 4,
+    "group": 4,
+    "disciplines": {
+     "Dom": "basic",
+     "Obf": "basic",
+     "Pre": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/robinwithersg4.jpg",
+    "sets": [
+     "Gehenna"
+    ]
+   },
+   "supported": false
+  },
+  "201438": {
+   "card": {
+    "kind": "crypt",
+    "id": 201438,
+    "name": "Victor Donaldson (G5)",
+    "clan": "Ventrue",
+    "capacity": 6,
+    "group": 5,
+    "disciplines": {
+     "For": "basic",
+     "Pre": "basic",
+     "Dom": "superior"
+    },
+    "cardText": "Camarilla Prince of Atlanta: If a card named /Golconda: Inner Peace/ you play is canceled, you can move that card from your ash heap to your library (shuffle afterward).",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/victordonaldsong5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
      "First Blood"
     ]
    },
@@ -31718,6 +31977,116 @@
     },
     {
      "id": 201116,
+     "copies": 1
+    }
+   ]
+  },
+  {
+   "set": "First Blood",
+   "name": "Ventrue",
+   "cards": [
+    {
+     "id": 100065,
+     "copies": 1
+    },
+    {
+     "id": 100199,
+     "copies": 3
+    },
+    {
+     "id": 100236,
+     "copies": 4
+    },
+    {
+     "id": 100401,
+     "copies": 2
+    },
+    {
+     "id": 100492,
+     "copies": 1
+    },
+    {
+     "id": 100518,
+     "copies": 4
+    },
+    {
+     "id": 100573,
+     "copies": 2
+    },
+    {
+     "id": 100845,
+     "copies": 6
+    },
+    {
+     "id": 100973,
+     "copies": 2
+    },
+    {
+     "id": 101056,
+     "copies": 5
+    },
+    {
+     "id": 101225,
+     "copies": 2
+    },
+    {
+     "id": 101321,
+     "copies": 3
+    },
+    {
+     "id": 101649,
+     "copies": 2
+    },
+    {
+     "id": 101706,
+     "copies": 2
+    },
+    {
+     "id": 101712,
+     "copies": 2
+    },
+    {
+     "id": 101817,
+     "copies": 1
+    },
+    {
+     "id": 102071,
+     "copies": 2
+    },
+    {
+     "id": 102084,
+     "copies": 1
+    },
+    {
+     "id": 102109,
+     "copies": 1
+    },
+    {
+     "id": 102169,
+     "copies": 3
+    },
+    {
+     "id": 200421,
+     "copies": 1
+    },
+    {
+     "id": 200533,
+     "copies": 1
+    },
+    {
+     "id": 200707,
+     "copies": 1
+    },
+    {
+     "id": 200848,
+     "copies": 1
+    },
+    {
+     "id": 201026,
+     "copies": 1
+    },
+    {
+     "id": 201438,
      "copies": 1
     }
    ]

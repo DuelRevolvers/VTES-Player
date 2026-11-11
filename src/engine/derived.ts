@@ -874,6 +874,7 @@ function conditionHolds(
   const needsAction =
     c.actionKinds !== undefined ||
     c.actionCardTypes !== undefined ||
+    c.actionCardTags !== undefined ||
     c.directedAtController !== undefined ||
     c.actionDirected !== undefined ||
     c.actingMinion !== undefined ||
@@ -885,6 +886,12 @@ function conditionHolds(
     if (c.actionCardTypes) {
       const types = announced.cardTypes ?? [];
       if (!c.actionCardTypes.some((t) => types.includes(t))) return false;
+    }
+    // "…during actions to put vampires in play" (João Bilé): a sub-type
+    // of the announcing card, the Paths in Two Worlds treatment.
+    if (c.actionCardTags) {
+      const tags = announced.cardTags ?? [];
+      if (!c.actionCardTags.some((t) => tags.includes(t))) return false;
     }
     // "…directed at their controller" — the action names a seat (p. 25)
     // and that seat is the one this static's bearer answers to.
@@ -1814,6 +1821,17 @@ export function mayAttemptBlock(state: GameState, af: ActionFrame, m: MinionStat
   if (m.attached.some((p) => p.statics.cannotBlock)) return false;
   // "…cannot block VAMPIRES" (Vagabond Mystic).
   if (actor && m.attached.some((p) => p.statics.cannotBlockKind === actor.kind)) return false;
+  // "While João has no title, he cannot block titled vampires" (João Bilé)
+  // — both titles read now, at block time.
+  if (
+    actor &&
+    actor.kind === "vampire" &&
+    actor.title !== null &&
+    m.title === null &&
+    m.attached.some((p) => p.statics.cannotBlockTitledWhileUntitled)
+  ) {
+    return false;
+  }
   // "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier).
   if (!af.directed && m.attached.some((p) => p.statics.cannotBlockUndirected)) return false;
   // "This minion cannot block YOUR minions" (Lesser Boon) — "your" is that

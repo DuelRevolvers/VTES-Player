@@ -588,6 +588,11 @@ export interface ConditionalStatic {
    *  action announces as `cardEffect` like any other action card, so what
    *  tells them apart is the printed type of the announcing card. */
   actionCardTypes?: PlayCostCardType[];
+  /** "…during actions to PUT VAMPIRES IN PLAY" (João Bilé) — a property of
+   *  the announcing card, read off `ActionAnnounced.cardTags` (the
+   *  announcing handler's `permanentTags`). The tag is `putsVampireInPlay`.
+   *  No action in the pool carries it yet. docs/first-blood-ventrue-design.md §1 */
+  actionCardTags?: string[];
   /** "…during actions directed at their controller" (Abbot, Guardian
    *  Angel) — read against the minion this static sits on. */
   directedAtController?: boolean;
@@ -1052,6 +1057,10 @@ export interface PermanentStatics {
    *  direction only: the bearer may still be blocked by anything.
    *  docs/cheap-tail-design.md §2 */
   cannotBlockKind?: "vampire" | "ally";
+  /** "While João has no title, he cannot block titled vampires" (João
+   *  Bilé). Read at block time, so a title gained mid-game lifts it.
+   *  docs/first-blood-ventrue-design.md §1 */
+  cannotBlockTitledWhileUntitled?: boolean;
   /** "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier) —
    *  the same restriction keyed on the ACTION rather than on the actor, so
    *  it bars a bleed at the table's other end and leaves the bearer free to
@@ -3912,6 +3921,11 @@ export interface ReferendumFrame {
    *  group before its first cast [RTR 19991001].
    *  docs/vote-changing-design.md §2 */
   votesChangedTo?: Record<MinionId, boolean>;
+  /** In-play abilities limited to once per user per referendum, as
+   *  `<cardId>:<user>` (Mustafa, The Heir: once per Toreador, owner ruling
+   *  2026-11-10). On the frame, so it dies with the referendum.
+   *  docs/first-blood-ventrue-design.md §1 */
+  usesThisReferendum?: string[];
   /** The same modifier or reaction once per action per minion (p. 13,
    *  p. 24). The ACTION frame's `played` has popped by the time its
    *  referendum polls, so it is copied here at push and this one is

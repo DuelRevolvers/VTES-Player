@@ -14265,8 +14265,17 @@ function addCryptAbilities(
     const bearer = owner.minion === null ? null : findMinion(ctx.state, owner.minion);
     if (!bearer || ctx.seat !== (entry.controller ?? owner.seat)) return out;
 
-    // "During your turn, you can burn the Edge to unlock <them>."
-    if (edge && bearer.locked && ctx.state.edge === ctx.seat && ctx.turnSeat === ctx.seat) {
+    // "During your turn, you can burn the Edge to unlock <them>" (Kalinda);
+    // "During your DISCARD PHASE, …" (Emily Carson) narrows it to one
+    // window. No latch is needed: using it unlocks her, and a ready
+    // vampire is not offered it again.
+    if (
+      edge &&
+      bearer.locked &&
+      ctx.state.edge === ctx.seat &&
+      ctx.turnSeat === ctx.seat &&
+      (edge !== "discardPhase" || ctx.window === "turn.discard")
+    ) {
       out.push({
         id: `ability:${spec.name}:${entry.card.id}:edgeUnlock`,
         kind: "useAbility",
@@ -17638,7 +17647,18 @@ function addLocationAbilities(spec: CardSpec, handler: CardHandler): void {
     if (vest && ctx.window === "combat.damageResolution" && owner.minion) {
       const cf = ctx.combat;
       const pd = cf?.pendingDamage[0];
-      if (cf && pd && pd.minion === owner.minion && !cf.usedThisCombat.includes(entry.card.id)) {
+      // "…from an OPPOSING MINION'S STRIKE" (Lodin): the item's source is
+      // the other combatant. `source` is null for environmental damage and
+      // for a striker's damage to itself.
+      const sourceOk =
+        !vest.opposingStrikesOnly || (pd?.source != null && pd.source !== owner.minion);
+      if (
+        cf &&
+        pd &&
+        sourceOk &&
+        pd.minion === owner.minion &&
+        !cf.usedThisCombat.includes(entry.card.id)
+      ) {
         const amount = pd.fromGun ? vest.fromGun : vest.otherwise;
         out.push({
           id: `ability:${spec.name}:${entry.card.id}:vest`,

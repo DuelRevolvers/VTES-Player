@@ -346,6 +346,7 @@ const STATIC_TAGS: Partial<Record<keyof PermanentStatics, PlayEffectTag>> = {
   // Taking something away from the other side.
   cannotBlock: "deny",
   cannotBlockKind: "deny",
+  cannotBlockTitledWhileUntitled: "deny",
   cannotPlayCardTypes: "deny",
   cannotPlayCardNames: "deny",
   untargetableByOthers: "deny",

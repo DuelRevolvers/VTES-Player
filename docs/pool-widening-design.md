@@ -1006,6 +1006,29 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 117 — First Blood Ventrue (5 vampires + 6 free), 2026-11-10
+
+**The third crypt clan opened** (§7): Ventrue groups 4–5, owner's word
+2026-11-10. Five vampires print an ability and are implemented: Emily
+Carson, João Bilé, Lodin, Mustafa, The Heir and Victor Donaldson. Six more
+entered free, Graham Gottesman among them. First Blood Ventrue is **100%**
+and joins the chooser as a labelled half deck. Design:
+`first-blood-ventrue-design.md`. Version 0.11.67. Library 934, crypt 245,
+total 1,179.
+
+**The findings:**
+
+- **No card in play could hear a cancel.** `CardCanceled` filed the card
+  in the ash heap (`out-of-turn-cancels-design.md` §5) but no hook fired, so "if a card you play is
+  canceled" was unexpressible. `onCardCanceled` now fires over
+  `allEntries()` after the filing, so crypt abilities hear it too.
+- **A once-per-user limit inside a referendum had nowhere to live.** The
+  referendum frame now carries `usesThisReferendum`, which dies with the
+  frame (the "scoped to a live frame" lesson).
+- **João's second clause is whole but inert** (owner ruling): no action in
+  the pool puts a vampire in play. The condition reads the announcing
+  card's tags, so the first such card costs one tag.
+
 ### Wave 116 — First Blood Nosferatu (5 vampires + 3 free), 2026-11-10
 
 **The second crypt clan opened** (§7): Nosferatu groups 4–5, owner's word

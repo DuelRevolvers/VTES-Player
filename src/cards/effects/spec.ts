@@ -3403,7 +3403,15 @@ export interface CardSpec {
      *  strikes or M damage from any other source" (Kevlar Vest) — the
      *  first prevention that reads what dealt the damage.
      *  docs/last-combat-design.md §5 */
-    preventByStrikeSource?: { fromGun: number; otherwise: number };
+    preventByStrikeSource?: {
+      fromGun: number;
+      otherwise: number;
+      /** "…prevent 1 damage from an OPPOSING MINION'S STRIKE" (Lodin):
+       *  only damage whose source is the other combatant. Environmental
+       *  damage (source null) and a striker's damage to itself are not
+       *  covered. docs/first-blood-ventrue-design.md §1 */
+      opposingStrikesOnly?: boolean;
+    };
     /** "Once each combat, this Ravnos can strike: dodge" (Treasured
      *  Samadji) — equipment that grants a SPECIFIED strike without being
      *  a weapon. docs/weapon-riders-design.md §1, §7 */
@@ -4055,7 +4063,7 @@ export interface CardSpec {
     /** "During your turn, you can BURN THE EDGE to unlock \<this
      *  vampire\>" (Kalinda). The Edge is a shared token, so this is a
      *  cost paid from the table rather than from a resource of yours. */
-    unlockForEdge?: boolean;
+    unlockForEdge?: boolean | "discardPhase";
     /** "You can unlock \<this vampire\> after a referendum called by them
      *  passes" (Sybren van Oosten). The `referendum.afterResolution`
      *  window, which already opens only on a PASS. */

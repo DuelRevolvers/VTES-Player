@@ -19729,6 +19729,30 @@ export const cryptSpecs: CardSpec[] = [
       controller: { targetControlsClan: ["Toreador", "Ventrue"] },
     },
   ]),
+  // ---- Wave 117: First Blood Ventrue (docs/first-blood-ventrue-design.md)
+
+  // "Camarilla primogen: During your discard phase, Emily can burn the
+  // Edge to unlock." Kalinda's clause, narrowed to one window.
+  cryptPerm(200421, "Emily Carson (G5)", { unlockForEdge: "discardPhase" }),
+  // "While João has no title, he cannot block titled vampires. He gets +1
+  // stealth during actions to put vampires in play." The second clause is
+  // whole but inert: no action in the pool carries the tag (owner ruling
+  // 2026-11-10, §1).
+  condCrypt(
+    200707,
+    "João Bilé (G4)",
+    [{ stealth: 1, actionCardTags: ["putsVampireInPlay"] }],
+    { cannotBlockTitledWhileUntitled: true },
+  ),
+  // "Camarilla Prince of Chicago: Once each combat, Lodin can prevent 1
+  // damage from an opposing minion's strike." Kevlar Vest's prevention,
+  // limited to the other combatant's strikes.
+  cryptPerm(200848, "Lodin (Olaf Holte) (G5)", {
+    preventByStrikeSource: { fromGun: 1, otherwise: 1, opposingStrikesOnly: true },
+  }),
+  // Bespoke overlays: `mustafa` and `victorDonaldson`.
+  cryptPerm(201026, "Mustafa, The Heir (G4)", {}),
+  cryptPerm(201438, "Victor Donaldson (G5)", {}),
 
   // --- Conditioned on the BOARD. Every one derived on each read. ---
   condCrypt(201667, "Branimira (G6)", [{ intercept: 1, controller: { poolAtMost: 9 } }]),
@@ -27179,6 +27203,126 @@ const distantFriend: CardHandler = {
   },
 };
 
+function cryptSpecByName(name: string): CardSpec {
+  const spec = cryptSpecs.find((s) => s.name === name);
+  if (!spec) throw new Error(`no crypt spec named ${name}`);
+  return spec;
+}
+
+/**
+ * Mustafa, The Heir (201026) — "During the polling step of a political
+ * action, each older Toreador controlled by another Methuselah can move 1
+ * blood from themselves to Mustafa to force him to cast his votes and
+ * ballots as that Toreador's controller chooses."
+ *
+ * The ability is the TOREADOR's, so the deciding seat is the Toreador's
+ * controller (`abilityAnySeat`), never Mustafa's. "Older" is strictly
+ * higher capacity (p. 6). The effect is Distant Friend superior's
+ * primitive, `changeVotes(…, forceCast)`, so votes already cast are turned
+ * as well and the last user has the final say [LSJ 20090304-2]. Once per
+ * Toreador per referendum (owner ruling 2026-11-10). Not during an
+ * automatically passing referendum [PIB 20150105] [LSJ 19980107].
+ * docs/first-blood-ventrue-design.md §1
+ */
+const MUSTAFA = "Mustafa, The Heir (G4)";
+const mustafa: CardHandler = {
+  ...compileSpec(cryptSpecByName(MUSTAFA)),
+  abilityAnySeat: true,
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "referendum.polling" || !owner.minion) return [];
+    const rf = ctx.referendum;
+    if (!rf || !referendumOpenToPlay(rf)) return [];
+    const him = findMinion(ctx.state, owner.minion);
+    if (!him || !vampireMayVote(rf, him) || !hasVoice(ctx.state, rf, him)) return [];
+    // "…controlled by ANOTHER Methuselah" — another than Mustafa's.
+    if (ctx.seat === him.controller) return [];
+    const now = groupDirection(rf, him.id);
+    const own = vampireVotes(ctx.state, rf, him);
+    const cast = rf.votes
+      .filter((v) => v.minion === him.id && v.source === him.id)
+      .reduce((n, v) => n + v.count, 0);
+    const out: LegalOption[] = [];
+    for (const t of getSeat(ctx.state, ctx.seat).minions) {
+      if (t.kind !== "vampire" || t.clan !== "Toreador" || !isReady(t) || t.blood < 1) continue;
+      if (capacityOf(t) <= capacityOf(him)) continue;
+      if ((rf.usesThisReferendum ?? []).includes(`${entry.card.id}:${t.id}`)) continue;
+      for (const inFavor of [true, false]) {
+        const dir = inFavor ? "for" : "against";
+        const left = own.votes + (inFavor ? own.for : own.against) - cast;
+        // Futile when his whole group already goes this way and nothing is
+        // left to cast.
+        if (now === inFavor && left <= 0) continue;
+        out.push({
+          id: `ability:${MUSTAFA}:${entry.card.id}:${t.id}:${dir}`,
+          kind: "useAbility",
+          label: `${t.name}: move 1 blood to ${him.name} — his votes go ${dir}`,
+          source: entry.card.id,
+          params: { toreador: t.id, dir },
+        });
+      }
+    }
+    return out;
+  },
+  useAbility(entry, owner, choice, ops) {
+    const rf = referendumOf(ops.state);
+    const t = findMinion(ops.state, choice.params["toreador"] ?? "");
+    if (!rf || !t || !owner.minion || !findMinion(ops.state, owner.minion)) return;
+    rf.usesThisReferendum = [...(rf.usesThisReferendum ?? []), `${entry.card.id}:${t.id}`];
+    // "Move 1 blood": burned from the Toreador, gained by Mustafa.
+    // `BloodGained` clamps at his capacity, so any excess drains to the
+    // blood bank (p. 8).
+    ops.emit({ type: "BloodBurned", minion: t.id, amount: 1 });
+    ops.emit({ type: "BloodGained", minion: owner.minion, amount: 1 });
+    ops.changeVotes(owner.minion, choice.params["dir"] === "for", true);
+  },
+};
+
+/**
+ * Victor Donaldson (201438) — "If a card named Golconda: Inner Peace you
+ * play is canceled, you can move that card from your ash heap to your
+ * library (shuffle afterward)." The cancel filed the card in the ash heap
+ * first (docs/out-of-turn-cancels-design.md §5); this offers the move as
+ * an optional choice. Victor must be ready: a vampire in torpor uses no
+ * abilities. docs/first-blood-ventrue-design.md §1
+ */
+const VICTOR = "Victor Donaldson (G5)";
+const victorDonaldson: CardHandler = {
+  ...compileSpec(cryptSpecByName(VICTOR)),
+  onCardCanceled(entry, owner, info, ops) {
+    if (info.cardName !== "Golconda: Inner Peace" || !owner.minion) return;
+    const victor = findMinion(ops.state, owner.minion);
+    if (!victor || !isReady(victor) || info.seat !== victor.controller) return;
+    const inAsh = (getSeat(ops.state, info.seat).ashHeap ?? []).some((c) => c.id === info.cardId);
+    if (!inAsh) return;
+    ops.raiseChoice({
+      seat: info.seat,
+      cardName: VICTOR,
+      cardId: entry.card.id,
+      key: "recover",
+      optional: true,
+      params: { card: info.cardId },
+    });
+  },
+  choiceOptions(frame, state) {
+    const id = frame.params["card"] ?? "";
+    if (!(getSeat(state, frame.seat).ashHeap ?? []).some((c) => c.id === id)) return [];
+    return [
+      {
+        id: `choice:${VICTOR}:${frame.cardId}:recover:${id}`,
+        kind: "answerChoice" as const,
+        label: `${VICTOR}: move Golconda: Inner Peace to your library and shuffle`,
+        params: { card: id },
+      },
+    ];
+  },
+  applyChoice(frame, choice, ops) {
+    const id = choice.params["card"];
+    if (!id) return;
+    ops.ashToLibrary(frame.seat, id, "top");
+    ops.shuffleLibrary(frame.seat);
+  },
+};
+
 /**
  * The Anarch Free Press (100052) — the intercept clause compiles from the
  * spec; the hunt clause is the bespoke half.
@@ -28145,6 +28289,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     disarmingPresence,
     kindredCoercion,
     distantFriend,
+    mustafa,
+    victorDonaldson,
     voxDomini,
     auraOfInvincibility,
   ]) {

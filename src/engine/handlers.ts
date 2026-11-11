@@ -1582,6 +1582,16 @@ export interface CardHandler {
     withdrawingSeat: SeatId,
     ops: EngineOps,
   ): void;
+  /** A card was CANCELED as played, after it was filed in its player's ash
+   *  heap (p. 16). "If a card named Golconda: Inner Peace you play is
+   *  canceled, …" (Victor Donaldson). Fired over `allEntries()`, so a
+   *  crypt ability hears it. docs/first-blood-ventrue-design.md §1 */
+  onCardCanceled?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    info: { seat: SeatId; cardId: CardInstanceId; cardName: string },
+    ops: EngineOps,
+  ): void;
   /** "At the end of the game, if you have not been ousted, …" (Gambit
    *  Accepted) — fired once for every card in play before `GameEnded`,
    *  however the game ends. docs/victory-points-design.md §3 */

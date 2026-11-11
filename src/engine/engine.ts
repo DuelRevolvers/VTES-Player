@@ -3747,6 +3747,16 @@ export class VtesEngine implements EngineOps {
       if (!this.allEntries().some((e) => e.entry.card.id === cp.card.id)) {
         this.toAshHeap(cp.seat, cp.card);
       }
+      // Cards in play hear the cancel once the card is in the ash heap
+      // (Victor Donaldson moves it back out).
+      for (const { entry, owner } of this.allEntries()) {
+        this.registry[entry.card.name]?.onCardCanceled?.(
+          entry,
+          owner,
+          { seat: cp.seat, cardId: cp.card.id, cardName: cp.card.name },
+          this,
+        );
+      }
       // "If the canceled card had a 'do not replace until' clause, that
       // clause is canceled as well and the card is replaced normally"
       // [LSJ 20080630].
