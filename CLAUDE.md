@@ -847,6 +847,11 @@ Each has cost an hour of "why is my card not offered":
   and put a stun counter on them; a minion with stun counters does not
   unlock as normal, and during that unlock phase all counters they had at
   the *beginning of the turn* are burned.
+- **A vampire's abilities work only while the vampire is READY**
+  (2026-11-13), unless the card says it works while elsewhere. A house
+  rule beyond p. 34, which bars only actions, blocks, reactions and votes.
+  **Not yet enforced engine-wide**: there is no central gate, each clause
+  checks `isReady` or doesn't (`first-blood-tremere-design.md` §0).
 - **Open War's 4-counter payout goes to the card's CONTROLLER**, not to
   whoever places the fourth counter.
 - **The AI plays with what a player can see** (2026-09-06). Handing an
