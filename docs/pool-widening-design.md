@@ -1006,6 +1006,26 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 118 — First Blood Tremere (4 vampires + 1 retainer, 10 crypt in), 2026-11-13
+
+`docs/first-blood-tremere-design.md`. Opened **Tremere groups 4–5** on the
+owner's word. First Blood Tremere went from 87% to 100%. Library 935,
+crypt 255 (was 245), total 1,190.
+
+- **New mechanics:** a retainer employed onto ANY minion
+  (`employOnAnyMinion`, directed when the target is a rival's), a card set
+  aside off a burning bearer (`PermanentSetAside` plus a choice), a vote bar
+  on one DIRECTION (`vampireMayVoteThatWay`), and a clan arm on the
+  opposing-intercept penalty.
+- **Found:** the pool now has Disciplines (`chi`, `vic`) that vampires have
+  and no library card requires, so `DISCIPLINES` grew and its drift test
+  became a subset check. Charnas's employer immunity and Rutor's penalty
+  are whole but can't come up in today's pool. The ten fuzz seeds never
+  reach a playable Charnas; a 120-seed run did, 298 times, all green.
+- **Owner ruling (same day):** a vampire's abilities work only while ready
+  unless the card says otherwise. Not yet enforced engine-wide; an audit
+  is queued.
+
 ### Wave 117 — First Blood Ventrue (5 vampires + 6 free), 2026-11-10
 
 **The third crypt clan opened** (§7): Ventrue groups 4–5, owner's word

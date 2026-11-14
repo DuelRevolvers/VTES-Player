@@ -842,7 +842,9 @@ export interface EngineOps {
    *  blood-hunt referendum is conducted (p. 35). */
   commitDiablerie(diablerist: MinionId, victim: MinionId): void;
   /** Burn life from a retainer; at 0 life the retainer is burned (p. 22). */
-  burnRetainerLife(cardId: CardInstanceId, amount: number): void;
+  /** `source`: the minion inflicting the damage, when there is one —
+   *  "immune to damage from the employer" (Charnas the Imp) reads it. */
+  burnRetainerLife(cardId: CardInstanceId, amount: number, source?: MinionId): void;
   /** "Remove a vampire from the game" (Golconda: Inner Peace) — p. 16
    *  names it as a fate distinct from burning, so a card keyed on
    *  `how: "burned"` does not fire. docs/cross-table-masters-design.md §3 */
@@ -1276,6 +1278,13 @@ export interface CardHandler {
   /** Retainer: played as an employ retainer action (undirected, +1
    *  stealth, p. 22); attaches to the acting minion with life on success. */
   isRetainer?: boolean;
+  /** "Put Charnas on a MINION": the bearer is `params.target`, chosen at
+   *  announcement, rather than the actor. docs/first-blood-tremere-design.md */
+  employOnTarget?: boolean;
+  /** "If the employer is about to be burned, their controller can put
+   *  Charnas on another minion" — `burnMinion` sets this card aside and
+   *  raises the `moveOffBurned` choice instead of burning it. */
+  movesOffBurningBearer?: boolean;
   /** Ally: played as a recruit ally action (undirected, +1 stealth,
    *  p. 22); becomes a minion with life on success, cannot act this turn. */
   isAlly?: boolean;

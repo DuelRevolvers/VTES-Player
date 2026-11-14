@@ -8597,10 +8597,32 @@ function permanentActionOptions(
       // cost" (p. 9); paid at resolution for action cards.
       const cost = costOf(spec, ctx, m, mode);
       if (seat.pool < cost.pool || m.blood < cost.blood) continue;
+      if (spec.employOnAnyMinion) {
+        // "Put Charnas on a minion": one option per minion in play that
+        // can have a retainer — the actor, another of yours, or a rival's.
+        for (const t of employTargets(ctx.state)) {
+          options.push(makeOption(spec, card, m, mode, { target: t.id }));
+        }
+        continue;
+      }
       options.push(makeOption(spec, card, m, mode, {}));
     }
   }
   return options;
+}
+
+/** Every minion in play a retainer can be put on (Charnas the Imp). A
+ *  minion in torpor is still in play; one that "cannot have retainers"
+ *  (Bone Shambler) is not a candidate. docs/first-blood-tremere-design.md */
+export function employTargets(state: GameState): MinionState[] {
+  const out: MinionState[] = [];
+  for (const s of state.seats) {
+    if (s.ousted) continue;
+    for (const t of s.minions) {
+      if (!cannotBeEquipped(t, "retainer")) out.push(t);
+    }
+  }
+  return out;
 }
 
 /** "Can enter combat with a minion/vampire as a Ⓓ action" granted by a
@@ -8700,6 +8722,7 @@ function compileRetainer(spec: CardSpec): CardHandler {
     poolCost: spec.poolCost ?? 0,
     isActionCard: true,
     isRetainer: true,
+    ...(spec.employOnAnyMinion ? { employOnTarget: true } : {}),
     permanentStatics: spec.permanent?.statics ?? {},
     permanentTags: spec.permanent?.tags ?? [],
 
@@ -8719,9 +8742,17 @@ function compileRetainer(spec: CardSpec): CardHandler {
 
     resolve(play, ops) {
       // The employ retainer action: undirected, +1 stealth (p. 22).
+      // "…this is a +1 stealth Ⓓ action if the target minion is controlled
+      // by another Methuselah" (Charnas): the target names the minion for
+      // directedness only — no combat on success (the Mind Numb shape).
+      const t = spec.employOnAnyMinion ? play.params["target"] : undefined;
+      const rival =
+        t !== undefined &&
+        (findMinion(ops.state, t)?.controller ?? play.seat) !== play.seat;
       ops.announceCardAction(play, {
         actionKind: "cardEffect",
         inherentStealth: 1,
+        ...(rival ? { targetMinion: t, noCombat: true } : {}),
       });
     },
   };

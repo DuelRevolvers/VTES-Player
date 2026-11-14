@@ -58,6 +58,7 @@ import {
   cardRequiresDiscipline,
   bloodVoteOfferFor,
   vampireMayVote,
+  vampireMayVoteThatWay,
   vampireVotes,
 } from "./derived.ts";
 import { rngInt } from "./rng.ts";
@@ -1225,6 +1226,19 @@ export class VtesEngine implements EngineOps {
         getMinion(this.state, ev.to).attached.push(moved);
         break;
       }
+      case "PermanentSetAside": {
+        let held: PermanentInPlay | null = null;
+        for (const seat of this.state.seats) {
+          for (const m of seat.minions) {
+            const idx = m.attached.findIndex((p) => p.card.id === ev.cardId);
+            if (idx >= 0) held = m.attached.splice(idx, 1)[0] ?? null;
+          }
+        }
+        if (!held) throw new Error(`no card to set aside: ${ev.cardId}`);
+        held.controller = ev.seat;
+        getSeat(this.state, ev.seat).permanents.push(held);
+        break;
+      }
       case "CountersChanged": {
         const p = this.findPermanent(ev.cardId);
         p.counters = Math.max(0, (p.counters ?? 0) + ev.delta);
@@ -1985,8 +1999,31 @@ export class VtesEngine implements EngineOps {
     // leaving the ready region, it left when it went there.
     if (!m.inTorpor) this.notifyLeaveReady(minionId, "burned");
     // Attached cards (equipment, retainers, the ally's own card entry)
-    // burn with the minion (p. 11).
+    // burn with the minion (p. 11) — except "If the employer is about to
+    // be burned, their controller can put Charnas on another minion".
+    // That card is SET ASIDE before the burn and the question raised for
+    // the employer's controller; the answer moves it or burns it. With no
+    // other minion in play there is nothing to ask.
+    // docs/first-blood-tremere-design.md §1
+    const elsewhere = this.state.seats.some(
+      (s) => !s.ousted && s.minions.some((o) => o.id !== minionId),
+    );
     for (const p of [...m.attached]) {
+      if (p.card.id !== minionId && elsewhere && this.handler(p.card.name).movesOffBurningBearer) {
+        this.emit({
+          type: "PermanentSetAside",
+          cardId: p.card.id,
+          seat: p.controller ?? m.controller,
+        });
+        this.raiseChoice({
+          seat: m.controller,
+          cardName: p.card.name,
+          cardId: p.card.id,
+          key: "moveOffBurned",
+          params: { from: minionId },
+        });
+        continue;
+      }
       this.emit({ type: "PermanentBurned", cardId: p.card.id, name: p.card.name });
     }
     this.emit({ type: "MinionBurned", minion: minionId });
@@ -2023,7 +2060,18 @@ export class VtesEngine implements EngineOps {
     this.emit({ type: "MinionRemovedFromGame", minion: minionId });
   }
 
-  burnRetainerLife(cardId: string, amount: number): void {
+  burnRetainerLife(cardId: string, amount: number, source?: MinionId): void {
+    // "Charnas is immune to damage from the employer": not inflicted at
+    // all [LSJ 20010627]. `source` is the minion inflicting it; damage
+    // with no source (environmental) is nobody's, so it still lands.
+    const target = this.findPermanent(cardId);
+    if (
+      source !== undefined &&
+      target.statics.immuneToEmployerDamage &&
+      findMinion(this.state, source)?.attached.some((p) => p.card.id === cardId)
+    ) {
+      return;
+    }
     this.emit({ type: "RetainerLifeBurned", cardId, amount });
     const entry = this.findPermanent(cardId);
     if ((entry.life ?? 0) <= 0) {
@@ -3456,6 +3504,10 @@ export class VtesEngine implements EngineOps {
       const group = voter ? this.voteGroup(rf, voter.id) : null;
       for (const inFavor of [true, false]) {
         if (group && group.inFavor !== null && group.inFavor !== inFavor) continue;
+        // "Troius cannot cast votes or ballots AGAINST blood hunt
+        // referendums" — the direction bar, from the one helper the blood
+        // votes below ask too.
+        if (voter && !vampireMayVoteThatWay(rf, voter, inFavor)) continue;
         const already = group ? group.castFrom(source) : 0;
         const n = count + (inFavor ? (bonus?.for ?? 0) : (bonus?.against ?? 0)) - already;
         if (n <= 0) continue;
@@ -3519,6 +3571,7 @@ export class VtesEngine implements EngineOps {
             : 0);
         for (const inFavor of [true, false]) {
           if (direction !== null && direction !== inFavor) continue;
+          if (!vampireMayVoteThatWay(rf, m, inFavor)) continue;
           options.push({
             id: `vote:blood:${m.id}:${offerIndex}:${inFavor ? "for" : "against"}`,
             kind: "castVote",
@@ -7679,6 +7732,17 @@ export class VtesEngine implements EngineOps {
   changeVotes(minion: MinionId, inFavor: boolean, forceCast = false): void {
     const rf = this.referendum();
     if (!rf || rf.abstaining?.includes(minion)) return;
+    // "Troius cannot cast votes or ballots AGAINST blood hunt referendums":
+    // turning his votes that way would make them count against, which is
+    // the thing the card forbids. docs/first-blood-tremere-design.md §1
+    const turned = findMinion(this.state, minion);
+    if (
+      !inFavor &&
+      rf.variant === "bloodHunt" &&
+      turned?.attached.some((p) => p.statics.cannotVoteAgainstBloodHunt)
+    ) {
+      return;
+    }
     let changed = 0;
     for (const v of rf.votes) {
       if (v.minion !== minion || v.inFavor === inFavor) continue;
@@ -9203,12 +9267,24 @@ export class VtesEngine implements EngineOps {
       this.notifyEnterPlay(af.card.instance.id);
       return true;
     }
+    // "Put Charnas on a minion": the bearer was chosen at announcement and
+    // rides in `params.target`. Re-checked here — a target that left play
+    // during the action leaves the card nowhere to go, so it burns.
+    // docs/first-blood-tremere-design.md §1
+    let bearer = af.acting;
+    if (handler.employOnTarget) {
+      const t = af.card.params["target"];
+      if (t !== undefined && t !== af.acting) {
+        if (!findMinion(this.state, t)) return false;
+        bearer = t;
+      }
+    }
     return this.enterPermanent({
       card: af.card.instance,
       handler,
       mode: af.card.mode,
       seat: af.actingSeat,
-      bearer: af.acting,
+      bearer,
       cost: handler.poolCost ?? 0,
     });
   }
@@ -9248,6 +9324,12 @@ export class VtesEngine implements EngineOps {
         statics: entry.statics,
         tags: entry.tags,
       };
+      // "You still control this card" (p. 16) — a retainer employed onto
+      // another Methuselah's minion (Charnas the Imp) answers to its
+      // player, so the controller is written down rather than inferred
+      // from the bearer.
+      const host = findMinion(this.state, bearer);
+      if (host && host.controller !== seat) ev.controller = seat;
       if (entry.life !== undefined) {
         ev.life = entry.life + startingLifeBonus(this.state, seat, entry.tags);
       }

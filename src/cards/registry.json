@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-11T00:51:25.325Z",
+ "fetchedAt": "2026-11-13T19:20:23.412Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -2862,6 +2862,33 @@
     "sets": [
      "Sabbat V5",
      "New Blood III"
+    ]
+   },
+   "supported": true
+  },
+  "100335": {
+   "card": {
+    "kind": "library",
+    "id": 100335,
+    "name": "Charnas the Imp",
+    "types": [
+     "Retainer"
+    ],
+    "clans": [
+     "Tremere"
+    ],
+    "disciplines": [],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "Unique demon with 1 life.\nPut Charnas on a minion (this is a +1 stealth Ⓓ action if the target minion is controlled by another Methuselah). Charnas inflicts 1 damage on the employer during their unlock phase. Charnas is immune to damage from the employer. If the employer is about to be burned, their controller can put Charnas on another minion.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/charnastheimp.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Camarilla Edition",
+     "Keepers of Tradition",
+     "First Blood"
     ]
    },
    "supported": true
@@ -21787,6 +21814,31 @@
    },
    "supported": true
   },
+  "200025": {
+   "card": {
+    "kind": "crypt",
+    "id": 200025,
+    "name": "Aidan Lyle (G5)",
+    "clan": "Tremere",
+    "capacity": 7,
+    "group": 5,
+    "disciplines": {
+     "Dom": "basic",
+     "Aus": "superior",
+     "Chi": "superior",
+     "Tha": "superior"
+    },
+    "cardText": "Camarilla: Aidan gets 1 optional press each combat.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/aidanlyleg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "200067": {
    "card": {
     "kind": "crypt",
@@ -21879,6 +21931,32 @@
    },
    "supported": true
   },
+  "200280": {
+   "card": {
+    "kind": "crypt",
+    "id": 200280,
+    "name": "Claus Wegener (G5)",
+    "clan": "Tremere",
+    "capacity": 5,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "For": "basic",
+     "Tha": "basic",
+     "Dom": "superior"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/clauswegenerg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "Heirs to the Blood",
+     "First Blood"
+    ]
+   },
+   "supported": false
+  },
   "200303": {
    "card": {
     "kind": "crypt",
@@ -21926,6 +22004,27 @@
    },
    "supported": true
   },
+  "200451": {
+   "card": {
+    "kind": "crypt",
+    "id": 200451,
+    "name": "Ezra Hawthorne (G4)",
+    "clan": "Tremere",
+    "capacity": 2,
+    "group": 4,
+    "disciplines": {
+     "Tha": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/ezrahawthorneg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
   "200473": {
    "card": {
     "kind": "crypt",
@@ -21944,6 +22043,30 @@
     "sets": [
      "Keepers of Tradition Reprint",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
+  "200481": {
+   "card": {
+    "kind": "crypt",
+    "id": 200481,
+    "name": "Frank Weisshadel (G4)",
+    "clan": "Tremere",
+    "capacity": 4,
+    "group": 4,
+    "disciplines": {
+     "Dom": "basic",
+     "Pot": "basic",
+     "Tha": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/frankweisshadelg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "Heirs to the Blood"
     ]
    },
    "supported": false
@@ -22301,6 +22424,28 @@
    },
    "supported": false
   },
+  "201003": {
+   "card": {
+    "kind": "crypt",
+    "id": 201003,
+    "name": "Monica Chang (G5)",
+    "clan": "Tremere",
+    "capacity": 3,
+    "group": 5,
+    "disciplines": {
+     "Dom": "basic",
+     "Tha": "basic"
+    },
+    "cardText": "Anarch.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/monicachangg5.jpg",
+    "sets": [
+     "Anarch Unbound",
+     "Anthology"
+    ]
+   },
+   "supported": false
+  },
   "201005": {
    "card": {
     "kind": "crypt",
@@ -22319,6 +22464,32 @@
     "sets": [
      "Third Edition",
      "Sabbat Preconstructed"
+    ]
+   },
+   "supported": false
+  },
+  "201020": {
+   "card": {
+    "kind": "crypt",
+    "id": 201020,
+    "name": "Muhsin Samir (G4)",
+    "clan": "Tremere",
+    "capacity": 6,
+    "group": 4,
+    "disciplines": {
+     "Aus": "basic",
+     "Pot": "basic",
+     "Dom": "superior",
+     "Tha": "superior"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/muhsinsamirg4.jpg",
+    "sets": [
+     "Gehenna",
+     "Kindred Most Wanted",
+     "Heirs to the Blood",
+     "First Blood"
     ]
    },
    "supported": false
@@ -22414,6 +22585,81 @@
    },
    "supported": false
   },
+  "201213": {
+   "card": {
+    "kind": "crypt",
+    "id": 201213,
+    "name": "Rutor (G5)",
+    "clan": "Tremere",
+    "capacity": 7,
+    "group": 5,
+    "disciplines": {
+     "Pro": "basic",
+     "Vic": "basic",
+     "Aus": "superior",
+     "Dom": "superior",
+     "Tha": "superior"
+    },
+    "cardText": "Camarilla: Tzimisce get -1 intercept against Rutor.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/rutorg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "201346": {
+   "card": {
+    "kind": "crypt",
+    "id": 201346,
+    "name": "Tarrence Moore (G5)",
+    "clan": "Tremere",
+    "capacity": 4,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "Dom": "basic",
+     "Tha": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/tarrencemooreg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "Heirs to the Blood"
+    ]
+   },
+   "supported": false
+  },
+  "201388": {
+   "card": {
+    "kind": "crypt",
+    "id": 201388,
+    "name": "Troius (G4)",
+    "clan": "Tremere",
+    "capacity": 8,
+    "group": 4,
+    "disciplines": {
+     "Cel": "basic",
+     "Aus": "superior",
+     "Dom": "superior",
+     "Tha": "superior"
+    },
+    "cardText": "Camarilla Prince of Geneva: Troius cannot cast votes or ballots against blood hunt referendums. +1 strength.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/troiusg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "201438": {
    "card": {
     "kind": "crypt",
@@ -22430,6 +22676,30 @@
     "cardText": "Camarilla Prince of Atlanta: If a card named /Golconda: Inner Peace/ you play is canceled, you can move that card from your ash heap to your library (shuffle afterward).",
     "advanced": false,
     "image": "https://static.krcg.org/card/victordonaldsong5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "201501": {
+   "card": {
+    "kind": "crypt",
+    "id": 201501,
+    "name": "Zane (G5)",
+    "clan": "Tremere",
+    "capacity": 5,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "Dom": "basic",
+     "Tha": "superior"
+    },
+    "cardText": "Camarilla primogen: If Zane is not a prince, he can call a referendum to receive (and contest) the title held by a prince as a +1 stealth political action.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/zaneg5.jpg",
     "sets": [
      "Keepers of Tradition Reprint",
      "Keepers of Tradition",
@@ -31977,6 +32247,120 @@
     },
     {
      "id": 201116,
+     "copies": 1
+    }
+   ]
+  },
+  {
+   "set": "First Blood",
+   "name": "Tremere",
+   "cards": [
+    {
+     "id": 100001,
+     "copies": 2
+    },
+    {
+     "id": 100015,
+     "copies": 1
+    },
+    {
+     "id": 100077,
+     "copies": 4
+    },
+    {
+     "id": 100081,
+     "copies": 1
+    },
+    {
+     "id": 100199,
+     "copies": 2
+    },
+    {
+     "id": 100236,
+     "copies": 4
+    },
+    {
+     "id": 100329,
+     "copies": 1
+    },
+    {
+     "id": 100335,
+     "copies": 1
+    },
+    {
+     "id": 100644,
+     "copies": 2
+    },
+    {
+     "id": 100760,
+     "copies": 3
+    },
+    {
+     "id": 100845,
+     "copies": 6
+    },
+    {
+     "id": 101014,
+     "copies": 1
+    },
+    {
+     "id": 101321,
+     "copies": 3
+    },
+    {
+     "id": 101475,
+     "copies": 2
+    },
+    {
+     "id": 101850,
+     "copies": 2
+    },
+    {
+     "id": 101856,
+     "copies": 1
+    },
+    {
+     "id": 101949,
+     "copies": 4
+    },
+    {
+     "id": 101963,
+     "copies": 1
+    },
+    {
+     "id": 101966,
+     "copies": 6
+    },
+    {
+     "id": 102092,
+     "copies": 1
+    },
+    {
+     "id": 102139,
+     "copies": 1
+    },
+    {
+     "id": 200025,
+     "copies": 1
+    },
+    {
+     "id": 200280,
+     "copies": 1
+    },
+    {
+     "id": 201020,
+     "copies": 1
+    },
+    {
+     "id": 201213,
+     "copies": 1
+    },
+    {
+     "id": 201388,
+     "copies": 1
+    },
+    {
+     "id": 201501,
      "copies": 1
     }
    ]

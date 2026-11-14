@@ -18,6 +18,7 @@ import {
   parseAlloc,
   seatControlsCopy,
   vulnerableGrant,
+  employTargets,
 } from "./compile.ts";
 import type { CardSpec } from "./spec.ts";
 
@@ -2838,6 +2839,30 @@ export const cardSpecs: CardSpec[] = [
   //     (docs/pool-widening-design.md §6). A life total and one static
   //     apiece — the shape `spec.ally` and `mode.retainerLife` already
   //     cover exactly. NO new vocabulary in this wave.
+  {
+    // "Unique demon with 1 life. Put Charnas on a minion (this is a +1
+    //  stealth Ⓓ action if the target minion is controlled by another
+    //  Methuselah). Charnas inflicts 1 damage on the employer during their
+    //  unlock phase. Charnas is immune to damage from the employer. If the
+    //  employer is about to be burned, their controller can put Charnas on
+    //  another minion." The unlock damage and the move are the bespoke
+    //  overlay `charnas`. docs/first-blood-tremere-design.md §1
+    krcgId: 100335,
+    name: "Charnas the Imp",
+    cardType: "retainer",
+    bloodCost: 1,
+    poolCost: 0,
+    unique: true,
+    requiresClan: ["Tremere"],
+    employOnAnyMinion: true,
+    permanent: {
+      where: "bearer",
+      statics: { immuneToEmployerDamage: true },
+      tags: ["demon"],
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, retainerLife: 1, effects: [] }],
+  },
   {
     // "Mortal with 1 life. If the vampire with this retainer is in torpor,
     //  he or she gains 1 blood at the beginning of his or her minion
@@ -19754,6 +19779,30 @@ export const cryptSpecs: CardSpec[] = [
   cryptPerm(201026, "Mustafa, The Heir (G4)", {}),
   cryptPerm(201438, "Victor Donaldson (G5)", {}),
 
+  // ---- Wave 118: First Blood Tremere (docs/first-blood-tremere-design.md)
+
+  // "Camarilla: Aidan gets 1 optional press each combat." Abaddon's shape.
+  flatCrypt(200025, "Aidan Lyle (G5)", { pressPerCombat: 1 }),
+  // "Camarilla: Tzimisce get -1 intercept against Rutor." Stolen Police
+  // Cruiser's penalty with a clan arm. Whole but inert: the pool has no
+  // Tzimisce yet, so the test builds one (§1).
+  flatCrypt(201213, "Rutor (G5)", {
+    opposingInterceptPenalty: { amount: 1, clans: ["Tzimisce"] },
+  }),
+  // "Camarilla Prince of Geneva: Troius cannot cast votes or ballots
+  // against blood hunt referendums. +1 strength."
+  flatCrypt(201388, "Troius (G4)", { cannotVoteAgainstBloodHunt: true, strength: 1 }),
+  // "Camarilla primogen: If Zane is not a prince, he can call a referendum
+  // to receive (and contest) the title held by a prince as a +1 stealth
+  // political action." Benjamin Rose's grant; the gate, the terms and the
+  // payout are the bespoke overlay `zane`.
+  {
+    ...cryptPerm(201501, "Zane (G5)", {
+      politicalGrant: { who: { self: true }, stealth: 1, effect: { gainPool: 0 } },
+    }),
+    referendumEffect: "other",
+  },
+
   // --- Conditioned on the BOARD. Every one derived on each read. ---
   condCrypt(201667, "Branimira (G6)", [{ intercept: 1, controller: { poolAtMost: 9 } }]),
   condCrypt(201748, "Devorah (G6)", [{ stealth: 1, controller: { poolAtMost: 5 } }]),
@@ -27324,6 +27373,110 @@ const victorDonaldson: CardHandler = {
 };
 
 /**
+ * Zane (201501) — "If Zane is not a prince, he can call a referendum to
+ * receive (and contest) the title held by a prince as a +1 stealth
+ * political action." Benjamin Rose's granted political action, plus:
+ *
+ * - the gate: not offered while Zane is a prince, nor with no prince to
+ *   name [LSJ 20100129]. A contested prince has no title (p. 18), so is
+ *   not one;
+ * - the terms: which prince, any Methuselah's, re-read at resolution;
+ * - the payout: `TitleGranted` with that prince's CITY. Zane loses
+ *   primogen (p. 39: one title only), and two claims to one city start the
+ *   engine's own title contest (p. 18). docs/first-blood-tremere-design.md §1
+ */
+const ZANE = "Zane (G5)";
+const zaneBase = compileSpec(cryptSpecByName(ZANE));
+function princesFor(state: GameState, zaneId: MinionId): MinionState[] {
+  const out: MinionState[] = [];
+  for (const s of state.seats) {
+    if (s.ousted) continue;
+    for (const m of s.minions) {
+      if (m.id === zaneId || m.kind !== "vampire") continue;
+      if (m.title === "prince" && m.titleCity !== undefined) out.push(m);
+    }
+  }
+  return out;
+}
+const zane: CardHandler = {
+  ...zaneBase,
+  actionOptions(entry, owner, ctx) {
+    const z = owner.minion ? findMinion(ctx.state, owner.minion) : null;
+    if (!z || z.title === "prince" || princesFor(ctx.state, z.id).length === 0) return [];
+    return zaneBase.actionOptions?.(entry, owner, ctx) ?? [];
+  },
+  referendumTerms(frame, state) {
+    if (!frame.callingMinion) return [];
+    return princesFor(state, frame.callingMinion).map((m) => ({
+      id: `terms:${m.id}`,
+      kind: "chooseTerms" as const,
+      label: `${ZANE}: receive and contest the title of ${m.name} (Prince of ${m.titleCity})`,
+      params: { target: m.id },
+    }));
+  },
+  applyReferendum(frame, ops) {
+    const z = frame.callingMinion ? findMinion(ops.state, frame.callingMinion) : null;
+    const prince = findMinion(ops.state, frame.terms["target"] ?? "");
+    // Gone, or no longer a prince: the referendum passed with nothing to do.
+    if (!z || !prince || prince.title !== "prince" || prince.titleCity === undefined) return;
+    ops.emit({ type: "TitleGranted", minion: z.id, title: "prince", city: prince.titleCity });
+  },
+};
+
+/**
+ * Charnas the Imp (100335) — the employ onto any minion and the immunity
+ * compile from the spec; this is the rest:
+ *
+ * - "Charnas inflicts 1 damage on the employer during THEIR unlock phase"
+ *   — the employer's controller's, whoever played Charnas. Mandatory.
+ *   Outside combat the engine has one damage applier and no prevention
+ *   window (§4).
+ * - "If the employer is about to be burned, their controller can put
+ *   Charnas on another minion" — `burnMinion` sets Charnas aside and asks;
+ *   any minion in play at any seat (owner ruling 2026-11-13), or burn.
+ *   docs/first-blood-tremere-design.md §1
+ */
+const CHARNAS = "Charnas the Imp";
+const charnas: CardHandler = {
+  ...compileSpec(specByName(CHARNAS)),
+  movesOffBurningBearer: true,
+  onAnyUnlock(_entry, owner, unlockingSeat, ops) {
+    const employer = owner.minion ? findMinion(ops.state, owner.minion) : null;
+    if (!employer || employer.controller !== unlockingSeat) return;
+    ops.applyEnvironmentalDamage(employer.id, 1, false);
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== "moveOffBurned") return [];
+    const from = frame.params["from"];
+    const out: LegalOption[] = employTargets(state)
+      .filter((t) => t.id !== from)
+      .map((t) => ({
+        id: `choice:${CHARNAS}:${frame.cardId}:moveOffBurned:${t.id}`,
+        kind: "answerChoice" as const,
+        label: `${CHARNAS}: put it on ${t.name} (${t.controller})`,
+        params: { minion: t.id },
+      }));
+    out.push({
+      id: `choice:${CHARNAS}:${frame.cardId}:moveOffBurned:burn`,
+      kind: "answerChoice" as const,
+      label: `${CHARNAS}: let it burn`,
+      params: {},
+    });
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key !== "moveOffBurned" || !frame.cardId) return;
+    const to = choice.params["minion"];
+    const holder = ops.state.seats.find((s) => s.permanents.some((p) => p.card.id === frame.cardId));
+    if (to && holder && findMinion(ops.state, to)) {
+      ops.emit({ type: "PermanentMoved", cardId: frame.cardId, to, controller: holder.id });
+      return;
+    }
+    ops.burnPermanent(frame.cardId);
+  },
+};
+
+/**
  * The Anarch Free Press (100052) — the intercept clause compiles from the
  * spec; the hunt clause is the bespoke half.
  *
@@ -28291,6 +28444,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     distantFriend,
     mustafa,
     victorDonaldson,
+    zane,
+    charnas,
     voxDomini,
     auraOfInvincibility,
   ]) {

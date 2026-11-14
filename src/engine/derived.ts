@@ -1303,9 +1303,16 @@ export function actingMinionOf(state: GameState, actionId: ActionId): MinionStat
 export function blockerMatchesFilter(
   blocker: MinionState,
   actor: MinionState | null,
-  filter: { kinds?: MinionState["kind"][]; youngerThan?: MinionId; sects?: string[] },
+  filter: {
+    kinds?: MinionState["kind"][];
+    youngerThan?: MinionId;
+    sects?: string[];
+    clans?: string[];
+  },
 ): boolean {
   if ((filter.kinds ?? []).includes(blocker.kind)) return true;
+  // "TZIMISCE get −1 intercept against Rutor" — a fourth arm.
+  if (blocker.clan !== null && (filter.clans ?? []).includes(blocker.clan)) return true;
   // "ANARCHS get −1 intercept during this action" (Fiendish Tongue) — a
   // third arm of the same union.
   if (blocker.sect !== null && (filter.sects ?? []).includes(blocker.sect)) return true;
@@ -1350,6 +1357,7 @@ export function currentIntercept(
         blockerMatchesFilter(holder, actor, {
           ...(pen.kinds ? { kinds: pen.kinds } : {}),
           ...(pen.younger ? { youngerThan: actor.id } : {}),
+          ...(pen.clans ? { clans: pen.clans } : {}),
         })
       ) {
         intercept -= pen.amount;
@@ -2046,6 +2054,27 @@ export function vampireMayVote(rf: ReferendumFrame, m: MinionState): boolean {
   // Like it, it bars VAMPIRES casting; the Edge, the calling card and a
   // Methuselah's card-granted votes are untouched.
   if (rf.voteBan && m.sect === rf.voteBan.sect) return false;
+  return true;
+}
+
+/** May this vampire cast votes in THIS DIRECTION? Every bar on
+ *  `vampireMayVote`, plus the ones that name a direction: "Troius cannot
+ *  cast votes or ballots AGAINST blood hunt referendums". The one helper
+ *  both vote sources ask — title votes and blood-bought votes — so they
+ *  cannot drift. docs/first-blood-tremere-design.md §1 */
+export function vampireMayVoteThatWay(
+  rf: ReferendumFrame,
+  m: MinionState,
+  inFavor: boolean,
+): boolean {
+  if (!vampireMayVote(rf, m)) return false;
+  if (
+    !inFavor &&
+    rf.variant === "bloodHunt" &&
+    m.attached.some((p) => p.statics.cannotVoteAgainstBloodHunt)
+  ) {
+    return false;
+  }
   return true;
 }
 

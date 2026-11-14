@@ -43,8 +43,8 @@ contradicts the rulebook, card text wins** (the Golden Rule, p. 16).
   `config/crypt-groups.json` (`open: [{ clan, groups }]`, owner ruling
   2026-11-08 — a bare group list opened every clan at once). Open today:
   **Toreador antitribu groups 4–5** (wave 115), **Nosferatu groups
-  4–5** (wave 116) and **Ventrue groups 4–5** (wave 117). Ask before
-  opening each.
+  4–5** (wave 116), **Ventrue groups 4–5** (wave 117) and **Tremere
+  groups 4–5** (wave 118). Ask before opening each.
 - **Widening is a PIPELINE, not a switch** (`docs/pool-widening-design.md`).
   Opening a group admits only vampires that are already whole — the
   builder gates on it, so the pool can never get ahead of the card waves.
@@ -136,7 +136,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 334 test files, 3802 tests**, with `npm run typecheck`,
+**Green baseline: 335 test files, 3824 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -851,7 +851,9 @@ Each has cost an hour of "why is my card not offered":
   (2026-11-13), unless the card says it works while elsewhere. A house
   rule beyond p. 34, which bars only actions, blocks, reactions and votes.
   **Not yet enforced engine-wide**: there is no central gate, each clause
-  checks `isReady` or doesn't (`first-blood-tremere-design.md` §0).
+  checks `isReady` or doesn't (`first-blood-tremere-design.md` §0). The
+  owner approved an audit (one central gate, an opt-out for cards that
+  say they work elsewhere); it needs its own design doc first.
 - **Open War's 4-counter payout goes to the card's CONTROLLER**, not to
   whoever places the fourth counter.
 - **The AI plays with what a player can see** (2026-09-06). Handing an
@@ -991,7 +993,10 @@ auras; §5 is the rule for legacy precons in the chooser),
 first-blood-nosferatu (wave 116, 0.11.66: an open hand is open to the
 whole table; granted rushes re-ask their target terms at resolution),
 first-blood-ventrue (wave 117, 0.11.67: the `onCardCanceled` hook,
-`usesThisReferendum`, the inert `putsVampireInPlay` action tag).
+`usesThisReferendum`, the inert `putsVampireInPlay` action tag),
+first-blood-tremere (wave 118, 0.11.68: a retainer employed onto any
+minion, `PermanentSetAside`, the one-direction vote bar; §0 is the
+owner's ready-only ruling for vampire abilities).
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

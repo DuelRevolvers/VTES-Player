@@ -2562,6 +2562,12 @@ export interface CardSpec {
   /** Unique: a seat may not voluntarily play a second copy (p. 17).
    *  Cross-player contests are not modeled yet (see CLAUDE.md gaps). */
   unique?: boolean;
+  /** "Put Charnas on a minion (this is a +1 stealth Ⓓ action if the target
+   *  minion is controlled by another Methuselah)" — a retainer employed
+   *  onto ANY minion in play, not only the actor. Still an employ action
+   *  whatever the target [ANK 20230408]; directed only when the target is
+   *  another Methuselah's. docs/first-blood-tremere-design.md §1 */
+  employOnAnyMinion?: boolean;
   /** "The blocking minion's controller can burn 1 pool to cancel this
    *  card as it is played" (True Love's Face) — pay-to-cancel, the gate
    *  built for Golconda: Inner Peace. The payer is computed from the

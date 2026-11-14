@@ -127,6 +127,10 @@ describe("Vial of Elder Vitae (102114)", () => {
       }
     }
     expect([...onVampires].sort()).toEqual([...DISCIPLINES].sort());
-    expect([...onLibrary].sort()).toEqual([...DISCIPLINES].sort());
+    // Since wave 118 a vampire can HAVE a Discipline no library card in the
+    // pool requires yet (Aidan Lyle's Chimerstry, Rutor's Vicissitude), so
+    // the library's set is a subset, not the same set. A requirement that
+    // names a Discipline outside the list is still a failure.
+    for (const d of onLibrary) expect(DISCIPLINES, d).toContain(d);
   });
 });

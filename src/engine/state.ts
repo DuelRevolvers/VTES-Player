@@ -165,15 +165,18 @@ export const CLANS: string[] = [
  * The same growth rule as `CLANS`, and the same trap in a new place: a
  * Discipline is a property of a VAMPIRE, but a library card carries a
  * discipline REQUIREMENT, and while the two sets agree by accident
- * nothing notices. They agree today — eleven either way — and the
- * vocabulary assertion in `tests/cards/burn-the-equipment.test.ts`
- * cross-checks both against the registry so a widening cannot drift it.
- * docs/burn-the-equipment-design.md §3
+ * nothing notices. They stopped agreeing in wave 118: Aidan Lyle brought
+ * Chimerstry and Rutor Vicissitude, which vampires HAVE and no library
+ * card in the pool yet REQUIRES. So the vampires' set is this list and the
+ * library's is a subset of it, asserted in
+ * `tests/cards/burn-the-equipment.test.ts` so a widening cannot drift it.
+ * docs/burn-the-equipment-design.md §3, docs/first-blood-tremere-design.md §4
  */
 export const DISCIPLINES: string[] = [
   "ani",
   "aus",
   "cel",
+  "chi",
   "dom",
   "for",
   "obf",
@@ -182,6 +185,7 @@ export const DISCIPLINES: string[] = [
   "pre",
   "pro",
   "tha",
+  "vic",
 ];
 
 export const TITLE_VOTES: Record<VampireTitle, number> = {
@@ -1144,6 +1148,15 @@ export interface PermanentStatics {
    *  referendum frame is in hand, never folded into a vote count.
    *  docs/blood-hunt-answers-design.md §3 */
   cannotCastVotesInOwnBloodHunt?: boolean;
+  /** "Troius cannot cast votes or ballots AGAINST blood hunt referendums"
+   *  — one DIRECTION barred, in one kind of referendum, so it is read by
+   *  `vampireMayVoteThatWay` where the direction is known, never by
+   *  `vampireMayVote`. docs/first-blood-tremere-design.md §1 */
+  cannotVoteAgainstBloodHunt?: boolean;
+  /** "Charnas is immune to damage from the employer" — the damage is not
+   *  inflicted at all [LSJ 20010627], read by `burnRetainerLife` against
+   *  the damage's SOURCE minion. docs/first-blood-tremere-design.md §1 */
+  immuneToEmployerDamage?: boolean;
   /** "This vampire DOES NOT LOCK for blocking a vampire the same age or
    *  younger" (Atonement) — an exemption from the lock a block costs (p. 25),
    *  carried by a card on the BLOCKER and conditional on who they blocked.
@@ -1163,7 +1176,14 @@ export interface PermanentStatics {
    *  the ACTING minion, so it holds for every action they take. The
    *  action-scoped twin is `ActionInterceptModified.filter`, and both
    *  read one helper. docs/opposing-statics-design.md §1 */
-  opposingInterceptPenalty?: { amount: number; kinds?: MinionKind[]; younger?: boolean };
+  opposingInterceptPenalty?: {
+    amount: number;
+    kinds?: MinionKind[];
+    younger?: boolean;
+    /** "TZIMISCE get −1 intercept against Rutor" — a fourth arm of the
+     *  same union. docs/first-blood-tremere-design.md §1 */
+    clans?: string[];
+  };
   /** "Vampires attempting to block the attached vampire burn 1 blood"
    *  (Archon) — the persistent twin of `ActionFrame.blockCosts`, keyed on
    *  the bearer rather than on one action. docs/opposing-statics-design.md §2 */
@@ -1841,6 +1861,12 @@ export type GameEvent =
   /** An attached card moved from one minion to another (Regent's
    *  diablerie clause); `controller` is who controls it afterwards. */
   | { type: "PermanentMoved"; cardId: CardInstanceId; to: MinionId; controller: SeatId }
+  /** An attached card lifted off a bearer that is about to be burned, held
+   *  in `seat`'s play area until its card's question is answered — "their
+   *  controller can put Charnas on another minion". The answer is a
+   *  `PermanentMoved` or a `PermanentBurned`.
+   *  docs/first-blood-tremere-design.md §1 */
+  | { type: "PermanentSetAside"; cardId: CardInstanceId; seat: SeatId }
   | { type: "HuntingGroundUsed"; minion: MinionId }
   | { type: "CorruptionChanged"; minion: MinionId; seat: SeatId; delta: number }
   /** A named counter on a minion changed (hostage, nightmare). */

@@ -1335,6 +1335,10 @@ function fourSeatGame(seed: number): GameState {
     "Faithful Servant",
     "Fortune Teller",
     "Robert Carter",
+    // Charnas the Imp (wave 118): a retainer employed onto ANY minion, as a
+    // directed action when the target is a rival's, and the first card set
+    // aside off a burning bearer.
+    "Charnas the Imp",
     // One each round (tranche 3 wave 44). Death Seeker acts inside ANOTHER
     // card's as-played window, which is the one window the fuzz could
     // previously only ever reach with a strike card.
@@ -1527,6 +1531,16 @@ function fourSeatGame(seed: number): GameState {
           blood: 1,
           capacity: 2,
           clan: "Toreador antitribu" as const,
+        }),
+        // Charnas the Imp requires a Tremere, and no other minion here is
+        // one — so without this it would be dealt and never played. Its
+        // employ onto ANY minion, the unlock damage and the move off a
+        // burning employer all need it in play (wave 118).
+        makeMinion(`${id}r`, id, {
+          blood: 3,
+          capacity: 5,
+          clan: "Tremere" as const,
+          sect: "camarilla" as const,
         }),
       ],
       // One vampire mid-influence and one still in the crypt, so random

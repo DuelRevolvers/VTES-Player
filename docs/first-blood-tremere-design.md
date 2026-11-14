@@ -1,8 +1,10 @@
-# First Blood Tremere (wave 118) — DESIGN, awaiting owner review
+# First Blood Tremere (wave 118) — BUILT 0.11.68
 
 The owner approved this wave on November 13, 2026, including opening
-Tremere groups 4–5. The readings in section 1 and the questions in
-section 3 need review before kernel code.
+Tremere groups 4–5, and answered both questions in section 3 the same
+day: Charnas moves to any minion at any seat, and the torpor ruling gets
+its own engine-wide audit after this wave. Section 4 records what was
+built.
 
 Target: the First Blood Tremere precon, 87% before this wave. It is
 missing six Tremere vampires from groups 4–5 and one library card.
@@ -163,3 +165,59 @@ All seven cards join the fuzz decks.
    for clauses that still work while the vampire is in torpor or
    elsewhere, and add one central readiness gate with an opt-out for
    cards that say they work elsewhere. It needs its own design doc first.
+
+## 4. What was built (0.11.68)
+
+Counts: library 935, crypt 255 (was 245), total 1,190. First Blood
+Tremere is at 100% and in the chooser as a labelled half deck, playstyle
+**Turtle** (its library is reactions, wakes, masters and equipment). Ten
+crypt cards entered, not six: opening Tremere groups 4–5 also admitted
+every other Tremere vampire in those groups that was already whole.
+
+- **Aidan Lyle** and **Troius's strength:** flat statics, no new code.
+- **Rutor:** `opposingInterceptPenalty.clans`, and a `clans` arm in
+  `blockerMatchesFilter`. Inert today; tested on a constructed Tzimisce.
+- **Troius's vote bar:** `cannotVoteAgainstBloodHunt`, read by one new
+  helper, `vampireMayVoteThatWay`, at both vote sources. `changeVotes`
+  also refuses to turn his votes against a blood hunt, because a turned
+  vote counts the same as a cast one.
+- **Zane:** a bespoke overlay on Benjamin Rose's grant. The engine's
+  existing title-contest state check needed no change.
+- **Charnas the Imp:**
+  - `CardSpec.employOnAnyMinion`: one employ option per minion in play
+    (`employTargets`). A rival's target makes the action directed
+    (`targetMinion` with `noCombat`, the Mind Numb shape).
+  - `CardHandler.employOnTarget`: `enterPermanentFromAction` puts the
+    card on `params.target`, re-checked at resolution.
+  - `enterPermanent` now records `controller` when the bearer belongs to
+    another seat (p. 16).
+  - `CardHandler.movesOffBurningBearer` and a new event,
+    `PermanentSetAside`: `burnMinion` lifts the card off the bearer and
+    raises the mandatory `moveOffBurned` choice (any minion, or `burn`).
+  - `immuneToEmployerDamage`, read by `burnRetainerLife`'s new `source`
+    argument.
+  - Unlock damage through `onAnyUnlock`.
+
+### 4.1 Findings
+
+1. **The pool now has Disciplines no library card requires.** Aidan
+   brings Chimerstry and Rutor brings Vicissitude. `DISCIPLINES` ("every
+   Discipline in the pool", what Vial of Elder Vitae offers) gained `chi`
+   and `vic`. Its drift test asserted the vampires' set and the library's
+   set were EQUAL, and they no longer are, so the library's is now
+   asserted as a subset. The "V5 crypt disciplines are exactly …" filter
+   in `CLAUDE.md` is still true of the V5 crypt, not of the pool.
+2. **Charnas's immunity is whole but can't come up yet.** The only path
+   that damages a retainer is combat round damage, and every card on it is
+   environmental, which the employer doesn't inflict [LSJ 20090304-1]. No
+   caller passes a `source` today; the test calls `burnRetainerLife`
+   directly.
+3. **Charnas's unlock damage has no prevention window.** The card prints
+   ordinary, preventable damage, but outside combat the engine has one
+   damage applier, `applyEnvironmentalDamage`, with no prevention window
+   (p. 31). No card in the pool prevents damage outside combat, so nothing
+   is lost today. A card that can will need that window built.
+4. **The ten fuzz seeds never deal Charnas into a playable spot.** It was
+   held once, by a seat whose only Tremere had spent its blood. A
+   one-off 120-seed run offered it 298 times and reached the move choice,
+   all games green. The fuzz decks gained one Tremere minion per seat.
