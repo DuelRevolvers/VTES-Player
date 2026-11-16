@@ -1119,7 +1119,7 @@
 "101118","Lock","library","true","CODE_DISCREPANCY",""
 "101119","Loki's Gift","library","true","CODE_DISCREPANCY",""
 "101120","London Evening Star, Tabloid Newspaper","library","true","REVIEWED_NO_ISSUE_FOUND",""
-"101121","Loner","library","true","CODE_DISCREPANCY","simple_gain_pool_text_mismatch_review"
+"101121","Loner","library","true","FIXED_TARGETED",""
 "101122","Loose Cannon","library","true","CODE_DISCREPANCY",""
 "101123","Lord of Serenity","library","true","CODE_DISCREPANCY",""
 "101124","Loss","library","true","CODE_DISCREPANCY",""

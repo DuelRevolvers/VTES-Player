@@ -215,6 +215,8 @@ export function narrate(ev: GameEvent, state: GameState): LogLine | null {
       return { text: `${ev.seat} takes the Edge.`, weight: "normal" };
 
     // -- minions in and out ------------------------------------------------
+    case "MinionActionSucceeded":
+      return { text: `${m(ev.minion)} succeeds with its action.`, weight: "minor" };
     case "MinionLocked":
       return { text: `${m(ev.minion)} locks.`, weight: "minor" };
     case "MinionUnlocked":

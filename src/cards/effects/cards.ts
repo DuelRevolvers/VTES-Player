@@ -9389,6 +9389,27 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  {
+    // Loner [101121] — "Master: archetype. Put this card on a vampire you
+    // control. During your influence phase, if this vampire successfully
+    // performed an action this turn and none of your other minions attempted
+    // any actions this turn, he or she gains 1 blood from the blood bank, if
+    // he or she is ready. A vampire can have only one archetype."
+    krcgId: 101121,
+    name: "Loner",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // Wave 107: five more archetypes on the same skeleton, each paying 1 blood
   // once per turn, automatically (docs/archetypes-design.md §7). Four print
   // "a Sabbat vampire you control".
@@ -29222,17 +29243,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Loner [101121] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 101121,
-    name: "Loner",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Loose Cannon [101122] — fala 50 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 101122,
     name: "Loose Cannon",
@@ -46493,6 +46503,30 @@ function archetypeGain(entry: PermanentInPlay, minion: MinionId, ops: EngineOps)
  * being ready, so it is paid then (owner ruling 2026-10-23,
  * docs/archetypes-design.md §7.5).
  */
+/**
+ * Loner (101121) — "During your influence phase, if this vampire successfully
+ * performed an action this turn and none of your other minions attempted any
+ * actions this turn, he or she gains 1 blood from the blood bank, if he or she
+ * is ready." The influence-phase hook fires for every card in play, so the
+ * bearer's controller must be the seat whose influence phase it is. Both
+ * conditions read the per-minion flags the engine keeps for the turn
+ * (`successfulActionThisTurn`, `attemptedActionThisTurn`).
+ */
+const loner: CardHandler = {
+  ...compileSpec(specByName("Loner")),
+  onInfluencePhase(entry, owner, turnSeat, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || bearer.controller !== turnSeat) return;
+    if (!bearer.successfulActionThisTurn || !isReady(bearer)) return;
+    const othersActed = ops.state.seats
+      .flatMap((s) => s.minions)
+      .some((m) => m.controller === turnSeat && m.id !== bearer.id && m.attemptedActionThisTurn);
+    if (othersActed) return;
+    archetypeGain(entry, bearer.id, ops);
+  },
+};
+
 const bravo: CardHandler = {
   ...compileSpec(specByName("Bravo")),
   onCombatEnded(entry, owner, info, ops) {
@@ -47935,6 +47969,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     perfectionist,
     rebel,
     bravo,
+    loner,
     capitalist,
     creepShow,
     guru,

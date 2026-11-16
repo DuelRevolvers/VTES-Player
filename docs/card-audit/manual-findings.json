@@ -6722,8 +6722,8 @@
   {
     "id": 101121,
     "name": "Loner",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast dołączenia archetype i warunkowego blood w influence phase. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: archetyp (mistrz na własnym vampire, exclusiveKey archetype) z hookiem onInfluencePhase; warunki czytane z nowych znaczników minionu successfulActionThisTurn / attemptedActionThisTurn (ustawiane przez ActionAnnounced i MinionActionSucceeded, czyszczone w unlock phase). Zysk 1 krwi z banku tylko gdy bearer gotowy i nie ma innych aktywnych minionów kontrolera. Test: tests/cards/loner.test.ts (5/5)."
   },
   {
     "id": 101122,

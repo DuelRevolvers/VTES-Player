@@ -8,7 +8,7 @@ To **triage, nie ręczny audyt ani potwierdzenie poprawności**. UNREVIEWED ozna
 |---|---:|
 | crypt_empty_spec_with_text_review | 648 |
 | no_runtime_handler | 8 |
-| simple_gain_pool_text_mismatch_review | 174 |
+| simple_gain_pool_text_mismatch_review | 173 |
 
 ## Udokumentowane ustalenia ręczne
 
@@ -1136,7 +1136,7 @@ To udokumentowane ustalenia, a nie pełne sprawdzenie wszystkich interakcji tych
 | 101118 | Lock | CODE_DISCREPANCY | Action daje modifyStealth zamiast dołączenia do miniona i kosztów dla monsters oraz opcji spalenia i limitu jednej kopii. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |
 | 101119 | Loki's Gift | CODE_DISCREPANCY | Action daje modifyStealth zamiast hunt, dołączenia oraz płatnych efektów stealth/votes; brak superior. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |
 | 101120 | London Evening Star, Tabloid Newspaper | REVIEWED_NO_ISSUE_FOUND | Wąski zakres: unique location może dać +1 intercept minionowi innego gracza; legacy-locations.test.ts. |
-| 101121 | Loner | CODE_DISCREPANCY | Master daje gainPool zamiast dołączenia archetype i warunkowego blood w influence phase. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER. |
+| 101121 | Loner | FIXED_TARGETED | Naprawiono: archetyp (mistrz na własnym vampire, exclusiveKey archetype) z hookiem onInfluencePhase; warunki czytane z nowych znaczników minionu successfulActionThisTurn / attemptedActionThisTurn (ustawiane przez ActionAnnounced i MinionActionSucceeded, czyszczone w unlock phase). Zysk 1 krwi z banku tylko gdy bearer gotowy i nie ma innych aktywnych minionów kontrolera. Test: tests/cards/loner.test.ts (5/5). |
 | 101122 | Loose Cannon | CODE_DISCREPANCY | Wszystkie trzy tryby dają stealth zamiast oddzielnych skutków po bloku; brak wymogu Anarch i timingu announce. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |
 | 101123 | Lord of Serenity | CODE_DISCREPANCY | Oba tryby action mają tylko stealth; brak rescue, permanenta z blood w unlock, opcji spalenia i superior. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |
 | 101124 | Loss | CODE_DISCREPANCY | Basic daje modifyBleed zamiast spalenia equipment/location; brak superior z akcją bleed +2. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |

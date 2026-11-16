@@ -322,6 +322,11 @@ export interface MinionState {
   disciplines: Record<string, DisciplineLevel>;
   /** One bleed action per minion per turn (p. 20). */
   bledThisTurn: boolean;
+  /** "None of your other minions attempted any actions this turn" (Loner).
+   *  Set when an action is announced by this minion; reset at its turn start. */
+  attemptedActionThisTurn?: boolean;
+  /** "…successfully performed an action this turn" (Loner). */
+  successfulActionThisTurn?: boolean;
   /** One political action per vampire per turn (p. 24). */
   calledPoliticalThisTurn: boolean;
   /** "…who did not hunt during that minion phase" (Thirst). Set when a
@@ -1980,6 +1985,7 @@ export type GameEvent =
   | { type: "PoolGained"; seat: SeatId; amount: number }
   | { type: "EdgeTaken"; seat: SeatId }
   | { type: "ActionResolved"; actionId: ActionId; success: boolean }
+  | { type: "MinionActionSucceeded"; minion: MinionId }
   /** "Continue the action as if unblocked" (Go-getter superior). A
    *  DISTINCT event rather than a second `ActionResolved` for the same
    *  actionId: the log is the record, one resolution really did happen and

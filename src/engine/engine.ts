@@ -683,6 +683,19 @@ export class VtesEngine implements EngineOps {
       case "MinionLocked":
         getMinion(this.state, ev.minion).locked = true;
         break;
+      case "ActionAnnounced": {
+        // "None of your other minions attempted any actions this turn" (Loner).
+        const acting = findMinion(this.state, ev.acting);
+        if (acting) acting.attemptedActionThisTurn = true;
+        break;
+      }
+      case "MinionActionSucceeded": {
+        // Read by Loner. A minion that left play during the action has
+        // nothing to flag, so this does not throw on a replay.
+        const succeeded = findMinion(this.state, ev.minion);
+        if (succeeded) succeeded.successfulActionThisTurn = true;
+        break;
+      }
       case "MinionUnlocked":
         getMinion(this.state, ev.minion).locked = false;
         break;
@@ -2749,6 +2762,8 @@ export class VtesEngine implements EngineOps {
           m.awake = false;
           m.bledThisTurn = false;
           m.calledPoliticalThisTurn = false;
+          m.attemptedActionThisTurn = false;
+          m.successfulActionThisTurn = false;
           m.huntedThisPhase = false;
           m.usedHuntingGroundThisTurn = false;
           m.playedSinceUnlock = [];
@@ -4931,6 +4946,7 @@ export class VtesEngine implements EngineOps {
       const toBurn = Math.min(extra, bleeder.blood);
       if (toBurn > 0) this.emit({ type: "BloodBurned", minion: bleeder.id, amount: toBurn });
     }
+    if (success) this.emit({ type: "MinionActionSucceeded", minion: af.acting });
     const actor = findMinion(this.state, af.acting);
     const spent = (actor?.attached ?? [])
       .filter((p) => p.statics.burnAfterBearerAction && p.card.id !== af.card?.instance.id)
