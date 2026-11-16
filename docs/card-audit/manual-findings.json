@@ -7184,8 +7184,8 @@
   {
     "id": 101198,
     "name": "Memories of Mortality",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast dołączenia do vampire z zakazem bloku allies, redukcją damage i opcją spalenia/torpor. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: ręczny handler mistrza na własnym vampire (statyki cannotBlockKind: ally oraz allyDamageZeroed). Obrażenia bearera wobec allies są zerowane w pushPendingDamage (DamagePrevented). Ability w turn.influence: 1 blood z bearera, karta spalona, bearer w torpor. Test: tests/cards/memories-of-mortality.test.ts (4/4: zagranie i statyki, kontrola obrażeń 1 vs 0, bearer nie blokuje akcji allies (kontrola: może), ability w influence). Założenie: 'put on a vampire' = vampire kontrolera, jak przy The Damned."
   },
   {
     "id": 101199,

@@ -13531,6 +13531,20 @@ export class VtesEngine implements EngineOps {
    * them would make the log say something the card does not.
    */
   private pushPendingDamage(cf: CombatFrame, pd: PendingDamage): void {
+    // "Any damage this vampire inflicts on allies is reduced to 0" (Memories
+    // of Mortality): the striking minion's packet, aimed at an ally, does
+    // nothing. Checked before any other prevention so the packet is spent.
+    if (pd.source !== null) {
+      const striker = findMinion(this.state, pd.source);
+      const victimNow = findMinion(this.state, pd.minion);
+      if (
+        striker?.attached.some((p) => p.statics.allyDamageZeroed) &&
+        victimNow?.kind === "ally"
+      ) {
+        this.emit({ type: "DamagePrevented", minion: pd.minion, amount: pd.amount });
+        return;
+      }
+    }
     // "Prevent all damage from the opposing minion's strikes this round"
     // (Rolling with the Punches superior). Check the packet's provenance:
     // environmental and retainer damage are not the opposing strike.

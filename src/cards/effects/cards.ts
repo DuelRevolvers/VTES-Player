@@ -29519,18 +29519,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Memories of Mortality [101198] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
-    krcgId: 101198,
-    name: "Memories of Mortality",
-    cardType: "master",
-    bloodCost: 0,
-    poolCost: 1,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Memory's Fading Glimpse [101200] — fala 50 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 101200,
     name: "Memory's Fading Glimpse",
@@ -42015,6 +42003,77 @@ function bloodMoverAbility(
   };
 }
 
+/** Memories of Mortality (101198) — "Master. Put this card on a vampire;
+ *  this vampire cannot attempt to block allies. Any damage this vampire
+ *  inflicts on allies is reduced to 0. This vampire may burn 1 blood during
+ *  his or her controller's influence phase to burn this card; he or she
+ *  then goes into torpor." Hand-rolled because the influence-phase burn is
+ *  an ability, which a spec does not carry. Put on the controller's own
+ *  vampire, as the other masters placed on "a vampire" are (the text does
+ *  not say "you control"; see docs/card-audit). */
+const MEMORIES_OF_MORTALITY_STATICS = { cannotBlockKind: "ally" as const, allyDamageZeroed: true };
+const memoriesOfMortality: CardHandler = {
+  name: "Memories of Mortality",
+  abilityAnySeat: true,
+  bloodCost: 0,
+  poolCost: 1,
+  isMasterCard: true,
+  permanentStatics: MEMORIES_OF_MORTALITY_STATICS,
+  permanentTags: ["Memories of Mortality"],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    return getSeat(ctx.state, ctx.seat).minions.filter((m) => m.kind === "vampire").map(
+      (m): LegalOption => ({
+        id: playOptionId(this.name, null, m.id, card.id),
+        kind: "playCard",
+        label: `Memories of Mortality on ${m.name}`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: { target: m.id },
+      }),
+    );
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    if (!target) throw new Error("Memories of Mortality: no target");
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: MEMORIES_OF_MORTALITY_STATICS,
+      tags: ["Memories of Mortality"],
+    });
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.influence" || owner.minion === null) return [];
+    const bearer = findMinion(ctx.state, owner.minion);
+    if (!bearer || bearer.kind !== "vampire" || bearer.blood < 1) return [];
+    // "During his or her controller's influence phase": the controller
+    // deciding, in their own turn.
+    if (ctx.seat !== bearer.controller || ctx.turnSeat !== bearer.controller) return [];
+    return [
+      {
+        id: `ability:Memories of Mortality:${entry.card.id}:burn`,
+        kind: "useAbility",
+        label: `Memories of Mortality: ${bearer.name} burns 1 blood, this card, and goes to torpor`,
+        source: entry.card.id,
+        params: {},
+      },
+    ];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    if (!owner.minion) throw new Error("Memories of Mortality: no bearer");
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || bearer.kind !== "vampire") return;
+    ops.emit({ type: "BloodBurned", minion: bearer.id, amount: 1 });
+    ops.burnPermanent(entry.card.id);
+    ops.sendToTorpor(bearer.id);
+  },
+};
+
 /** Blood Doll (100199) — bespoke: attach to an own vampire; master-phase
  *  blood mover (usable the turn it is played, ruling p. 47). */
 const bloodDoll: CardHandler = {
@@ -47675,6 +47734,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     tabrizAssembly,
     theBarrens,
     bloodDoll,
+    memoriesOfMortality,
     vessel,
     magnum44,
     doubleDeuce,

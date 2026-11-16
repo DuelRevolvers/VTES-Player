@@ -1233,6 +1233,9 @@ export interface PermanentStatics {
    *  action he or she successfully performs (after resolving the action)"
    *  (The Damned). Read on the actor when the action resolves. */
   bleedSuccessBloodBurn?: number;
+  /** "Any damage this vampire inflicts on allies is reduced to 0" (Memories
+   *  of Mortality). Read on the striking minion when a packet is queued. */
+  allyDamageZeroed?: boolean;
   /** "Burn this card at the end of this turn" (Enrage inferior, Bloodlust)
    *  — swept once as the turn ends. */
   burnAtEndOfTurn?: boolean;
