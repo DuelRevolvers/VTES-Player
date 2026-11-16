@@ -26162,17 +26162,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Agent of Power [100025] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 100025,
-    name: "Agent of Power",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Aggressive Tactics [100026] — fala 49 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 100026,
     name: "Aggressive Tactics",
@@ -42129,6 +42118,78 @@ const spontaneousPower: CardHandler = {
   },
 };
 
+/** Agent of Power (100025) — "Master: Discipline. Trifle. Unique. Put this
+ *  card on a vampire you control and choose a Discipline. This vampire gains
+ *  1 level of that Discipline. Burn this card during your discard phase."
+ *  Hand-rolled like Spontaneous Power: the chosen Discipline is part of the
+ *  play option, and the discard-phase burn is an ability. "You control" is
+ *  narrower than the Discipline masters' "a vampire", so only your own
+ *  vampires are offered. */
+const agentOfPower: CardHandler = {
+  name: "Agent of Power",
+  abilityAnySeat: true,
+  bloodCost: 0,
+  poolCost: 0,
+  isMasterCard: true,
+  isUnique: true,
+  isTrifle: true,
+  permanentTags: ["discipline"],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const out: LegalOption[] = [];
+    for (const m of getSeat(ctx.state, ctx.seat).minions) {
+      if (m.kind !== "vampire") continue;
+      const have = disciplinesOf(m);
+      for (const code of DISCIPLINES) {
+        if (have[code] === "superior") continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id, code),
+          kind: "playCard",
+          label: `Agent of Power on ${m.name} (${code})`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id, discipline: code },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    const code = play.params["discipline"];
+    if (!target || !code) throw new Error("Agent of Power: no target or discipline");
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: { disciplineBoost: code },
+      tags: ["discipline"],
+    });
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.discard" || owner.minion === null) return [];
+    const bearer = findMinion(ctx.state, owner.minion);
+    if (!bearer || bearer.kind !== "vampire") return [];
+    // "Your discard phase": the controller's own turn.
+    if (ctx.seat !== bearer.controller || ctx.turnSeat !== bearer.controller) return [];
+    return [
+      {
+        id: `ability:Agent of Power:${entry.card.id}:burn`,
+        kind: "useAbility",
+        label: `Agent of Power: burn this card (${bearer.name})`,
+        source: entry.card.id,
+        params: {},
+      },
+    ];
+  },
+  useAbility(entry, _owner, _choice, ops) {
+    ops.burnPermanent(entry.card.id);
+  },
+};
+
 /** Blood Doll (100199) — bespoke: attach to an own vampire; master-phase
  *  blood mover (usable the turn it is played, ruling p. 47). */
 const bloodDoll: CardHandler = {
@@ -47791,6 +47852,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     bloodDoll,
     memoriesOfMortality,
     spontaneousPower,
+    agentOfPower,
     vessel,
     magnum44,
     doubleDeuce,

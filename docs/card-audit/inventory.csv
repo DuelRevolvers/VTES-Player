@@ -23,7 +23,7 @@
 "100022","Adhocracy","library","true","CONFIRMED_BUG",""
 "100023","The Admonitions","library","true","PARTIAL_FIX","simple_gain_pool_text_mismatch_review"
 "100024","Agate Talisman","library","true","CODE_DISCREPANCY",""
-"100025","Agent of Power","library","true","PARTIAL_FIX","simple_gain_pool_text_mismatch_review"
+"100025","Agent of Power","library","true","FIXED_TARGETED",""
 "100026","Aggressive Tactics","library","true","CONFIRMED_BUG","simple_gain_pool_text_mismatch_review"
 "100027","Ahriman's Demesne","library","true","CONFIRMED_BUG",""
 "100028","Ahrimane Protectorate","library","true","PARTIAL_FIX",""

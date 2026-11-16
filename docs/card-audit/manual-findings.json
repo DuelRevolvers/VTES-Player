@@ -146,8 +146,8 @@
   {
     "id": 100025,
     "name": "Agent of Power",
-    "status": "PARTIAL_FIX",
-    "evidence": "Zamiast trifle, wyboru dyscypliny i dołączenia do wampira, spalania w discard, master daje gainPool. Tekst: src/cards/registry.json, ID 100025; implementacja: src/cards/effects/cards.ts. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: ręczny handler mistrza Discipline (unique, trifle), zagrywany tylko na własny vampire z wyborem dyscypliny w opcji zagrania; disciplineBoost daje +1 poziom; spalenie w abilityOptions w turn.discard kontrolera. Test: tests/cards/agent-of-power.test.ts (3/3)."
   },
   {
     "id": 100026,
