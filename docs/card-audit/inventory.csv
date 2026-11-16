@@ -48,7 +48,7 @@
 "100047","Amria","library","true","CONFIRMED_BUG",""
 "100048","Amulet of Temporal Perception","library","true","PARTIAL_FIX",""
 "100049","Amusement Park Hunting Ground","library","true","REVIEWED_NO_ISSUE_FOUND",""
-"100050","Anachronism","library","true","CONFIRMED_BUG","simple_gain_pool_text_mismatch_review"
+"100050","Anachronism","library","true","FIXED_TARGETED",""
 "100051","Ananasi Vampirephile","library","true","PARTIAL_FIX",""
 "100052","The Anarch Free Press","library","true","FIXED_TARGETED",""
 "100053","Anarch Manifesto, An","library","true","CODE_DISCREPANCY",""
