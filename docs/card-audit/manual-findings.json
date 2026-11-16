@@ -3507,7 +3507,7 @@
     "id": 100585,
     "name": "Drawing Out the Beast",
     "status": "PARTIAL_FIX",
-    "evidence": "Oba poziomy niedostępne przeciw ally [PIB 20121028]; superior zadaje unpreventable environmental damage w press step przed decyzjami o press, nie po wcześniejszym końcu walki. frenzy-direction-audit.test.ts: kolejność, torpor, dwie rundy, save/load na decyzji press, Flesh of Marble i Bloodform. Stare zapisy bez pochodzenia ograniczeń oraz inne interakcje nadal wymagają przeglądu."
+    "evidence": "Oba poziomy niedostępne przeciw ally [PIB 20121028]; superior zadaje unpreventable environmental damage w press step przed decyzjami o press, nie po wcześniejszym końcu walki. frenzy-direction-audit.test.ts: kolejność, torpor, dwie rundy, save/load na decyzji press, Flesh of Marble i Bloodform. Stare zapisy bez pochodzenia ograniczeń oraz inne interakcje nadal wymagają przeglądu. Paczka 1: ponownie sprawdzono rulings (PIB 20121028, RTR 19970630, LSJ 20010312); pokryte przez frenzy-direction-audit.test.ts (w tym przerwanie przez combat-ends). Status bez zmian: brak przeglądu starych zapisów."
   },
   {
     "id": 100586,
@@ -6855,7 +6855,7 @@
     "id": 101143,
     "name": "Magic of the Smith",
     "status": "PARTIAL_FIX",
-    "evidence": "Wąski zakres: wyszukanie/equip po sukcesie, koszt i tasowanie; library-search.test.ts. Pozostałe interakcje nie są w pełni sprawdzone. Aktualizacja: koszt wyszukanego equipment uwzględnia wymagany klan, a własna kopia Unique nie jest oferowana; library-search.test.ts. Sprzęt z wyszukania nie generuje już CardPlayed, a koszty uwzględniają tagi, w tym podatek od broni; tests/cards/library-search.test.ts. Zgodność pozostałych skutków i anulowania nadal trzeba zweryfikować (https://www.vekn.net/forum/rules-questions/82962-meditative-grove-vs-rotschreck)."
+    "evidence": "Wąski zakres: wyszukanie/equip po sukcesie, koszt i tasowanie; library-search.test.ts. Pozostałe interakcje nie są w pełni sprawdzone. Aktualizacja: koszt wyszukanego equipment uwzględnia wymagany klan, a własna kopia Unique nie jest oferowana; library-search.test.ts. Sprzęt z wyszukania nie generuje już CardPlayed, a koszty uwzględniają tagi, w tym podatek od broni; tests/cards/library-search.test.ts. Zgodność pozostałych skutków i anulowania nadal trzeba zweryfikować (https://www.vekn.net/forum/rules-questions/82962-meditative-grove-vs-rotschreck). Paczka 1: ruling 'equipment can be a location in play' (LSJ 19971001-2) i zniżki Equip/Employ (ANK 20180817) nie mają osobnego testu; library-search.test.ts pokrywa wybór przy rozwiązaniu, koszt i tasowanie. Status bez zmian."
   },
   {
     "id": 101144,
@@ -7851,7 +7851,7 @@
     "id": 101309,
     "name": "Obedience",
     "status": "PARTIAL_FIX",
-    "evidence": "Dodano sprawdzanie młodszego działającego vampire z uwzględnieniem capacity, właściwego blockera i powodzenia próby bloku; dodano reakcję celu niezablokowanego rush w state C. tests/cards/end-action.test.ts. Reakcja na rush korzysta z istniejącego okna C, a nie odrębnego impulsu bezpośrednio przed rozpoczęciem combat po zakończeniu innych efektów resolution; pełny timing i pozostałe interakcje nadal wymagają pracy."
+    "evidence": "Dodano sprawdzanie młodszego działającego vampire z uwzględnieniem capacity, właściwego blockera i powodzenia próby bloku; dodano reakcję celu niezablokowanego rush w state C. tests/cards/end-action.test.ts. Reakcja na rush korzysta z istniejącego okna C, a nie odrębnego impulsu bezpośrednio przed rozpoczęciem combat po zakończeniu innych efektów resolution; pełny timing i pozostałe interakcje nadal wymagają pracy. Paczka 1: pokryte przez end-action.test.ts (tylko blocker, młodszy vampire, rush, basic/superior). Nieobjęte: ANK 20171212 (zastąpiony przez slave nie może grać), LSJ 19991025 (starszy unlocked vampire przed nową walką). Status bez zmian."
   },
   {
     "id": 101310,
@@ -9525,7 +9525,7 @@
     "id": 101588,
     "name": "Rego Motum",
     "status": "PARTIAL_FIX",
-    "evidence": "Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane."
+    "evidence": "Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Nie zweryfikowano RTR 20041202 (niewykorzystane punkty nie przechodzą dalej) dla obu trybów. Status bez zmian."
   },
   {
     "id": 101589,
@@ -9891,7 +9891,7 @@
     "id": 101649,
     "name": "Rolling with the Punches",
     "status": "PARTIAL_FIX",
-    "evidence": "Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane."
+    "evidence": "Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Nie zweryfikowano ANK 20210226 (burn blood nie zmniejszany przez redukcje kosztu) w kontekście kosztu karty. Status bez zmian."
   },
   {
     "id": 101650,
@@ -10827,7 +10827,7 @@
     "id": 101805,
     "name": "The Sleeping Mind",
     "status": "PARTIAL_FIX",
-    "evidence": "Superior nie wymaga już wyboru locked vampire ani nie zabrania mu bloku; test bez celu i test zakazu unlock w tests/cards/block-tax.test.ts. Poprawiono też zakaz po nieudanym bloku dla onlyAsAnnounced, ale inne przejścia okna ogłoszenia nie są w pełni zweryfikowane. Wcześniejsze ustalenie: Superior w spec nie tylko zabrania unlock, ale również nakazuje wybór locked vampire i zakazuje mu bloku, chociaż tekst superior nie zawiera basic. block-tax.test.ts oczekuje wyboru celu również w superior, więc nie bada wersji bez dodatkowego ograniczenia. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: po zagraniu zwykłego action modifier lub reaction w stanie A okno „as announced” zostaje zamknięte także po anulowaniu karty i po save/load; testy obejmują Seduction, The Sleeping Mind, Club Illusion oraz replacement karty akcji (tests/cards/audit-action-and-shadow.test.ts). Nie obejmuje jeszcze wszystkich zwykłych zdolności kart w grze ani starych zapisów bez flagi; kwestia innych krawędzi pozostaje otwarta. Źródła: https://www.vekn.net/rulebook oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zakaz unlock superior obejmuje teraz Freak Drive w oknie po rozstrzygnięciu, Change of Target przed rozstrzygnięciem bloku i objęte nim zdolności; zachowano efekty as if unlocked. Testy tests/cards/sleeping-mind-unlock-audit.test.ts obejmują także inferior oraz zapis/wznowienie. Inne ścieżki automatycznego unlock i wszystkie interakcje wymagają dalszego przeglądu. Źródła: https://www.vekn.net/forum/rules-questions/81780-the-sleeping-mind-and-change-of-target oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zablokowano także Revelation corruption unlock, Warsaw Station po sukcesie, Forward Momentum oraz wariant unlock Dabbler i Monster w trakcie akcji. Testy sleeping-mind-unlock-audit.test.ts i revelation-of-the-serpent.test.ts; pozostałe ścieżki wymagają kontroli. Aktualizacja: superior wyklucza zagranie wersji Majesty/Earth Meld, która nakazuje unlock w walce, oraz nie oferuje płatnego unlock Truth in Darkness; wersja strike combat ends bez unlock pozostaje legalna. Zabezpieczono też rozstrzygnięcie wcześniej wybranego strike w starszym stanie. Ruling: https://www.vekn.net/forum-es/rules-questions/68051-the-sleeping-mind-vs-as-though-untapped. tests/cards/sleeping-mind-unlock-audit.test.ts. Inne źródła unlock nadal wymagają przeglądu. Aktualizacja: Zablokowano Helicopter, Horrific Countenance oraz znane opcje basic Cats' Guidance i Forced Vigilance w aktualnym oknie blokady; podczas resolve pomijane są unlock Abbot/Khabar: Glory, Precognizant Mobility, Psychophagia oraz Eulogio. Sprawdzono superior/inferior i Abbot w tests/cards/sleeping-mind-unlock-audit.test.ts. Inne ścieżki pozostają otwarte; wcześniejszy osobny błąd czasu Cats' Guidance po wszystkich walkach naprawiono i przetestowano w post-block-unlock.test.ts oraz psyche-post-block-audit.test.ts. Aktualizacja: testy sleeping-mind-unlock-audit.test.ts i master-intercept.test.ts obejmują Special Report, Organized Resistance, Guard Duty, Under Siege i Eternal Vigilance; niepłatne próby bloku bez rzeczywistego unlock pozostają legalne. Eagle’s Sight zagrać można po realnym wake bez unlock. Inne nieprzejrzane ścieżki nadal są otwarte. Aktualizacja: basic może wybrać również samego działającego zablokowanego wampira (tekst nie wymaga „another”); tests/cards/block-restrictions.test.ts."
+    "evidence": "Superior nie wymaga już wyboru locked vampire ani nie zabrania mu bloku; test bez celu i test zakazu unlock w tests/cards/block-tax.test.ts. Poprawiono też zakaz po nieudanym bloku dla onlyAsAnnounced, ale inne przejścia okna ogłoszenia nie są w pełni zweryfikowane. Wcześniejsze ustalenie: Superior w spec nie tylko zabrania unlock, ale również nakazuje wybór locked vampire i zakazuje mu bloku, chociaż tekst superior nie zawiera basic. block-tax.test.ts oczekuje wyboru celu również w superior, więc nie bada wersji bez dodatkowego ograniczenia. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: po zagraniu zwykłego action modifier lub reaction w stanie A okno „as announced” zostaje zamknięte także po anulowaniu karty i po save/load; testy obejmują Seduction, The Sleeping Mind, Club Illusion oraz replacement karty akcji (tests/cards/audit-action-and-shadow.test.ts). Nie obejmuje jeszcze wszystkich zwykłych zdolności kart w grze ani starych zapisów bez flagi; kwestia innych krawędzi pozostaje otwarta. Źródła: https://www.vekn.net/rulebook oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zakaz unlock superior obejmuje teraz Freak Drive w oknie po rozstrzygnięciu, Change of Target przed rozstrzygnięciem bloku i objęte nim zdolności; zachowano efekty as if unlocked. Testy tests/cards/sleeping-mind-unlock-audit.test.ts obejmują także inferior oraz zapis/wznowienie. Inne ścieżki automatycznego unlock i wszystkie interakcje wymagają dalszego przeglądu. Źródła: https://www.vekn.net/forum/rules-questions/81780-the-sleeping-mind-and-change-of-target oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zablokowano także Revelation corruption unlock, Warsaw Station po sukcesie, Forward Momentum oraz wariant unlock Dabbler i Monster w trakcie akcji. Testy sleeping-mind-unlock-audit.test.ts i revelation-of-the-serpent.test.ts; pozostałe ścieżki wymagają kontroli. Aktualizacja: superior wyklucza zagranie wersji Majesty/Earth Meld, która nakazuje unlock w walce, oraz nie oferuje płatnego unlock Truth in Darkness; wersja strike combat ends bez unlock pozostaje legalna. Zabezpieczono też rozstrzygnięcie wcześniej wybranego strike w starszym stanie. Ruling: https://www.vekn.net/forum-es/rules-questions/68051-the-sleeping-mind-vs-as-though-untapped. tests/cards/sleeping-mind-unlock-audit.test.ts. Inne źródła unlock nadal wymagają przeglądu. Aktualizacja: Zablokowano Helicopter, Horrific Countenance oraz znane opcje basic Cats' Guidance i Forced Vigilance w aktualnym oknie blokady; podczas resolve pomijane są unlock Abbot/Khabar: Glory, Precognizant Mobility, Psychophagia oraz Eulogio. Sprawdzono superior/inferior i Abbot w tests/cards/sleeping-mind-unlock-audit.test.ts. Inne ścieżki pozostają otwarte; wcześniejszy osobny błąd czasu Cats' Guidance po wszystkich walkach naprawiono i przetestowano w post-block-unlock.test.ts oraz psyche-post-block-audit.test.ts. Aktualizacja: testy sleeping-mind-unlock-audit.test.ts i master-intercept.test.ts obejmują Special Report, Organized Resistance, Guard Duty, Under Siege i Eternal Vigilance; niepłatne próby bloku bez rzeczywistego unlock pozostają legalne. Eagle’s Sight zagrać można po realnym wake bez unlock. Inne nieprzejrzane ścieżki nadal są otwarte. Aktualizacja: basic może wybrać również samego działającego zablokowanego wampira (tekst nie wymaga „another”); tests/cards/block-restrictions.test.ts. Paczka 1: sleeping-mind-unlock-audit.test.ts pokrywa wake (Eagle's Sight) i zakaz unlock po resolution (PIB 20150703); block-tax.test.ts pokrywa superior bez celu. Status bez zmian; sprawdzenie innych przejść okna 'as announced' nadal otwarte."
   },
   {
     "id": 101806,
@@ -11757,7 +11757,7 @@
     "id": 101960,
     "name": "Terror Frenzy",
     "status": "PARTIAL_FIX",
-    "evidence": "Basic działa przeciw minion, superior wyłącznie przeciw wampirowi; obsługiwane kierunki maneuver/press i zachowanie niezależnych ograniczeń po Tranquility Shield; tests/cards/frenzy-direction-audit.test.ts. Timing i inne źródła ograniczeń wymagają dalszej weryfikacji, jak również stare zapisy bez informacji o źródłach."
+    "evidence": "Basic działa przeciw minion, superior wyłącznie przeciw wampirowi; obsługiwane kierunki maneuver/press i zachowanie niezależnych ograniczeń po Tranquility Shield; tests/cards/frenzy-direction-audit.test.ts. Timing i inne źródła ograniczeń wymagają dalszej weryfikacji, jak również stare zapisy bez informacji o źródłach. Paczka 1: ANK 20180910-3 (koszt combat cards na końcu rundy) zweryfikowany testem batch1-frenzy-end-of-round.test.ts z kontrolą dodatnią (Telepathic Tracking superior, aus, bob z 1 blood nie płaci, z 5 płaci). Pozostaje: limit superior raz na walkę w starych zapisach i timing innych źródeł."
   },
   {
     "id": 101961,
@@ -13395,7 +13395,7 @@
     "id": 102233,
     "name": "Revelation of the Serpent",
     "status": "PARTIAL_FIX",
-    "evidence": "Superior oferuje wybór corruption tylko po rozstrzygnięciu oust i okna Life Boon; po oust celu nie oferuje unlock [ANK 20220210], po uratowaniu celu umożliwia wybór również po save/load; Sleeping Mind blokuje unlock. Testy revelation-of-the-serpent.test.ts. Pozostałe efekty sukcesu, kolejność i interakcje wymagają weryfikacji."
+    "evidence": "Superior oferuje wybór corruption tylko po rozstrzygnięciu oust i okna Life Boon; po oust celu nie oferuje unlock [ANK 20220210], po uratowaniu celu umożliwia wybór również po save/load; Sleeping Mind blokuje unlock. Testy revelation-of-the-serpent.test.ts. Pozostałe efekty sukcesu, kolejność i interakcje wymagają weryfikacji. Paczka 1: ANK 20220210 (ousted przez bleed nie odblokowuje) pokryte przez revelation-of-the-serpent.test.ts; nie sprawdzono pozostałych efektów sukcesu i kolejności. Status bez zmian."
   },
   {
     "id": 102234,
@@ -13473,7 +13473,7 @@
     "id": 102246,
     "name": "Childe of the Revolution",
     "status": "PARTIAL_FIX",
-    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu."
+    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu. Paczka 1: pokryte przez token-vampire.test.ts (obowiązek hunt, uncontrolled, Anarch). Nie zweryfikowano LSJ 20041201-2 (wejście do crypt = spalenie) dla tokena. Status bez zmian."
   },
   {
     "id": 102247,
@@ -13569,7 +13569,7 @@
     "id": 102262,
     "name": "Touch of Valeren",
     "status": "PARTIAL_FIX",
-    "evidence": "Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte."
+    "evidence": "Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Nie zweryfikowano LSJ 20001114 dla tej ścieżki prevention oraz starych pakietów bez strikePhase. Status bez zmian."
   },
   {
     "id": 102263,
