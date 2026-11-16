@@ -1787,6 +1787,15 @@ export interface CardHandler {
    *  entered play (Cry Wolf: "If the action to recruit this ally is
    *  blocked, the acting anarch goes to torpor"). Fired on the handler of
    *  the card being played, with the acting minion. */
+  /** A minion of some seat lost pool — a payment or a burn, both of which
+   *  are a `PoolBurned` (Conniver: "If your prey loses pool when it is
+   *  neither your turn nor your prey's turn …"). */
+  onPoolLost?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    info: { seat: SeatId; amount: number },
+    ops: EngineOps,
+  ): void;
   onActionBlockedAsPlayed?(
     info: { acting: MinionId; actingSeat: SeatId },
     ops: EngineOps,

@@ -2438,8 +2438,8 @@
   {
     "id": 100407,
     "name": "Conniver",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast archetype i lock za zysk blood po stracie pool przez prey. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: archetyp na własnym vampire (spec) + hook onPoolLost (nowy, wywoływany z emit dla PoolBurned po zastosowaniu zdarzenia). Gdy prey traci pulę w turze innej niż jego i kontrolera: blokada karty (ops.lockPermanent) i +1 krew z banku. Test: tests/cards/conniver.test.ts (5/5). ODSTĘPSTWO: karta mówi 'may' — zysk jest automatyczny, bez pytania o wybór; to jawne uproszczenie."
   },
   {
     "id": 100408,

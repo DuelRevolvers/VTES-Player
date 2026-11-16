@@ -633,6 +633,13 @@ export class VtesEngine implements EngineOps {
     // minion entering combat (p. 38). Checked at the one point every event
     // passes through, so no future emit site can forget it.
     this.checkWithdrawal(ev);
+    // "If your prey loses pool …" (Conniver): every card in play sees a pool
+    // loss, read after it is applied.
+    if (ev.type === "PoolBurned") {
+      for (const { entry, owner } of this.allEntries()) {
+        this.registry[entry.card.name]?.onPoolLost?.(entry, owner, { seat: ev.seat, amount: ev.amount }, this);
+      }
+    }
   }
 
   private applyToEntities(ev: GameEvent): void {

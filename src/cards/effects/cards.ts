@@ -9438,6 +9438,26 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  {
+    // Conniver [100407] — "Master: archetype. Put this card on a vampire you
+    // control. If your prey loses pool when it is neither your turn nor your
+    // prey's turn, you may lock this card to move 1 blood from the blood bank
+    // to this vampire. A vampire can have only one archetype."
+    krcgId: 100407,
+    name: "Conniver",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // Wave 107: five more archetypes on the same skeleton, each paying 1 blood
   // once per turn, automatically (docs/archetypes-design.md §7). Four print
   // "a Sabbat vampire you control".
@@ -27321,17 +27341,6 @@ export const cardSpecs: CardSpec[] = [
     cardType: "master",
     bloodCost: 0,
     poolCost: 1,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
-    // Conniver [100407] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 100407,
-    name: "Conniver",
-    cardType: "master",
-    bloodCost: 0,
     usable: [],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
@@ -46589,6 +46598,35 @@ const loner: CardHandler = {
   },
 };
 
+/**
+ * Conniver (100407) — "If your prey loses pool when it is neither your turn
+ * nor your prey's turn, you may lock this card to move 1 blood from the blood
+ * bank to this vampire."
+ *
+ * The lock is the price, so it cannot be used again until the card unlocks.
+ * The pool loss is read off the `PoolBurned` event after it is applied, and
+ * only a loss by the bearer's CURRENT prey counts.
+ *
+ * Deviation, recorded for the audit: the card says "may", and this takes the
+ * gain automatically rather than asking. A question for the controller would
+ * be the faithful version; it is not built here.
+ */
+const conniver: CardHandler = {
+  ...compileSpec(specByName("Conniver")),
+  onPoolLost(entry, owner, info, ops) {
+    if (entry.locked || owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    const controller = bearer.controller;
+    if (info.seat !== preyOf(ops.state, controller)) return;
+    const tf = ops.state.frames.find((f) => f.kind === "turn");
+    if (tf?.kind !== "turn") return;
+    if (tf.seat === controller || tf.seat === info.seat) return;
+    ops.lockPermanent(entry.card.id);
+    ops.emit({ type: "BloodGained", minion: bearer.id, amount: 1 });
+  },
+};
+
 const bravo: CardHandler = {
   ...compileSpec(specByName("Bravo")),
   onCombatEnded(entry, owner, info, ops) {
@@ -48033,6 +48071,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     rebel,
     bravo,
     loner,
+    conniver,
     capitalist,
     creepShow,
     guru,
