@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { GameState, MinionState } from "../../src/engine/index.ts";
-import { VtesEngine } from "../../src/engine/index.ts";
+import { VtesEngine, currentStealth } from "../../src/engine/index.ts";
 import { buildHandlerRegistry } from "../../src/cards/effects/cards.ts";
 import { makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
@@ -160,6 +160,29 @@ describe("unlock riders", () => {
     expect(withPath.found).toBe(false);
   });
 
+  it("Sakura unlocks for an action requiring her Path, not for a non-Path action card", () => {
+    function setup(card: string) {
+      const state = threeSeatGame();
+      const sakura = asVampire(state.seats[0]!.minions[0]!, "Sakura, The Merciless (G6)");
+      Object.assign(sakura, { path: "Death and the Soul", sect: "sabbat", blood: 5, disciplines: { dom: "basic" } });
+      state.seats[0]!.hand.push({ id: "action", name: card });
+      const engine = new VtesEngine(state, testRegistry);
+      runTrace(engine, [["Alice", `play:${card}`]]);
+      return { state, engine };
+    }
+    const wrong = setup("Govern the Unaligned");
+    expect(walkTo(wrong.engine, "choice:Sakura", 60)).toBe(false);
+    const right = setup("Dance of the Dead");
+    expect(walkTo(right.engine, "choice:Sakura", 60)).toBe(true);
+    const copy = JSON.parse(JSON.stringify(right.state)) as GameState;
+    const resumed = new VtesEngine(copy, testRegistry);
+    const choice = resumed.decision()!.options.find(o => o.id.startsWith("choice:Sakura") && o.id.endsWith(":yes"));
+    expect(choice).toBeDefined();
+    resumed.choose(choice!.id);
+    expect(copy.seats[0]!.minions[0]!.locked).toBe(false);
+    expect(copy.seats[0]!.minions[0]!.blood).toBe(4);
+  });
+
   it("Aline wakes for ANOTHER Anarch's action, not her own", () => {
     const state = threeSeatGame();
     const aline = makeMinion("V2", "Alice", { blood: 4, sect: "anarch" });
@@ -296,5 +319,48 @@ describe("Doc Martina's rescue discount", () => {
     const state = threeSeatGame();
     const v = asVampire(state.seats[0]!.minions[0]!, "Doc Martina (G7)");
     expect(v.attached[0]!.statics.rescueDiscount).toEqual({ amount: 1 });
+  });
+});
+
+describe("additional crypt search actions", () => {
+  it.each([
+    ["Cristos Mantigo (G3)", [".44 Magnum", "Govern the Unaligned", "Dreams of the Sphinx"], [true, false, false]],
+    ["Mistress Fanchon (G4)", [".44 Magnum", "Govern the Unaligned", "Dreams of the Sphinx"], [true, true, false]],
+  ] as const)("%s finds only the printed card types at resolution", (name, library, matches) => {
+    const state = threeSeatGame();
+    const actor = asVampire(state.seats[0]!.minions[0]!, name);
+    state.seats[0]!.library = library.map((n, i) => ({ id: `find${i}`, name: n }));
+    const engine = new VtesEngine(state, testRegistry);
+    expect(walkTo(engine, `act:${name}`)).toBe(true);
+    expect(actor.attached[0]!.statics.stealth ?? 0).toBe(0);
+    runTrace(engine, [["Alice", optionIds(engine).find(o => o.startsWith(`act:${name}`))!]]);
+    const af = state.frames.find(f => f.kind === "action");
+    expect(af?.kind === "action" && currentStealth(state, af.actionId)).toBe(1);
+    expect(walkTo(engine, `choice:${name}`)).toBe(true);
+    for (let i = 0; i < matches.length; i++) expect(optionIds(engine).some(o => o.endsWith(`:find${i}`))).toBe(matches[i]);
+    engine.choose(optionIds(engine).find(o => o.endsWith(":find0"))!);
+    expect(state.seats[0]!.hand.some(c => c.id === "find0")).toBe(true);
+    expect(state.eventLog.some(e => e.type === "LibraryShuffled")).toBe(true);
+  });
+
+  it("Cristos discards to hand size after finding equipment", () => {
+    const state = threeSeatGame();
+    asVampire(state.seats[0]!.minions[0]!, "Cristos Mantigo (G3)");
+    const alice = state.seats[0]!;
+    alice.hand = Array.from({ length: 7 }, (_, i) => ({ id: `hand${i}`, name: "Govern the Unaligned" }));
+    alice.library = [{ id: "equipment", name: ".44 Magnum" }];
+    const engine = new VtesEngine(state, testRegistry);
+    expect(walkTo(engine, "act:Cristos")).toBe(true);
+    engine.choose(optionIds(engine).find(o => o.startsWith("act:Cristos"))!);
+    expect(walkTo(engine, "choice:Cristos")).toBe(true);
+    engine.choose(optionIds(engine).find(o => o.endsWith(":equipment"))!);
+    expect(alice.hand).toHaveLength(8);
+    expect(state.eventLog.some(e => e.type === "LibraryShuffled")).toBe(false);
+    const resumed = new VtesEngine(JSON.parse(JSON.stringify(state)), testRegistry);
+    const discard = resumed.decision()?.options.find(o => o.id.includes("handSizeDown"));
+    expect(discard).toBeDefined();
+    resumed.choose(discard!.id);
+    expect(resumed.state.seats[0]!.hand).toHaveLength(7);
+    expect(resumed.state.eventLog.some(e => e.type === "LibraryShuffled")).toBe(true);
   });
 });

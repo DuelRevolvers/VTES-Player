@@ -298,3 +298,42 @@ describe(".44 Magnum (100001)", () => {
     expect(range).toMatchObject({ range: "long" });
   });
 });
+
+describe("blood mover regression coverage", () => {
+  it("offers Blood Doll only on own vampires, including torpor", async () => {
+    const { makeAlly } = await import("../engine/fixtures.ts");
+    const { state, engine } = masterPhaseGame(["Blood Doll"]);
+    state.seats[0]!.minions[0]!.inTorpor = true;
+    state.seats[0]!.minions.push(makeAlly("ally", "Alice", 3));
+    const targets = engine.decision()!.options.filter((o) => o.kind === "playCard" && o.name === "Blood Doll").map((o) => o.kind === "playCard" ? o.params["target"] : "");
+    expect(targets).toEqual(["V1"]);
+    runTrace(engine, [["Alice", "play:Blood Doll:-:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "ability:Blood Doll"]]);
+    expect(state.seats[0]!.pool).toBe(11);
+  });
+
+  it("lets the bearer's new controller, not the master card's controller, move the blood", () => {
+    const { state, engine } = masterPhaseGame(["Blood Doll"]);
+    runTrace(engine, [["Alice", "play:Blood Doll:-:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    engine.emit({ type: "ControlChanged", target: "minion", id: "V1", from: "Alice", to: "Bob" });
+    const tf = state.frames[0]!;
+    if (tf.kind !== "turn") throw new Error("fixture");
+    tf.seat = "Bob";
+    const changed = new VtesEngine(state, testRegistry);
+    const dp = changed.decision()!;
+    expect(dp.seat).toBe("Bob");
+    expect(dp.options.some((o) => o.id.startsWith("ability:Blood Doll"))).toBe(true);
+    runTrace(changed, [["Bob", "ability:Blood Doll"]]);
+    expect(state.seats[1]!.pool).toBe(11);
+    expect(state.seats[0]!.pool).toBe(10);
+  });
+
+  it("Vessel targets vampires, not allies, even across the table", async () => {
+    const { makeAlly } = await import("../engine/fixtures.ts");
+    const { state, engine } = masterPhaseGame(["Vessel"]);
+    state.seats[1]!.minions[0]!.inTorpor = true;
+    state.seats[1]!.minions.push(makeAlly("ally", "Bob", 3));
+    const options = engine.decision()!.options.filter((o) => o.kind === "playCard" && o.name === "Vessel");
+    expect(options.some((o) => o.kind === "playCard" && o.params["target"] === "ally")).toBe(false);
+    expect(options.some((o) => o.kind === "playCard" && o.params["target"] === "W")).toBe(true);
+  });
+});

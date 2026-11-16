@@ -213,6 +213,19 @@ describe("The Sleeping Mind (101805)", () => {
     expect(dp.options.some((o) => o.id === "block:W")).toBe(true);
   });
 
+  it("offers superior without a locked target and does not choose a vampire", () => {
+    const state = game({ dom: "superior" }, "The Sleeping Mind");
+    const engine = new VtesEngine(state, testRegistry);
+    upToEffects(engine);
+    const opts = engine.decision()!.options.filter((o) => o.id.includes("The Sleeping Mind:superior"));
+    expect(opts).toHaveLength(1);
+    expect(opts[0]!.id).not.toContain(":M");
+    playAndSettle(engine, opts[0]!.id);
+    const af = state.frames.find((f) => f.kind === "action");
+    expect(af?.kind === "action" && af.noUnlock).toBe(true);
+    expect(af?.kind === "action" && af.blockRestrictions.cannotBlock).toEqual([]);
+  });
+
   it("shuts off unlock effects for the whole action at superior", () => {
     const state = game({ dom: "superior" }, "The Sleeping Mind");
     // Both of Bob's vampires are locked and could unlock with Guard Dogs.
@@ -222,8 +235,8 @@ describe("The Sleeping Mind (101805)", () => {
     state.seats[1]!.hand.push({ id: "gd", name: "Guard Dogs" });
     const engine = new VtesEngine(state, testRegistry);
     upToEffects(engine);
-    // Only M is named, but the superior clause stops W unlocking too.
-    playAndSettle(engine, "play:The Sleeping Mind:superior:V1:M");
+    // Superior selects no vampire; it stops all minions unlocking.
+    playAndSettle(engine, "play:The Sleeping Mind:superior:V1");
 
     const dp = engine.decision()!;
     expect(dp.seat).toBe("Bob");

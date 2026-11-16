@@ -95,10 +95,18 @@ describe("Anarch Salon (100056)", () => {
     // …but Bob, with TWO Anarchs, gains ONE pool. That is the whole point.
     expect(seatOf(state, "Bob").pool).toBe(pools["Bob"]! + 1);
     expect(seatOf(state, "Alice").pool).toBe(pools["Alice"]! + 1);
-    // Carol's Anarch is in torpor: no blood, and no pool for her.
+    // Ready qualifies the blood clause, not the separate controller clause.
     expect(find(state, "N").blood).toBe(1);
-    expect(seatOf(state, "Carol").pool).toBe(pools["Carol"]!);
+    expect(seatOf(state, "Carol").pool).toBe(pools["Carol"]! + 1);
   });
+  it("does not pay a Methuselah who controls no Anarch", () => {
+    const { state, engine } = salonGame();
+    find(state, "N").sect = "camarilla";
+    const pool = seatOf(state, "Carol").pool;
+    runTrace(engine, [...announceTrace("play:Anarch Salon"), ...passTrace]);
+    expect(seatOf(state, "Carol").pool).toBe(pool);
+  });
+
 });
 
 describe("Consanguineous Boon (100410)", () => {

@@ -190,6 +190,8 @@ export type EffectPrimitive =
       interceptBonus?: number;
       bloodCost?: number;
       ignoreRestrictions?: boolean;
+      /** The effect starts a block without actually unlocking (Eagle's Sight). */
+      withoutUnlock?: boolean;
       penaltyIfNoBlock?: "lock" | "attach";
     }
   /** "Unlock this vampire" so its controller can block normally (Guard
@@ -390,8 +392,9 @@ export type EffectPrimitive =
       kind: "preventForOther";
       amount: number;
       all?: boolean;
-      perBlood?: { max: number; plus: number };
+      perBlood?: { max?: number; plus: number };
       ownOnly?: boolean;
+      opposingStrikeOnly?: boolean;
     }
   /** "The blocking minion gets -N intercept" — the acting minion pushing
    *  the blocker down, as opposed to `modifyIntercept`, which the blocker
@@ -454,7 +457,7 @@ export type EffectPrimitive =
       optOutBlood?: number;
     }
   // Action-card primitives: what the announced action IS.
-  | { kind: "actionBleed"; bonus: number }
+  | { kind: "actionBleed"; bonus: number; anyMethuselah?: boolean }
   | { kind: "actionStealth"; amount: number }
   | { kind: "addUncontrolledBlood"; amount: number; youngerOnly: boolean; clan?: string; sect?: Sect; titledOnly?: boolean }
   /** "This vampire gains N blood" on a successful action (Restoration).
@@ -528,8 +531,8 @@ export type EffectPrimitive =
     }
   /** "Put this card in play. It becomes a 1-capacity (non-unique)
    *  \<clan/sect\> vampire and must hunt this turn" (Waters of Duat,
-   *  Childe of the Revolution). The token enters with 0 blood, so the
-   *  "must hunt" clause is p. 21's mandatory hunt and needs no code.
+   *  Childe of the Revolution). Their printed hunt obligation remains
+   *  even if the token gains blood before acting.
    *  `clanFromActor` is "…of the same clan as the acting vampire".
    *  docs/token-vampire-design.md */
   | {
@@ -547,6 +550,7 @@ export type EffectPrimitive =
        *  is not a clause at all: a vampire arriving at 0 blood must hunt
        *  (p. 21). §3 */
       cannotActThisTurn?: boolean;
+      mustHuntThisTurn?: boolean;
       /** "…with basic Chimerstry [chi]" (Tumnimos). */
       disciplines?: Record<string, "basic" | "superior">;
       /** "MOVE UP TO N BLOOD from the acting vampire to this new vampire"
@@ -1045,6 +1049,8 @@ export type EffectPrimitive =
    *  is not locked for blocking". docs/end-action-design.md §3 */
   | {
       kind: "endAction";
+      /** Reacting vampire is about to enter combat with a younger acting vampire. */
+      beforeCombatWithYoungerActor?: boolean;
       /** "Unlock this minion" / "unlock the acting vampire". */
       unlockActor?: boolean;
       /** "…lock the blocking minion" — the one thing p. 49 says Mirror
@@ -1147,6 +1153,8 @@ export type EffectPrimitive =
    *  (docs/after-resolution-design.md §5). */
   | {
       kind: "afterResolutionAttach";
+      /** Put in the Methuselah's play area rather than on the acting minion. */
+      where?: "controller";
       /** Tags the attached card carries, for the ability that spends it. */
       tags: string[];
       /** Statics it grants while it sits there (Shadow Cloak). */
@@ -1207,9 +1215,9 @@ export type EffectPrimitive =
    *  The store is `PermanentInPlay.counters` — the Wasserschloss Anif
    *  precedent, blood in and blood out. docs/combat-attachments-design.md §6 */
   | { kind: "combatBloodStore"; max: number }
-  /** "Strike: send the opposing vampire to torpor or burn the opposing
-   *  ally" (Touch of Oblivion superior). */
-  | { kind: "strikeIncapacitate" }
+  /** Close-range strike: torpor an opposing vampire and/or burn an ally.
+   *  An absent target admits either kind (Touch of Oblivion). */
+  | { kind: "strikeIncapacitate"; target?: "ally" | "vampire" }
   /** "Only usable when the opposing vampire is going into torpor; burn
    *  that vampire instead" (Decapitate superior). This is a torpor-window
    *  effect, not a strike rider. */
@@ -1402,6 +1410,11 @@ export type EffectPrimitive =
       equipment?: boolean;
       additionalStrikes?: boolean;
       strengthPenalty?: number;
+      maneuverToClose?: boolean;
+      maneuverToLong?: boolean;
+      pressToContinue?: boolean;
+      pressToEnd?: boolean;
+      vampireOnly?: boolean;
     }
   /** "Damage from this vampire's hand strikes is aggravated this round"
    *  (Claws of the Dead, Wolf Claws) — before strikes. */
@@ -1433,6 +1446,7 @@ export type EffectPrimitive =
   /** "Gets +N strength this combat" — additive, before range (Form of
    *  the Wolf). */
   | { kind: "addStrength"; amount: number; perRound?: boolean }
+  | { kind: "handStrikeDamageBonus"; amount: number }
   /** Add damage only to this minion's damaging strike cards requiring Potence. */
   | { kind: "potenceStrikeDamageBonus"; amount: number }
   /** Blood to Water: burn blood from the opposing vampire, or burn an opposing ally. */
@@ -1449,7 +1463,7 @@ export type EffectPrimitive =
    * the only difference is which field the round boundary clears.
    * docs/strength-before-range-design.md §2
    */
-  | { kind: "opposingStrength"; amount: number; scope: "round" | "combat" }
+  | { kind: "opposingStrength"; amount: number; scope: "round" | "combat"; vampireOnly?: boolean }
   /** "This combat, YOU get +1 hand size" (Rage of Apedemak) — the card's
    *  player, not their vampire. Held on the combat frame, so the bonus
    *  lifts itself however the combat ended and p. 7's discard-down runs
@@ -1552,7 +1566,7 @@ export type EffectPrimitive =
    *  docs/round-end-design.md §1 */
   | { kind: "startNewRound"; bloodCost?: number }
   /** "[CEL] Queue a combat with the opposing minion" (Psyche! superior).
-   *  Queues a new combat after the current action ends. Only usable if
+   *  Queues a new combat after the current combat ends. Only usable if
    *  both combatants are still ready and combat would end. */
   | { kind: "queueCombat"; bloodCost?: number }
   /** "Strikes that are not hand strikes cannot be used this round (by
@@ -1596,7 +1610,7 @@ export type EffectPrimitive =
    *  OPTION, like `PendingDamage.noPreventBy`: a card that provably
    *  cannot touch this damage is never offered against it.
    *  docs/combat-attachments-design.md §3 */
-  | { kind: "prevent"; base: number; perBloodX: boolean; nonAggravated?: boolean }
+  | { kind: "prevent"; base: number; perBloodX: boolean; nonAggravated?: boolean; opposingStrikeOnly?: boolean }
   /** "Prevent N damage from the next strike this round" (Undying Tenacity
    * superior) — a one-off prevention applied at strike resolution. */
   | {
@@ -1765,6 +1779,10 @@ export type EffectPrimitive =
       /** "…and each retainer on them" (Weather Control). */
       retainers?: boolean;
       unpreventable?: boolean;
+      /** A single damage event rather than an every-round rider. */
+      once?: boolean;
+      /** The playing minion inflicts it rather than environmental damage. */
+      inflictedByMinion?: boolean;
       /** "…increased by 1 in each subsequent round" (Weather Control
        *  superior). */
       escalate?: boolean;
@@ -1792,7 +1810,7 @@ export type EffectPrimitive =
   /** "…takes N unpreventable damage during the PRESS STEP each round"
    *  (Drawing Out the Beast) / "…this round, only effective if this strike
    *  was made at close range" (Necrosis). */
-  | { kind: "pressStepDamage"; amount: number; ifCloseStrikeThisRound?: boolean }
+  | { kind: "pressStepDamage"; amount: number; ifCloseStrikeThisRound?: boolean; combat?: boolean; vampireOnly?: boolean }
   /** "This combat, if any damage is successfully inflicted on this vampire
    *  in a round, the opposing minion cannot press / use additional strikes
    *  that round" (Sympathetic Agony). */
@@ -2218,6 +2236,9 @@ export type EffectPrimitive =
   // One-shot master-card primitives.
   /** "Gain N pool" (Ascendance) — the whole card, and the simplest
    *  possible master (docs/pool-widening-design.md §6, tranche 3 wave 7). */
+  /** Burn this many cards from the top of the library to gain pool. */
+  | { kind: "cryptPeek"; clan: string; blood: number }
+  | { kind: "burnLibraryForPool"; count: number; pool: number }
   | { kind: "gainPool"; amount: number }
   /** The Blood Curse no longer bars this clan from diablerie for the game. */
   | { kind: "liftBloodCurseDiablerieBar"; clan: string }
@@ -2339,6 +2360,9 @@ export type EffectPrimitive =
    *  burns it and the acting Methuselah gains it, on success.
    *  docs/bleed-riders-sweep.md */
   | { kind: "actionStealPool"; amount: number }
+  /** Enticement: directed at prey, burn Edge on success to burn pool;
+   *  the controller's minions cannot attempt bleeds for the rest of the turn. */
+  | { kind: "actionBurnEdgeForPreyPool"; amount: number }
   /** "Ⓓ Burn a location" / "Ⓓ Burn an equipment" / "Ⓓ Steal a location" —
    *  an action card from hand that targets a CARD IN PLAY, chosen at
    *  announcement and directed at its controller (Conceal, Rewilding,
@@ -2367,6 +2391,8 @@ export type EffectPrimitive =
    *  (Propaganda superior) — the choice belongs to the TARGET, so it is a
    *  ChoiceFrame raised to that seat. */
   | { kind: "targetLocksOwnMinion" }
+  /** Bleed action rider: the actor chooses a ready minion of their prey at resolution. */
+  | { kind: "lockPreyMinion" }
   | {
       kind: "bloodOnBleedSuccess";
       amount: number;
@@ -2522,6 +2548,7 @@ export type UsabilityRule =
   /** "Only one <card> can be played at superior each turn" — per seat,
    *  per turn, for the superior mode alone (Veil the Legions). */
   | "oncePerTurnAtSuperior"
+  | "oncePerTurnPerVampireAtSuperior"
   | "oncePerUnlockPhase"
   /** "Only usable by a … vampire" — allies cannot play it, even when no
    *  discipline requirement would stop them (Wake with Evening's
@@ -2612,6 +2639,8 @@ export type UsabilityRule =
   | "targetHasTheEdge"
   /** "…if the bleed is successful (for 1 or more)" (Fever Pitch). */
   | "ifBleedSucceeded"
+  /** The bleed's final target must be the acting Methuselah's prey. */
+  | "bleedTargetIsPrey"
   | "onlyAsAnnounced"
   /** "Only usable by a ready vampire NOT INVOLVED in the combat" (Touch of
    *  Valeren superior). p. 28: minions controlled by ANY Methuselah can
@@ -2683,6 +2712,9 @@ export interface CardMode {
 }
 
 export interface CardSpec {
+  /** Cards that cannot have been played during the same action, even if
+   *  cancelled or played by a different minion. */
+  incompatibleActionCards?: string[];
   /** Stable KRCG id — must match src/cards/registry.json. */
   krcgId: number;
   /** Handler key — must match the registry card name exactly. */
@@ -2741,6 +2773,8 @@ export interface CardSpec {
   combatLimit?: "round" | "combat";
   /** Unique: a seat may not voluntarily play a second copy (p. 17).
    *  Cross-player contests are not modeled yet (see CLAUDE.md gaps). */
+  /** A separate per-controller limit; unlike unique, does not cause contests. */
+  onePerMethuselah?: boolean;
   unique?: boolean;
   /** "The blocking minion's controller can burn 1 pool to cancel this
    *  card as it is played" (True Love's Face) — pay-to-cancel, the gate
@@ -2751,6 +2785,8 @@ export interface CardSpec {
    *  paid" (Sudden Reversal) refunds. docs/cheap-tail-design.md §6 */
   payToCancel?: {
     pool: number;
+    /** When present, only these modes offer payment to cancel. */
+    levels?: DisciplineLevel[];
     /** `blocker` — the blocking minion's controller (True Love's Face).
      *  `opposingMinion` — the other combatant's controller, which is who
      *  "they" is on a combat card (Target Vitals). `anyMethuselah` — "ANY
@@ -2862,6 +2898,9 @@ export interface CardSpec {
        *  but with no "you control", so any Methuselah's, and with no pool
        *  cost, unlike `otherMethuselah`. */
       anyController?: boolean;
+      /** The acting minion's controller, not the card controller, may use
+       *  this standing permission (Club Illusion). */
+      actingControllerUses?: boolean;
       /** Club Illusion is a standing permission, not a lock: using it
        *  neither locks the card nor is limited by the card being locked. */
       noLock?: boolean;
@@ -3603,8 +3642,14 @@ export interface CardSpec {
     preventFromTagEachRound?: { blood: number; tag: string };
     /** This minion can prevent their own damage once each combat. */
     preventSelfEachCombat?: { amount: number; nonAggravatedOnly?: boolean };
-    /** During their bleed action, burn blood for bleed once per action. */
-    bleedForBlood?: { blood: number; amount: number };
+    /** Burn blood for bleed during an action; recipients and limits are
+     * explicitly described because several vampires can assist others. */
+    bleedForBlood?: {
+      blood: number;
+      amount: number;
+      target?: "self" | "any" | "otherControlledSabbat" | "controlledRavnos" | "anarch";
+      limit?: "action" | "turn";
+    };
     /** During your unlock phase, one controlled vampire pays to change clan. */
     unlockTransformClan?: { from: string; to: string; blood: number; discipline: string };
     /** "Once each combat involving \<a minion you control\>, \<this
@@ -3619,6 +3664,9 @@ export interface CardSpec {
       requiresReady?: boolean;
       /** "…prevent up to 2 NON-AGGRAVATED damage" (Opikun). */
       nonAggravated?: boolean;
+      /** The subject can protect themself as well as other vampires. */
+      allowSelf?: boolean;
+      opposingStrikeOnly?: boolean;
       /** Opikun says "a vampire you control"; Huldu "another minion you
        *  control". */
       kind?: "vampire" | "any";
@@ -3975,6 +4023,7 @@ export interface CardSpec {
        *  the card's own tags. */
       tag?: string;
       stealth: number;
+      discardDown?: boolean;
     };
     /** "\<This vampire\> can DISCARD a card requiring \<Discipline\> (or a
      *  \<type\> card, or a card AT RANDOM) to get \<bonus\>" — seven crypt
@@ -4174,8 +4223,7 @@ export interface CardSpec {
     coinFlipOnDirected?: { failOn: "tails" };
     /** "If \<this vampire\> is ready during your master phase, you can
      *  \<do Y\> AFTER PLAYING A MASTER CARD" (Nonu Dis). "After playing"
-     *  needs no bookkeeping: the event log is the record of everything
-     *  played (the Week of Nightmares lesson). docs/crypt-wave-7.md §3 */
+     *  offers a choice after a master play; at most one use per master phase. */
     afterMasterPlayed?: { blood: number; clan: string };
     /** "During an action \<this vampire\> performs, you can REVEAL the top
      *  card of your library. If it is a \<type\> card, \<penalty\>;
@@ -4234,10 +4282,7 @@ export interface CardSpec {
      *  docs/crypt-wave-6.md §5 */
     bleedSuccessHandSize?: { amount: number; preyOnly?: boolean };
     /** "After \<this vampire\> successfully bleeds your prey (for 1 or
-     *  more), he can gain N blood" (Gostoso). Taken automatically:
-     *  costless, purely beneficial and unpunished by anything on the card
-     *  (the Cursed Abattoir reading), and `BloodGained` clamps at
-     *  capacity so it can never hurt. docs/crypt-wave-4.md §3 */
+     *  more), he can gain N blood" (Gostoso), as an optional choice. */
     bleedSuccessBlood?: { amount: number; preyOnly?: boolean };
     /** "During your turn, you can BURN THE EDGE to unlock \<this
      *  vampire\>" (Kalinda). The Edge is a shared token, so this is a
@@ -4576,7 +4621,7 @@ export interface CardSpec {
    *  docs/wraith-zombie-design.md §4 */
   rush?: {
     targets: "minion" | "vampire";
-    cost?: { blood?: number; pool?: number };
+    cost?: { blood?: number; pool?: number; burnEdge?: boolean };
     /** "…can enter combat with a LOCKED vampire" (Nathaniel Bordruff).
      *  `enumerateRushTargets` has always understood this; no crypt card
      *  had asked for it (docs/crypt-wave-2.md §1). */
@@ -4692,9 +4737,6 @@ export interface CardSpec {
    *  reads the spec's own requirement and attach filters.
    *  docs/burn-option-design.md */
   burnOption?: boolean;
-  /** "Requires a prince, justicar or Inner Circle member" on a polling-step
-   *  modifier — the *controller* must have a ready vampire with one of these
-   *  titles (Closed Session, Private Audience), not the calling vampire. */
   /** "Requires 2 OR MORE ready vampires who follow the Path of \<x\>"
    *  (Privileged Position). The only counting requirement in the pool: its
    *  three siblings ask whether SOME ready vampire matches, which one

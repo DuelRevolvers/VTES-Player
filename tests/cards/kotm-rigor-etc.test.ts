@@ -232,6 +232,224 @@ describe("Drawing Out the Beast (100585)", () => {
 });
 
 describe("Necrosis (101268)", () => {
+  it.each([false, true])("[THN] press damage occurs before press only against a vampire (ally=%s)", (ally) => {
+    const state = threeSeatGame();
+    const actor = state.seats[0]!.minions[0]!;
+    const foe = state.seats[1]!.minions.find(m => m.id === "M")!;
+    Object.assign(actor, { disciplines: { thn: "superior" }, blood: 10, capacity: 10, strength: 0 });
+    Object.assign(foe, { blood: 10, capacity: 10, strength: 0, ...(ally ? { kind: "ally" as const } : {}) });
+    state.seats[0]!.hand.push({ id: "k", name: "Necrosis" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    const cf = state.frames.find(f => f.kind === "combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    cf.presses.acting = 1;
+    runUntil(engine, dp => dp.window === "combat.chooseStrike" && dp.seat === "Alice");
+    choose(engine, "play:Necrosis:superior");
+    for (let i = 0; i < 150 && engine.decision()?.window !== "combat.press"; i++) {
+      const dp = engine.decision()!;
+      const opt = dp.options.find(o => o.id === "pass") ?? dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      engine.choose(opt.id);
+    }
+    expect(engine.decision()!.window).toBe("combat.press");
+    const events = state.eventLog.filter(e => e.type === "DamageInflicted" && e.minion === "M" && e.source === null);
+    expect(events).toHaveLength(ally ? 0 : 1);
+  });
+
+  it("[THN] a dodged Necrosis strike must not inflict environmental damage", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { thn: "superior" }, blood: 10, capacity: 10, strength: 0 });
+    Object.assign(state.seats[1]!.minions.find(m => m.id === "M")!, { blood: 10, capacity: 10, strength: 0 });
+    state.seats[0]!.hand.push({ id: "k", name: "Necrosis" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    const cf = state.frames.find(f => f.kind === "combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    cf.presses.acting = 1;
+    cf.grantedStrikes ??= { acting: [], opposing: [] };
+    cf.grantedStrikes.opposing.push({ kind: "dodge" });
+    runUntil(engine, dp => dp.window === "combat.chooseStrike" && dp.seat === "Alice");
+    choose(engine, "play:Necrosis:superior");
+    let dodged = false;
+    for (let i = 0; i < 150 && engine.decision()?.window !== "combat.press"; i++) {
+      const dp = engine.decision()!;
+      const dodge = dp.seat === "Bob" && dp.window === "combat.chooseStrike" && dp.options.find(o => o.id === "strike:dodge");
+      if (dodge) dodged = true;
+      const opt = dodge || dp.options.find(o => o.id === "pass") || dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      engine.choose(opt.id);
+    }
+    expect(dodged).toBe(true);
+    expect(engine.decision()!.window).toBe("combat.press");
+    expect(state.eventLog.filter(e => e.type === "DamageInflicted" && e.minion === "M" && e.source === null)).toHaveLength(0);
+  });
+
+  it("[THN] does not schedule damage for a strike made at long range", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { thn: "superior" }, blood: 10, capacity: 10, strength: 0 });
+    Object.assign(state.seats[1]!.minions.find(m => m.id === "M")!, { blood: 10, capacity: 10, strength: 0 });
+    state.seats[0]!.hand.push({ id: "k", name: "Necrosis" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    const cf = state.frames.find(f => f.kind === "combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    cf.presses.acting = 1;
+    cf.maneuverCredits.acting = 1;
+    runUntil(engine, dp => dp.window === "combat.range" && dp.seat === "Alice");
+    choose(engine, "maneuver:credit");
+    runUntil(engine, dp => dp.window === "combat.chooseStrike" && dp.seat === "Alice");
+    expect(cf.range).toBe("long");
+    choose(engine, "play:Necrosis:superior");
+    for (let i = 0; i < 150 && engine.decision()?.window !== "combat.press"; i++) {
+      const dp = engine.decision()!;
+      const opt = dp.options.find(o => o.id === "pass") ?? dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      engine.choose(opt.id);
+    }
+    expect(engine.decision()!.window).toBe("combat.press");
+    expect(state.eventLog.filter(e => e.type === "DamageInflicted" && e.minion === "M" && e.source === null)).toHaveLength(0);
+  });
+
+  it("[THN] schedules no damage if first strike sends the Necrosis player to torpor", () => {
+    const state = threeSeatGame();
+    const actor = state.seats[0]!.minions[0]!;
+    Object.assign(actor, { disciplines: { thn: "superior" }, blood: 1, capacity: 10, strength: 0 });
+    Object.assign(state.seats[1]!.minions.find(m => m.id === "M")!, { blood: 10, capacity: 10, strength: 1 });
+    state.seats[0]!.hand.push({ id: "k", name: "Necrosis" });
+    state.seats[1]!.hand.push({ id: "jab", name: "Quick Jab" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    // Blood can be lost after the bleed was announced.
+    actor.blood = 0;
+    let necrosis = false, jab = false;
+    for (let i = 0; i < 150 && state.frames.some(f => f.kind === "combat"); i++) {
+      const dp = engine.decision()!;
+      const nec = !necrosis && dp.seat === "Alice" && dp.options.find(o => o.id.startsWith("play:Necrosis:superior"));
+      const quick = !jab && dp.seat === "Bob" && dp.options.find(o => o.id.startsWith("play:Quick Jab"));
+      if (nec) necrosis = true;
+      if (quick) jab = true;
+      const opt = nec || quick || dp.options.find(o => o.id === "pass") || dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      engine.choose(opt.id);
+    }
+    expect(necrosis && jab).toBe(true);
+    expect(actor.inTorpor || actor.torporPending).toBe(true);
+    expect(state.eventLog.filter(e => e.type === "DamageInflicted" && e.minion === "M" && e.source === null)).toHaveLength(0);
+  });
+
+  it("[THN] still schedules environmental damage when the hand strike damage is prevented", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { thn: "superior" }, blood: 10, capacity: 10, strength: 0 });
+    Object.assign(state.seats[1]!.minions.find(m => m.id === "M")!, { disciplines: { for: "basic" }, blood: 10, capacity: 10, strength: 0 });
+    state.seats[0]!.hand.push({ id: "k", name: "Necrosis" });
+    state.seats[1]!.hand.push({ id: "soak", name: "Soak" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    const cf = state.frames.find(f => f.kind === "combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    cf.presses.acting = 1;
+    let necrosis = false, soak = false;
+    for (let i = 0; i < 150 && engine.decision()?.window !== "combat.press"; i++) {
+      const dp = engine.decision()!;
+      const nec = !necrosis && dp.seat === "Alice" && dp.options.find(o => o.id.startsWith("play:Necrosis:superior"));
+      const prevent = !soak && dp.seat === "Bob" && dp.options.find(o => o.id.startsWith("play:Soak:basic"));
+      if (nec) necrosis = true;
+      if (prevent) soak = true;
+      const opt = nec || prevent || dp.options.find(o => o.id === "pass") || dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      engine.choose(opt.id);
+    }
+    expect(necrosis && soak).toBe(true);
+    expect(engine.decision()!.window).toBe("combat.press");
+    expect(state.eventLog.some(e => e.type === "DamagePrevented" && e.minion === "M" && e.amount === 2)).toBe(true);
+    expect(state.eventLog.filter(e => e.type === "DamageInflicted" && e.minion === "M" && e.source === null)).toHaveLength(1);
+  });
+
+  it("[THN] persists the strike rider across a save before strike resolution", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { thn: "superior" }, blood: 10, capacity: 10, strength: 0 });
+    Object.assign(state.seats[1]!.minions.find(m => m.id === "M")!, { blood: 10, capacity: 10, strength: 0 });
+    state.seats[0]!.hand.push({ id: "k", name: "Necrosis" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    const cf = state.frames.find(f => f.kind === "combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    cf.presses.acting = 1;
+    runUntil(engine, dp => dp.window === "combat.chooseStrike" && dp.seat === "Alice");
+    choose(engine, "play:Necrosis:superior");
+    settleAsPlayed(engine);
+    expect(cf.strikes.acting?.pressStepDamageOnClose).toEqual({ amount: 1, vampireOnly: true });
+    const saved = JSON.parse(JSON.stringify(state));
+    const resumed = new VtesEngine(saved, testRegistry);
+    for (let i = 0; i < 150 && resumed.decision()?.window !== "combat.press"; i++) {
+      const dp = resumed.decision()!;
+      const opt = dp.options.find(o => o.id === "pass") ?? dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      resumed.choose(opt.id);
+    }
+    expect(resumed.decision()!.window).toBe("combat.press");
+    expect(saved.eventLog.filter((e: {type: string; minion?: string; source?: string | null}) =>
+      e.type === "DamageInflicted" && e.minion === "M" && e.source === null)).toHaveLength(1);
+  });
+
+  it("[THN] schedules each resolved Necrosis strike in the same round", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { thn: "superior" }, blood: 10, capacity: 10, strength: 0 });
+    Object.assign(state.seats[1]!.minions.find(m => m.id === "M")!, { blood: 10, capacity: 10, strength: 0 });
+    state.seats[0]!.hand.push({ id: "k1", name: "Necrosis" }, { id: "k2", name: "Necrosis" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    const cf = state.frames.find(f => f.kind === "combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    cf.presses.acting = 1;
+    cf.additionalStrikes.acting = 1;
+    let strikes = 0;
+    for (let i = 0; i < 150 && engine.decision()?.window !== "combat.press"; i++) {
+      const dp = engine.decision()!;
+      const necrosis = dp.seat === "Alice" && dp.window === "combat.chooseStrike" && dp.options.find(o => o.id.startsWith("play:Necrosis:superior"));
+      if (necrosis) strikes++;
+      const opt = necrosis || dp.options.find(o => o.id === "pass") || dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      engine.choose(opt.id);
+    }
+    expect(strikes).toBe(2);
+    expect(engine.decision()!.window).toBe("combat.press");
+    expect(state.eventLog.filter(e => e.type === "DamageInflicted" && e.minion === "M" && e.source === null))
+      .toMatchObject([{ amount: 2 }]);
+  });
+
+  it("[THN] tracks a dodged strike separately from a later additional Necrosis strike", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { thn: "superior" }, blood: 10, capacity: 10, strength: 0 });
+    Object.assign(state.seats[1]!.minions.find(m => m.id === "M")!, { blood: 10, capacity: 10, strength: 0 });
+    state.seats[0]!.hand.push({ id: "k1", name: "Necrosis" }, { id: "k2", name: "Necrosis" });
+    const engine = new VtesEngine(state, testRegistry);
+    toBeforeRange(engine);
+    const cf = state.frames.find(f => f.kind === "combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    cf.presses.acting = 1;
+    cf.additionalStrikes.acting = 1;
+    cf.grantedStrikes ??= { acting: [], opposing: [] };
+    cf.grantedStrikes.opposing.push({ kind: "dodge" });
+    let strikes = 0, dodged = false;
+    for (let i = 0; i < 150 && engine.decision()?.window !== "combat.press"; i++) {
+      const dp = engine.decision()!;
+      const nec = dp.seat === "Alice" && dp.window === "combat.chooseStrike" && dp.options.find(o => o.id.startsWith("play:Necrosis:superior"));
+      const dodge = !dodged && dp.seat === "Bob" && dp.window === "combat.chooseStrike" && dp.options.find(o => o.id === "strike:dodge");
+      if (nec) strikes++;
+      if (dodge) dodged = true;
+      const opt = nec || dodge || dp.options.find(o => o.id === "pass") || dp.options.find(o => o.id === "strike:hand");
+      if (!opt) throw new Error(`no option in ${dp.window}`);
+      engine.choose(opt.id);
+    }
+    expect(strikes).toBe(2);
+    expect(dodged).toBe(true);
+    expect(engine.decision()!.window).toBe("combat.press");
+    expect(state.eventLog.filter(e => e.type === "DamageInflicted" && e.minion === "M" && e.source === null))
+      .toMatchObject([{ amount: 1 }]);
+  });
+
   it("[THN] keeps the +2 hand strike and offers the press rider", () => {
     const state = threeSeatGame();
     state.seats[0]!.minions[0]!.disciplines = { thn: "superior" };

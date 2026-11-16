@@ -30,6 +30,17 @@ import type { HandlerRegistry } from "./handlers.ts";
 // answered rather than as an error anyone can act on.
 import { TITLE_VOTES, findMinion, getSeat, isReady, mustHunt } from "./state.ts";
 
+/** Printed named Blood Brother circles in the card database. A named circle
+ * is distinct from a singleton even if a singleton vampire has that name. */
+export const BLOOD_BROTHER_CIRCLES = ["Budapest", "Chicago", "Kiev", "Mexico City", "Torrance"] as const;
+
+/** Every vampire without a printed circle has its own distinct circle.
+ * The special choice on New Blood only applies while controlled/in play. */
+export function vampireCircle(m: MinionState, inPlay = true): string {
+  return (inPlay ? m.chosenCircle : undefined) ??
+    (m.printedCircle ? `named:${m.printedCircle}` : `individual:${m.id}`);
+}
+
 /** Scarce penalty on moving this vampire out during its controller's
  * influence phase. Controlled vampires in torpor count; allies and cards
  * out of play (including contested minions) do not. */
@@ -152,9 +163,10 @@ export function disciplinesOf(m: MinionState): Record<string, DisciplineLevel> {
   if (m.disciplineBoostUntilUnlock) boosts.push(m.disciplineBoostUntilUnlock);
   // "…HAS superior Celerity [CEL]" — a grant at a level, not a step up
   // (docs/discipline-granting-equipment-design.md §1).
-  const grants = m.attached.flatMap((p) =>
-    p.statics.disciplineGrant ? [p.statics.disciplineGrant] : [],
-  );
+  const grants = m.attached.flatMap((p) => [
+    ...(p.statics.disciplineGrant ? [p.statics.disciplineGrant] : []),
+    ...(p.statics.disciplineGrants ?? []),
+  ]);
   if (boosts.length === 0 && grants.length === 0) return m.disciplines;
   const out: Record<string, DisciplineLevel> = { ...m.disciplines };
   for (const d of boosts) {
@@ -320,6 +332,10 @@ function bleedOf(
 ): number {
   const af = { actionKind, target } as const;
   let bleed = acting.bleedAmount;
+  const turn = state.frames.find(f => f.kind === "turn");
+  if (turn?.kind === "turn") {
+    bleed += (turn.bleedBonuses ?? []).filter(b => b.minion === acting.id).reduce((sum, b) => sum + b.amount, 0);
+  }
   // Persistent +bleed statics from attached cards (Heart of the City).
   for (const p of acting.attached) bleed += p.statics.bleed ?? 0;
   // "If you control a locked minion, Elen must bleed WITH +1 BLEED" — the
@@ -775,6 +791,12 @@ export function bleedAnnounceTax(m: MinionState, target: SeatId | null): number 
  * either" [PIB 20130711], which is why a redirect asks this too.
  * docs/boons-design.md §4
  */
+/** Turn-scoped restriction follows the minion's current controller. */
+export function cannotAttemptBleed(state: GameState, minion: MinionState): boolean {
+  const turn = state.frames.find(f => f.kind === "turn");
+  return turn?.kind === "turn" && (turn.cannotBleedSeats?.includes(minion.controller) ?? false);
+}
+
 export function bleedBarred(m: MinionState, target: SeatId | null): boolean {
   if (target === null) return false;
   return m.attached.some((p) => p.statics.cannotBleedController && p.controller === target);
@@ -1491,6 +1513,7 @@ export function blockTollFor(
     ...(actor?.attached ?? []).flatMap((p) => {
       const t = p.statics.blockToll;
       if (!t) return [];
+      if (t.youngerOnly && (!actor || minion.kind !== "vampire" || capacityOf(minion) >= capacityOf(actor))) return [];
       // "Minions with 1 or more of YOUR corruption counters must burn 1
       // blood or life to attempt to block Sergio" — "your" is the CARD's
       // controller, which is not always the bearer's (p. 16).
@@ -1527,6 +1550,8 @@ export interface PricedCard {
   name: string;
   bloodCost: number;
   poolCost: number;
+  /** This card is put into play outside a recruit/employ/equip action. */
+  outsideAction?: boolean;
   /** Every printed type the card carries, plus "strike" when the chosen
    *  mode sets a strike. */
   types: PlayCostCardType[];
@@ -1581,43 +1606,48 @@ export function activePlayCostMods(
       mods.push(...(seat.playCostMods ?? []));
     }
     for (const p of seat.permanents) {
-      const mod = p.statics.playCostMod;
-      if (!mod) continue;
-      // A seat-level location has no bearer, so a bearer-scoped modifier
-      // can never come from one, and neither can a target-scoped one.
-      if (mod.minions === "bearer" || mod.onTarget) continue;
-      if (mod.controllerOnly && payerSeat !== undefined && payerSeat !== seat.id) continue;
-      mods.push(mod);
+      for (const mod of [p.statics.playCostMod, ...(p.statics.playCostMods ?? [])]) {
+        if (!mod) continue;
+        // A seat-level location has no bearer, so a bearer-scoped modifier
+        // can never come from one, and neither can a target-scoped one.
+        if (mod.minions === "bearer" || mod.onTarget) continue;
+        if (mod.controllerOnly && payerSeat !== undefined && payerSeat !== (p.controller ?? seat.id)) continue;
+        mods.push(mod);
+      }
     }
     for (const m of seat.minions) {
       for (const p of m.attached) {
-        const mod = p.statics.playCostMod;
-        if (!mod) continue;
-        if (mod.minions === "bearer" && m.id !== minion?.id) continue;
-        if (mod.minions === "others" && m.id === minion?.id) continue;
-        if (mod.whileBearerEngaged && !engaged(m.id)) continue;
-        // "Strike cards cost THE OPPOSING MINION +1 blood" (Djeneba,
-        // Algirdas) — the payer is whoever is fighting the bearer right
-        // now, read off the live frame rather than stored.
-        if (mod.opposingBearer) {
-          if (!cf || !minion) continue;
-          const other = cf.acting === m.id ? cf.opposing : cf.opposing === m.id ? cf.acting : null;
-          if (other !== minion.id) continue;
-          // "…opposing YOUNGER vampires": derived capacity on both sides,
-          // so a granted point counts.
-          if (mod.opposingBearer.youngerOnly) {
-            if (minion.kind !== "vampire" || capacityOf(minion) >= capacityOf(m)) continue;
+        for (const mod of [p.statics.playCostMod, ...(p.statics.playCostMods ?? [])]) {
+          if (!mod) continue;
+          if (mod.minions === "bearer" && m.id !== minion?.id) continue;
+          if (mod.minions === "others" && m.id === minion?.id) continue;
+          if (mod.whileBearerEngaged && !engaged(m.id)) continue;
+          if (mod.whileBearerActing && (!af || af.acting !== m.id || af.step === "afterResolution" || af.step === "blocked")) continue;
+          // "Strike cards cost THE OPPOSING MINION +1 blood" (Djeneba,
+          // Algirdas) — the payer is whoever is fighting the bearer right
+          // now, read off the live frame rather than stored.
+          if (mod.opposingBearer) {
+            if (!cf || !minion) continue;
+            const other = cf.acting === m.id ? cf.opposing : cf.opposing === m.id ? cf.acting : null;
+            if (other !== minion.id) continue;
+            // "…opposing YOUNGER vampires": derived capacity on both sides,
+            // so a granted point counts.
+            if (mod.opposingBearer.youngerOnly) {
+              if (minion.kind !== "vampire" || capacityOf(minion) >= capacityOf(m)) continue;
+            }
           }
+          // "…targeting THIS minion" (Secure Haven, Villein's self-clause):
+          // keyed to what the card being played aims at, not to who pays.
+          if (mod.onTarget && m.id !== target) continue;
+          // "…cost YOU +1 pool" (Villein) — the card's controller only.
+          if (mod.controllerOnly && payerSeat !== undefined) {
+            // A minion's self-entry follows the minion's control. Master
+            // attachments keep their own controller when the bearer moves.
+            const owner = p.card.id === m.id ? m.controller : (p.controller ?? m.controller);
+            if (owner !== payerSeat) continue;
+          }
+          mods.push(mod);
         }
-        // "…targeting THIS minion" (Secure Haven, Villein's self-clause):
-        // keyed to what the card being played aims at, not to who pays.
-        if (mod.onTarget && m.id !== target) continue;
-        // "…cost YOU +1 pool" (Villein) — the card's controller only.
-        if (mod.controllerOnly && payerSeat !== undefined) {
-          const owner = p.controller ?? m.controller;
-          if (owner !== payerSeat) continue;
-        }
-        mods.push(mod);
       }
     }
   }
@@ -1627,6 +1657,7 @@ export function activePlayCostMods(
 /** Does this modifier apply to this card? Every filter that is present
  *  must match; an absent filter does not constrain. */
 export function playCostModApplies(mod: PlayCostMod, card: PricedCard): boolean {
+  if (mod.actionOnly && card.outsideAction) return false;
   if (mod.cardName !== undefined && mod.cardName !== card.name) return false;
   if (mod.cardTypes && !mod.cardTypes.some((t) => card.types.includes(t))) return false;
   if (mod.redirectsBleed && card.redirectsBleed !== true) return false;

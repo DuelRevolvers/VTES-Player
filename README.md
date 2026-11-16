@@ -240,7 +240,9 @@ npm run bench              # fair mirror-match AI comparison, e.g. -- --style tu
   attached to each preconstructed deck.
 - `docs/`: a design note per mechanic, with rulebook citations.
   `docs/card-status-by-set.md` shows every card by set and whether it is
-  playable yet.
+  playable yet. `docs/rules-reference/README.md` indexes official sources
+  and the pinned local card rulings; search those offline with
+  `npm run rules:lookup -- "card name"` or a card ID.
 - `scripts/`: the KRCG card-data pipeline, the simulator and the bench.
 
 **Card data**

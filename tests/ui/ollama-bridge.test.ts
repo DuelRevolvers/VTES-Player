@@ -59,6 +59,17 @@ describe("local Ollama bridge", () => {
     } finally { chatResponse = { message: { content: '{"id":"legal-1"}' } }; }
   });
 
+  it("forwards optional model-reported prompt token counts", async () => {
+    try {
+      chatResponse = { message: { content: '{"id":"legal-1"}' }, prompt_eval_count: 1234 };
+      const response = await realFetch(`${base}/__vtes_ollama/decide`, {
+        method: "POST", headers: { origin: base, "content-type": "application/json" },
+        body: JSON.stringify({ model: "qwen3:8b", prompt: "game data", optionIds: ["legal-1", "pass"] }),
+      });
+      expect(await response.json()).toEqual({ id: "legal-1", promptTokens: 1234 });
+    } finally { chatResponse = { message: { content: '{"id":"legal-1"}' } }; }
+  });
+
   it("rejects cross-origin calls and invalid model names without invoking Ollama", async () => {
     const previous = upstreamCalls.length;
     const cross = await realFetch(`${base}/__vtes_ollama/status`, { method: "POST", headers: { origin: "https://evil.invalid", "content-type": "application/json" }, body: '{"model":"qwen3:8b"}' });

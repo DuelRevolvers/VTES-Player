@@ -1916,3 +1916,6 @@ button.keybind.capturing { color: var(--gold); border-color: var(--gold); }
   border: 1px solid var(--line); border-radius: 3px;
   font: 10px/1.4 monospace; color: var(--dim); text-align: center;
 }
+
+/* The field class sets display:flex; respect the deck input hidden state. */
+#lab-deck-paste-label[hidden] { display: none; }

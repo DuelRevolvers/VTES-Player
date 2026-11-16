@@ -687,6 +687,23 @@ describe("True Love's Face (102041)", () => {
     expect(state.eventLog.some((e) => e.type === "BlockFailed")).toBe(false);
   });
 
+  it("basic is not cancelable by a blocker even during a block attempt", () => {
+    const { state, engine } = bleedGame("superior");
+    runTrace(engine, [
+      ["Alice", "bleed:V1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "block:M"],
+    ]);
+    expect(walkTo(engine, "play:True Love's Face:basic")).toBe(true);
+    engine.choose(optionIds(engine).find(id => id.startsWith("play:True Love's Face:basic"))!);
+    for (let i = 0; i < 3; i++) {
+      const dp = engine.decision()!;
+      expect(dp.options.some(o => o.id === "cancelpay:tlf")).toBe(false);
+      engine.choose("pass");
+    }
+    expect(state.eventLog.some(e => e.type === "BleedAmountModified" && e.source === "True Love's Face")).toBe(true);
+  });
+
   it("basic: +1 bleed, and only during a bleed", () => {
     const { state, engine } = bleedGame("basic");
     runTrace(engine, [

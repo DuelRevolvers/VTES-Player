@@ -122,7 +122,7 @@ describe("strike cards with optional maneuver riders", () => {
     expect(combat(state).maneuverCredits.acting).toBe(1);
   });
 
-  it("still commits Aid from Bats when Terror Frenzy bars its optional maneuver", () => {
+  it("commits Aid from Bats and retains its maneuver to long against Terror Frenzy", () => {
     const state = threeSeatGame();
     const v1 = state.seats[0]!.minions[0]!;
     v1.disciplines = { ani: "basic" };
@@ -143,7 +143,7 @@ describe("strike cards with optional maneuver riders", () => {
     resolveCard(engine, state, "aid-bob", aid!.id, aid!.seat);
 
     expect(combat(state).strikes.opposing?.name).toBe("Aid from Bats");
-    expect(combat(state).maneuverCredits.opposing).toBe(0);
+    expect(combat(state).maneuverCredits.opposing).toBe(1);
   });
 
   it("Lam Into [for] commits the +1 hand/melee strike and grants a maneuver", () => {

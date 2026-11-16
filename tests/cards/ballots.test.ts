@@ -100,3 +100,22 @@ describe("Cardinal Benediction (100294) — non-Sabbat cannot cast votes", () =>
     expect(state.seats[0]!.minions[0]!.title).toBe("cardinal");
   });
 });
+
+
+describe.each([
+  ["Private Audience", "archbishop", "sabbat"],
+  ["Closed Session", "prince", "camarilla"],
+] as const)("%s title requirement", (name, title, sect) => {
+  it("requires the caller, not merely a different controlled vampire, to hold the title", () => {
+    const state = threeSeatGame();
+    const caller = state.seats[0]!.minions[0]!;
+    Object.assign(caller, { title: null, sect });
+    state.seats[0]!.minions.push(makeMinion("other", "Alice", { title, sect }));
+    state.seats[0]!.hand.push({ id: "vote", name: "Kine Resources Contested" }, { id: "mod", name });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [...politicalActionTrace("play:Kine Resources Contested"), ["Alice", "terms:Bob=2,Carol=2"]]);
+    expect(engine.decision()!.options.some(o => o.id.startsWith(`play:${name}:`))).toBe(false);
+    caller.title = title;
+    expect(engine.decision()!.options.some(o => o.id.startsWith(`play:${name}:`))).toBe(true);
+  });
+});

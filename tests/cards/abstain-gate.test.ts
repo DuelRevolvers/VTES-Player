@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 import type { GameState } from "../../src/engine/index.ts";
 import { VtesEngine } from "../../src/engine/index.ts";
-import { runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
+import { makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
 /** Alice calls Anarchist Uprising and reaches the polling step. */
 function toPolling(): Array<[string, string]> {
@@ -280,6 +280,16 @@ describe("polling-only effects stay out of ordinary action windows", () => {
 });
 
 describe("Expulsion (102276) — a restriction that outlives the referendum", () => {
+  it("requires the caller to be a primogen or prince, not merely another controlled vampire", () => {
+    const state = threeSeatGame();
+    state.seats[0]!.minions[0]!.title = null;
+    state.seats[0]!.minions.push(makeMinion("other", "Alice", { title: "prince", locked: true }));
+    state.seats[0]!.hand.push({ id: "ex1", name: "Expulsion" });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some(o => o.kind === "playCard" && o.name === "Expulsion")).toBe(false);
+    state.seats[0]!.minions[0]!.title = "primogen";
+    expect(engine.decision()!.options.some(o => o.kind === "playCard" && o.name === "Expulsion" && o.minion === "V1")).toBe(true);
+  });
   it("stops the chosen minions blocking, reacting and voting this turn", () => {
     const state = threeSeatGame();
     state.seats[0]!.minions[0]!.title = "prince";

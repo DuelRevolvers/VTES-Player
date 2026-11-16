@@ -130,3 +130,72 @@ describe("Hecata: Huldu, The Desecrator (201757)", () => {
     expect(ally.engine.decision()!.options.map((o) => o.id)).not.toContain(abilityId(ally.helper, "Opikun (G7)"));
   });
 });
+
+describe("Opikun strike restrictions", () => {
+  it("only prevents damage from an opposing strike", () => {
+    const a = inCombat({ helperId: 201680 });
+    const id = abilityId(a.helper, "Opikun (G7)");
+    expect(a.engine.decision()!.options.map((o) => o.id)).toContain(id);
+    const pd = a.cf.pendingDamage[0]!;
+    pd.fromStrike = false;
+    expect(a.engine.decision()!.options.map((o) => o.id)).not.toContain(id);
+    pd.fromStrike = true;
+    pd.source = a.actor.id;
+    expect(a.engine.decision()!.options.map((o) => o.id)).not.toContain(id);
+    pd.source = a.foe.id;
+    pd.unpreventable = true;
+    expect(a.engine.decision()!.options.map((o) => o.id)).not.toContain(id);
+  });
+
+  it("spends its two-point allowance across packets of the same opposing strike only", () => {
+    const a = inCombat({ helperId: 201680 });
+    const first = a.cf.pendingDamage[0]!;
+    first.amount = 1;
+    const phase = first.strikePhase!;
+    a.cf.pendingDamage.push({ ...first, amount: 1, aggravated: true });
+    a.cf.pendingDamage.push({ ...first, amount: 2, unpreventable: true });
+    a.cf.pendingDamage.push({ ...first, amount: 2, strikePhase: phase + 1 });
+    a.cf.pendingDamage.push({ ...first, amount: 2, fromStrike: false });
+    a.cf.pendingDamage.push({ ...first, amount: 2 });
+    a.engine.choose(abilityId(a.helper, "Opikun (G7)"));
+    expect(a.cf.pendingDamage.map(p => [p.amount, p.aggravated, p.unpreventable ?? false, p.fromStrike, p.strikePhase]))
+      .toEqual([[1, true, false, true, phase], [2, false, true, true, phase],
+        [2, false, false, true, phase + 1], [2, false, false, false, phase], [1, false, false, true, phase]]);
+    expect(a.state.eventLog.filter(e => e.type === "DamagePrevented" && e.minion === "V1")
+      .map(e => e.type === "DamagePrevented" ? e.amount : 0)).toEqual([1, 1]);
+    expect(a.helper.blood).toBe(3);
+  });
+  it("does not guess later strike identity in a legacy save with no phase id", () => {
+    const a = inCombat({ helperId: 201680 });
+    const first = a.cf.pendingDamage[0]!;
+    first.amount = 1;
+    delete first.strikePhase;
+    a.cf.pendingDamage.push({ ...first, amount: 2 });
+    const saved = JSON.parse(JSON.stringify(a.state));
+    const resumed = new VtesEngine(saved, testRegistry);
+    resumed.choose(abilityId(a.helper, "Opikun (G7)"));
+    const cf = saved.frames.find((f: { kind: string }) => f.kind === "combat");
+    expect(cf.pendingDamage.map((p: { amount: number }) => p.amount)).toEqual([2]);
+  });
+
+  it("can prevent her own non-aggravated strike damage", () => {
+    const state = threeSeatGame();
+    const opikun = imported(201680);
+    Object.assign(opikun, { blood: 5, strength: 0 });
+    state.seats[0]!.minions = [opikun];
+    Object.assign(state.seats[1]!.minions.find((m) => m.id === "M")!, { blood: 5, strength: 3 });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", `bleed:${opikun.id}`], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "block:M"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"], ["Bob", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "strike:hand"], ["Bob", "strike:hand"],
+    ]);
+    const id = abilityId(opikun, "Opikun (G7)");
+    expect(engine.decision()!.options.map((o) => o.id)).toContain(id);
+    engine.choose(id);
+    const cf = state.frames.find((f) => f.kind === "combat");
+    expect(opikun.blood).toBe(4);
+    expect(cf?.kind === "combat" && cf.pendingDamage[0]?.amount).toBe(1);
+  });
+});

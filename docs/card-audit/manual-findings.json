@@ -33,7 +33,7 @@
     "id": 100006,
     "name": "Abbot",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "W sprawdzonym zakresie: Sabbat, +1 stealth, dołączenie, unlock, limit jednej kopii oraz intercept wobec akcji skierowanych do kontrolera; tests/cards/conditional-statics.test.ts. Możliwe dalsze interakcje nie zostały w pełni zweryfikowane."
+    "evidence": "W sprawdzonym zakresie: Sabbat, +1 stealth, dołączenie, unlock, limit jednej kopii oraz intercept wobec akcji skierowanych do kontrolera; tests/cards/conditional-statics.test.ts. Możliwe dalsze interakcje nie zostały w pełni zweryfikowane. Aktualizacja: Przy superior Sleeping Mind karta nadal się dołącza, ale acting vampire nie unlockuje; tests/cards/sleeping-mind-unlock-audit.test.ts."
   },
   {
     "id": 100007,
@@ -308,8 +308,8 @@
   {
     "id": 100052,
     "name": "The Anarch Free Press",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec i skompilowany The Anarch Free Press nadają tag location, choć drukowany tekst zawiera Unique bez location; system location w derived.ts i compile.ts filtruje po tym tagu. Osobny hook polowania i lockGrant istnieją; testy lock-grant-locations nie sprawdzają typu location. Statyczne porównanie tekstu, spec i wyszukanych handlerów, bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Usunięto nieistniejący w nadruku podtyp location. Rzeczywiste zagranie i istniejące zdolności sprawdzane w tests/cards/lock-grant-locations.test.ts. Wcześniejsze ustalenie: Spec i skompilowany The Anarch Free Press nadają tag location, choć drukowany tekst zawiera Unique bez location; system location w derived.ts i compile.ts filtruje po tym tagu. Osobny hook polowania i lockGrant istnieją; testy lock-grant-locations nie sprawdzają typu location. Statyczne porównanie tekstu, spec i wyszukanych handlerów, bez nowego testu scenariuszowego."
   },
   {
     "id": 100053,
@@ -332,8 +332,8 @@
   {
     "id": 100056,
     "name": "Anarch Salon",
-    "status": "UNRESOLVED",
-    "evidence": "refSectPayout filtruje anarchs przez isReady zarówno dla blood, jak i pool; referendum-terms.test.ts:63–103 oczekuje braku pool dla kontrolera jedynego Anarcha w torporze. Druk kwalifikuje ready tylko w pierwszej części („each ready Anarch” vs „each Methuselah controlling an Anarch”); wymagane rozstrzygnięcie interpretacji reguł i osobny scenariusz przed klasyfikacją."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dla referendum rozdzielono warunek: blood otrzymuje każdy ready Anarch, a pool każdy kontroler Anarcha, również w torporze. tests/cards/referendum-terms.test.ts sprawdza wielu Anarchów, torpor i brak Anarcha. Interpretacja opiera się na osobnych członach nadruku; nie zweryfikowano wszystkich interakcji."
   },
   {
     "id": 100057,
@@ -344,8 +344,8 @@
   {
     "id": 100058,
     "name": "Anarch Troublemaker",
-    "status": "UNRESOLVED",
-    "evidence": "Bespoke abilityOptions w cards.ts:38880 wybiera 1 lub 2 ready unlocked vampire albo equipment i nie oferuje wyboru 0 przy „up to two”. Wymaga ustalenia, czy reguły dopuszczają przekazanie karty bez wybrania żadnego celu; cross-table-masters.test.ts bada typowy wybór, nie zero."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono wybór vampire przeciwnika: karta nie wymaga ani ready, ani unlocked, więc uwzględnia vampire w torpor i już locked (bez fałszywego zdarzenia zmiany stanu). Wyklucza uncontrolled i allies. tests/cards/anarch-troublemaker-audit.test.ts; zasada celu w torpor: https://www.vekn.net/forum/rules-questions/81293-touch-of-valeren; wybór locked: https://www.vekn.net/forum/rules-questions/39816-ec-2012-can-you-answer-these?start=12. Nadal nierozstrzygnięte, czy aktualne „up to two” pozwala przekazać kartę bez żadnego celu; historyczny RTR 19950413 mówi o jednym lub dwóch."
   },
   {
     "id": 100059,
@@ -632,8 +632,8 @@
   {
     "id": 100106,
     "name": "Ashur Tablets",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje natychmiast gainPool 3 zamiast odkładania trzech kopii, limitu per turn, usuwania kopii i wybierania kart z ash heap. Tekst: src/cards/registry.json, ID 100106; implementacja: src/cards/effects/cards.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Trzy kopie wyzwalają usunięcie wszystkich kopii ze stołu, 3 pool i wybór 0–13 kart biblioteki z ash heap, jednej do ręki; limit raz na turę i serializacja wyboru. tests/cards/ashur-tablets-audit.test.ts."
   },
   {
     "id": 100107,
@@ -782,8 +782,8 @@
   {
     "id": 100131,
     "name": "Banishment",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Bespoke referendumTerms porównuje m.capacity z actor.capacity, zamiast capacityOf uwzględniającego capacityBonus z kart. Zmiana capacity może zatem zmienić prawidłowy wybór younger vampire bez zmiany oferowanych terms; politics.test.ts sprawdza tylko bazowe wartości. Statyczna analiza bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Wybór younger vampire używa capacityOf zarówno aktora, jak i celu; dodatni i ujemny przypadek bonusu capacity w tests/cards/politics.test.ts. Wcześniejsze ustalenie: Bespoke referendumTerms porównuje m.capacity z actor.capacity, zamiast capacityOf uwzględniającego capacityBonus z kart. Zmiana capacity może zatem zmienić prawidłowy wybór younger vampire bez zmiany oferowanych terms; politics.test.ts sprawdza tylko bazowe wartości. Statyczna analiza bez nowego testu scenariuszowego."
   },
   {
     "id": 100132,
@@ -950,8 +950,8 @@
   {
     "id": 100159,
     "name": "Big Game",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Rush ma maneuver i press bez warunku Red List, przyznaje oba zamiast wyboru, brak unlock po akcji. Źródła: src/cards/registry.json ID 100159; src/cards/effects/cards.ts i compile.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Usunięto błędnie przyznawane każdemu celowi maneuver i press. tests/cards/rush-cards.test.ts potwierdza rush na zwykły cel bez obu bonusów i bez unlock. Red List nie jest jeszcze modelowana: prawidłowy opcjonalny maneuver albo press i unlock przy celu Red List pozostają do zrobienia; karta nie jest w pełni poprawna."
   },
   {
     "id": 100160,
@@ -1190,8 +1190,8 @@
   {
     "id": 100199,
     "name": "Blood Doll",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Bespoke bloodDoll.options mapuje wszystkie minions kontrolera bez filtra kind vampire, mimo wymogu karty „on a vampire you control”. permanents.test.ts sprawdza wybór własnego vampire, nie wykluczenie ally. Statyczna analiza bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Celowana naprawa: wybór tylko własnego vampire, w tym torpor; zdolność i transfer należą do aktualnego kontrolera wampira także po zmianie kontroli. tests/cards/permanents.test.ts; nie jest to pełna weryfikacja wszystkich interakcji. Wcześniejsze ustalenie: Bespoke bloodDoll.options mapuje wszystkie minions kontrolera bez filtra kind vampire, mimo wymogu karty „on a vampire you control”. permanents.test.ts sprawdza wybór własnego vampire, nie wykluczenie ally. Statyczna analiza bez nowego testu scenariuszowego."
   },
   {
     "id": 100200,
@@ -1311,7 +1311,7 @@
     "id": 100219,
     "name": "Bloodform",
     "status": "CODE_DISCREPANCY",
-    "evidence": "Superior ma press endOnly w tym samym trybie co shield przed range, ale case press w compile.ts wywołuje applyPressCard z domyślnym toContinue=true, zamiast przyznać opcjonalny end-only press. applyPressCard ustawia willContinue; test kotm-rigor-etc bada tylko brak basic przeciw vampire, nie superior press. Statyczna analiza bez nowego testu scenariuszowego."
+    "evidence": "Superior ma press endOnly w tym samym trybie co shield przed range, ale case press w compile.ts wywołuje applyPressCard z domyślnym toContinue=true, zamiast przyznać opcjonalny end-only press. applyPressCard ustawia willContinue; test kotm-rigor-etc bada tylko brak basic przeciw vampire, nie superior press. Statyczna analiza bez nowego testu scenariuszowego. Test frenzy-direction-audit.test.ts potwierdza brak utraty krwi od unpreventable non-aggravated press damage w rundzie immunitetu; silnik rejestruje to jednak jako DamagePrevented zamiast nieskutecznie zadanych obrażeń. Znaczenie dla triggerów wymaga analizy."
   },
   {
     "id": 100220,
@@ -1556,8 +1556,8 @@
   {
     "id": 100260,
     "name": "Brujah Debate",
-    "status": "CONFIRMED_BUG",
-    "evidence": "oldestBrujah filtruje już zablokowanych przed znalezieniem najstarszego i porównuje bazowe capacity; może zablokować młodszego zamiast najstarszego (cards.ts, bespoke handler). Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Wybór najstarszego Brujah uwzględnia już locked i w torporze oraz aktualne capacity, a przy remisie decyduje kontroler; tests/cards/burn-family.test.ts. Aktualny tekst nie wymaga ready; ruling VEKN PIB 20110310 dopuszcza locked. Nie obejmuje wszystkich interakcji."
   },
   {
     "id": 100261,
@@ -1694,8 +1694,8 @@
   {
     "id": 100283,
     "name": "Camaraderie",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Reaction daje intercept zamiast redukcji bleed 1/3 i warunku drugiego Blood Brother. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Poprawiono redukcję bleed na basic −1 / superior −3 zamiast interceptu, warunek drugiego ready unlocked Blood Brother w tym samym circle i działanie New Blood oraz Angelo przy kartach Sanguinus. Rzeczywiste zagrania, brak celu, blokady, circle of one, save/load, anulowanie i wynik bleed sprawdzają tests/cards/camaraderie-circle-audit.test.ts. Interpretacja superior dla wampira innego klanu oraz szersze interakcje nadal wymagają weryfikacji."
   },
   {
     "id": 100284,
@@ -1844,8 +1844,8 @@
   {
     "id": 100308,
     "name": "Cats' Guidance",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "W sprawdzonym zakresie basic unlock po block resolution; tests/cards/post-block-unlock.test.ts. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Basic po zakończeniu wszystkich walk związanych z blokiem, także walki z Psyche! lub kolejki Hedonism, a także gdy Ghoul Escort pominie walkę; nie podczas walki, w torpor ani przy zakazie unlock. Superior +1 intercept. Testy tests/cards/post-block-unlock.test.ts oraz tests/cards/psyche-post-block-audit.test.ts, w tym rzeczywiste Hedonism, Psyche!, Form of Mist i save/load. https://www.vekn.net/forum/rules-questions/82396-queued-combats#114683. Timing Hedonism w udanej akcji naprawiono i przetestowano w psyche-post-block-audit.test.ts, w tym save/load. Status opisuje te scenariusze, nie wszystkie interakcje."
   },
   {
     "id": 100309,
@@ -2192,8 +2192,8 @@
   {
     "id": 100366,
     "name": "Club Illusion",
-    "status": "UNRESOLVED",
-    "evidence": "Spec lockGrant ustawia ownOnly, a abilityOptions pyta kontrolera lokalizacji; nadruk mówi „An Anarch can burn 1 blood” bez „you control”. docs/action-time-locations-design.md interpretuje to jako uprawnienie własnych Anarchów. Wymaga potwierdzenia reguł co do Anarcha innego kontrolera i odrębnego scenariusza; test bada tylko własnego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Club Illusion pozwala także działającemu Anarchowi innego kontrolera zdecydować i zapłacić blood; nie daje tej decyzji kontrolerowi lokacji. Zablokowano użycie po ponownym otwarciu state A po próbie bloku. tests/cards/action-time-locations.test.ts; reguła VEKN https://www.vekn.net/forum/rules-questions/78013-club-illusion. Inne interakcje nieweryfikowane."
   },
   {
     "id": 100367,
@@ -2444,8 +2444,8 @@
   {
     "id": 100408,
     "name": "Conquer the Beast",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "conquerTheBeast zapisuje counters i mandatoryPress do pola CombatFrame i blokuje equipment również przeciwnikowi; wyszukiwanie użyć pola znajduje zapis, lecz nie reset counters przy kartach, ich spalanie ani przyznawanie obowiązkowych/opcjonalnych press. Brak widocznego umieszczenia karty w play i jej burn po combat. next-batch-a.test.ts weryfikuje tylko pojawienie się opcji. Statyczna analiza bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Usunięto zakaz sprzętu dla przeciwnika: ograniczenie dotyczy tylko grającego wampira; test frenzy-direction-audit.test.ts. Nadal brak resetowania i spalania counterów, przyznawania press oraz pełnej reprezentacji karty w play i burn na koniec combat."
   },
   {
     "id": 100409,
@@ -3422,8 +3422,8 @@
   {
     "id": 100571,
     "name": "Domain of Evernight",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Superior powinien mieć limit jednego zagrania przez danego wampira na turę; brak go w spec. Ponadto basic obf i tem nie mają variant, więc modeOf rozstrzyga oba na pierwszy tryb obf. src/cards/effects/cards.ts, compile.ts; brak osobnego handlera."
+    "status": "FIXED_TARGETED",
+    "evidence": "Rozdzielono warianty basic obf i tem, superior wymaga udanej akcji, obowiązkowo odblokowuje i ma limit na wampira na turę; tests/cards/domain-evernight-audit.test.ts sprawdza oba warianty, blok, innego wampira i kolejną turę. Nie obejmuje wszystkich interakcji."
   },
   {
     "id": 100572,
@@ -3506,8 +3506,8 @@
   {
     "id": 100585,
     "name": "Drawing Out the Beast",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Zamiast przez combat +1 strength przeciwnika jest round; brak zakazu manewrowania do long, ograniczenie press nie rozróżnia end/continue. Superior pressStepDamage resetuje się po rundzie, a tekst wymaga każdej rundy. Spec i engine.ts kroki końca rundy. Naprawiono i przetestowano card-wide ograniczenie first round; pozostałe opisane błędy nadal otwarte."
+    "status": "PARTIAL_FIX",
+    "evidence": "Oba poziomy niedostępne przeciw ally [PIB 20121028]; superior zadaje unpreventable environmental damage w press step przed decyzjami o press, nie po wcześniejszym końcu walki. frenzy-direction-audit.test.ts: kolejność, torpor, dwie rundy, save/load na decyzji press, Flesh of Marble i Bloodform. Stare zapisy bez pochodzenia ograniczeń oraz inne interakcje nadal wymagają przeglądu."
   },
   {
     "id": 100586,
@@ -3524,8 +3524,8 @@
   {
     "id": 100588,
     "name": "Dreams of the Sphinx",
-    "status": "PARTIAL_FIX",
-    "evidence": "Osobny handler oferuje dodanie blood do uncontrolled tylko w master phase (effects/cards.ts: dreamsOfTheSphinx.abilityOptions), chociaż tekst karty nie ogranicza czasu tej zdolności. Test dreams-of-the-sphinx.test.ts sprawdza jedynie master phase; pozostaje otwarte. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zrealizowano trzy zdolności, hand size do końca tury, licznik przy rzeczywistym lock i burn przy trzech counterach; przetestowano impulsy w różnych fazach i w walce, przeciwnika, zakaz as-played i contest, wykluczenie nie-wampira oraz save/load. Rzeczywista akcja Goth Band przenosi counter z Dreams albo na Dreams i uruchamia próg trzech (tests/cards/goth-band-dreams-audit.test.ts); także tests/cards/dreams-of-the-sphinx.test.ts i temporary-hand-size.test.ts. FIXED_TARGETED dotyczy tych scenariuszy, nie dowodzi kompletności wszystkich specjalnych okien ani efektów zewnętrznych; Imbued nie jest reprezentowany osobnym rodzajem miniona."
   },
   {
     "id": 100589,
@@ -3585,7 +3585,7 @@
     "id": 100598,
     "name": "Eagle's Sight",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Ograniczony zakres: basic +1 intercept i superior próba bloku poza zwykłymi ograniczeniami; unlock-and-block.test.ts dla superior. Inne interakcje wymagają zbadania."
+    "evidence": "Ograniczony zakres: basic +1 intercept i superior próba bloku poza zwykłymi ograniczeniami; unlock-and-block.test.ts dla superior. Inne interakcje wymagają zbadania. Superior tylko inicjuje blok i nie unlockuje woken minion; również pod superior Sleeping Mind. sleeping-mind-unlock-audit.test.ts, w tym On the Qui Vive."
   },
   {
     "id": 100599,
@@ -3866,8 +3866,8 @@
   {
     "id": 100645,
     "name": "Enkil Cog",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Modifier daje natychmiast +1 bleed zamiast dołączenia po successful bleed, stałego bonusu i akcji w cudzej minion phase. Tekst registry.json i bieżący spec effects/cards.ts; wyszukano nazwę w src pod kątem osobnego handlera. Bez dedykowanego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Po successful bleed przeciw prey karta jest teraz unikalnym permanentem na aktorze capacity >=10 i daje mu stałe +1 bleed. tests/cards/enkil-cog-audit.test.ts. Wciąż brak dodatkowej akcji w dowolnej minion phase, a relacja prey po oust wymaga weryfikacji."
   },
   {
     "id": 100646,
@@ -3896,14 +3896,14 @@
   {
     "id": 100650,
     "name": "Enticement",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Action kradnie 2/3 pool zamiast je spalić; brak kosztu burn Edge i zakazu bleed kontrolowanych minionów do końca tury. Porównano registry.json z bieżącym effects/cards.ts, wyszukano nazwę w src i tests; bez nowego osobnego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Enticement wymaga kontrolowania Edge przy zagraniu; po sukcesie jest skierowany w prey, spala Edge i 2/3 pool bez zysku pool dla kontrolera oraz zabrania jego minionom podejmować bleedy do końca tury. Jeżeli Edge utracono w czasie akcji, pool nie jest spalany, lecz zakaz nadal obowiązuje. tests/cards/enticement-audit.test.ts: basic/superior, blok, anulowanie, utrata Edge, akcje basic/kartowe/granted/bespoke, zmiana kontroli, mandatory bleed, tryb non-bleed i save/restore oraz wygaśnięcie. Tekst: https://www.vekn.net/card-lists/157-starting-with-e; utrata Edge: https://vtes.cardsrealm.com/pt-pt/card/enticement. Status oznacza naprawę i pokrycie wymienionych scenariuszy, nie pełną weryfikację wszystkich interakcji."
   },
   {
     "id": 100651,
     "name": "Entombment",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Spec daje maneuver zamiast basic strike spalającego ally i superior strike wysyłającego wampira do torpor. Tekst: registry.json; spec: effects/cards.ts. Sprawdzono wystąpienia nazwy i ID w src pod kątem osobnego handlera."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono oba poziomy, rodzaje celów i równoczesne strike; dodano okno odroczenia bezpośredniego strike: torpor z serializowalną kolejką. tests/cards/entombment-audit.test.ts sprawdza m.in. oba opóźnienia, pass, anulowanie, save/restore, first strike, jednoczesne strike i obrażenia oraz wounded przy aggravated. Pozostaje weryfikacja innych interakcji, m.in. retainerów i legalności deklaracji przeciw niewłaściwemu rodzajowi celu. Ruling: https://vtes.cardsrealm.com/pt-pt/card/entombment."
   },
   {
     "id": 100652,
@@ -3993,7 +3993,7 @@
     "id": 100666,
     "name": "Eternal Vigilance",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: wymóg ready tytułu oraz płatny unlock nosiciela i block; pay-to-unlock.test.ts. Nie jest to pełna weryfikacja interakcji."
+    "evidence": "Wąski zakres: wymóg ready tytułu oraz płatny unlock nosiciela i block; pay-to-unlock.test.ts. Nie jest to pełna weryfikacja interakcji. Sprawdzono wpływ zakazu unlock z The Sleeping Mind: sleeping-mind-unlock-audit.test.ts oraz master-intercept.test.ts (Guard Duty)."
   },
   {
     "id": 100667,
@@ -4064,8 +4064,8 @@
   {
     "id": 100678,
     "name": "Eye of Hazimel",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Spec daje tylko superior Potence, nie Chimerstry; brak zakazu przenoszenia/kradzieży, upkeep 1 pool i 5 unpreventable damage przy spaleniu. Tekst registry.json i bieżący spec effects/cards.ts; wyszukano nazwę w src pod kątem osobnego handlera. Bez dedykowanego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono jednoczesne nadawanie superior Potence i Chimerstry; tests/cards/eye-hazimel-audit.test.ts sprawdza oba poziomy oraz usunięcie bonusów po utracie karty. Nadal brak zakazu przenoszenia/kradzieży, upkeep 1 pool i 5 unpreventable damage przy spaleniu; te istotne błędy pozostają otwarte."
   },
   {
     "id": 100679,
@@ -4448,8 +4448,8 @@
   {
     "id": 100742,
     "name": "Flamethrower",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Tekst w registry podaje Weapon, nie Gun, zaś spec dodaje tag gun; może to błędnie dopuścić karty i efekty wymagające gun. weapons.test.ts bada obrażenia, nie poprawność klasyfikacji; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Usunięto nieistniejący podtyp gun; test metadanych oraz obrażeń 2R aggravated w tests/cards/weapons.test.ts. Wcześniejsze ustalenie: Tekst w registry podaje Weapon, nie Gun, zaś spec dodaje tag gun; może to błędnie dopuścić karty i efekty wymagające gun. weapons.test.ts bada obrażenia, nie poprawność klasyfikacji; bez nowego testu scenariuszowego."
   },
   {
     "id": 100743,
@@ -4491,7 +4491,7 @@
     "id": 100749,
     "name": "Flesh of Marble",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: automatyczna prewencja kolejnych damage oraz różnica aggravated poziomów; round-recurring-combat.test.ts. Nie oznacza pełnej poprawności interakcji."
+    "evidence": "Automatyczna prewencja kolejnych obrażeń nie zatrzymuje unpreventable damage; obie wersje w frenzy-direction-audit.test.ts i normalna prewencja w round-recurring-combat.test.ts. Wąski zakres, nie pełny audyt."
   },
   {
     "id": 100750,
@@ -4568,14 +4568,14 @@
   {
     "id": 100762,
     "name": "Forced Vigilance",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: superior unlock locked vampire podczas directed action; post-block-unlock.test.ts. Basic i dokładne granice directed action wymagają dalszej weryfikacji."
+    "status": "FIXED_TARGETED",
+    "evidence": "Basic po block resolution, również po kolejkowanej walce i przy pominięciu walki przez Ghoul Escort; nie jest dostępne z torpor ani przy zakazie unlock. Superior odblokowuje podczas directed action. Testy tests/cards/post-block-unlock.test.ts (obie gałęzie, save/load), tests/cards/psyche-post-block-audit.test.ts; zob. też https://www.vekn.net/forum/rules-questions/82396-queued-combats#114683. Osobno timing walk kolejkowanych przy udanej akcji pozostaje niepełny."
   },
   {
     "id": 100763,
     "name": "Forearm Block",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: prevent 2 z bieżącego hand strike i first strike w następnej rundzie; first-strike-cards.test.ts."
+    "evidence": "Prevent 2 z hand strike i first strike w następnej rundzie; unpreventable hand-strike packet nie zużywa ani nie podlega prewencji. first-strike-cards.test.ts; wąski zakres."
   },
   {
     "id": 100764,
@@ -4706,8 +4706,8 @@
   {
     "id": 100785,
     "name": "Fragment of the Book of Nod",
-    "status": "UNRESOLVED",
-    "evidence": "Fragment of the Book of Nod: osobny handler realizuje draw/discard i ogranicza ability do faz własnej tury; jego komentarz wskazuje możliwe szersze okno. Tekst nie określa timingu; potrzebne rozstrzygnięcie zasad oraz testy poza własną turą."
+    "status": "PARTIAL_FIX",
+    "evidence": "Fragment of the Book of Nod: osobny handler realizuje draw/discard i ogranicza ability do faz własnej tury; jego komentarz wskazuje możliwe szersze okno. Tekst nie określa timingu; potrzebne rozstrzygnięcie zasad oraz testy poza własną turą. Aktualizacja: Poszerzono dostępność o zwykłe impulsy w turze innych Methuselahów, akcjach i walce, z wyłączeniem as-played. Dwa dobierania są kontynuowane przed discard down także przy przekierowaniu i po save/load; tests/cards/fragment-impulse-audit.test.ts. Zakres innych specjalnych okien nadal wymaga sprawdzenia; ruling ANK 20200616 https://www.vekn.net/forum/rules-questions/78687-the-erciyes-fragments-fragment-of-the-book-of-nod-barrens-impulse#100110."
   },
   {
     "id": 100786,
@@ -5061,7 +5061,7 @@
     "id": 100844,
     "name": "Goth Band",
     "status": "PARTIAL_FIX",
-    "evidence": "Ally nie ma unique ani akcji przenoszenia countera między master cards; ma tylko modifyStealth w spec. Porównano registry.json z bieżącym effects/cards.ts, wyszukano nazwę w src i tests; bez nowego osobnego testu scenariuszowego. Aktualizacja: naprawiono wymaganie nadrukowanej ikony klanu dla wampira zagrywającego kartę (tests/cards/library-clan-icons.test.ts); wcześniejsze wzmianki o jego braku są już nieaktualne. Inne ustalenia powyżej i nieweryfikowane interakcje pozostają otwarte. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Aktualizacja: poprawiono drukowany podtyp w metadanych i karcie wchodzącej do gry (tests/cards/printed-subtypes.test.ts); wcześniejsze wzmianki o braku tego podtypu są już nieaktualne. Pozostałe wskazane błędy i niezweryfikowane interakcje pozostają otwarte."
+    "evidence": "Dodano skierowaną akcję +1 stealth przenoszącą ogólne countery między master cards, w tym Dreams; zachowano unique, mortal i wymóg klanu. tests/cards/goth-band-dreams-audit.test.ts sprawdza właściciela źródła, pusty counter, zniknięcie celu oraz oba kierunki z Dreams. Pozostaje PARTIAL_FIX: nie wszystkie karty używające counterów ujawniają pole counters przy wartości zero; niezweryfikowane są inne reprezentacje counterów oraz skutki źródła po zabraniu ostatniego countera."
   },
   {
     "id": 100845,
@@ -5181,7 +5181,7 @@
     "id": 100864,
     "name": "Guard Duty",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: osobny handler wybiera location i daje unlock/block za blood albo kartę; master-intercept.test.ts."
+    "evidence": "Wąski zakres: osobny handler wybiera location i daje unlock/block za blood albo kartę; master-intercept.test.ts. Sprawdzono wpływ zakazu unlock z The Sleeping Mind: sleeping-mind-unlock-audit.test.ts oraz master-intercept.test.ts (Guard Duty)."
   },
   {
     "id": 100865,
@@ -5252,8 +5252,8 @@
   {
     "id": 100876,
     "name": "Hackerspace",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast location z counterami za Anarch i płacenia nimi kosztu equipment. Porównano registry.json i bieżący effects/cards.ts, wyszukano nazwę w kodzie; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Master nie daje już pool; lokacja startuje z counterami za kontrolowanych Anarchs (także w torporze) i dostaje counter po wejściu Anarch oraz po zmianie sekty na Anarch (nie przy ponownym ustawieniu). Koszt equipment z counterów tylko dla kontrolowanego Anarch, rozliczony przy resolution. tests/cards/hackerspace-audit.test.ts (11 testów: save/load, Convert, contest, duplikaty, blokada, pełna/częściowa płatność). ANK 20210410."
   },
   {
     "id": 100877,
@@ -5415,7 +5415,7 @@
     "id": 100903,
     "name": "Heart of Nizchetus",
     "status": "PARTIAL_FIX",
-    "evidence": "Celowana naprawa: liczony draw Heart jest wznawiany po każdym wyborze źródła (w tym Tarot/Cache) i po save/load; dopiero po draw następuje wybór do przesunięcia na spód, w liczbie rzeczywiście dobranych kart. Opcje liczby uwzględniają aktywne store; heart-draw-redirect.test.ts. Nadal brak reprezentacji właściciela karty w ręce i poprawnego skierowania do biblioteki właściciela (np. Agaitas), niezweryfikowana kompletna semantyka choice/up to i kolejność wszystkich efektów; inne ścieżki wielokrotnego draw nie zostały naprawione. Historycznie: Odtworzony błąd: przy Heart i Shilmulo Tarot w fazie unlock wybór draw 2 natychmiast pyta o przesunięcie karty na spód, przed rozwiązaniem któregokolwiek przekierowanego dobierania; świeżo dobranych kart nie można wtedy wybrać. W compile.ts drawCards tworzy oczekujące wybory, lecz bury jest umieszczane nad nimi. Ponadto liczba opcji draw jest ograniczona długością biblioteki bez uwzględnienia store; pozostałe interakcje wymagają sprawdzenia. Poprzednia wąska ocena: Wąski zakres: opcjonalne draw do 3 i umieszczenie takiej samej liczby na spodzie biblioteki; cheap-tail.test.ts."
+    "evidence": "Celowana naprawa: liczony draw Heart jest wznawiany po każdym wyborze źródła (w tym Tarot/Cache) i po save/load; dopiero po draw następuje wybór do przesunięcia na spód, w liczbie rzeczywiście dobranych kart. Opcje liczby uwzględniają aktywne store; heart-draw-redirect.test.ts. Nadal brak reprezentacji właściciela karty w ręce i poprawnego skierowania do biblioteki właściciela (np. Agaitas), niezweryfikowana kompletna semantyka choice/up to i kolejność wszystkich efektów; inne ścieżki wielokrotnego draw nie zostały naprawione. Historycznie: Odtworzony błąd: przy Heart i Shilmulo Tarot w fazie unlock wybór draw 2 natychmiast pyta o przesunięcie karty na spód, przed rozwiązaniem któregokolwiek przekierowanego dobierania; świeżo dobranych kart nie można wtedy wybrać. W compile.ts drawCards tworzy oczekujące wybory, lecz bury jest umieszczane nad nimi. Ponadto liczba opcji draw jest ograniczona długością biblioteki bez uwzględnienia store; pozostałe interakcje wymagają sprawdzenia. Poprzednia wąska ocena: Wąski zakres: opcjonalne draw do 3 i umieszczenie takiej samej liczby na spodzie biblioteki; cheap-tail.test.ts. Stan kodu sprawdzony ponownie: CardInstance w ręce nie ma pola owner (tylko MinionState i PermanentInPlay je mają), więc bury nie może trafić do biblioteki właściciela karty (RTR 19970425, LSJ 20060921); bury zawsze wraca do biblioteki kontrolera. Wymaga reprezentacji właściciela kart w ręce, niezbędnej także dla Agaitas (dotąd tylko cryptPerm)."
   },
   {
     "id": 100904,
@@ -5451,7 +5451,7 @@
     "id": 100909,
     "name": "Helicopter",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: vehicle wchodzi locked i może dać unlock po sukcesie; vehicles-and-havens.test.ts."
+    "evidence": "Wąski zakres: vehicle wchodzi locked i może dać unlock po sukcesie; vehicles-and-havens.test.ts. Aktualizacja: Opcja unlock wymaga successful action oraz braku zakazu unlock; zabezpieczono również rozstrzygnięcie. tests/cards/sleeping-mind-unlock-audit.test.ts obejmuje sukces, zablokowaną akcję oraz Sleeping Mind superior/inferior."
   },
   {
     "id": 100910,
@@ -5613,7 +5613,7 @@
     "id": 100936,
     "name": "Horrific Countenance",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: uwolnienie akcji, unlock blockera i brak kolejnego bloku; avoiding-the-block.test.ts."
+    "evidence": "Wąski zakres: uwolnienie akcji, unlock blockera i brak kolejnego bloku; avoiding-the-block.test.ts. Aktualizacja: Nie jest oferowany przy superior Sleeping Mind, który zakazuje obowiązkowego unlock blockera; tests/cards/sleeping-mind-unlock-audit.test.ts."
   },
   {
     "id": 100937,
@@ -5642,8 +5642,8 @@
   {
     "id": 100941,
     "name": "Hourglass of the Mind",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Tryb tem odrzuca zamiast odłożyć cztery karty na wierzch i nie unlockuje; superior daje stałe handSize zamiast counterów i ich opłacania. Porównano registry.json i bieżący effects/cards.ts, wyszukano nazwę w kodzie; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono: odrębne warianty [pot]/[tem]; [tem] dobiera cztery karty bez discard, następnie wybiera do czterech kart z ręki na wierzch w zadanej kolejności i unlockuje przed zakończeniem akcji. Uwzględniono przekierowanie draw, zapis/wznowienie oraz pustą bibliotekę (tests/cards/hourglass-audit.test.ts). Przy niepełnej ręce przyjęto wykonanie możliwej części efektu; interpretacja wymaga potwierdzenia. Usunięto nieuprawnione +1 hand size superior bez counterów, lecz [TEM] nadal nie obsługuje opłacania counterów ani ich wpływu na hand size. Logi wyboru są maskowane, ale identyfikatory zakrytych kart w projekcji stanu nadal mogą umożliwiać ich śledzenie (istniejący szerszy problem prywatności). Pozostaje PARTIAL_FIX."
   },
   {
     "id": 100942,
@@ -6002,8 +6002,8 @@
   {
     "id": 101001,
     "name": "Into Thin Air",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Modifier ma wyłącznie basic +1 stealth, bez delayed replacement, płatnej redukcji intercept i superior. Porównano registry.json i bieżący effects/cards.ts, wyszukano nazwę w kodzie; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano superior +2 stealth, delayed replacement do unlock oraz wzajemne wykluczenie z Lost in Crowds; test w obu kolejnościach i anulowanie w tests/cards/precon-audit-regressions.test.ts. Nadal brak płatnego raz na akcję -1 intercept do ally lub younger vampire. Wcześniejsze ustalenie: Modifier ma wyłącznie basic +1 stealth, bez delayed replacement, płatnej redukcji intercept i superior. Porównano registry.json i bieżący effects/cards.ts, wyszukano nazwę w kodzie; bez nowego testu scenariuszowego."
   },
   {
     "id": 101002,
@@ -6254,8 +6254,8 @@
   {
     "id": 101043,
     "name": "Khabar: Glory",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec ma właściwe dołączenie i bonusy, ale usable jest puste: brakuje nadrukowanego zakazu po wykonaniu non-mandatory action, mimo istniejącego gate onlyIfNoActionsYet w compile.ts. Bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano kontrolę poprzednich non-mandatory actions i liczenie akcji wbudowanych, z kart i przyznanych; mandatory hunt jest wyjątkiem. tests/cards/action-attachments.test.ts. Inne rodzaje obowiązkowych akcji i anulowanie wymagają dalszej weryfikacji. Aktualizacja: Ten sam warunkowy unlock on attach nie działa przy superior Sleeping Mind; wspólny kod testowany przez Abbot, sam scenariusz Khabar niezweryfikowany."
   },
   {
     "id": 101044,
@@ -6326,8 +6326,8 @@
   {
     "id": 101055,
     "name": "Kindred Spirits",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Oba tryby mają bleed i gain pool, lecz brak wyboru dowolnego Methuselah: compileActionCard nie wylicza celu dla actionBleed, a announceCardAction wybiera domyślnie prey. Porównano tekst i metadane registry z aktualnym kodem; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Oba tryby wybierają żyjącego innego Methuselah, stosują ograniczenia i koszty do wybranego celu oraz bleed i gain pool po sukcesie. tests/cards/kindred-spirits-audit.test.ts."
   },
   {
     "id": 101056,
@@ -6338,8 +6338,8 @@
   {
     "id": 101057,
     "name": "King of the Mountain",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: basic prevent strike i oferta superior po range; kotm-rigor-etc.test.ts. Odbicie obrażeń superior i niszczenie broni wymagają dalszej weryfikacji."
+    "status": "CODE_DISCREPANCY",
+    "evidence": "Basic preventOpposingStrikeRound w pushPendingDamage nie sprawdza unpreventable, przez co według analizy kodu może zapobiec niepreventable strike damage. Wymaga testu odtwarzającego; zakres prewencji i superior odbicie również do weryfikacji. kotm-rigor-etc.test.ts bada wybrane zachowanie i dostępność."
   },
   {
     "id": 101058,
@@ -6483,7 +6483,7 @@
     "id": 101081,
     "name": "Leather Jacket",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: unlock na koniec tury po equip, spalenie do prevent strike i limit jednej kopii; equip-unlocks.test.ts."
+    "evidence": "Wąski zakres: unlock na koniec tury po equip, spalenie do prevent strike i limit jednej kopii; equip-unlocks.test.ts. Aktualizacja: Prevent obejmuje wszystkie pakiety danego opposing strike, nie pozostałe obrażenia przeciwnika. tests/cards/prevention-provenance-audit.test.ts; zachowane testy equip-unlocks.test.ts."
   },
   {
     "id": 101082,
@@ -6668,8 +6668,8 @@
   {
     "id": 101112,
     "name": "Liquidation",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje 3 pool z delayed replacement, ale spec nie spala siedmiu kart z wierzchu biblioteki; brak osobnego handlera karty. Porównano tekst i metadane registry z aktualnym kodem; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano spalenie siedmiu wierzchnich kart biblioteki przed zyskaniem 3 pool, kontrolę dostępności siedmiu kart i delayed replacement; tests/cards/liquidation-audit.test.ts. Ruling VEKN PIB 20110304 wyklucza zagranie przy mniejszej liczbie kart. Nie obejmuje wszystkich interakcji."
   },
   {
     "id": 101113,
@@ -6746,8 +6746,8 @@
   {
     "id": 101125,
     "name": "Lost in Crowds",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "W spec są poprawne wartości stealth, ale brak wzajemnego wykluczenia z Into Thin Air; nie znaleziono nazwy karty w innym kodzie runtime; komentarz w spec twierdzi, że Into Thin Air nie ma w puli, lecz ma ona spec ID 101001. Nie przetestowano scenariusza obu kart w jednej akcji. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Celowana naprawa: wzajemne wykluczenie z Into Thin Air dla tej samej akcji, w obu kolejnościach i także po anulowaniu zagranej karty; tests/cards/precon-audit-regressions.test.ts. Nie stanowi certyfikacji wszystkich interakcji. Wcześniejsze ustalenie: W spec są poprawne wartości stealth, ale brak wzajemnego wykluczenia z Into Thin Air; nie znaleziono nazwy karty w innym kodzie runtime; komentarz w spec twierdzi, że Into Thin Air nie ma w puli, lecz ma ona spec ID 101001. Nie przetestowano scenariusza obu kart w jednej akcji. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
   },
   {
     "id": 101126,
@@ -6855,7 +6855,7 @@
     "id": 101143,
     "name": "Magic of the Smith",
     "status": "PARTIAL_FIX",
-    "evidence": "Wąski zakres: wyszukanie/equip po sukcesie, koszt i tasowanie; library-search.test.ts. Pozostałe interakcje nie są w pełni sprawdzone. Aktualizacja: koszt wyszukanego equipment uwzględnia wymagany klan, a własna kopia Unique nie jest oferowana; library-search.test.ts. Sprzęt z wyszukania przechodzi przez playCardFromHand i generuje CardPlayed; zgodność pozostałych skutków i anulowania trzeba zweryfikować (https://www.vekn.net/forum/rules-questions/82962-meditative-grove-vs-rotschreck)."
+    "evidence": "Wąski zakres: wyszukanie/equip po sukcesie, koszt i tasowanie; library-search.test.ts. Pozostałe interakcje nie są w pełni sprawdzone. Aktualizacja: koszt wyszukanego equipment uwzględnia wymagany klan, a własna kopia Unique nie jest oferowana; library-search.test.ts. Sprzęt z wyszukania nie generuje już CardPlayed, a koszty uwzględniają tagi, w tym podatek od broni; tests/cards/library-search.test.ts. Zgodność pozostałych skutków i anulowania nadal trzeba zweryfikować (https://www.vekn.net/forum/rules-questions/82962-meditative-grove-vs-rotschreck)."
   },
   {
     "id": 101144,
@@ -7046,8 +7046,8 @@
   {
     "id": 101175,
     "name": "Martyr's Resilience",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior ogranicza X do 3 w spec; outsidePreventOptions w compile.ts bierze minimum z tego limitu i dostępnej blood, podczas gdy tekst nie zawiera limitu 3. Pozostałe zachowania nie były tu rozstrzygane. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Usunięto arbitralny limit X=3 superior; test dla X=6 w tests/cards/outside-combat.test.ts."
   },
   {
     "id": 101176,
@@ -7370,8 +7370,8 @@
   {
     "id": 101229,
     "name": "Mob Connections",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: osobny handler lockuje kartę, dając press do kontynuacji własnemu uczestnikowi combat; burn-family.test.ts. Dalsze interakcje nie są w pełni zbadane."
+    "status": "FIXED_TARGETED",
+    "evidence": "Poprawiono rodzaj przyznawanego press: wolno go użyć tylko do kontynuacji, także w połączeniu z Terror Frenzy; tests/cards/burn-family.test.ts oraz frenzy-direction-audit.test.ts. Inne interakcje nie są w pełni zbadane."
   },
   {
     "id": 101230,
@@ -7604,8 +7604,8 @@
   {
     "id": 101268,
     "name": "Necrosis",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: basic pot +1, basic thn +2, superior +2 z pressStepDamage w spec; kotm-rigor-etc.test.ts bada wybrane superior zachowanie."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono superior: rider jest przypisany do konkretnego strike i powstaje po rozliczeniu nieunikniętego ciosu w close range, tylko przeciw vampire; obrażenia są w press step. kotm-rigor-etc.test.ts: unik, long range, first strike, prewencja ciosu, dwa additional strikes (w tym jeden uniknięty) i save/load przed rozstrzygnięciem. Starsze zapisy z dawną flagą nie zachowują wszystkich informacji o strike; dalsze interakcje pozostają do sprawdzenia. Ruling ANK 20200517: https://www.vekn.net/forum/rules-questions/78638-transfusion-and-elemental-damage#99853."
   },
   {
     "id": 101269,
@@ -7850,8 +7850,8 @@
   {
     "id": 101309,
     "name": "Obedience",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Oba tryby mają endAction, ale spec nie zapisuje wymogu, by działający vampire był młodszy i miał wejść w combat z grającym. compile.ts dla endAction sprawdza istnienie blockAttempt, a enumerator reaction przegląda miniony gracza; test end-action.test.ts obejmuje tylko przypadek młodszego aktora i blockera. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano sprawdzanie młodszego działającego vampire z uwzględnieniem capacity, właściwego blockera i powodzenia próby bloku; dodano reakcję celu niezablokowanego rush w state C. tests/cards/end-action.test.ts. Reakcja na rush korzysta z istniejącego okna C, a nie odrębnego impulsu bezpośrednio przed rozpoczęciem combat po zakończeniu innych efektów resolution; pełny timing i pozostałe interakcje nadal wymagają pracy."
   },
   {
     "id": 101310,
@@ -8024,8 +8024,8 @@
   {
     "id": 101338,
     "name": "Outside the Hourglass",
-    "status": "UNRESOLVED",
-    "evidence": "Outside the Hourglass: superior ma beforeRange damage 2, lecz nie widać limitu jednej karty superior na rundę; basic tem ma strike dodge z riderem maneuver, a tekst dopuszcza też sam maneuver. Wymaga sprawdzenia kompilatora, okien i testu obu wyborów."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano wariant basic tem maneuver i limit superior per vampire/runda. Superior jest jednorazowy i pochodzi od wampira, nie environmental, a pending damage rozstrzygane jest przed strike; tests/cards/outside-hourglass-audit.test.ts obejmuje oba wampiry, save/load i źródło. Otwarte: prevention ma być dostępny w tym samym oknie przed range co inne efekty, a także zachowanie gdy walka kończy się przedwcześnie [ANK 20180104]."
   },
   {
     "id": 101339,
@@ -8852,8 +8852,8 @@
   {
     "id": 101476,
     "name": "Precognizant Mobility",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: basic unlock młodszego vampire lub ally, superior dowolnego vampire; choosing-a-minion.test.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Wąski zakres: basic unlock młodszego vampire lub ally, superior dowolnego vampire; choosing-a-minion.test.ts. Aktualizacja: Efekt unlock celu nie zachodzi przy superior Sleeping Mind; brak osobnego testu end-to-end tego połączenia."
   },
   {
     "id": 101477,
@@ -8936,8 +8936,8 @@
   {
     "id": 101490,
     "name": "Private Audience",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec używa requiresControlledTitle, a branch restrictVotes sprawdza tytuł dowolnego ready vampire kontrolera, nie tytuł caller; warunek przed oddaniem votes/ballots jest sprawdzany w gałęzi restrictVotes. Efekt ograniczenia głosów istnieje; rozróżnienie aktora i innego ready vampire wymaga scenariusza. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Wymóg tytułu sprawdza działającego wampira, nie innego kontrolowanego; zachowano ograniczenie przed oddaniem głosów. tests/cards/ballots.test.ts. Analogicznie naprawiono Closed Session."
   },
   {
     "id": 101491,
@@ -8972,8 +8972,8 @@
   {
     "id": 101496,
     "name": "Propaganda of the Deed",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Modifier daje stealth zamiast permanenta po udanej directed action i burn za głosy; brak wymogu Anarch. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zastąpiono błędne stealth wymogiem Anarch, zagraniem po udanej akcji directed, umieszczeniem w obszarze kontrolera oraz spaleniem za 2 głosy w głosowaniu political action. tests/cards/propaganda-of-the-deed-audit.test.ts obejmuje zagranie, wymóg sekty i użycie głosów; dalsze interakcje wymagają przeglądu."
   },
   {
     "id": 101497,
@@ -9524,8 +9524,8 @@
   {
     "id": 101588,
     "name": "Rego Motum",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Oba tryby mają ogólny prevent 2/4 bez ograniczenia do strike przeciwnika. compile.ts:combat.damageResolution sprawdza pending damage, lecz dla prevent nie filtruje źródła ani rodzaju; sweep2.test.ts bada trafienie przeciwnika, nie obrażenia z innych źródeł. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane."
   },
   {
     "id": 101589,
@@ -9890,8 +9890,8 @@
   {
     "id": 101649,
     "name": "Rolling with the Punches",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior preventAllThisRound jest oferowany dla dowolnego pending damage do grającego: compile.ts nie sprawdza źródła przed ofertą, choć tekst dotyczy strike przeciwnika; engine.ts następnie usuwa pending damage tylko od przeciwnika. after-combat-ends.test.ts bada jedynie poprawny strike. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane."
   },
   {
     "id": 101650,
@@ -10268,8 +10268,8 @@
   {
     "id": 101712,
     "name": "Seduction",
-    "status": "PARTIAL_FIX",
-    "evidence": "Dodano onlyAsAnnounced: karta dostępna przy ogłoszeniu, niedostępna w trakcie próby bloku; tests/cards/audit-action-and-shadow.test.ts, block-restrictions.test.ts. Wspólny gate nadal dopuszcza ją po nieudanej próbie bloku, ponieważ stan A jest ponownie otwierany (odtworzenie /home/user/shadow-window-diagnostic.log); dokładne okno wymaga poprawki silnika. Wybór działającego wampira w trybie superior wyklucza go bez jawnego ograniczenia w tekście; wymaga rozstrzygnięcia."
+    "status": "FIXED_TARGETED",
+    "evidence": "Tryb basic wybiera młodszego wampira, superior dowolnego wampira, także własnego i samego aktora. Nie wymaga ready ani unlocked. Okno „as announced” zamyka się po zwykłej karcie lub próbie bloku, również po anulowaniu i save/load; można przedtem użyć Dreams i dobraną kartę zagrać. tests/cards/block-restrictions.test.ts oraz tests/cards/audit-action-and-shadow.test.ts. Przykład legalnego wskazania własnego wampira: https://groups.google.com/g/rec.games.trading-cards.jyhad/c/ZrlebBiQQHk; timing https://www.vekn.net/rulebook. Starsze zapisy bez flagi okna nie mają pełnej migracji."
   },
   {
     "id": 101713,
@@ -10646,8 +10646,8 @@
   {
     "id": 101775,
     "name": "Shroud of Night",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Basic stealth nie ogranicza użycia podczas bleed, mimo że superior jest dostępny podczas bleed. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Basic stealth niedostępny podczas bleed; superior pozostaje dostępny. tests/cards/audit-action-and-shadow.test.ts."
   },
   {
     "id": 101776,
@@ -10748,8 +10748,8 @@
   {
     "id": 101792,
     "name": "Skin of Steel",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Basic preventAll w compile.ts nie filtruje źródła pending damage, choć tekst ogranicza do strike przeciwnika. Superior preventAllThisRound także oferowany przy dowolnym pending damage, a engine usuwa tylko damage od przeciwnika. armour.test.ts sprawdza trafienia strike, nie negative space innych źródeł. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Basic i superior ograniczono do strike przeciwnika; podstawowe zapobieganie obsługuje pakiety tego samego strike, a efekt na rundę respektuje unpreventable i zakaz dyscypliny. tests/cards/prevention-provenance-audit.test.ts, armour.test.ts. W starszych zapisach pakiety bez strikePhase mogą mieć niejednoznaczne pochodzenie; inne interakcje nieweryfikowane."
   },
   {
     "id": 101793,
@@ -10826,8 +10826,8 @@
   {
     "id": 101805,
     "name": "The Sleeping Mind",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior w spec nie tylko zabrania unlock, ale również nakazuje wybór locked vampire i zakazuje mu bloku, chociaż tekst superior nie zawiera basic. block-tax.test.ts oczekuje wyboru celu również w superior, więc nie bada wersji bez dodatkowego ograniczenia. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Superior nie wymaga już wyboru locked vampire ani nie zabrania mu bloku; test bez celu i test zakazu unlock w tests/cards/block-tax.test.ts. Poprawiono też zakaz po nieudanym bloku dla onlyAsAnnounced, ale inne przejścia okna ogłoszenia nie są w pełni zweryfikowane. Wcześniejsze ustalenie: Superior w spec nie tylko zabrania unlock, ale również nakazuje wybór locked vampire i zakazuje mu bloku, chociaż tekst superior nie zawiera basic. block-tax.test.ts oczekuje wyboru celu również w superior, więc nie bada wersji bez dodatkowego ograniczenia. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: po zagraniu zwykłego action modifier lub reaction w stanie A okno „as announced” zostaje zamknięte także po anulowaniu karty i po save/load; testy obejmują Seduction, The Sleeping Mind, Club Illusion oraz replacement karty akcji (tests/cards/audit-action-and-shadow.test.ts). Nie obejmuje jeszcze wszystkich zwykłych zdolności kart w grze ani starych zapisów bez flagi; kwestia innych krawędzi pozostaje otwarta. Źródła: https://www.vekn.net/rulebook oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zakaz unlock superior obejmuje teraz Freak Drive w oknie po rozstrzygnięciu, Change of Target przed rozstrzygnięciem bloku i objęte nim zdolności; zachowano efekty as if unlocked. Testy tests/cards/sleeping-mind-unlock-audit.test.ts obejmują także inferior oraz zapis/wznowienie. Inne ścieżki automatycznego unlock i wszystkie interakcje wymagają dalszego przeglądu. Źródła: https://www.vekn.net/forum/rules-questions/81780-the-sleeping-mind-and-change-of-target oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zablokowano także Revelation corruption unlock, Warsaw Station po sukcesie, Forward Momentum oraz wariant unlock Dabbler i Monster w trakcie akcji. Testy sleeping-mind-unlock-audit.test.ts i revelation-of-the-serpent.test.ts; pozostałe ścieżki wymagają kontroli. Aktualizacja: superior wyklucza zagranie wersji Majesty/Earth Meld, która nakazuje unlock w walce, oraz nie oferuje płatnego unlock Truth in Darkness; wersja strike combat ends bez unlock pozostaje legalna. Zabezpieczono też rozstrzygnięcie wcześniej wybranego strike w starszym stanie. Ruling: https://www.vekn.net/forum-es/rules-questions/68051-the-sleeping-mind-vs-as-though-untapped. tests/cards/sleeping-mind-unlock-audit.test.ts. Inne źródła unlock nadal wymagają przeglądu. Aktualizacja: Zablokowano Helicopter, Horrific Countenance oraz znane opcje basic Cats' Guidance i Forced Vigilance w aktualnym oknie blokady; podczas resolve pomijane są unlock Abbot/Khabar: Glory, Precognizant Mobility, Psychophagia oraz Eulogio. Sprawdzono superior/inferior i Abbot w tests/cards/sleeping-mind-unlock-audit.test.ts. Inne ścieżki pozostają otwarte; wcześniejszy osobny błąd czasu Cats' Guidance po wszystkich walkach naprawiono i przetestowano w post-block-unlock.test.ts oraz psyche-post-block-audit.test.ts. Aktualizacja: testy sleeping-mind-unlock-audit.test.ts i master-intercept.test.ts obejmują Special Report, Organized Resistance, Guard Duty, Under Siege i Eternal Vigilance; niepłatne próby bloku bez rzeczywistego unlock pozostają legalne. Eagle’s Sight zagrać można po realnym wake bez unlock. Inne nieprzejrzane ścieżki nadal są otwarte. Aktualizacja: basic może wybrać również samego działającego zablokowanego wampira (tekst nie wymaga „another”); tests/cards/block-restrictions.test.ts."
   },
   {
     "id": 101806,
@@ -11043,7 +11043,7 @@
     "id": 101841,
     "name": "Special Report",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: osobny out-of-turn handler daje ready vampire unlock/attempt block i możliwość 1 pool za intercept; master-intercept.test.ts."
+    "evidence": "Wąski zakres: osobny out-of-turn handler daje ready vampire unlock/attempt block i możliwość 1 pool za intercept; master-intercept.test.ts. Sprawdzono wpływ zakazu unlock z The Sleeping Mind: sleeping-mind-unlock-audit.test.ts oraz master-intercept.test.ts (Guard Duty)."
   },
   {
     "id": 101842,
@@ -11084,8 +11084,8 @@
   {
     "id": 101848,
     "name": "Spirit Marionette",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Basic obe daje targetLocksOwnMinion, którego compile.ts przydziela wybór celowi bleed, choć karta wskazuje miniona kontrolowanego przez prey nawet po redirect. Superior daje bleed +2 zamiast przejęcia unlocked miniona do kolejnej akcji. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Rozdzielono [dom] i [obe]; [obe] przy sukcesie pozwala aktorowi wybrać miniona pierwotnego prey nawet po redirect, z kontrolą dostępności przy announcement. tests/cards/spirit-marionette-audit.test.ts. Moment wyboru wymaga weryfikacji; [OBE] nadal błędny: brak czasowego przejęcia i wymuszonego bleed/hunt."
   },
   {
     "id": 101849,
@@ -11427,7 +11427,7 @@
     "id": 101905,
     "name": "Superior Mettle",
     "status": "CODE_DISCREPANCY",
-    "evidence": "preventOpposingStrike mapowany na combat.beforeRange i ustawia flagę całej rundy, a tekst chroni przed jednym strike; initialStrikeShield w pushPendingDamage automatycznie pali blood przy normal strikeRound zamiast zaoferować wybór i nie sprawdza strikePhase. library-audit.test.ts tylko wymienia nazwę. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "evidence": "preventOpposingStrike mapowany na combat.beforeRange i ustawia flagę całej rundy, a tekst chroni przed jednym strike; initialStrikeShield w pushPendingDamage automatycznie pali blood przy normal strikeRound zamiast zaoferować wybór i nie sprawdza strikePhase. library-audit.test.ts tylko wymienia nazwę. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Dodatkowo analiza kodu wskazuje brak kontroli unpreventable przed spaleniem blood i prewencją; wymaga scenariusza odtwarzającego."
   },
   {
     "id": 101906,
@@ -11540,8 +11540,8 @@
   {
     "id": 101924,
     "name": "Tabriz Assembly",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec unique z hand size i blood True Brujah nie deklaruje referendum do burn ani dodatkowego głosu kontrolera. Osobnego handlera tej nazwy nie znaleziono. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano wymaganie gotowego True Brujah i burn option; karta nie jest Hunting Ground ani location. Opcjonalny blood w unlock phase nie zużywa limitu hunting ground, dostępny także w torpor; dodano +1 stealth political action o spalenie oraz głos aktualnego kontrolera wyłącznie w tym referendum. tests/cards/tabriz-assembly-audit.test.ts: wymagania, blood, głosy, zmiana kontrolera, pass/fail i save/load. Dalsze nietypowe interakcje wymagają weryfikacji."
   },
   {
     "id": 101925,
@@ -11697,7 +11697,7 @@
     "id": 101950,
     "name": "Telepathic Tracking",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: basic press continue i maneuver w kolejnej rundzie, superior nowa runda przy spełnieniu warunków; round-end.test.ts bada wybrane przypadki."
+    "evidence": "Wąski zakres: basic press continue i maneuver w kolejnej rundzie, superior nowa runda przy spełnieniu warunków; round-end.test.ts bada wybrane przypadki. Naprawiono możliwość kontynuacji po strike: combat ends oraz przy oczekującym Hedonism; po kontynuacji ginie nie-unlockowy rider Catatonic Fear. tests/cards/psyche-post-block-audit.test.ts."
   },
   {
     "id": 101951,
@@ -11756,8 +11756,8 @@
   {
     "id": 101960,
     "name": "Terror Frenzy",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Basic restrictOpponent ustawia ogólny zakaz maneuver i press w compile.ts/engine.ts, nie tylko maneuver do close i press do continue. Testy rozpatrują wybrane ograniczenia, nie dowodzą prawidłowego dopuszczenia maneuver do long lub press do end. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Basic działa przeciw minion, superior wyłącznie przeciw wampirowi; obsługiwane kierunki maneuver/press i zachowanie niezależnych ograniczeń po Tranquility Shield; tests/cards/frenzy-direction-audit.test.ts. Timing i inne źródła ograniczeń wymagają dalszej weryfikacji, jak również stare zapisy bez informacji o źródłach."
   },
   {
     "id": 101961,
@@ -12242,8 +12242,8 @@
   {
     "id": 102041,
     "name": "True Love's Face",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "payToCancel jest na poziomie całej spec, a payToCancelFor w compile.ts wybiera aktualnego blockera bez rozróżnienia trybu: jeśli basic bleed modifier zagrano przy próbie bloku, kontroler blockera może płacić za cancel, choć drukowany cancel dotyczy tylko superior. cheap-tail.test.ts bada superior. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Koszt anulowania przez blokującego dotyczy tylko superior, także gdy basic zagrano w trakcie próby bloku. tests/cards/cheap-tail.test.ts."
   },
   {
     "id": 102042,
@@ -12356,8 +12356,8 @@
   {
     "id": 102060,
     "name": "Undead Persistence",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: basic opóźnienie torpor z press i zakończeniem po trzech rundach bez kart, superior prevent 2; torpor-delay.test.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono okno basic dla bezpośredniego strike: torpor oraz zachowano wounded, first strike i odroczone wejście do torpor; testy entombment-audit.test.ts i torpor-delay.test.ts obejmują oba przypadki i anulowanie. Inne bezpośrednie efekty wysyłające do torpor poza strike oraz pełna kolejność interakcji nadal wymagają sprawdzenia. Ruling: https://groups.google.com/g/rec.games.trading-cards.jyhad/c/1zt1SZb2TIk/m/CYNhVovmlk8J."
   },
   {
     "id": 102061,
@@ -12375,7 +12375,7 @@
     "id": 102063,
     "name": "Under Siege",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: unique action z trzema counterami i osobnym handlerem płatnego unlock/block Sabbat +1 intercept; under-siege.test.ts."
+    "evidence": "Wąski zakres: unique action z trzema counterami i osobnym handlerem płatnego unlock/block Sabbat +1 intercept; under-siege.test.ts. Sprawdzono wpływ zakazu unlock z The Sleeping Mind: sleeping-mind-unlock-audit.test.ts oraz master-intercept.test.ts (Guard Duty)."
   },
   {
     "id": 102064,
@@ -12404,8 +12404,8 @@
   {
     "id": 102068,
     "name": "Undying Tenacity",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior press w spec to deferTorporUntilCombatEnds z press, co compile.ts oferuje w combat.wouldGoTorpor; tekst superior to po prostu press albo prevent, bez odkładania torpor. torpor-delay.test.ts bada basic/wybrane przypadki. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono superior press jako zwykły press, zamiast błędnie ograniczać go do okna torpor; basic można też zagrać przy bezpośrednim strike: torpor. Testy torpor-delay.test.ts i entombment-audit.test.ts obejmują press, prevention, first strike, pass, anulowanie oraz save/restore. Inne bezpośrednie efekty poza strike i pełna kolejność interakcji wymagają weryfikacji."
   },
   {
     "id": 102069,
@@ -12488,8 +12488,8 @@
   {
     "id": 102082,
     "name": "Unwholesome Bond",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Basic ma tylko stealth zamiast gain blood według ready unlocked Blood Brothers tej circle; brak superior dla uncontrolled. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano [san] blood w liczbie 1 plus ready unlocked Blood Brothers odpowiedniego circle oraz [SAN] blood dla wszystkich Blood Brothers właściwego circle w uncontrolled; uwzględniono niedziałający special New Blood w uncontrolled i wybór jednego circle dla Angelo. tests/cards/unwholesome-bond-circle-audit.test.ts obejmuje cross-table, zablokowanie akcji i save/load. Timing wyboru circle przez Angelo oraz pełny zakres jego specjalnej zdolności przy innych kartach wymagają dalszej weryfikacji."
   },
   {
     "id": 102083,
@@ -12549,7 +12549,7 @@
     "id": 102092,
     "name": "Vast Wealth",
     "status": "PARTIAL_FIX",
-    "evidence": "Wąski zakres: master na własnego ready miniona nadaje akcję equip pierwszego equipment z library; library-search.test.ts. Aktualizacja: sprawdzany jest pierwszy sprzęt, a przy niespełnionym wymogu klanu lub wymuszonym konflikcie Unique jest spalany bez kosztu zamiast przeszukania dalszych kart (library-search.test.ts; https://www.vekn.net/forum/rules-questions/79883-enkidu-vast-wealth). Nadal brak wyboru nic nie znaleźć, niepełna obsługa innych ograniczeń i ceny oraz błędne CardPlayed przy wyposażeniu z library; zgodnie z https://www.vekn.net/forum/rules-questions/79511-vidal-jarbeaux ten sprzęt nie jest zagrywany."
+    "evidence": "Wąski zakres: master na własnego ready miniona nadaje akcję equip pierwszego equipment z library; library-search.test.ts. Aktualizacja: sprawdzany jest pierwszy sprzęt, a przy niespełnionym wymogu klanu lub wymuszonym konflikcie Unique jest spalany bez kosztu zamiast przeszukania dalszych kart (library-search.test.ts; https://www.vekn.net/forum/rules-questions/79883-enkidu-vast-wealth). Wyposażenie z library nie emituje już błędnego CardPlayed, a koszt uwzględnia tagi broni; pozostaje brak wyboru nic nie znaleźć oraz niepełna obsługa innych ograniczeń i ceny. Zgodnie z https://www.vekn.net/forum/rules-questions/79511-vidal-jarbeaux ten sprzęt nie jest zagrywany."
   },
   {
     "id": 102093,
@@ -12674,14 +12674,14 @@
   {
     "id": 102113,
     "name": "Vessel",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: osobny trifle handler dołącza na vampire, opcjonalnie pali Blood Doll i pozwala kontrolerowi przemieścić blood w unlock; own-unlock-phase.test.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Celowana dodatkowa naprawa: Vessel nie oferuje ally, może celować w vampire w torpor i po zmianie kontroli oddaje zdolność kontrolerowi wampira. tests/cards/permanents.test.ts; nie pełna weryfikacja wszystkich interakcji. Wcześniejsze ustalenie: Wąski zakres: osobny trifle handler dołącza na vampire, opcjonalnie pali Blood Doll i pozwala kontrolerowi przemieścić blood w unlock; own-unlock-phase.test.ts."
   },
   {
     "id": 102114,
     "name": "Vial of Elder Vitae",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: burn equipment za 1 poziom wybranej non-superior dyscypliny do następnego unlock; burn-the-equipment.test.ts bada rodzinę, ale test zbioru dyscyplin ma znaną porażkę."
+    "evidence": "Wąski zakres: burn equipment za 1 poziom wybranej non-superior dyscypliny do następnego unlock. Poprawiono listę wyboru: zawiera Abombwe i Sanguinus, nie zawiera Striga, Maleficia, Flight ani cnót Imbued (nie są dyscyplinami). tests/cards/burn-the-equipment.test.ts. Inne interakcje nie zostały sprawdzone."
   },
   {
     "id": 102115,
@@ -12722,8 +12722,8 @@
   {
     "id": 102121,
     "name": "Villein",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec permanenta zawiera wyłącznie podatek Minion Tap, bez Villein +1 pool przy kolejnym zagraniu na ten vampire. Test granted-bleed-target-costs.test.ts podstawia sztucznie playCostMod dla Villein, zamiast zagrać pierwszą kartę; enumerator wymaga co najmniej 2 blood mimo warunku celu „any amount of blood”; dopuszczalność przeniesienia mniej niż 2 wymaga osobnego sprawdzenia reguł. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Celowana naprawa: obie staty naraz; koszt kolejnej Villein kumuluje się na celu niezależnie od kontrolera, Minion Tap obciąża kontrolera karty; cel z 0 lub 1 blood legalny, transfer ograniczony dostępną krwią, także w torpor. Rzeczywiste zagrania, kumulacja i zmiana kontroli w tests/cards/granted-bleed-target-costs.test.ts. Ruling: https://www.vekn.net/forum/rules-questions/57965-villein-with-0-or-1-blood. Wcześniejsze ustalenie: Spec permanenta zawiera wyłącznie podatek Minion Tap, bez Villein +1 pool przy kolejnym zagraniu na ten vampire. Test granted-bleed-target-costs.test.ts podstawia sztucznie playCostMod dla Villein, zamiast zagrać pierwszą kartę; enumerator wymaga co najmniej 2 blood mimo warunku celu „any amount of blood”; dopuszczalność przeniesienia mniej niż 2 wymaga osobnego sprawdzenia reguł. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
   },
   {
     "id": 102122,
@@ -12860,8 +12860,8 @@
   {
     "id": 102144,
     "name": "War Ghoul",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Osobny overlay warGhoul.options w cards.ts wybiera każdego canAct miniona bez sprawdzenia wymogu Tzimisce z compileSpec; engine.handlerOptions nie nakłada go ponownie. Overlay obsługuje inne drukowane efekty, więc sama pusta spec nie jest dowodem ich braku. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Overlay wymaga rekrutującego Tzimisce i uwzględnia modyfikatory kosztu; testy rush-cards.test.ts i retainer-wave.test.ts. Pozostałe interakcje alternatywnych kosztów i rekrutacji wymagają dalszej weryfikacji."
   },
   {
     "id": 102145,
@@ -12950,8 +12950,8 @@
   {
     "id": 102159,
     "name": "Waters of Duat",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Token wchodzi z 0 blood i ogólny mustHunt działa początkowo, lecz spec i runtime nie zapisują odrębnego „must hunt this turn”: gdy token dostanie blood przed hunt, warunek blood 0 przestaje obowiązywać. token-vampire.test.ts opiera obowiązek na samym blood 0, nie bada tego przypadku. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji."
   },
   {
     "id": 102160,
@@ -13136,8 +13136,8 @@
   {
     "id": 102190,
     "name": "Wolf Claws",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior ma press continueOnly: true, chociaż tekst podaje dowolny press. aggravated-hand-strikes.test.ts bada basic, nie press to end. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Superior pozwala na dowolny press, w tym anulowanie press to continue przeciwnika; tests/cards/precon-audit-regressions.test.ts. Wcześniejsze ustalenie: Superior ma press continueOnly: true, chociaż tekst podaje dowolny press. aggravated-hand-strikes.test.ts bada basic, nie press to end. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
   },
   {
     "id": 102191,
@@ -13190,8 +13190,8 @@
   {
     "id": 102199,
     "name": "Yawp Court",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: unique location przy political action lock Sabbat do combat przed referendum z warunkowym damage; crypt-and-uncontrolled.test.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono kolejkę walk przed referendum i jego anulowanie po opuszczeniu ready przez działającego wampira. tests/cards/crypt-and-uncontrolled.test.ts: rzeczywisty torpor (także w drugiej walce Psyche!), torpor samego przeciwnika, symulowany powrót i save/load, damage między walkami. Faktyczne użycie Warsaw Station w środku akcji nie jest zaimplementowane; Rötschreck i pozostałe interakcje timingów/prevention niezweryfikowane. Rulings LSJ 20060902, LSJ 20090325-1, ANK 20180910-1."
   },
   {
     "id": 102200,
@@ -13352,8 +13352,8 @@
   {
     "id": 102226,
     "name": "Haqim's Law: Retribution",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Dotychczasowy opposing-statics.test.ts sprawdza tylko dodatni wybór combat card i ograniczenia klanu. Warunek discardForBleed w compile.ts nie sprawdza okna ani limitu użyć danej kopii; engine.ts wywołuje zdolności w oknach combat i action.afterResolution, gdy ramka akcji może nadal istnieć. Oficjalny ruling zabrania tego boostu w combat i po rozstrzygnięciu: https://www.vekn.net/forum/rules-questions/80984-haqim-s-law-retribution-efect-during-combat?start=12 ; forma during ogranicza użycie do jednego na wskazany przedział. Statyczna analiza, bez nowego testu scenariuszowego; dostępność zależy też od ogólnych ograniczeń silnika."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zdolność ograniczono do okien trwającego bleed poza combat i po rozstrzygnięciu, oraz do jednego użycia każdej kopii na akcję. Test rzeczywistego użycia i dwóch kopii oraz negatywnych okien w tests/cards/opposing-statics.test.ts. Ruling: https://www.vekn.net/forum/rules-questions/80984-haqim-s-law-retribution-efect-during-combat?start=12. Wcześniejsze ustalenie: Dotychczasowy opposing-statics.test.ts sprawdza tylko dodatni wybór combat card i ograniczenia klanu. Warunek discardForBleed w compile.ts nie sprawdza okna ani limitu użyć danej kopii; engine.ts wywołuje zdolności w oknach combat i action.afterResolution, gdy ramka akcji może nadal istnieć. Oficjalny ruling zabrania tego boostu w combat i po rozstrzygnięciu: https://www.vekn.net/forum/rules-questions/80984-haqim-s-law-retribution-efect-during-combat?start=12 ; forma during ogranicza użycie do jednego na wskazany przedział. Statyczna analiza, bez nowego testu scenariuszowego; dostępność zależy też od ogólnych ograniczeń silnika."
   },
   {
     "id": 102227,
@@ -13377,7 +13377,7 @@
     "id": 102230,
     "name": "Organized Resistance",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: bespoke handler locked baron wybiera intercept anarch albo unlock i block; organized-resistance.test.ts."
+    "evidence": "Wąski zakres: bespoke handler locked baron wybiera intercept anarch albo unlock i block; organized-resistance.test.ts. Sprawdzono wpływ zakazu unlock z The Sleeping Mind: sleeping-mind-unlock-audit.test.ts oraz master-intercept.test.ts (Guard Duty)."
   },
   {
     "id": 102231,
@@ -13394,8 +13394,8 @@
   {
     "id": 102233,
     "name": "Revelation of the Serpent",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior „can burn” w engine.ts auto-taken if affordable: automatycznie pali 2 counters pierwszego kwalifikującego się miniona i unlock, bez wyboru czy i z którego. revelation-of-the-serpent.test.ts sprawdza tylko pojedynczego kandydata i automatyczne wykonanie. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Superior oferuje wybór corruption tylko po rozstrzygnięciu oust i okna Life Boon; po oust celu nie oferuje unlock [ANK 20220210], po uratowaniu celu umożliwia wybór również po save/load; Sleeping Mind blokuje unlock. Testy revelation-of-the-serpent.test.ts. Pozostałe efekty sukcesu, kolejność i interakcje wymagają weryfikacji."
   },
   {
     "id": 102234,
@@ -13472,8 +13472,8 @@
   {
     "id": 102246,
     "name": "Childe of the Revolution",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Token wchodzi z 0 blood i ogólny mustHunt działa początkowo, lecz brak odrębnego zapisu „must hunt this turn”: blood otrzymany przed hunt usuwa obowiązek. token-vampire.test.ts nie bada wcześniejszego uzupełnienia blood. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu."
   },
   {
     "id": 102247,
@@ -13568,8 +13568,8 @@
   {
     "id": 102262,
     "name": "Touch of Valeren",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Oba combat tryby mają zapobiegać damage ze strike przeciwnika, ale compile.ts przy preventAll ani outsidePreventOptions dla preventForOther nie filtruje źródła pending damage; umożliwia wybór niepowiązanego damage. Istniejące testy nie dowodzą filtra źródła. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte."
   },
   {
     "id": 102263,
@@ -13652,8 +13652,8 @@
   {
     "id": 102276,
     "name": "Expulsion",
-    "status": "UNRESOLVED",
-    "evidence": "Spec wymaga kontrolowania ready primogen lub prince przez Methuselah, bez wymogu tytułu samego aktora. Czy tekst „Requires a primogen or prince” wymaga tytułu aktora czy innego kontrolowanego vampire, wymaga rozstrzygnięcia reguł; referendum-outcomes.test.ts bada wybrane skutki."
+    "status": "FIXED_TARGETED",
+    "evidence": "Wyjaśniono, że wymaganie dotyczy wywołującego wampira przy political action; sprawdzane są primogen/prince, nie tytuł innego kontrolowanego wampira. tests/cards/abstain-gate.test.ts."
   },
   {
     "id": 102277,
@@ -13694,8 +13694,8 @@
   {
     "id": 102283,
     "name": "Touch of Oblivion",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: basic strike przyłącza dwa counters blokujące unlock, superior torpor/burn ally; touch-of-oblivion.test.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Basic dołącza counters, superior wysyła wampira do torpor lub spala ally. Naprawiono równoczesny strike oraz okno odroczenia bezpośredniego strike: torpor; tests/cards/entombment-audit.test.ts i touch-of-oblivion.test.ts. Pozostałe interakcje wymagają weryfikacji."
   },
   {
     "id": 102284,
@@ -13730,8 +13730,8 @@
   {
     "id": 102289,
     "name": "Family Gathering",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Trifle działa przez permanent i onEnterPlay cryptPeek, ale tekst nie umieszcza go w grze. Po rozpatrzeniu brak burn/usunięcia: karta pozostaje jako permanent. crypt-and-uncontrolled.test.ts sprawdza tylko crypt i blood, nie końcową strefę tej karty. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Trifle rozpatruje cryptPeek bez wchodzenia do gry; po rozpatrzeniu trafia do ash heap, bez PermanentEnteredPlay. tests/cards/crypt-and-uncontrolled.test.ts."
   },
   {
     "id": 102290,
@@ -13742,8 +13742,8 @@
   {
     "id": 102291,
     "name": "Pit of Contemplation",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Bespoke handler porównuje m.capacity zamiast capacityOf, więc nie uwzględnia np. bonusu discipline master; ponadto wysyła vampire do regionu m.controller mimo drukowanego owner. pit-of-contemplation.test.ts nie rozstrzyga tych interakcji. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Wybór sprawdza aktualną capacity wraz z bonusami; MovedToUncontrolled umieszcza wampira w regionie właściciela także po kradzieży. tests/cards/pit-of-contemplation.test.ts."
   },
   {
     "id": 102292,
@@ -13808,14 +13808,14 @@
   {
     "id": 102302,
     "name": "Psychophagia",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: Hecata hunt usuwa ally z ash heap za blood albo mniej blood i unlock; ash-heap-cards.test.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Wąski zakres: Hecata hunt usuwa ally z ash heap za blood albo mniej blood i unlock; ash-heap-cards.test.ts. Aktualizacja: Unlock przy wariancie 2 blood jest pomijany przy superior Sleeping Mind, blood gain pozostaje; brak osobnego testu end-to-end tego połączenia."
   },
   {
     "id": 102303,
     "name": "Raising the Portcullis",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Tekst ogranicza liczbę kopii jednego Methuselah, ale spec oznacza kartę unique. Engine.settleContests używa isUnique i powoduje contest kopii kontrolowanych przez różnych Methuselahów. Test opposing-statics.test.ts sprawdza aurę, nie dwie kopie. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Limit jednej kopii na kontrolera zamiast unique; test per-methuselah-audit.test.ts sprawdza dostępność i blokadę drugiej kopii. Pełna rezolucja dwóch kopii i interakcje contest wymagają dalszej weryfikacji."
   },
   {
     "id": 102304,
@@ -13856,8 +13856,8 @@
   {
     "id": 102310,
     "name": "Augury of Doom",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Tekst ogranicza do jednej kopii na Methuselah, lecz unique w spec prowadzi do contest między różnymi graczami w engine.settleContests. pool-drain.test.ts nie bada dwóch kontrolerów. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Limit jednej kopii na kontrolera zamiast unique; test per-methuselah-audit.test.ts sprawdza dostępność i blokadę drugiej kopii. Pełna rezolucja dwóch kopii i interakcje contest wymagają dalszej weryfikacji."
   },
   {
     "id": 102311,
@@ -13880,14 +13880,14 @@
   {
     "id": 102314,
     "name": "Dance of the Dead",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Zdolność combatGrantForCounter jest oferowana tylko w combat.beforeRange, choć druk nie zawęża użycia do tego okna: brak aktywacji dla niezużytej karty po przejściu przed range, np. w kroku press. Pozostałe klauzule mają implementację w compile.ts. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zdolność można teraz aktywować w dalszych oknach walki, w tym w kroku press. wraith-zombie.test.ts sprawdza press, zużycie ostatniego countera i spalenie karty, limit na combat, kontrolę celu oraz maneuver zachowany do następnej rundy po save/restore. Pozostają do zbadania pozostałe okna (m.in. damage resolution) oraz interakcje z ograniczeniami ruchu i timingiem. Uwaga: ogólna legalność kart library wymagających Path nadal wymaga egzekwowania; samo pole Path przywrócono do registry."
   },
   {
     "id": 102315,
     "name": "Dance with the Devil",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior „can burn” daje opcjonalny dodatkowy maneuver, lecz compile.ts przy rozpatrzeniu automatycznie spala blood i daje credit bez decyzji; round-end.test.ts wprost oczekuje obowiązkowej zapłaty. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Superior nie pobiera blood automatycznie; w kroku range można opcjonalnie zapłacić za dodatkowy close maneuver, a bez blood nadal zagrać kartę. round-end.test.ts. Zakup jest obecnie dostępny tylko w range przy long, nie dowolnie w rundzie; wymagane są dalsze prace nad timingiem i ograniczeniami dyscyplin."
   },
   {
     "id": 102316,
@@ -13965,13 +13965,13 @@
     "id": 102328,
     "name": "Hedonism",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: drugi unlocked vampire powoduje fail block i lock; basic kolejkowany combat, superior bez combat; other-vampire-modifiers.test.ts."
+    "evidence": "Wąski zakres: drugi unlocked vampire powoduje fail block i lock; basic kolejkowany combat, superior bez combat; other-vampire-modifiers.test.ts. Walka basic toczy się przed końcem resolution zablokowanej lub udanej akcji, po jej efektach; tests/cards/psyche-post-block-audit.test.ts sprawdza dodatkowo Tracking, Hunting the Quarry, Form of Mist i save/load."
   },
   {
     "id": 102329,
     "name": "Hunting the Quarry",
     "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: limit na combat, basic attach z rush grant lub superior restart za blood, gdy combat ma się skończyć i obaj ready; round-end.test.ts."
+    "evidence": "Wąski zakres: limit na combat, basic attach z rush grant lub superior restart za blood, gdy combat ma się skończyć i obaj ready; round-end.test.ts. Superior działa po strike: combat ends także przy oczekującym Hedonism; tests/cards/psyche-post-block-audit.test.ts."
   },
   {
     "id": 102330,
@@ -14012,8 +14012,8 @@
   {
     "id": 102336,
     "name": "Rage of Apedemak",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec stosuje addStrength na cały combat zamiast zwiększyć tylko damage hand strikes. Engine dolicza strengthBonus do strength-based melee weapon; temporary-hand-size.test.ts sprawdza strengthBonus i hand size, nie rozróżnia hand i melee. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Bonus dotyczy hand strike, nie strength ani melee weapon; testy hand, Roundhouse i Femur oraz hand size. tests/cards/frenzy-direction-audit.test.ts i temporary-hand-size.test.ts. Wygaszanie wszystkich wcześniejszych efektów frenzy przez Shield wymaga dalszej weryfikacji."
   },
   {
     "id": 102337,
@@ -14054,8 +14054,8 @@
   {
     "id": 102343,
     "name": "Terrifying Visage",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master attach ma scope own, choć tekst pozwala wybrać ready vampire na ścieżce Cathari bez ograniczenia do własnego. Kod attachTargets respektuje scope; crypt-wave-3.test.ts nie dowodzi wyboru vampire innego gracza. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Wybór dopuszcza także ready vampire innego Methuselah na Path of Cathari; zachowane wykluczenie torpor oraz duplikatu. tests/cards/precon-audit-regressions.test.ts. Wcześniejsze ustalenie: Master attach ma scope own, choć tekst pozwala wybrać ready vampire na ścieżce Cathari bez ograniczenia do własnego. Kod attachTargets respektuje scope; crypt-wave-3.test.ts nie dowodzi wyboru vampire innego gracza. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
   },
   {
     "id": 102344,
@@ -14090,8 +14090,8 @@
   {
     "id": 102349,
     "name": "Angel's Gift",
-    "status": "UNRESOLVED",
-    "evidence": "Wąski zakres: Salubri before range wybiera melee equipment z ręki lub close-only maneuver, limit na rundę; play-from-hand.test.ts. Nowe pytanie: equipment z ręki używa playCardFromHand i generuje CardPlayed oraz replacement jak zagranie; analogiczny przypadek Concealed Weapon według https://www.vekn.net/forum/rules-questions/79511-vidal-jarbeaux nie jest zagraniem. Wymaga potwierdzenia dla tej karty i scenariusza."
+    "status": "FIXED_TARGETED",
+    "evidence": "Rozstrzygnięto otwartą kwestię wyposażenia poza akcją: wybrana broń nie emituje CardPlayed, lecz opuszcza rękę i jest zastępowana; koszt uwzględnia modyfikatory, m.in. podatek od broni. Rzeczywisty combat, testy ręki, logu i płatności: tests/cards/play-from-hand.test.ts; zasady G00131 i https://www.vekn.net/forum/rules-questions/79511-vidal-jarbeaux. Nie jest to certyfikat wszystkich interakcji."
   },
   {
     "id": 102350,
@@ -14108,8 +14108,8 @@
   {
     "id": 102352,
     "name": "Contraband",
-    "status": "UNRESOLVED",
-    "evidence": "Wąski zakres: Ravnos before range equip non-unique z ręki, superior dopłata części kosztu z blood, limit na combat; play-from-hand.test.ts. Nowe pytanie: equipment z ręki używa playCardFromHand i generuje CardPlayed oraz replacement jak zagranie; analogiczny przypadek Concealed Weapon według https://www.vekn.net/forum/rules-questions/79511-vidal-jarbeaux nie jest zagraniem. Wymaga potwierdzenia dla tej karty i scenariusza."
+    "status": "FIXED_TARGETED",
+    "evidence": "Rozstrzygnięto otwartą kwestię wyposażenia poza akcją: wybrany sprzęt nie emituje CardPlayed, lecz opuszcza rękę i jest zastępowany. Rzeczywisty combat, podział kosztu i anulowanie przez Direct Intervention: tests/cards/play-from-hand.test.ts; zasady G00131 oraz G00128 w lokalnym zbiorze orzeczeń. Pozostałe interakcje nie są certyfikowane."
   },
   {
     "id": 102353,
@@ -14162,8 +14162,8 @@
   {
     "id": 102362,
     "name": "Tranquility Shield",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "Wąski zakres: Salubri first-round frenzy shield i 1/2 prevention co rundę; round-recurring-combat.test.ts zawiera znany niepowiązany failing klasyfikacji."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zachowuje niezależne ograniczenia przy anulowaniu frenzy, zarówno nałożone przed nim, jak po nim, także po save/load; testy frenzy-direction-audit.test.ts. W starych zapisach brak wystarczającej informacji o pochodzeniu ograniczeń, dlatego zachowywane są niejednoznaczne flagi. Pełna zgodność wszystkich możliwych efektów frenzy wymaga dalszej weryfikacji; wcześniejsza ocena była tylko wąska."
   },
   {
     "id": 102363,
@@ -14414,8 +14414,8 @@
   {
     "id": 200039,
     "name": "Alabástrom (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: drukowane Flight jest importowane i testowane (flight-audit.test.ts); pozostałe problemy w analizie poniżej nadal otwarte. Historyczna analiza sprzed poprawki Flight: Pusty cryptPerm bez unlock innego Gargoyle; drukowane Flight nie widnieje w registry disciplines i nie jest wyprowadzane z tekstu przez importer. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano once-per-turn unlock innego własnego ready Gargoyle podczas własnej tury, wraz z ready/locked i negatywnymi testami; crypt-wave-5.test.ts. Nie wszystkie okna i interakcje unlock zweryfikowane."
   },
   {
     "id": 200040,
@@ -14468,8 +14468,8 @@
   {
     "id": 200048,
     "name": "Alex Wilkins (G5)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusty cryptPerm nie oferuje targetowi udanego bleed zapłaty pool za przejęcie Alexa. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano opcję końcowego celu successful bleed po rozstrzygnięciu: zapłata 1 pool i przejęcie Alexa albo odmowa. tests/cards/alex-wilkins-audit.test.ts obejmuje przekierowanie, zero bleed i save/load. Wymaga weryfikacji kolejności względem oust i innych efektów rozstrzygnięcia."
   },
   {
     "id": 200049,
@@ -14636,8 +14636,8 @@
   {
     "id": 200076,
     "name": "Anarch Convert (ANY)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusty cryptPerm bez opcjonalnego remove-self przy wejściu, zmiany sekty non-titled vampire i wyboru pool lub crypt draw. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Opcjonalny wybór przed contestem przy wejściu, usunięcie Convert, zmiana sekty nietytułowanego wampira i wybór pool lub crypt draw; wybór przeżywa serializację. tests/cards/anarch-convert-audit.test.ts. Dalsza weryfikacja wszystkich interakcji wejścia i następstwa zdarzeń. Aktualizacja: wybór draw jest dostępny również przy pustym crypt [LSJ 20060620]; conversion nadal następuje, pool się nie zmienia. tests/cards/anarch-convert-audit.test.ts obejmuje także save/load. Hackerspace: Convert wchodzi (counter) przed usunięciem i zmianą sekty; counter za zmianę tylko przy realnej zmianie. Pokryte przez tests/cards/hackerspace-audit.test.ts."
   },
   {
     "id": 200077,
@@ -14660,14 +14660,14 @@
   {
     "id": 200080,
     "name": "Andre LeRoux (G5)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "flatCrypt daje stały +2 bleed zamiast opcjonalnego zmniejszenia udanego bleedu własnego vampire o 1 i bonusu tylko do końca tury. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Usunięto fałszywe stałe +2 bleed; opcjonalna zdolność raz na udany bleed zmniejsza jego wartość o 1 i daje Andre +2 do końca tury, także przy własnym bleed. Modyfikator kumuluje się między bleedami i wygasa po turze. tests/cards/andre-leroux-audit.test.ts: own/other, zero, ally, dwa bleedy, expiry, save/load; ograniczenie kolejnych kart zgodnie z LSJ 20090205. Spying Mission: wariant superior tylko jeśli po redukcji bleed nadal jest dodatni; testy także z Andre w torpor [PIB 20150612], https://www.vekn.net/forum/rules-questions/71660-andre-leroux-spying-mission#71685."
   },
   {
     "id": 200081,
     "name": "André the Manipulator (G5)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusty cryptPerm bez +2 hand size warunkowego od ready. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "+2 hand size wyliczane dla ready, także locked; torpor usuwa bonus, test crypt-wave-1.test.ts. Automatyczny draw/discard przy zmianie stanu i wszystkie przejścia wejścia/wyjścia nadal wymagają poprawy."
   },
   {
     "id": 200082,
@@ -14744,8 +14744,8 @@
   {
     "id": 200094,
     "name": "Angelo (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: import drukowanego Sterile naprawiono i sprawdzono w crypt-sterile.test.ts; inne opisane poniżej rozbieżności pozostają otwarte. Historyczna analiza (twierdzenie o braku importu sterile jest już nieaktualne): Pusty cryptPerm bez reguły Sanguinus circle, akcji burn location, zakazu retainers i Red List; importer nie ustawia sterile. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Wdrożono możliwość traktowania Angelo jako członka wybranego circle dla Unwholesome Bond, w tym circle of one w uncontrolled (tests/cards/unwholesome-bond-circle-audit.test.ts). Zdolność uwzględniono także w Camaraderie (tests/cards/camaraderie-circle-audit.test.ts); inne karty Sanguinus nadal nie są zintegrowane. Brakuje także akcji burn location, zakazu retainers i Red List; import Sterile był poprawiony wcześniej."
   },
   {
     "id": 200095,
@@ -14894,8 +14894,8 @@
   {
     "id": 200119,
     "name": "Anu Diptinatpa (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: drukowany niemerged Scarce importowany i kara za wejście w fazie influence testowana w crypt-scarce.test.ts; inne problemy pozostają otwarte. Historyczna analiza sprzed poprawki Scarce: Pusty cryptPerm bez opcji blood za bleed acting miniona i bez importu Scarce. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Aktualizacja: drukowany niemerged Scarce importowany i kara za wejście w fazie influence testowana w crypt-scarce.test.ts; inne problemy pozostają otwarte. Historyczna analiza sprzed poprawki Scarce: Pusty cryptPerm bez opcji blood za bleed acting miniona i bez importu Scarce. Porównano tekst, spec i wyszukano osobne implementacje; bez nowego testu odtwarzającego."
   },
   {
     "id": 200120,
@@ -15722,8 +15722,8 @@
   {
     "id": 200257,
     "name": "Cedric (G4)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: drukowane Flight jest importowane i testowane (flight-audit.test.ts); pozostałe problemy w analizie poniżej nadal otwarte. Historyczna analiza sprzed poprawki Flight: Pusta spec bez płatnego unlock po udanym block directed action; registry nie zawiera Flight w disciplines, importer nie przenosi drukowanego Flight ani Tremere slave. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano możliwość zapłacenia 1 blood za unlock po blokowaniu akcji directed, w oknie po rozstrzygnięciu i walce; tests/cards/cedric-audit.test.ts obejmuje brak celu przy akcji undirected, zapłatę, odmowę i save/load. Flight importowany i testowany. Nadal brak implementacji Tremere slave, a ścisły timing po natychmiastowym zakończeniu akcji i przy kontynuacji po bloku wymaga dalszego przeglądu. Źródła: https://www.vekn.net/179-rules/vtes-rulebook oraz https://www.vekn.net/forum/rules-questions/75320-rules-questions-for-someone-coming-back-in-to-v-tes."
   },
   {
     "id": 200258,
@@ -15992,8 +15992,8 @@
   {
     "id": 200302,
     "name": "Cristos Mantigo (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały stealth zamiast jedynie dla akcji wyszukania equipment do ręki, której brak. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano akcję wyszukania właściwych typów z +1 stealth tylko dla tej akcji, testy crypt-wave-2.test.ts; Cristos odrzuca nadmiar przed tasowaniem, również po save/load. Pozostają kwestie ujawniania wyszukiwanej karty Cristosa i inne interakcje. Poprzednie ustalenia: Spec daje stały stealth zamiast jedynie dla akcji wyszukania equipment do ręki, której brak. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 200303,
@@ -16370,8 +16370,8 @@
   {
     "id": 200365,
     "name": "Donald Cargill (G5)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez burn blood po passed referendum zwołanym przez predatora. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Po passed referendum wywołanym przez predatora spala 1 blood; test pass/fail i innego kontrolera w referendum-outcomes.test.ts. Zmiana relacji predator po oust oraz przypadki torpor i niestandardowych referendum wymagają weryfikacji."
   },
   {
     "id": 200366,
@@ -17036,8 +17036,8 @@
   {
     "id": 200476,
     "name": "Francisco Domingo de Polonia (G2)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały +1 bleed zamiast opcji blood raz na turę dla bieżącej akcji; Archbishop of New York importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Spec daje stały +1 bleed zamiast opcji blood raz na turę dla bieżącej akcji; Archbishop of New York importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 200477,
@@ -17480,8 +17480,8 @@
   {
     "id": 200550,
     "name": "Gustav Breidenstein (G4)",
-    "status": "PARTIAL_FIX",
-    "evidence": "Częściowo naprawiono: +1 bleed. Testy crypt-printed-statics-audit.test.ts sprawdzają tę klauzulę; pozostałe problemy nadal są otwarte (poniższa wcześniejsza analiza statyczna może opisywać naprawioną klauzulę): Pusta spec bez +1 bleed i lock za 5 votes podczas polling; Prince of Berlin importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano możliwość lock Gustava podczas polling dowolnego referendum, aby otrzymał 5 własnych głosów, łączonych z jego pozostałymi głosami. Testy gustav-horatio-audit.test.ts obejmują wybór, koszt, ograniczenia i zachowanie grupy głosów; +1 bleed w crypt-printed-statics-audit.test.ts. Weryfikacja celowana."
   },
   {
     "id": 200551,
@@ -17588,8 +17588,8 @@
   {
     "id": 200568,
     "name": "Hardestadt (G4)",
-    "status": "PARTIAL_FIX",
-    "evidence": "Częściowo naprawiono: +1 bleed, +2 strength. Testy crypt-printed-statics-audit.test.ts sprawdzają tę klauzulę; pozostałe problemy nadal są otwarte (poniższa wcześniejsza analiza statyczna może opisywać naprawioną klauzulę): Pusta spec bez +1 bleed, +2 strength i wymuszonego yield tytułu przez contestującego vampire; Ventrue Inner Circle importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano wymuszenie yield przez wampira contestującego tytuł Hardestadta podczas jego unlock phase, także gdy Hardestadt jest w torporze (LSJ 20090430). Testy title-yield-audit.test.ts obejmują oba przypadki, inne tytuły i odzyskanie tytułu z miastem; +1 bleed i +2 strength testuje crypt-printed-statics-audit.test.ts. Weryfikacja celowana."
   },
   {
     "id": 200569,
@@ -17804,8 +17804,8 @@
   {
     "id": 200604,
     "name": "Horatio Ballard (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały stealth zamiast wyłącznie dla political action ustanawiającej Prince of Chicago gdy bez tytułu; brak tej akcji. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Usunięto nieuprawniony stały stealth; dodano referendum o Prince of Chicago jako polityczną akcję +1 stealth dla nieutytułowanego Camarilla. Testy gustav-horatio-audit.test.ts obejmują wymagania, blok, wynik, contest miasta oraz brak automatycznego głosu karty przy akcji bez karty politycznej. Weryfikacja celowana, nie pełna poprawność silnika tytułów."
   },
   {
     "id": 200605,
@@ -17828,8 +17828,8 @@
   {
     "id": 200608,
     "name": "Hrothulf (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez directed rush na ready miniona innego Methuselah za burn Edge. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano directed rush Hrothulfa na ready miniona innego Methuselah, tylko przy posiadaniu Edge; koszt spalany przy sukcesie, zgodnie z rulingiem LSJ 20030519. tests/cards/hrothulf-audit.test.ts obejmuje targety, blok, sukces, Go-getter i save/restore. Po utracie Edge przed rozpatrzeniem przyjęto interpretację: akcja pozostaje udana, ale nie dochodzi do walki; ten przypadek wymaga potwierdzenia rulingiem i pozostaje otwarty."
   },
   {
     "id": 200609,
@@ -18254,8 +18254,8 @@
   {
     "id": 200679,
     "name": "Jason, The World's Voice (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały +1 bleed zamiast blood raz na akcję; brak burn blood blokującego vampire po wynikłym combat; primogen importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Spec daje stały +1 bleed zamiast blood raz na akcję; brak burn blood blokującego vampire po wynikłym combat; primogen importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 200680,
@@ -18363,7 +18363,7 @@
     "id": 200697,
     "name": "Jerry (G2)",
     "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: import drukowanego Sterile naprawiono i sprawdzono w crypt-sterile.test.ts; inne opisane poniżej rozbieżności pozostają otwarte. Historyczna analiza (twierdzenie o braku importu sterile jest już nieaktualne): Pusta spec bez przesuwania blood między Blood Brothers Chicago Circle w master phase; circle i sterile nie importowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "evidence": "Aktualizacja: import drukowanego Sterile naprawiono i sprawdzono w crypt-sterile.test.ts; inne opisane poniżej rozbieżności pozostają otwarte. Historyczna analiza (twierdzenie o braku importu sterile jest już nieaktualne): Pusta spec bez przesuwania blood między Blood Brothers Chicago Circle w master phase; circle i sterile nie importowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego. Aktualizacja: drukowany Chicago Circle jest teraz importowany; zdolność przesuwania blood nadal nie jest zaimplementowana (blood-brother-circle-audit.test.ts)."
   },
   {
     "id": 200698,
@@ -18584,8 +18584,8 @@
   {
     "id": 200734,
     "name": "Julia Prima (G2)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały +1 bleed zamiast blood raz na akcję; brak directed action bleed dowolnego Methuselah. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Spec daje stały +1 bleed zamiast blood raz na akcję; brak directed action bleed dowolnego Methuselah. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 200735,
@@ -20102,8 +20102,8 @@
   {
     "id": 200987,
     "name": "Miguel Santo Domingo (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez blood za +1 bleed innemu własnemu acting Sabbat vampire podczas bleed. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Pusta spec bez blood za +1 bleed innemu własnemu acting Sabbat vampire podczas bleed. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 200988,
@@ -20132,8 +20132,8 @@
   {
     "id": 200992,
     "name": "Mina Grotius (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały +1 bleed zamiast blood raz na akcję; brak gain 3 blood po burn vampire predatora/prey. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Spec daje stały +1 bleed zamiast blood raz na akcję; brak gain 3 blood po burn vampire predatora/prey. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 200993,
@@ -20174,8 +20174,8 @@
   {
     "id": 200999,
     "name": "Mistress Fanchon (G4)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje +2 bleed i stały stealth zamiast tylko dla akcji wyszukania minion card do ręki, której brak; Tremere Inner Circle importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano akcję wyszukania właściwych typów z +1 stealth tylko dla tej akcji, testy crypt-wave-2.test.ts; Cristos odrzuca nadmiar przed tasowaniem, również po save/load. Pozostają kwestie ujawniania wyszukiwanej karty Cristosa i inne interakcje. Poprzednie ustalenia: Spec daje +2 bleed i stały stealth zamiast tylko dla akcji wyszukania minion card do ręki, której brak; Tremere Inner Circle importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 201000,
@@ -20186,8 +20186,8 @@
   {
     "id": 201001,
     "name": "Mithras (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje +2 bleed i +1 strength, lecz brak +2 votes i płatnego cancel reaction młodszego vampire raz na akcję. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano +2 własne głosy oraz anulowanie reaction młodszego vampire za 2 blood raz na własną akcję, z nieopłaceniem kosztu anulowanej karty. Testy crypt-wave-6.test.ts i mithras-g3-audit.test.ts obejmują timing, granice wieku i kosztu, limit, zwrot kosztu oraz save/restore; nie jest to pełny audyt wszystkich interakcji."
   },
   {
     "id": 201002,
@@ -20474,8 +20474,8 @@
   {
     "id": 201049,
     "name": "Nergal (G5 ADV)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: drukowany niemerged Infernal importowany, wybór odblokowania za pool testowany w crypt-infernal.test.ts; pozostałe problemy nadal otwarte. Historyczna analiza sprzed poprawki Infernal: Pusta spec bez dodatkowego blood za reaction cards podczas akcji Nergala i blood za stealth; Infernal nie importowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaawansowany Nergal zwiększa koszt reaction cards o 1 blood wyłącznie gdy działa; może raz na akcję zapłacić 1 blood za stealth, gdy jest potrzebny. Testy akcji, ceny, drugiego aktora, płatności i save/load w tests/cards/nergal-advanced-audit.test.ts; Infernal sprawdzany w testach cech."
   },
   {
     "id": 201050,
@@ -20492,8 +20492,8 @@
   {
     "id": 201052,
     "name": "New Blood (ANY)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: import drukowanego Sterile naprawiono i sprawdzono w crypt-sterile.test.ts; inne opisane poniżej rozbieżności pozostają otwarte. Historyczna analiza (twierdzenie o braku importu sterile jest już nieaktualne): Pusta spec bez wyboru circle i draw crypt przy wejściu w influence; sterile i circle nie importowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodano wybór dowolnego nazwanego circle albo circle jednego znanego wampira przed wejściem i contest, model identyfikacji circle oraz dobór crypt w swojej influence; wybór przeżywa save/load i jest usuwany po powrocie do uncontrolled. Wykorzystują go Unwholesome Bond i Camaraderie (także circle of one oraz save/load); pozostałe karty Sanguinus nie są jeszcze zintegrowane z modelem, a wszystkie sposoby wejścia i interakcje contest wymagają kontroli. tests/cards/new-blood-audit.test.ts, blood-brother-circle-audit.test.ts, unwholesome-bond-circle-audit.test.ts. Korekta poprzedniego ustalenia: późniejszy ruling Rules Director z 13.11.2021 pozwala New Blood dołączyć do circle of one innego wampira, wbrew starszej interpretacji z 2019: https://www.vekn.net/forum/rules-questions/79465-unwholesome-bond-angelo-circle-of-one-new-blood-and-circle."
   },
   {
     "id": 201053,
@@ -20738,8 +20738,8 @@
   {
     "id": 201093,
     "name": "Papa Legba (G5)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez blood za +1 bleed podczas bleed action. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Pusta spec bez blood za +1 bleed podczas bleed action. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 201094,
@@ -20792,8 +20792,8 @@
   {
     "id": 201102,
     "name": "Paul Forrest, False Prophet (G4)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez blood za +1 bleed własnemu acting Ravnos podczas bleed. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Pusta spec bez blood za +1 bleed własnemu acting Ravnos podczas bleed. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 201103,
@@ -21086,8 +21086,8 @@
   {
     "id": 201151,
     "name": "Rafael de Corazon (G4)",
-    "status": "PARTIAL_FIX",
-    "evidence": "Częściowo naprawiono: +2 bleed. Testy crypt-printed-statics-audit.test.ts sprawdzają tę klauzulę; pozostałe problemy nadal są otwarte (poniższa wcześniejsza analiza statyczna może opisywać naprawioną klauzulę): Pusta spec bez +2 bleed i obowiązku yield przez vampire contestującego tytuł Rafaela; Toreador Inner Circle importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano wymuszenie yield przez wampira contestującego tytuł Rafaela podczas jego unlock phase, także gdy Rafael jest w torporze (analogiczny tekst i ruling Hardestadta LSJ 20090430). Testy title-yield-audit.test.ts obejmują oba przypadki, inne tytuły i odzyskanie tytułu z miastem; +2 bleed testuje crypt-printed-statics-audit.test.ts. Weryfikacja celowana."
   },
   {
     "id": 201152,
@@ -21722,8 +21722,8 @@
   {
     "id": 201257,
     "name": "Sébastien Goulet (G3)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały +1 bleed zamiast opcji za blood raz na akcję; brak zniżki blood/pool allies i retainers. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Spec daje stały +1 bleed zamiast opcji za blood raz na akcję; brak zniżki blood/pool allies i retainers. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 201258,
@@ -21824,8 +21824,8 @@
   {
     "id": 201274,
     "name": "Shalmath (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: drukowany niemerged zakaz używania Celerity importowany; celowane ścieżki kompilatora, warianty i alternatywy sprawdzone w crypt-discipline-bars.test.ts, lecz niezweryfikowane ścieżki i inne zdolności pozostają otwarte. Aktualizacja: drukowany niemerged Scarce importowany i kara za wejście w fazie influence testowana w crypt-scarce.test.ts; inne problemy pozostają otwarte. Historyczna analiza sprzed poprawki Scarce: Pusta spec bez unlock raz na turę i zakazu kart Celerity; Scarce nie importowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono unlock Shalmatha raz na każdą turę w obsługiwanych oknach impulsu, z zakazem w card.asPlayed oraz The Sleeping Mind. Testy shalmath-audit.test.ts obejmują własną i cudzą turę, unlock phase, limit, save/restore oraz torpor. Zakaz Celerity i Scarce importowane i testowane wcześniej. Nie potwierdzono kompletności wszystkich okien czasowych ani wszystkich ścieżek zakazu dyscypliny; wpis pozostaje otwarty."
   },
   {
     "id": 201275,
@@ -21902,8 +21902,8 @@
   {
     "id": 201287,
     "name": "Silas (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez blood za dodatkową discard phase action przy ready w discard phase. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "W discard phase może raz spalić blood za dodatkową discard phase action; ready locked kwalifikuje się, torpor i brak blood nie. tests/cards/crypt-wave-5.test.ts."
   },
   {
     "id": 201288,
@@ -22125,7 +22125,7 @@
     "id": 201324,
     "name": "Sundervere, The Devil Brahmin (G4)",
     "status": "PARTIAL_FIX",
-    "evidence": "Częściowo naprawiono: +1 bleed. Testy crypt-printed-statics-audit.test.ts sprawdzają tę klauzulę; pozostałe problemy nadal są otwarte (poniższa wcześniejsza analiza statyczna może opisywać naprawioną klauzulę): Pusta spec bez +1 bleed, dodatkowego bleed za blood, burn pool po burn Sundervere i Red List. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Częściowo naprawiono: +1 bleed. Testy crypt-printed-statics-audit.test.ts sprawdzają tę klauzulę; pozostałe problemy nadal są otwarte (poniższa wcześniejsza analiza statyczna może opisywać naprawioną klauzulę): Pusta spec bez +1 bleed, dodatkowego bleed za blood, burn pool po burn Sundervere i Red List. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 201325,
@@ -22436,8 +22436,8 @@
   {
     "id": 201376,
     "name": "Toby (G4)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez blood za +1 bleed acting anarch podczas bleed action. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Pusta spec bez blood za +1 bleed acting anarch podczas bleed action. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 201377,
@@ -22646,8 +22646,8 @@
   {
     "id": 201411,
     "name": "The unnamed (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Aktualizacja: drukowany niemerged Infernal importowany, wybór odblokowania za pool testowany w crypt-infernal.test.ts; pozostałe problemy nadal otwarte. Historyczna analiza sprzed poprawki Infernal: Pusta spec bez blood za strike 2R aggravated i opcji gain 2 pool po successful bleed; Infernal nie importowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano zdolność strike za 1 blood: 2R aggravated, jako zdolność wampira, nie karta ani broń; obsługa range, ograniczenia strike i save/load. Opcjonalny gain 2 pool testowany przy sukcesie, niepowodzeniu i The Rising (Edge przed gain). tests/cards/the-unnamed-audit.test.ts; Infernal w testach cech. Dalsze rzadkie interakcje dotyczą wspólnego silnika walki."
   },
   {
     "id": 201412,
@@ -22892,8 +22892,8 @@
   {
     "id": 201452,
     "name": "Virginie, Prodigy (G4)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje stały +1 bleed zamiast blood za bleed podczas akcji; bishop importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Częściowo naprawiono płatny bonus bleed: blood płaci posiadacz, bonus nie jest stały, limit raz na akcję (Francisco: raz na turę); testy paid-bleed-batch-audit.test.ts. Sprawdzono także część ograniczeń celu i cudzą akcję dla Anu. Inne drukowane klauzule, dokładne okna akcji niebędących bleed oraz pozostałe interakcje wymagają osobnej weryfikacji. Poprzednie ustalenia: Spec daje stały +1 bleed zamiast blood za bleed podczas akcji; bishop importowany. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
   },
   {
     "id": 201453,
@@ -22952,8 +22952,8 @@
   {
     "id": 201462,
     "name": "Walker Grimes (G5)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Pusta spec bez dodatkowego pool za własne master celujące w Walkera. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodatkowy pool dla master targetujących Walkera i kontrolera; cena, płatność, limit pool i zmiana kontroli testowane w granted-bleed-target-costs.test.ts. Naprawiono też bramkę affordability dla attachAnyMinion/attachClan; inne ścieżki zagrania master i regiony wymagają weryfikacji."
   },
   {
     "id": 201463,
@@ -23828,8 +23828,8 @@
   {
     "id": 201608,
     "name": "Nonu Dis (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje +1 bleed i afterMasterPlayed, ale compile.ts blokuje kolejne użycie przez usedThisPhase po pierwszym zastosowaniu, choć tekst nie podaje limitu raz na fazę; skan dowolnego CardPlayed od TurnBegan nie wiąże oferty z konkretnym właśnie zagranym masterem. Istniejący test crypt-wave-7 oczekuje jednego użycia, nie sprawdza drugiego mastera; bez nowego scenariusza. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Poprawiono ofertę: opcjonalny wybór bezpośrednio po konkretnym zagraniu mastera (także po zagnieżdżonych wyborach), odmowa nie zużywa użycia; limit raz na fazę i jego reset. Regresje crypt-wave-7.test.ts obejmują Blood Doll, dwa mastery, legalność celu i save/restore. Wcześniejsze założenie o braku limitu było błędne: ruling Rules Directora potwierdza szablon „during X, do Y” (https://www.vekn.net/forum-es/rules-questions/79835-nonu-dis-and-during-x-do-y). Wpływ anulowania i nietypowych sposobów zagrania mastera wymaga dalszego ustalenia i testów; obecny hook przyjmuje również anulowane zagranie."
   },
   {
     "id": 201609,
@@ -24050,8 +24050,8 @@
   {
     "id": 201645,
     "name": "Mithras (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje +2 bleed i +1 strength, ale brak +2 votes i blood za próbę block lub vote przeciw referendum Mithrasa przez młodszych vampires. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Dodano +2 własne głosy oraz opłaty 1 blood dla młodszych vampires przy próbie block i głosowaniu przeciw referendum Mithrasa. tests/cards/crypt-wave-6.test.ts sprawdza m.in. równego i starszego, ally, Edge, brak blood, zapłatę, efektywną capacity i kupione głosy; testy block-tax, referendum-blood i vote-changing regresyjnie. Pełna weryfikacja wszystkich interakcji pozostaje poza zakresem."
   },
   {
     "id": 201646,
@@ -24164,8 +24164,8 @@
   {
     "id": 201664,
     "name": "Adrino Manauara (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Spec daje continuePressPerCombat, ale engine.ts w combat.press oferuje zawsze pass oraz opcjonalne press:continue: drukowany press jest obowiązkowy. Test crypt-wave-3.test.ts sprawdza tylko statykę, nie obowiązek. Porównano tekst, spec i dostępne ścieżki; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Wcześniejsza naprawa obowiązkowego press do kontynuacji raz na combat; tests/cards/crypt-wave-3.test.ts oraz adrino-mandatory-press-audit.test.ts sprawdzają rzeczywistą walkę, Terror Frenzy, anulowanie press i save/load, pominięcie press po Majesty oraz zużycie przed opcjonalnym press. Drugi jednoczesny press obowiązkowy sprawdzono na syntetycznym źródle: Conquer the Beast i Trap nie są obecnie wystarczająco zaimplementowane do pełnego scenariusza kart. Ograniczenia tych innych kart nie stanowią dowodu ich poprawności."
   },
   {
     "id": 201665,
@@ -24176,8 +24176,8 @@
   {
     "id": 201666,
     "name": "Aniel (G7)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "stripMinion w compile.ts ogranicza wybór corruption counters do należących do kontrolera Aniel; tekst nie zawiera tego ograniczenia. Istniejący test crypt-wave-5.test.ts sprawdza właśnie takie ograniczenie, nie inne pochodzenie licznika zgodnie z tekstem. Porównano tekst, spec i dostępne ścieżki; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Przy wyborze corruption counter można wskazać pochodzenie dowolnego licznika, również innego Methuselah; wybór i rozliczenie sprawdza tests/cards/crypt-wave-5.test.ts."
   },
   {
     "id": 201667,
@@ -24212,8 +24212,8 @@
   {
     "id": 201672,
     "name": "Gathii (G7)",
-    "status": "UNRESOLVED",
-    "evidence": "compile.ts ogranicza reveal do raz na akcję i wymaga 1 blood przed ujawnieniem, choć drukowany tekst nie podaje wprost limitu ani kosztu jako warunku; docs/crypt-wave-7.md opisuje latch jako wcześniejszą poprawkę i test go zakłada. Bez rozstrzygnięcia ewentualnych reguł/erraty i bez nowego scenariusza nie klasyfikujemy tego jako błąd."
+    "status": "FIXED_TARGETED",
+    "evidence": "Limit raz na akcję wynika z reguły „during X, do Y” (https://www.vekn.net/forum/rules-questions/79835-nonu-dis-and-during-x-do-y#105494). Można ujawnić kartę przy zerze blood i bez potrzeby stealth, ale stealth jest dodawany tylko gdy blok by się powiódł [ANK 20231031]. tests/cards/crypt-wave-7.test.ts sprawdza master, niemaster, legalność reveal i limit. https://www.vekn.net/forum/rules-questions/80911-can-you-use-gathii-s-and-or-boleslaw-s-abilities-when-you-dont-need-stealth#109706"
   },
   {
     "id": 201673,
@@ -24260,8 +24260,8 @@
   {
     "id": 201680,
     "name": "Opikun (G7)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "preventForOther w compile.ts wymaga victim.id !== bearer.id i sprawdza tylko non-aggravated, a nie źródło opposing minion strike. Tekst dopuszcza vampire you control i ogranicza damage do strike przeciwnika; istniejące testy sprawdzają ofertę dla innego vampire i koszt, nie te brzegi. Porównano tekst, spec i dostępne ścieżki; bez nowego testu scenariuszowego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; pozostałe interakcje nieweryfikowane. Aktualizacja: zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental; test z pakietami i starym zapisem w tests/cards/hecata-huldu-audit.test.ts. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń."
   },
   {
     "id": 201681,
@@ -24674,8 +24674,8 @@
   {
     "id": 201750,
     "name": "Eulogio Sánchez de los Reyes (G6)",
-    "status": "REVIEWED_NO_ISSUE_FOUND",
-    "evidence": "grantedAction reorderTop 5, +1 stealth, 1 blood i unlockActor; porównano spec i kompilator. Ograniczony zakres; bez nowego scenariusza."
+    "status": "PARTIAL_FIX",
+    "evidence": "grantedAction reorderTop 5, +1 stealth, 1 blood i unlockActor; porównano spec i kompilator. Ograniczony zakres; bez nowego scenariusza. Aktualizacja: Unlock przy reorderTop pomijany przy superior Sleeping Mind; brak osobnego testu end-to-end tego połączenia."
   },
   {
     "id": 201751,
@@ -24698,8 +24698,8 @@
   {
     "id": 201754,
     "name": "Gostoso (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Tekst dopuszcza decyzję o zdobyciu blood; bleedSuccessBlood w compile.ts automatycznie emituje BloodGained bez opcji odmowy. Komentarz cards.ts świadomie przyjmuje automatyzację; crypt-wave-4.test.ts sprawdza zdobycie, nie wybór. Analiza kodu bez nowego scenariusza."
+    "status": "PARTIAL_FIX",
+    "evidence": "Po successful bleed prey gracz wybiera gain blood lub odmowę, wybór można zapisać i wznowić; crypt-wave-4.test.ts. Wybór jest kolejkwany przez resolver akcji, timing względem wszystkich efektów rozstrzygnięcia wymaga weryfikacji."
   },
   {
     "id": 201755,
@@ -24800,8 +24800,8 @@
   {
     "id": 201771,
     "name": "Sakura, The Merciless (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "unlockAfterAction sprawdza path aktora i obecność dowolnej karty akcji zamiast sprawdzić czy sama akcja wymaga Path of Death and the Soul. Test crypt-wave-2.test.ts sprawdza jedynie brak oferty przy zwykłym bleed. Analiza bez nowego scenariusza."
+    "status": "FIXED_TARGETED",
+    "evidence": "Przywrócono drukowany Path kart library w registry i centralną kwerendę wymagania; Sakura sprawdza wymaganie AKCJI, nie sam Path aktora. Rzeczywisty Dance of the Dead wyzwala opcjonalny unlock za blood, Govern i zwykły bleed nie; save/load w tests/cards/crypt-wave-2.test.ts. Osobne ograniczenie silnika: globalna legalność zagrania wszystkich kart wymagających Path nie jest jeszcze kompletnie egzekwowana."
   },
   {
     "id": 201772,
@@ -24830,8 +24830,8 @@
   {
     "id": 201776,
     "name": "Věnceslava, The Implacable (G6)",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Tekst pozwala wybrać zysk pool raz na turę; actionPoolGain automatycznie emituje PoolGained i oznacza usedThisTurn, bez możliwości odmowy i zachowania użycia na późniejszą akcję. Istniejące testy badają dodatni i ujemny trigger, nie wybór. Analiza bez nowego scenariusza."
+    "status": "PARTIAL_FIX",
+    "evidence": "Gain pool jest opcjonalny; odmowa nie zużywa once-per-turn i działa późniejsza kwalifikująca akcja, także po zapisie. crypt-wave-4.test.ts. Identyfikacja prey i kolejność przy zmianie/oust oraz wszystkich zagnieżdżonych zdarzeniach wymagają weryfikacji."
   },
   {
     "id": 201777,

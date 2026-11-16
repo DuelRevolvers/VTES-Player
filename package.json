@@ -20,14 +20,17 @@
     "bench": "tsx scripts/aibench.mts",
     "cards:catalog": "tsx scripts/build-catalog.mts",
     "cards:audit": "tsx scripts/card-audit.mts",
-    "cards:triage": "tsx scripts/card-batch-triage.mts"
+    "cards:triage": "tsx scripts/card-batch-triage.mts",
+    "rules:lookup": "tsx scripts/rulings-lookup.mts",
+    "rules:fetch-vekn": "tsx scripts/fetch-vekn-references.mts"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
     "vite": "^6.0.0",
-    "vitest": "^2.1.0"
+    "vitest": "^2.1.0",
+    "yaml": "^2.9.1"
   },
   "dependencies": {
     "peerjs": "^1.5.5"

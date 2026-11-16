@@ -326,6 +326,7 @@ function makeVampire(v: DeckVampire, id: string, seat: string, inCrypt: boolean)
     ...(card.blackHand ? { blackHand: true } : {}),
     ...(card.seraph ? { seraph: true } : {}),
     ...(card.scarce ? { scarce: true } : {}),
+    ...(card.printedCircle ? { printedCircle: card.printedCircle } : {}),
     ...(card.cannotUseDisciplines.length ? { cannotUseDisciplines: [...card.cannotUseDisciplines] } : {}),
     id,
     name: card.name,

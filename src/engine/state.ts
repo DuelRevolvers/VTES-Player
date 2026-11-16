@@ -220,13 +220,13 @@ export function isToreadorOrAntitribuClan(clan: string | null | undefined): bool
  *
  * The same growth rule as `CLANS`, and the same trap in a new place: a
  * Discipline is a property of a VAMPIRE, but a library card carries a
- * discipline REQUIREMENT, and while the two sets agree by accident
- * nothing notices. They agree today — eleven either way — and the
- * vocabulary assertion in `tests/cards/burn-the-equipment.test.ts`
- * cross-checks both against the registry so a widening cannot drift it.
+ * discipline requirement. Registry fields also contain Flight, Maleficia,
+ * Striga and Imbued virtues, none of which are vampire Disciplines; the
+ * vocabulary test excludes those explicitly rather than offering them here.
  * docs/burn-the-equipment-design.md §3
  */
 export const DISCIPLINES: string[] = [
+  "abo",
   "ani",
   "aus",
   "cel",
@@ -246,6 +246,7 @@ export const DISCIPLINES: string[] = [
   "pre",
   "pro",
   "qui",
+  "san",
   "ser",
   "spi",
   "tem",
@@ -363,6 +364,11 @@ export interface MinionState {
   /** Fixture/import-set title (p. 28); votes derive via TITLE_VOTES.
    *  Null for untitled vampires and all allies. */
   title: VampireTitle | null;
+  /** Printed Blood Brother circle. Undefined vampires are each in a distinct
+   * circle of one. New Blood's entry choice is separate because its special
+   * text does not apply while the vampire is uncontrolled. */
+  printedCircle?: string;
+  chosenCircle?: string;
   /** Printed Sterile trait. Cards with requiresNonSterile consult this;
    *  other vampire-creation actions must also implement the rulebook
    *  restriction (glossary, p. 42). */
@@ -417,6 +423,8 @@ export interface MinionState {
   /** A recruited ally "cannot act this turn" (p. 22) — blocking is fine.
    *  Cleared at end of turn; NOT set when entering play by other means. */
   cannotActThisTurn: boolean;
+  /** A token vampire still owes the hunt printed on its creation card this turn. */
+  mustHuntThisTurn?: boolean;
   /** "Take control of them UNTIL THE END OF YOUR TURN" (Puppet Master
    *  superior) — the seat control goes back to. Every other control
    *  change in the engine is permanent; this one reverts in `endTurn`,
@@ -570,6 +578,9 @@ export interface PlayCostMod {
    *  today — see the design doc §4. */
   pays: "blood" | "pool" | "bloodOrLife" | "bloodOrPool";
   cardTypes?: PlayCostCardType[];
+  /** Applies only to the corresponding recruit/employ/equip action, not
+   *  to a card put in play outside an action (Charisma). */
+  actionOnly?: boolean;
   /** Exact printed card name (Villein names *Minion Tap*). */
   cardName?: string;
   /** KRCG abbreviations: the card's chosen mode must require one of
@@ -619,6 +630,8 @@ export interface PlayCostMod {
    *  to bite. Only meaningful on a modifier radiated by a card in play,
    *  where there IS a bearer. */
   whileBearerEngaged?: boolean;
+  /** Only while the bearer is the acting minion. */
+  whileBearerActing?: boolean;
   /** "In combat, strike cards cost THE OPPOSING MINION +1 blood or life"
    *  (Djeneba), "…cost opposing YOUNGER vampires +1 blood" (Algirdas) —
    *  the payer is whoever is fighting the bearer right now.
@@ -768,6 +781,8 @@ export interface ConditionalStatic {
 }
 
 export interface PermanentStatics {
+  /** Other vampires contesting this bearer's title must yield at unlock. */
+  forceTitleContestYield?: boolean;
   /** This permanent grants its bearer Flight; a retainer's own tags do not. */
   grantsFlight?: boolean;
   /** "This ally cannot have or use equipment (or retainers)" (Bone
@@ -873,6 +888,8 @@ export interface PermanentStatics {
    *  modifier radiated by a card in play.
    *  docs/play-cost-design.md §2 */
   playCostMod?: PlayCostMod;
+  /** Additional simultaneous modifiers from one permanent (e.g. Villein). */
+  playCostMods?: PlayCostMod[];
   /** "+1 hand size for each counter on this card" (Visit from the
    *  Capuchin) — a hand size that moves with the counters
    *  (docs/counter-sinks-design.md §3). */
@@ -1089,6 +1106,8 @@ export interface PermanentStatics {
    *  (Righteous Blade) — the restricted sibling, spent before a general
    *  credit. docs/weapon-riders-design.md §4 */
   continuePressPerCombat?: number;
+  /** Mandatory combat-long press, only to continue (Adrino). */
+  mandatoryContinuePressPerCombat?: number;
   /** "1 optional press each combat, ONLY USABLE TO END COMBAT" (Qetu the
    *  Evil Doer) — the other restricted sibling. p. 32 gives a press two
    *  uses, continue or cancel a press to continue, so "to end" is exactly
@@ -1156,6 +1175,8 @@ export interface PermanentStatics {
    *  optional [RTR 19980707].
    *  docs/discipline-granting-equipment-design.md §1 */
   disciplineGrant?: { discipline: string; level: DisciplineLevel };
+  /** Multiple simultaneous discipline floors from one permanent (Eye of Hazimel). */
+  disciplineGrants?: Array<{ discipline: string; level: DisciplineLevel }>;
   /** "This minion cannot block" (Pentex™ Subversion) — a persistent
    *  restriction on the bearer, unlike the action-scoped
    *  `ActionFrame.blockRestrictions`. */
@@ -1282,6 +1303,8 @@ export interface PermanentStatics {
     payWith: "blood" | "bloodOrLife";
     /** Restrict the toll to the printed kind of blocker, e.g. vampires. */
     kinds?: MinionKind[];
+    /** Only vampires younger than the acting bearer pay (Mithras). */
+    youngerOnly?: boolean;
     /** "Minions with 1 or more of YOUR corruption counters must burn 1
      *  blood or life to attempt to block Sergio" — the toll falls only on
      *  a blocker the card's controller has corrupted.
@@ -1310,7 +1333,7 @@ export interface PermanentStatics {
    *  block-tax shape one frame over: it gates the option as well as being
    *  charged, and a voter who cannot pay simply cannot vote that way.
    *  docs/crypt-wave-6.md §2 */
-  voteTollAgainst?: { blood: number };
+  voteTollAgainst?: { blood: number; youngerOnly?: boolean };
   /** "If you control a LOCKED MINION, \<this vampire\> must bleed with +N
    *  bleed as a Ⓓ action unless she must hunt" (Elen Kamjian). Read in
    *  two places that must agree — the mandatory-action gate in
@@ -1384,6 +1407,8 @@ export interface PermanentCostSource {
   for: "action" | "equipment";
   /** "Ravnos you control can use those counters…" */
   clan?: string;
+  /** "An Anarch you control can use those counters…" */
+  sect?: Sect;
   /** "…can lock this location to use those counters": it must be
    *  unlocked to be used, and spending locks it. */
   locks?: boolean;
@@ -1864,6 +1889,8 @@ export type GameEvent =
    *  Nizchetus). Not a discard: it never reaches the ash heap and draws
    *  no replacement. docs/cheap-tail-design.md §5 */
   | { type: "CardBuried"; seat: SeatId; cardId: CardInstanceId; name: string }
+  /** Privately move a hand card to the top of its owner's library. */
+  | { type: "CardPlacedOnLibraryTop"; seat: SeatId; cardId: CardInstanceId }
   /** "Flip a coin" (Evan Klein) — the outcome, so a replay of the command
    *  log reproduces it without re-rolling. */
   | { type: "CoinFlipped"; minion: MinionId; tails: boolean }
@@ -2074,7 +2101,10 @@ export type GameEvent =
    *  region's counterpart to `MinionRemovedFromGame`, which only knows
    *  about minions in PLAY. */
   | { type: "UncontrolledRemovedFromGame"; seat: SeatId; minion: MinionId }
+  /** A circle chosen as a vampire enters, recorded before contesting. */
+  | { type: "VampireCircleChosen"; seat: SeatId; minion: MinionId; circle: string }
   | { type: "VampireEnteredPlay"; seat: SeatId; minion: MinionId; blood: number }
+  | { type: "MinionSectChanged"; minion: MinionId; sect: Sect }
   | { type: "LeftTorpor"; minion: MinionId }
   /** A vampire is going to torpor and a Minor Boon could still stop it
    *  (`MinionState.torporPending`). docs/boons-design.md §4 */
@@ -2181,8 +2211,7 @@ export type GameEvent =
   /** "Put this card in play. It becomes a 1-capacity vampire" (Waters of
    *  Duat, Childe of the Revolution) — a LIBRARY card that becomes a
    *  vampire minion, which is the ally machinery with `kind: "vampire"`.
-   *  It enters with 0 blood, so p. 21's mandatory hunt produces the
-   *  printed "must hunt this turn" with no code.
+   *  Printed hunt obligations remain even if the token gains blood.
    *  docs/token-vampire-design.md §§2–3 */
   | {
       type: "VampireTokenEnteredPlay";
@@ -2197,6 +2226,7 @@ export type GameEvent =
       disciplines?: Record<string, "basic" | "superior">;
       /** "…and cannot perform actions this turn" (Creation Rites). §3 */
       cannotActThisTurn?: boolean;
+      mustHuntThisTurn?: boolean;
     }
   | { type: "MinionBurned"; minion: MinionId }
   /** "Remove a vampire from the game" (Golconda: Inner Peace) — p. 16
@@ -2374,6 +2404,8 @@ export interface HandSizeGrant {
 
 export interface TurnFrame {
   kind: "turn";
+  /** A new combat queued by a finished combat, waiting for its aftermath. */
+  pendingFollowupCombat?: { acting: MinionId; opposing: MinionId };
   seat: SeatId;
   phase: TurnPhase;
   turnNumber: number;
@@ -2408,6 +2440,12 @@ export interface TurnFrame {
   transfersLeft: number;
   /** Master phase actions remaining (default 1, minus out-of-turn debt). */
   masterActionsLeft: number;
+  /** Master cards just played, awaiting their after-play hooks after any nested choices. */
+  pendingMasterPlays?: Array<{ seat: SeatId; cardId: CardInstanceId; name: string; canceled: boolean }>;
+  /** Seats whose controlled minions cannot attempt bleed actions this turn. */
+  cannotBleedSeats?: SeatId[];
+  /** Temporary bleed modifiers attached to minions until this turn ends. */
+  bleedBonuses?: Array<{ minion: MinionId; amount: number }>;
   /** Seats owed a replacement draw once THIS turn is over ("do not replace
    *  until after the current turn", Sonar). Drained at the turn's end beside
    *  the hand-size expiry. docs/conditional-reactions-design.md §3 */
@@ -2488,6 +2526,12 @@ export interface ActionCardRef {
 
 export interface ActionFrame {
   kind: "action";
+  /** A combat queued at the end of another combat during this action. */
+  pendingFollowupCombat?: { acting: MinionId; opposing: MinionId };
+  /** A pre-referendum ambush makes the referendum conditional on the
+   *  acting vampire remaining in the ready region throughout the combat.
+   *  Keep the interruption even if the vampire subsequently returns. */
+  preReferendumCombat?: { actingLeftReady: boolean };
   actionId: ActionId;
   actionKind: ActionKind;
   /** Non-null when the action was announced with an action card. */
@@ -2586,6 +2630,8 @@ export interface ActionFrame {
    *  cards usable "when the action would be successful" may be played
    *  [LSJ 20090205], and no second boon [LSJ 19990218]. */
   bleedBoonApplied?: boolean;
+  /** After a would-be-successful bleed replacement, restrict later cards. */
+  bleedWouldSucceedOnly?: boolean;
   /** "This vampire burns 1 blood to continue the action AS IF UNBLOCKED"
    *  (Go-getter superior) — set in the `action.afterResolution` window and
    *  consumed the moment that window closes, which is the only point at
@@ -2642,7 +2688,9 @@ export interface ActionFrame {
   grantRequires?: { clans: string[] };
   /** "…as a Ⓓ action that costs 2 pool" — a granted action's own cost,
    *  paid at resolution and only on success (p. 27). */
-  grantedCost: { pool?: number; blood?: number } | null;
+  grantedCost: { pool?: number; blood?: number; burnEdge?: boolean } | null;
+  /** The action resolved unblocked but its Edge-dependent effect could not be paid. */
+  grantedEdgeCostUnpaid?: boolean;
   /** "…can use those counters to pay some or all of the cost" — the split
    *  chosen at announcement, spent at resolution like the rest of the cost
    *  (docs/cost-sources-design.md §2). Empty for a play paid in full by
@@ -2661,6 +2709,9 @@ export interface ActionFrame {
    *  Form of Mist at superior each action") the way
    *  `oncePerCombatAtSuperior` does for a combat. */
   played: Array<{ minion: MinionId; card: string; mode?: DisciplineLevel | null }>;
+  /** A regular modifier or reaction was played; announcement-only effects
+   * cannot be played later, even if that card was cancelled. */
+  announcementWindowClosed?: boolean;
   /** Who successfully blocked (for "if they do not block" riders). */
   blockedBy: MinionId | null;
   /** Deferred "burn N if this minion did not block" (Forced Awakening).
@@ -2713,6 +2764,12 @@ export interface ActionFrame {
    *  permanent-entry result once the referendum has finished. */
   awaitingBloodHunt?: boolean;
   bloodHuntResolutionEntered?: boolean;
+  /** A success effect is awaiting card-owned choices; the action tail must
+   * wait until those choices (including redirected draws) have finished. */
+  pendingSuccessChoices?: { entered?: boolean; continued?: boolean };
+  /** Success effects are complete, but queued combats must finish before
+   * action resolution and its after-resolution window can complete. */
+  pendingSuccessCombats?: { entered: boolean };
   /** Seats whose card replacement waits "until after this action". */
   drawAfter: SeatId[];
   /** "Reaction cards cost +1 blood or life" (Consign to Oblivion), "the
@@ -2812,7 +2869,7 @@ export interface ActionFrame {
   /** "If the bleed is successful, this vampire can burn 2 of your corruption
    *  counters from a minion of the target to unlock" (Revelation of the
    *  Serpent) — settled at action resolution. */
-  corruptionUnlocks: Array<{ minion: MinionId; seat: SeatId }>;
+  corruptionUnlocks: Array<{ minion: MinionId; seat: SeatId; cardId?: CardInstanceId }>;
   /** "Minions [without Oblivion] must burn 1 blood [or life] to attempt to
    *  block this action" (docs/block-tax-design.md) — a toll paid when a
    *  block is declared. Several are cumulative; each entry names who is
@@ -2929,7 +2986,7 @@ export type CombatStep =
 
 /** A rider that fires once a combat frame has popped
  *  (docs/after-combat-ends-design.md §2). */
-export type AfterCombatRider =
+export type AfterCombatRider = (
   /** "…if the range is close, this vampire inflicts N unpreventable
    *  damage on the opposing minion" (Catatonic Fear). */
   | { kind: "damage"; source: MinionId; amount: number; closeRangeOnly: boolean }
@@ -2982,7 +3039,7 @@ export type AfterCombatRider =
       name: string;
       when: OutcomeCondition;
       effect: OutcomeEffect;
-    };
+    }) & { lostIfFollowupCombat?: boolean };
 
 /** Which survivors the payoff is conditioned on. Every one is asked with
  *  `findMinion`, never `getMinion`: a combatant burned during the combat
@@ -3037,6 +3094,9 @@ export interface PendingDamage {
   minion: MinionId;
   amount: number;
   source: MinionId | null;
+  /** This packet is damage from a minion's strike, not environmental,
+   *  retainer, or other damage that happens during strike resolution. */
+  fromStrike?: boolean;
   /** Aggravated damage can't be mended and burns a wounded vampire
    *  (p. 34). */
   aggravated: boolean;
@@ -3109,6 +3169,8 @@ export interface CombatRoundDamageRider {
    *  minion. Honest only because such damage is unpreventable. */
   retainers?: boolean;
   unpreventable?: boolean;
+  once?: boolean;
+  inflictedByMinion?: boolean;
   /** "…but the amount is increased by 1 in each subsequent round"
    *  (Weather Control superior) — `amount + (round - startRound)`. */
   escalate?: boolean;
@@ -3120,7 +3182,7 @@ export interface CombatRoundDamageRider {
 /** A chosen strike — the default hand strike, one set by a strike card,
  *  or a weapon's strike. */
 export interface Strike {
-  source: "hand" | "card" | "weapon";
+  source: "hand" | "card" | "weapon" | "ability";
   /** True when a combat card declares a hand strike instead of replacing it. */
   handStrike?: boolean;
   /** Card name when not a plain hand strike. */
@@ -3139,6 +3201,10 @@ export interface Strike {
    *  opposing strike on this minion (not retainer/environmental damage,
    *  not combat-ends); effective at any range (p. 33). */
   dodge: boolean;
+  /** Necrosis: on a resolved, undodged close-range strike, schedule
+   * environmental damage for the press step. Bound to this strike, not
+   * the whole round, so additional strikes and first strike stay distinct. */
+  pressStepDamageOnClose?: { amount: number; vampireOnly: boolean };
   /** Damage this strike inflicts is aggravated (p. 34). */
   aggravated: boolean;
   /** This strike's damage cannot be prevented. */
@@ -3219,10 +3285,10 @@ export interface Strike {
     statics?: PermanentStatics;
     tags?: string[];
   };
-  /** "Strike: send the opposing vampire to torpor or burn the opposing
-   *  ally" (Touch of Oblivion superior) — not damage, so not prevented,
-   *  but a dodge cancels it (p. 33). */
-  incapacitate?: boolean;
+  /** Non-damage, close-range incapacitating strike. True hits either kind
+   *  (Touch of Oblivion); a string restricts the victim (Entombment).
+   *  A dodge cancels it (p. 33). */
+  incapacitate?: boolean | "ally" | "vampire";
   /** "Strike: burn equipment" (Heroic Might) — a strike that destroys
    *  rather than damages: it inflicts nothing and burns the named
    *  equipment card on the opposing minion, chosen at strike time so it
@@ -3346,6 +3412,8 @@ export interface AmmoLoad {
 
 export interface CombatFrame {
   kind: "combat";
+  /** Psyche!: the next combat starts after this combat's aftermath. */
+  queuedFollowupCombat?: { acting: MinionId; opposing: MinionId };
   acting: MinionId;
   actingSeat: SeatId;
   opposing: MinionId;
@@ -3373,6 +3441,8 @@ export interface CombatFrame {
   afterStrikeDamage?: PendingDamage;
   /** Vampires whose torpor arrival is deferred until this combat ends. */
   deferredTorpor?: Array<{ minion: MinionId; by: MinionId | null; threeCardlessRounds?: boolean }>;
+  /** Direct strike-induced torpor effects awaiting the optional torpor-delay window. */
+  pendingStrikeTorpor?: Array<{ minion: MinionId; source: MinionId | null }>;
   torporNoCardRounds?: number;
   step: CombatStep;
   range: Range;
@@ -3428,6 +3498,9 @@ export interface CombatFrame {
   /** Additive "gets +N strength this combat" (Form of the Wolf) — stacks
    *  on top of the printed strength or the override, whole-combat scope. */
   strengthBonus: { acting: number; opposing: number };
+  /** Combat-long bonus to hand-strike damage, not to strength or weapons. */
+  handStrikeDamageBonus?: { acting: number; opposing: number };
+  frenzyHandStrikeDamage?: { acting: number; opposing: number };
   /** "THIS ROUND, this vampire gets +1 strength" (Obedient Flesh) — reset
    *  when a new round begins, unlike strengthBonus. */
   strengthBonusRound: { acting: number; opposing: number };
@@ -3562,6 +3635,8 @@ export interface CombatFrame {
    *  range. It carries both restrictions because the one card that grants
    *  it carries both (docs/play-from-hand-design.md §8). */
   closeManeuvers: { acting: number; opposing: number };
+  /** Unused offers to buy a close-only maneuver this round. */
+  paidCloseManeuvers?: { acting: number[]; opposing: number[] };
   /** "…can prevent 1 damage during the FIRST ROUND of the resulting
    *  combat" (Precognition). Spent before `preventCredits`, being the
    *  use-it-or-lose-it pool — the rule `closeManeuvers` follows.
@@ -3595,6 +3670,8 @@ export interface CombatFrame {
    *  `pressesCombat`, offered only for `press:continue` and SPENT FIRST,
    *  the `closeManeuvers` rule. docs/weapon-riders-design.md §4 */
   pressesContinueOnly?: { acting: number; opposing: number };
+  /** Unspent mandatory continue-only presses across this combat. */
+  mandatoryContinuePresses?: { acting: number; opposing: number };
   /** The mirror: "1 optional press each combat, ONLY USABLE TO END
    *  COMBAT" (Qetu) — offered only for `press:end` and spent first there,
    *  by the same "most restricted credit first" rule.
@@ -3712,6 +3789,8 @@ export interface CombatFrame {
   /** "This combat, <X> takes N damage each round" (Carrion Crows, Weather
    *  Control). docs/round-recurring-combat-design.md §3 */
   roundDamage: CombatRoundDamageRider[];
+  /** A pre-range damage queue must finish before range can be determined. */
+  preRangeDamageResolving?: boolean;
   /** "…and the opposing vampire takes 1 UNPREVENTABLE damage during the
    *  press step each round" (Drawing Out the Beast superior, Necrosis
    *  [THN]). A round damage rider whose WINDOW is the press step, which
@@ -3722,15 +3801,15 @@ export interface CombatFrame {
    *  fired while both combatants are still in the fight.
    *  docs/card-rules-audit.md */
   pressStepDamage?: { acting: number; opposing: number };
-  /** "Strike: … the opposing vampire takes 1 unpreventable environmental
-   *  damage during the press step this round (ONLY EFFECTIVE IF THIS
-   *  STRIKE WAS MADE AT CLOSE RANGE)" (Necrosis [THN]). Conditional on
-   *  the range the strike actually resolved at, so it is armed by the
-   *  strike and read at the press step. */
+  /** Legacy saves may contain this pre-resolution Necrosis flag. New
+   *  strikes store their rider on Strike and add it to pressStepDamage
+   *  only when the strike resolves at close range without being dodged. */
   pressStepDamageIfCloseStrike?: { acting: boolean; opposing: boolean };
-  /** Fired once per combat: the press step is re-entered after any
-   *  "would end" card, and the rider is a once-each-round payment. */
+  /** Fires once per round, even if the press step is re-entered. */
   pressStepDamageDone?: boolean;
+  /** Damage resolution was entered from the press step; resume it without
+   * opening the additional-strike window again. Serializable for saves. */
+  pressDamageResolving?: boolean;
   /** "Strike: … when the opposing minion inflicts damage with a HAND
    *  STRIKE this round (even if the damage is prevented), he or she takes
    *  an equal amount of damage during strike resolution as well" (King of
@@ -3819,6 +3898,12 @@ export interface CombatFrame {
    *  plus `PlayCostMod.fromFrenzy` is everything a frenzy card in the V5
    *  pool can aim at the other combatant. */
   frenzyRestrict: { acting: boolean; opposing: boolean };
+  /** Non-frenzy restrictions, kept separately so canceling frenzy cannot
+   * remove an overlapping restriction. Optional for older saved combats. */
+  nonFrenzyRestrict?: {
+    acting: { maneuver: boolean; press: boolean; equipment: boolean };
+    opposing: { maneuver: boolean; press: boolean; equipment: boolean };
+  };
   /** Card instances whose "each round of combat" ability was used this
    *  round (War Ghoul's prevention) — cleared when a new round begins. */
   usedThisRound: CardInstanceId[];
@@ -3866,6 +3951,15 @@ export interface CombatFrame {
     acting: { maneuver: boolean; press: boolean; equipment: boolean };
     opposing: { maneuver: boolean; press: boolean; equipment: boolean };
   };
+  /** Directional movement bans imposed by Frenzy cards, combat-long. */
+  frenzyDirection?: {
+    acting: { close?: boolean; long?: boolean; continue?: boolean; end?: boolean };
+    opposing: { close?: boolean; long?: boolean; continue?: boolean; end?: boolean };
+  };
+  /** Unpreventable press-step damage which lasts for the entire combat. */
+  pressStepDamageCombat?: { acting: number; opposing: number };
+  frenzyStrengthBonus?: { acting: number; opposing: number };
+  frenzyPressDamage?: { acting: number; opposing: number };
   /** "The opposing vampire's strikes with weapons inflict no damage this
    *  round" (Blood Fury, Blood Rage, Soul Burn) — keyed by the STRIKING
    *  side, reset each round beside `handStrikesAggravated`. Only true
@@ -3929,6 +4023,8 @@ export interface CombatFrame {
    *  (Rolling with the Punches superior) — per side, reset each round,
    *  checked at the `pushPendingDamage` chokepoint (§4). */
   preventAllFrom: { acting: boolean; opposing: boolean };
+  /** Discipline requirements for each round-long prevention shield. */
+  preventAllFromDisciplines?: { acting: string[][]; opposing: string[][] };
   /** "…the opposing minion CANNOT USE CARDS REQUIRING Protean [pro] or
    *  Vicissitude [vic] until the end of combat" (Powder of Rigidity). On
    *  the frame because it dies with the combat; read by the two option
@@ -4667,6 +4763,18 @@ export function canAct(m: MinionState): boolean {
  */
 export function mustHunt(m: MinionState): boolean {
   if (m.kind !== "vampire") return false;
-  if (m.blood === 0) return true;
+  if (m.blood === 0 || m.mustHuntThisTurn) return true;
   return m.huntedThisPhase !== true && m.attached.some((p) => p.statics.mustHunt === true);
+}
+
+/** Whether the next maneuver may change the range in its only possible direction. */
+export function canUseCombatManeuver(cf: CombatFrame, side: "acting" | "opposing"): boolean {
+  const bans = cf.frenzyDirection?.[side];
+  return !cf.restrict[side].maneuver && !(cf.range === "long" ? bans?.close : bans?.long);
+}
+
+/** Whether a press may be used for the requested direction. */
+export function canUseCombatPress(cf: CombatFrame, side: "acting" | "opposing", toContinue: boolean): boolean {
+  const bans = cf.frenzyDirection?.[side];
+  return !cf.restrict[side].press && !(toContinue ? bans?.continue : bans?.end);
 }

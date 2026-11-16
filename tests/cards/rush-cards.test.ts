@@ -191,9 +191,19 @@ describe("Freakish Conglomeration (102324)", () => {
 });
 
 describe("War Ghoul (102144)", () => {
+  it("requires a Tzimisce recruiter", () => {
+    const state = threeSeatGame();
+    state.seats[0]!.minions[0]!.clan = "Ventrue";
+    state.seats[0]!.hand.push({ id: "wg", name: "War Ghoul" });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some(o => o.kind === "playCard" && o.name === "War Ghoul")).toBe(false);
+    state.seats[0]!.minions[0]!.clan = "Tzimisce";
+    expect(engine.decision()!.options.some(o => o.kind === "playCard" && o.name === "War Ghoul")).toBe(true);
+  });
   it("recruiting burns a chosen ally or retainer you control (fixed at announcement)", () => {
     const state = threeSeatGame();
     const alice = state.seats[0]!;
+    alice.minions[0]!.clan = "Tzimisce";
     alice.minions.push(
       makeAlly("pa0", "Alice", 1, {
         name: "Political Ally",
@@ -203,16 +213,13 @@ describe("War Ghoul (102144)", () => {
     alice.hand.push({ id: "wg1", name: "War Ghoul" });
     const engine = new VtesEngine(state, testRegistry);
 
-    // Both the existing ally and "self" are offered as the burn victim —
-    // and the Political Ally is itself a legal recruiter ("any ready
-    // minion", p. 22).
+    // Both the existing ally and "self" can be burned, but the Tzimisce
+    // clan requirement excludes the Political Ally as a recruiter.
     const dp = engine.decision()!;
     const plays = dp.options.filter((o) => o.id.startsWith("play:War Ghoul"));
     expect(plays.map((o) => o.id).sort()).toEqual([
       "play:War Ghoul:basic:V1:pa0:wg1",
       "play:War Ghoul:basic:V1:self:wg1",
-      "play:War Ghoul:basic:pa0:pa0:wg1",
-      "play:War Ghoul:basic:pa0:self:wg1",
     ]);
 
     runTrace(engine, [
@@ -293,5 +300,34 @@ describe("War Ghoul (102144)", () => {
 
     expect(state.seats[0]!.minions.some((m) => m.id === "wg0")).toBe(false);
     expect(state.seats[1]!.permanents).toHaveLength(0);
+  });
+});
+
+describe("Big Game on a non-Red-List minion", () => {
+  it("rushes without the conditional maneuver, press, or unlock", () => {
+    const state = threeSeatGame();
+    const actor = state.seats[0]!.minions[0]!;
+    actor.blood = 5;
+    state.seats[1]!.minions.find(m => m.id === "W")!.blood = 5;
+    state.seats[0]!.hand.push({ id: "bg", name: "Big Game" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", "play:Big Game:basic:V1:W"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    const cf = state.frames.find(f => f.kind === "combat");
+    expect(cf?.kind).toBe("combat");
+    if (!cf || cf.kind !== "combat") throw new Error("no combat");
+    expect(cf.maneuverCredits.acting).toBe(0);
+    expect(cf.presses.acting).toBe(0);
+    for (let i = 0; i < 60 && state.frames.some(f => f.kind === "action" || f.kind === "combat"); i++) {
+      const dp = engine.decision()!;
+      const pick = dp.options.find(o => o.id === "pass") ?? dp.options.find(o => o.id === "strike:hand") ?? dp.options[0]!;
+      engine.choose(pick.id);
+    }
+    expect(actor.locked).toBe(true);
   });
 });

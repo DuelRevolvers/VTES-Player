@@ -61,6 +61,8 @@ export interface LibraryCardDef {
   clans: Clan[];
   /** Discipline requirement(s), if any (any one of these unlocks the card). */
   disciplines: Discipline[];
+  /** Printed Path requirement, when present on this library card. */
+  path?: string;
   poolCost: number | null;
   bloodCost: number | null;
   /** "X" costs exist on a few cards; keep the raw string when non-numeric. */

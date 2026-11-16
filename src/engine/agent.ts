@@ -357,19 +357,21 @@ export function redactFor(state: GameState, seat: SeatId): GameState {
   const known = new Set(state.knowledge?.[seat] ?? []);
   return {
     ...state,
-    // A card moved from a private hand to the face-down library is not
-    // revealed. Neither the event nor the selected card handle in the
-    // command log may identify it to another Methuselah. The live state
-    // retains the complete logs for replay; only this projection is masked.
+    // Mask private selections in the logs. Face-down-zone instance IDs
+    // remain visible in the projection, a separate existing tracking issue.
+    // The live state retains complete logs for replay.
     eventLog: state.eventLog.map((ev) =>
       ev.type === "CardBuried" && ev.seat !== seat
         ? { ...ev, cardId: "", name: FACE_DOWN }
-        : ev,
+        : ev.type === "CardPlacedOnLibraryTop" && ev.seat !== seat
+          ? { ...ev, cardId: "" }
+          : ev,
     ),
     commandLog: state.commandLog.map((cmd) =>
       cmd.seat !== seat &&
       (/^ability:Nehemiah \(G4\):.*:bury:/.test(cmd.option) ||
-       /^choice:(?:Nehemiah \(G4\)|Heart of Nizchetus):.*:bury:/.test(cmd.option))
+       /^choice:(?:Nehemiah \(G4\)|Heart of Nizchetus):.*:bury:/.test(cmd.option) ||
+       /^choice:Hourglass of the Mind:.*:top:/.test(cmd.option))
         ? { ...cmd, option: "[hidden card selection]" }
         : cmd,
     ),

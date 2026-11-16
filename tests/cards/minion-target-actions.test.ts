@@ -73,6 +73,48 @@ describe("Touch of Valeren (102262) — the action mode", () => {
     expect(find(state, "A1").blood).toBe(4); // capped, not 6
   });
 
+  it("can target the full acting vampire because the blood cost is paid before healing", () => {
+    const state = threeSeatGame();
+    const actor = find(state, "V1");
+    Object.assign(actor, { disciplines: { for: "basic" }, blood: 5, capacity: 5, clan: "Salubri" });
+    state.seats[0]!.hand.push({ id: "tv1", name: "Touch of Valeren" });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some(o => o.id === "play:Touch of Valeren:basic:V1:action:V1:tv1")).toBe(true);
+    runTrace(engine, [["Alice", "play:Touch of Valeren:basic:V1:action:V1:tv1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    expect(actor.blood).toBe(5);
+    const burned = state.eventLog.findIndex(e => e.type === "BloodBurned" && e.minion === "V1" && e.amount === 1);
+    const gained = state.eventLog.findIndex(e => e.type === "BloodGained" && e.minion === "V1" && e.amount === 1);
+    expect(burned).toBeGreaterThanOrEqual(0);
+    expect(gained).toBeGreaterThan(burned);
+  });
+
+  it("does not offer a full self-target when a discount makes the blood cost zero", () => {
+    const state = threeSeatGame();
+    const actor = find(state, "V1");
+    Object.assign(actor, { disciplines: { for: "basic" }, blood: 5, capacity: 5, clan: "Salubri" });
+    actor.attached.push({ card: { id: "discount", name: "Test discount" }, locked: false, usedThisPhase: false,
+      tags: [], statics: { playCostMod: { amount: -1, pays: "blood", cardName: "Touch of Valeren" } } });
+    state.seats[0]!.hand.push({ id: "tv1", name: "Touch of Valeren" });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some(o => o.id === "play:Touch of Valeren:basic:V1:action:V1:tv1")).toBe(false);
+  });
+
+  it("cannot target another Methuselah's minion protected from actions", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4, clan: "Salubri" });
+    const target = find(state, "W");
+    target.blood = 1;
+    target.attached.push({ card: { id: "haven", name: "Secure Haven" }, locked: false, usedThisPhase: false,
+      tags: ["Secure Haven"], statics: { untargetableByOthers: true } });
+    state.seats[0]!.hand.push({ id: "tv1", name: "Touch of Valeren" });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some(o => o.id.includes("Touch of Valeren:basic:V1:action:W"))).toBe(false);
+  });
+
   it("does not offer a minion already at its starting life", () => {
     const state = threeSeatGame();
     Object.assign(find(state, "V1"), { disciplines: { for: "basic" }, blood: 4, clan: "Salubri" });

@@ -108,6 +108,21 @@ describe("Magic of the Smith (101143)", () => {
     void state;
   });
 
+  it("includes weapon taxes when offering and paying for equipment", () => {
+    const { state, engine } = game("basic");
+    state.seats[1]!.permanents.push(inPlay("cbc", "Centralized Background Check", {
+      statics: testRegistry["Centralized Background Check"]!.permanentStatics ?? {},
+    }));
+    alice(state).pool = 3;
+    resolveAction(engine, "play:Magic of the Smith:basic:V1:ms");
+    expect(engine.decision()!.options.some((o) => o.id.endsWith(":l2"))).toBe(false);
+    alice(state).pool = 4;
+    expect(engine.decision()!.options.some((o) => o.id.endsWith(":l2"))).toBe(true);
+    engine.choose("choice:Magic of the Smith:ms:searchEquip:l2");
+    expect(alice(state).pool).toBe(1);
+    expect(state.eventLog.some((e) => e.type === "CardPlayed" && e.cardId === "l2")).toBe(false);
+  });
+
   it("does not offer equipment to a bearer who cannot have it", () => {
     const { state, engine } = game("basic");
     const self = testRegistry["Helen Fairchild (G6)"]!.cryptEntry!();

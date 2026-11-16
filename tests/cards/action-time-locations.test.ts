@@ -103,6 +103,45 @@ describe("Club Illusion (100366)", () => {
     expect(dp.options.some((o) => o.id.includes("Club Illusion"))).toBe(false);
   });
 
+  it("permits another Methuselah's acting Anarch to choose and pay", () => {
+    const state = threeSeatGame();
+    const actor = find(state, "V1");
+    Object.assign(actor, { sect: "anarch", blood: 3 });
+    state.seats[1]!.permanents.push(loc("ci", "Club Illusion"));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    const dp = stateA(engine)!;
+    expect(dp.seat).toBe("Alice");
+    expect(dp.options.some((o) => o.id === "ability:Club Illusion:ci:bleed")).toBe(true);
+    runTrace(engine, [["Alice", "ability:Club Illusion:ci:bleed"]]);
+    expect(actor.blood).toBe(2);
+    expect(state.eventLog.some((e) => e.type === "BleedAmountModified" && e.source === "Club Illusion" && e.delta === 1)).toBe(true);
+    expect(state.seats[1]!.permanents[0]!.locked).toBe(false);
+  });
+
+  it("the location controller cannot decide on behalf of another acting Anarch", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { sect: "anarch", blood: 3 });
+    state.seats[1]!.permanents.push(loc("ci", "Club Illusion"));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    stateA(engine);
+    runTrace(engine, [["Alice", "pass"]]);
+    expect(engine.decision()!.seat).toBe("Bob");
+    expect(engine.decision()!.options.some((o) => o.id.includes("Club Illusion"))).toBe(false);
+  });
+
+  it("is not offered when state A reopens after a failed block", () => {
+    const { state, engine } = game("anarch");
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    stateA(engine);
+    const af = state.frames.find((f) => f.kind === "action");
+    if (!af || af.kind !== "action") throw new Error("no action");
+    // A BlockDeclared event remains in history when the failed attempt pops.
+    engine.emit({ type: "BlockDeclared", actionId: af.actionId, seat: "Bob", blocker: "M" });
+    expect(engine.decision()!.options.some((o) => o.id.includes("Club Illusion"))).toBe(false);
+  });
+
   it("is not offered to a non-Anarch, nor on a non-bleed", () => {
     const { engine } = game("camarilla");
     runTrace(engine, [["Alice", "bleed:V1"]]);

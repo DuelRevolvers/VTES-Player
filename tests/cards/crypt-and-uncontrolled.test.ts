@@ -199,6 +199,9 @@ describe("Family Gathering (102289)", () => {
     expect(alice.uncontrolled[0]!.counters).toBe(1);
     expect(alice.crypt.map((c) => c.id)).toEqual(["C2"]);
     expect(alice.minions.some((m) => m.id === "C1")).toBe(false);
+    expect(alice.permanents.some((p) => p.card.id === "fg")).toBe(false);
+    expect(alice.ashHeap?.some((c) => c.id === "fg")).toBe(true);
+    expect(state.eventLog.some((e) => e.type === "PermanentEnteredPlay" && e.cardId === "fg")).toBe(false);
   });
 
   it("anything else goes to the BOTTOM of the crypt", () => {
@@ -328,6 +331,141 @@ describe("Yawp Court (102199)", () => {
     // …and the referendum is conducted as normal, which is what the
     // card's last sentence describes rather than instructs (§5).
     expect(walkTo(engine, "terms:")).toBe(true);
+  });
+
+  it("does not conduct the referendum if the acting vampire goes to torpor", () => {
+    const { state, engine } = courtGame();
+    find(state, "V1").blood = 1;
+    find(state, "W").strength = 2;
+    runTrace(engine, [
+      ["Alice", "play:Kine Resources Contested"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(walkTo(engine, "ability:Yawp Court:yc:ambush:W")).toBe(true);
+    runTrace(engine, [["Bob", "ability:Yawp Court:yc:ambush:W"]]);
+    // Strike when available; otherwise pass through combat windows.
+    for (let i = 0; i < 100; i++) {
+      const dp = engine.decision();
+      if (!dp || state.eventLog.some((e) => e.type === "ReferendumCalled")) break;
+      const option = dp.options.find((o) => o.id.startsWith("strike:hand")) ?? dp.options.find((o) => o.id === "pass") ?? dp.options[0]!;
+      runTrace(engine, [[dp.seat, option.id]]);
+    }
+    expect(find(state, "V1").inTorpor).toBe(true);
+    expect(state.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(false);
+  });
+
+  it("still calls the referendum if the ambusher, not the acting vampire, goes to torpor", () => {
+    const { state, engine } = courtGame();
+    find(state, "W").blood = 1;
+    find(state, "V1").strength = 2;
+    runTrace(engine, [
+      ["Alice", "play:Kine Resources Contested"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(walkTo(engine, "ability:Yawp Court:yc:ambush:W")).toBe(true);
+    runTrace(engine, [["Bob", "ability:Yawp Court:yc:ambush:W"]]);
+    for (let i = 0; i < 100 && !state.eventLog.some((e) => e.type === "ReferendumCalled"); i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      const option = dp.options.find((o) => o.id.startsWith("strike:hand")) ?? dp.options.find((o) => o.id === "pass") ?? dp.options[0]!;
+      runTrace(engine, [[dp.seat, option.id]]);
+    }
+    expect(find(state, "W").inTorpor).toBe(true);
+    expect(find(state, "V1").inTorpor).toBe(false);
+    expect(state.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(true);
+  });
+
+  it("remembers departure from ready across a return and save/load", () => {
+    const { state, engine } = courtGame();
+    runTrace(engine, [
+      ["Alice", "play:Kine Resources Contested"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(walkTo(engine, "ability:Yawp Court:yc:ambush:W")).toBe(true);
+    runTrace(engine, [["Bob", "ability:Yawp Court:yc:ambush:W"]]);
+    expect(walkTo(engine, "strike:hand")).toBe(true);
+    // Exercise the real torpor transition, then simulate an immediate
+    // rescue. Warsaw Station's actual mid-action window is not implemented.
+    engine.sendToTorpor("V1");
+    expect(find(state, "V1").inTorpor).toBe(true);
+    engine.emit({ type: "LeftTorpor", minion: "V1" });
+    expect(find(state, "V1").inTorpor).toBe(false);
+    const copy = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(copy, testRegistry);
+    for (let i = 0; i < 100 && copy.frames.some((f) => f.kind === "action" || f.kind === "combat"); i++) {
+      const dp = resumed.decision();
+      if (!dp) break;
+      const option = dp.options.find((o) => o.id === "pass") ?? dp.options[0]!;
+      runTrace(resumed, [[dp.seat, option.id]]);
+    }
+    expect(copy.frames.some((f) => f.kind === "action" || f.kind === "combat")).toBe(false);
+    expect(copy.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(false);
+  });
+
+  it("waits for Psyche's new combat before conducting the referendum", () => {
+    const { state, engine } = courtGame();
+    Object.assign(find(state, "V1"), { disciplines: { pre: "superior" }, strength: 0 });
+    Object.assign(find(state, "W"), { disciplines: { cel: "superior" }, strength: 0 });
+    seatOf(state, "Alice").hand.push({ id: "maj", name: "Majesty" });
+    seatOf(state, "Bob").hand.push({ id: "psy", name: "Psyche!" });
+    runTrace(engine, [
+      ["Alice", "play:Kine Resources Contested"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(walkTo(engine, "ability:Yawp Court:yc:ambush:W")).toBe(true);
+    runTrace(engine, [["Bob", "ability:Yawp Court:yc:ambush:W"]]);
+    expect(walkTo(engine, "play:Majesty:basic")).toBe(true);
+    engine.choose(engine.decision()!.options.find((o) => o.id.startsWith("play:Majesty:basic"))!.id);
+    expect(walkTo(engine, "play:Psyche!:superior")).toBe(true);
+    engine.choose(engine.decision()!.options.find((o) => o.id.startsWith("play:Psyche!:superior"))!.id);
+    expect(walkTo(engine, "strike:hand")).toBe(true);
+    expect(state.eventLog.filter((e) => e.type === "CombatBegan")).toHaveLength(2);
+    // Yawp's environmental damage is applied between the two combats.
+    expect(find(state, "W").blood).toBe(2);
+    expect(state.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(false);
+    expect(walkTo(engine, "terms:")).toBe(true);
+    expect(state.eventLog.filter((e) => e.type === "CombatEnded")).toHaveLength(2);
+  });
+
+  it("cancels the referendum if the acting vampire goes to torpor in the Psyche follow-up", () => {
+    const { state, engine } = courtGame();
+    Object.assign(find(state, "V1"), { disciplines: { pre: "superior" }, strength: 0, blood: 2 });
+    Object.assign(find(state, "W"), { disciplines: { cel: "superior" }, strength: 2 });
+    seatOf(state, "Alice").hand.push({ id: "maj", name: "Majesty" });
+    seatOf(state, "Bob").hand.push({ id: "psy", name: "Psyche!" });
+    runTrace(engine, [
+      ["Alice", "play:Kine Resources Contested"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(walkTo(engine, "ability:Yawp Court:yc:ambush:W")).toBe(true);
+    runTrace(engine, [["Bob", "ability:Yawp Court:yc:ambush:W"]]);
+    expect(walkTo(engine, "play:Majesty:basic")).toBe(true);
+    engine.choose(engine.decision()!.options.find((o) => o.id.startsWith("play:Majesty:basic"))!.id);
+    expect(walkTo(engine, "play:Psyche!:superior")).toBe(true);
+    engine.choose(engine.decision()!.options.find((o) => o.id.startsWith("play:Psyche!:superior"))!.id);
+    expect(walkTo(engine, "strike:hand")).toBe(true);
+    expect(state.eventLog.filter((e) => e.type === "CombatBegan")).toHaveLength(2);
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    for (let i = 0; i < 100 && saved.frames.some((f) => f.kind === "action" || f.kind === "combat"); i++) {
+      const dp = resumed.decision();
+      if (!dp) break;
+      const option = dp.options.find((o) => o.id.startsWith("strike:hand")) ?? dp.options.find((o) => o.id === "pass") ?? dp.options[0]!;
+      runTrace(resumed, [[dp.seat, option.id]]);
+    }
+    expect(find(saved, "V1").inTorpor).toBe(true);
+    expect(saved.eventLog.some((e) => e.type === "ReferendumCalled")).toBe(false);
+    expect(saved.frames.some((f) => f.kind === "action" || f.kind === "combat")).toBe(false);
   });
 
   it("NEGATIVE SPACE: not offered on a NON-political action", () => {

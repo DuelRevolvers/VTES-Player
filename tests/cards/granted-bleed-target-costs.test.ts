@@ -257,3 +257,90 @@ describe("Secure Haven (101711)", () => {
     expect(engine.decision()!.options.some((o) => o.id === "bleed:V1")).toBe(true);
   });
 });
+
+describe("Villein actual-play regressions", () => {
+  for (const blood of [0, 1, 2, 5, 7]) {
+    it(`can target a vampire with ${blood} blood and transfers a legal amount`, () => {
+      const state = threeSeatGame();
+      find(state, "V1").blood = blood;
+      find(state, "V1").capacity = 8;
+      find(state, "V1").inTorpor = true;
+      state.seats[0]!.hand.push({ id: "v", name: "Villein" });
+      masterPhase(state);
+      const engine = new VtesEngine(state, testRegistry);
+      const opts = engine.decision()!.options.filter((o) => o.kind === "playCard" && o.name === "Villein" && o.params["target"] === "V1");
+      expect(opts.map((o) => o.kind === "playCard" ? Number(o.params["x"]) : 0)).toEqual(Array.from({ length: Math.max(1, Math.min(5, blood) - 1) }, (_, i) => i + 2));
+      const chosen = opts[0]!;
+      runTrace(engine, [["Alice", chosen.id], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+      expect(find(state, "V1").blood).toBe(blood - Math.min(2, blood));
+      expect(state.seats[0]!.pool).toBe(10 + Math.min(2, blood));
+    });
+  }
+
+  it("actual copies stack target surcharges, while Minion Tap follows card control", () => {
+    const state = threeSeatGame();
+    find(state, "V1").blood = 7;
+    state.seats[0]!.hand.push({ id: "v1", name: "Villein" }, { id: "v2", name: "Villein" }, { id: "v3", name: "Villein" });
+    masterPhase(state);
+    const tf = state.frames[0]!;
+    if (tf.kind !== "turn") throw new Error("fixture");
+    tf.masterActionsLeft = 3;
+    const engine = new VtesEngine(state, testRegistry);
+    for (const [card, price] of [["v1", 0], ["v2", 1]] as const) {
+      const opt = engine.decision()!.options.find((o) => o.kind === "playCard" && o.card === card && o.params["target"] === "V1" && o.params["x"] === "2");
+      expect(opt?.kind === "playCard" && opt.cost?.pool).toBe(price);
+      runTrace(engine, [["Alice", opt!.id], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    }
+    const priced = { name: "Villein", bloodCost: 0, poolCost: 0, types: ["master" as const], requires: [] };
+    const tap = { ...priced, name: "Minion Tap", poolCost: 1 };
+    expect(playCostFor(state, priced, null, null, null, "V1", "Bob").pool).toBe(2);
+    expect(playCostFor(state, priced, null, null, null, "W", "Bob").pool).toBe(0);
+    engine.emit({ type: "ControlChanged", target: "minion", id: "V1", from: "Alice", to: "Bob" });
+    expect(playCostFor(state, tap, null, null, null, null, "Alice").pool).toBe(3);
+    expect(playCostFor(state, tap, null, null, null, null, "Bob").pool).toBe(1);
+    expect(playCostFor(state, priced, null, null, null, "V1", "Bob").pool).toBe(2);
+  });
+});
+
+
+describe("Walker Grimes — master cards targeting him cost his controller +1 pool", () => {
+  it("gates target-priced masters that can attach to any ready minion", () => {
+    const state = threeSeatGame();
+    const w = find(state, "V1");
+    w.attached.push({ card: { id: "V1", name: "Walker Grimes (G5)" }, locked: false, usedThisPhase: false,
+      statics: testRegistry["Walker Grimes (G5)"]!.cryptEntry!().statics, tags: [] });
+    state.seats[0]!.minions.push(makeMinion("second", "Alice"));
+    state.seats[0]!.hand.push({ id: "pentex", name: "Pentex™ Subversion" });
+    state.seats[0]!.pool = 3;
+    masterPhase(state);
+    const options = new VtesEngine(state, testRegistry).decision()!.options;
+    expect(options.some(o => o.kind === "playCard" && o.name === "Pentex™ Subversion" && o.params["target"] === "V1")).toBe(false);
+    expect(options.some(o => o.kind === "playCard" && o.name === "Pentex™ Subversion" && o.params["target"] === "second")).toBe(true);
+  });
+
+  it("prices, gates and pays on Walker, but not another vampire, and follows control", () => {
+    const state = threeSeatGame();
+    const walker = find(state, "V1");
+    const statics = testRegistry["Walker Grimes (G5)"]!.cryptEntry!().statics;
+    walker.attached.push({ card: { id: "V1", name: "Walker Grimes (G5)" }, controller: "Alice", locked: false, usedThisPhase: false, statics, tags: [] });
+    state.seats[0]!.minions.push(makeMinion("second", "Alice"));
+    state.seats[0]!.hand.push({ id: "villein", name: "Villein" });
+    masterPhase(state);
+    const engine = new VtesEngine(state, testRegistry);
+    const opts = engine.decision()!.options.filter(o => o.kind === "playCard" && o.name === "Villein");
+    const own = opts.find(o => o.kind === "playCard" && o.params["target"] === "V1")!;
+    const other = opts.find(o => o.kind === "playCard" && o.params["target"] === "second")!;
+    expect(own.kind === "playCard" && own.cost?.pool).toBe(1);
+    expect(other.kind === "playCard" && other.cost?.pool).toBe(0);
+    const price = { name: "Villein", bloodCost: 0, poolCost: 0, types: ["master" as const], requires: [] };
+    expect(playCostFor(state, price, null, null, null, "V1", "Bob").pool).toBe(0);
+    state.seats[0]!.pool = 1;
+    expect(engine.decision()!.options.some(o => o.kind === "playCard" && o.name === "Villein" && o.params["target"] === "V1")).toBe(false);
+    state.seats[0]!.pool = 10;
+    engine.choose(own.id);
+    expect(state.seats[0]!.pool).toBe(9);
+    engine.emit({ type: "ControlChanged", target: "minion", id: "V1", from: "Alice", to: "Bob" });
+    expect(playCostFor(state, price, null, null, null, "V1", "Alice").pool).toBe(0);
+    expect(playCostFor(state, price, null, null, null, "V1", "Bob").pool).toBe(1);
+  });
+});

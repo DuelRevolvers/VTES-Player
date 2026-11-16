@@ -177,6 +177,45 @@ describe("Khabar: Glory (101043)", () => {
     expect(must(state, "V1").locked).toBe(false);
   });
 
+  it("is unavailable after another minion's non-mandatory action", () => {
+    const state = game(["Khabar: Glory"], banu);
+    state.seats[0]!.minions.push(makeMinion("V2", "Alice", { blood: 3 }));
+    const engine = new VtesEngine(state, testRegistry);
+    resolveUnopposed(engine, state, "bleed:V2");
+    expect(offered(engine).some(i => i.startsWith("play:Khabar: Glory"))).toBe(false);
+  });
+
+  it("remains available after a mandatory hunt", () => {
+    const state = game(["Khabar: Glory"], banu);
+    state.seats[0]!.minions.push(makeMinion("V2", "Alice", { blood: 0 }));
+    const engine = new VtesEngine(state, testRegistry);
+    resolveUnopposed(engine, state, "hunt:V2");
+    expect(offered(engine).some(i => i.startsWith("play:Khabar: Glory"))).toBe(true);
+  });
+
+  it("counts actions from cards, not only built-in actions", () => {
+    const state = game(["Khabar: Glory", "Entrenching"], banu);
+    state.seats[0]!.minions.push(makeMinion("V2", "Alice", { blood: 4, capacity: 5 }));
+    const engine = new VtesEngine(state, testRegistry);
+    const id = offered(engine).find(i => i.startsWith("play:Entrenching:basic:V2"))!;
+    expect(id).toBeDefined();
+    resolveUnopposed(engine, state, id);
+    expect(offered(engine).some(i => i.startsWith("play:Khabar: Glory"))).toBe(false);
+  });
+
+  it("counts actions granted by a card in play", () => {
+    const state = game(["Khabar: Glory"], banu);
+    state.seats[0]!.minions.push(makeMinion("V2", "Alice", { blood: 4 }));
+    state.seats[0]!.permanents.push({ card: { id: "fa", name: "Frontal Assault" }, controller: "Alice", locked: false, usedThisPhase: false, statics: {}, tags: ["Frontal Assault"] });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(offered(engine)).toContain("act:Frontal Assault:fa:rush:V2:M");
+    engine.choose("act:Frontal Assault:fa:rush:V2:M");
+    const tf = state.frames.find(f => f.kind === "turn");
+    expect(tf?.kind === "turn" && tf.nonMandatoryActions).toBe(1);
+    passUntil(engine, () => engine.decision()?.window === "turn.minion", 100);
+    expect(offered(engine).some(i => i.startsWith("play:Khabar: Glory"))).toBe(false);
+  });
+
   it("requires a Banu Haqim — the registry clan, not the printed 'Assamite'", () => {
     const state = game(["Khabar: Glory"], (s) => {
       must(s, "V1").clan = "Brujah";

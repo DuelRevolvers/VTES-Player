@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import type { GameState, MinionState } from "../../src/engine/index.ts";
 import { VtesEngine, handSizeOf } from "../../src/engine/index.ts";
 import { buildHandlerRegistry } from "../../src/cards/effects/cards.ts";
-import { makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
+import { makeAlly, makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
 const handlers = buildHandlerRegistry();
 
@@ -452,5 +452,88 @@ describe("Cedrick Calhoun", () => {
     engine.decision(); // settle drops the cancelled frame
     expect(state.eventLog.some((e) => e.type === "ReferendumResolved")).toBe(false);
     expect(find(state, "V1").inTorpor).toBe(true);
+  });
+});
+
+describe("Mithras (G3) personal votes", () => {
+  it("has two personal votes without a title", () => {
+    const { engine } = politicalGame(s => {
+      const m = asVampire(find(s, "V1"), "Mithras (G3)");
+      m.title = null;
+    });
+    runTrace(engine, TO_POLLING);
+    const vote = engine.decision()!.options.find(o => o.kind === "castVote" && o.source === "V1" && o.inFavor);
+    expect(vote?.kind === "castVote" ? vote.count : 0).toBe(2);
+  });
+});
+
+describe("Mithras (G6): younger vampires pay to block or vote against him", () => {
+  it("has two personal votes in addition to his bleed and strength", () => {
+    const { engine } = politicalGame(s => {
+      const m = asVampire(find(s, "V1"), "Mithras (G6)");
+      m.title = null;
+      m.capacity = 10;
+    });
+    runTrace(engine, TO_POLLING);
+    const vote = engine.decision()!.options.find(o => o.kind === "castVote" && o.source === "V1" && o.inFavor);
+    expect(vote?.kind === "castVote" ? vote.count : 0).toBe(2);
+  });
+  it("charges younger vampire block attempts, not peers, elders or allies", () => {
+    const state = threeSeatGame();
+    const actor = asVampire(find(state, "V1"), "Mithras (G6)");
+    actor.capacity = 10; actor.blood = 5;
+    Object.assign(find(state, "M"), { capacity: 5, blood: 2 });
+    Object.assign(find(state, "W"), { capacity: 10, blood: 2 });
+    state.seats[1]!.minions.push(makeMinion("E", "Bob", { capacity: 11, blood: 2 }));
+    state.seats[1]!.minions.push(makeAlly("A", "Bob", 2));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"]]);
+    const getToll = (id: string) => {
+      const o = engine.decision()!.options.find(o => o.id === `block:${id}`);
+      return o?.kind === "declareBlock" ? o.toll : undefined;
+    };
+    expect([getToll("M"), getToll("W"), getToll("E"), getToll("A")]).toEqual([1, 0, 0, 0]);
+    find(state, "M").blood = 0;
+    expect(getToll("M")).toBeUndefined();
+    find(state, "M").blood = 2;
+    runTrace(engine, [["Bob", "block:M"]]);
+    expect(find(state, "M").blood).toBe(1);
+  });
+  it("charges only younger vampires voting against and respects effective capacity", () => {
+    const { state, engine } = politicalGame(s => {
+      asVampire(find(s, "V1"), "Mithras (G6)").capacity = 10;
+      Object.assign(find(s, "W"), { capacity: 9, blood: 2 });
+      Object.assign(find(s, "M"), { capacity: 9, blood: 2, title: "primogen" });
+      find(s, "M").attached.push({ card: { id: "boost", name: "test" }, locked: false, usedThisPhase: false, statics: { capacityBonus: 1 }, tags: [] });
+      s.edge = "Bob";
+    });
+    runTrace(engine, TO_POLLING);
+    const opts = pollingOptionsFor(engine, "Bob");
+    const toll = (id: string) => {
+      const o = opts.find(o => o.id === id);
+      return o?.kind === "castVote" ? o.toll : undefined;
+    };
+    expect(toll("vote:W:against")).toBe(1);
+    expect(toll("vote:W:for")).toBeUndefined();
+    expect(toll("vote:M:against")).toBeUndefined();
+    expect(toll("vote:edge:against")).toBeUndefined();
+    runTrace(engine, [["Bob", "vote:W:against"]]);
+    expect(find(state, "W").blood).toBe(1);
+  });
+  it("tolls purchased votes in addition to their price and disallows unpaid against votes", () => {
+    const state = threeSeatGame();
+    asVampire(find(state, "V1"), "Mithras (G6)").capacity = 10;
+    Object.assign(find(state, "W"), { capacity: 4, blood: 1 });
+    pushReferendum(state, { bloodVoteOffers: [{ votesPerBlood: 1 }] });
+    const engine = new VtesEngine(state, testRegistry);
+    let opts = pollingOptionsFor(engine, "Bob");
+    expect(opts.some(o => o.id === "vote:blood:W:0:for")).toBe(true);
+    expect(opts.some(o => o.id === "vote:blood:W:0:against")).toBe(false);
+    find(state, "W").blood = 2;
+    opts = engine.decision()!.options;
+    const against = opts.find(o => o.id === "vote:blood:W:0:against");
+    expect(against?.kind === "castVote" ? against.toll : undefined).toBe(2);
+    runTrace(engine, [["Bob", "vote:blood:W:0:against"]]);
+    expect(find(state, "W").blood).toBe(0);
   });
 });

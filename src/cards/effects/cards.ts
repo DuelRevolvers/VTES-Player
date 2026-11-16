@@ -7,13 +7,14 @@
  */
 
 import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, canReact, mayAttemptBlock, canAct, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, CLANS, disciplinesOf, handSizeOf, minionHasTag, cannotBeEquipped, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
+import { BLOOD_BROTHER_CIRCLES, vampireCircle, auraBlocksPolitical, canRepeatAction, blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, cannotAttemptBleed, canReact, mayAttemptBlock, canAct, canUseCombatManeuver, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, CLANS, disciplinesOf, handSizeOf, minionHasTag, cannotBeEquipped, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
   compileSpec,
   controllerMeetsRequirements,
   enumerateAllocations,
+  meetsRequirements,
   paymentSplits,
   parseAlloc,
   seatControlsCopy,
@@ -1829,7 +1830,7 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     poolCost: 4,
     weapon: { damage: 2, ranged: true, aggravated: true },
-    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon"] },
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
@@ -5475,10 +5476,7 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "superior",
         discipline: "dom",
-        effects: [
-          { kind: "blockRestriction", who: "chosen", chosenScope: "locked" },
-          { kind: "preventUnlockDuringAction" },
-        ],
+        effects: [{ kind: "preventUnlockDuringAction" }],
       },
     ],
   },
@@ -5888,7 +5886,7 @@ export const cardSpecs: CardSpec[] = [
         variant: "combat",
         usable: ["byOutsideVampire"],
         // "…to THAT minion": the one this vampire's controller owns.
-        effects: [{ kind: "preventForOther", amount: 0, all: true, ownOnly: true }],
+        effects: [{ kind: "preventForOther", amount: 0, all: true, ownOnly: true, opposingStrikeOnly: true }],
       },
     ],
   },
@@ -5949,7 +5947,7 @@ export const cardSpecs: CardSpec[] = [
         usable: ["byOutsideUnlockedVampire"],
         // X chosen at play time; X=0 still prevents 1.
         effects: [
-          { kind: "preventForOther", amount: 1, perBlood: { max: 3, plus: 1 } },
+          { kind: "preventForOther", amount: 1, perBlood: { plus: 1 } },
         ],
       },
     ],
@@ -5992,7 +5990,7 @@ export const cardSpecs: CardSpec[] = [
     cardType: "politicalAction",
     bloodCost: 0,
     usable: [],
-    requiresControlledTitle: ["primogen", "prince"],
+    requiresTitle: ["primogen", "prince"],
     modes: [
       {
         level: "basic",
@@ -6633,8 +6631,8 @@ export const cardSpecs: CardSpec[] = [
   {
     // "Frenzy. Only usable before range is determined. This combat, you
     // get +1 hand size and this vampire's hand strikes inflict +1 (sup:
-    // +2) damage." The damage is +strength (the only thing that feeds
-    // hand-strike damage); the hand size is a grant on the combat frame,
+    // +2) damage." The damage bonus is restricted to hand strikes, not strength;
+    // the hand size is a grant on the combat frame,
     // so the player draws 1 now and discards 1 when the combat ends —
     // p. 7, docs/temporary-hand-size-design.md.
     krcgId: 102336,
@@ -6649,7 +6647,7 @@ export const cardSpecs: CardSpec[] = [
         level: "basic",
         discipline: ["ani", "pot"],
         effects: [
-          { kind: "addStrength", amount: 1 },
+          { kind: "handStrikeDamageBonus", amount: 1 },
           { kind: "handSizeBonus", amount: 1 },
         ],
       },
@@ -6657,7 +6655,7 @@ export const cardSpecs: CardSpec[] = [
         level: "superior",
         discipline: ["ani", "pot"],
         effects: [
-          { kind: "addStrength", amount: 2 },
+          { kind: "handStrikeDamageBonus", amount: 2 },
           { kind: "handSizeBonus", amount: 1 },
         ],
       },
@@ -6680,7 +6678,7 @@ export const cardSpecs: CardSpec[] = [
         level: "basic",
         discipline: "ani",
         usable: ["onlyFirstRound"],
-        effects: [{ kind: "restrictOpponent", maneuver: true, press: true, equipment: true }],
+        effects: [{ kind: "restrictOpponent", maneuverToClose: true, pressToContinue: true, equipment: true }],
       },
       {
         // "[ANI] This combat, combat cards cost the opposing vampire +1
@@ -6689,7 +6687,7 @@ export const cardSpecs: CardSpec[] = [
         // opposing-cost modifier; the play-cost gate supplies it.
         level: "superior",
         discipline: "ani",
-        usable: ["oncePerCombatAtSuperior"],
+        usable: ["oncePerCombatAtSuperior", "onlyAgainstVampire"],
         effects: [
           {
             kind: "combatCostModOnOpponent",
@@ -6833,7 +6831,7 @@ export const cardSpecs: CardSpec[] = [
     name: "True Love's Face",
     cardType: "actionModifier",
     bloodCost: 0,
-    payToCancel: { pool: 1, who: "blocker" },
+    payToCancel: { pool: 1, who: "blocker", levels: ["superior"] },
     usable: [],
     modes: [
       {
@@ -7763,15 +7761,13 @@ export const cardSpecs: CardSpec[] = [
     permanent: {
       where: "bearer",
       statics: {
-        playCostMod: {
-          amount: 1,
-          pays: "pool",
-          cardName: "Minion Tap",
-          controllerOnly: true,
-        },
+        playCostMods: [
+          { amount: 1, pays: "pool", cardName: "Minion Tap", controllerOnly: true },
+          { amount: 1, pays: "pool", cardName: "Villein", onTarget: true },
+        ],
       },
       tags: ["Villein"],
-      attach: { scope: "own", kind: "vampire" },
+      attach: { scope: "own", kind: "vampire", inTorporToo: true },
       bloodToPool: { min: 2, max: 5 },
     },
     usable: [],
@@ -8004,7 +8000,8 @@ export const cardSpecs: CardSpec[] = [
         grant: "bleed",
         amount: 1,
         sect: "anarch",
-        ownOnly: true,
+        actingControllerUses: true,
+        vampireOnly: true,
         atAnnouncement: true,
         noLock: true,
         oncePerAction: true,
@@ -8060,6 +8057,7 @@ export const cardSpecs: CardSpec[] = [
           pays: "bloodOrPool",
           cardTypes: ["ally"],
           minions: "bearer",
+          actionOnly: true,
         },
       },
       tags: ["Charisma"],
@@ -8353,7 +8351,7 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: "pro", effects: [{ kind: "handStrikesAggravated" }] },
-      { level: "superior", discipline: "pro", effects: [{ kind: "press", continueOnly: true }] },
+      { level: "superior", discipline: "pro", effects: [{ kind: "press", continueOnly: false }] },
     ],
   },
   // --- Votes-during-polling gate (docs/polling-votes-design.md) ---
@@ -8536,12 +8534,12 @@ export const cardSpecs: CardSpec[] = [
   },
   {
     // "Non-Camarilla vampires cannot cast votes or ballots this referendum."
-    // Requires the controller to hold a prince/justicar/Inner Circle member.
+    // The acting vampire must be a prince/justicar/Inner Circle member.
     krcgId: 100364,
     name: "Closed Session",
     cardType: "actionModifier",
     bloodCost: 0,
-    requiresControlledTitle: ["prince", "justicar", "innerCircle"],
+    requiresTitle: ["prince", "justicar", "innerCircle"],
     usable: [],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "restrictVotes", sect: "camarilla" }] },
@@ -8553,7 +8551,7 @@ export const cardSpecs: CardSpec[] = [
     name: "Private Audience",
     cardType: "actionModifier",
     bloodCost: 0,
-    requiresControlledTitle: ["archbishop", "priscus", "cardinal", "regent"],
+    requiresTitle: ["archbishop", "priscus", "cardinal", "regent"],
     usable: [],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "restrictVotes", sect: "sabbat" }] },
@@ -8846,7 +8844,7 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "superior",
         discipline: "aus",
-        effects: [{ kind: "unlockAndAttemptBlock", ignoreRestrictions: true }],
+        effects: [{ kind: "unlockAndAttemptBlock", ignoreRestrictions: true, withoutUnlock: true }],
       },
     ],
   },
@@ -9546,7 +9544,7 @@ export const cardSpecs: CardSpec[] = [
     permanent: {
       where: "seat",
       statics: {},
-      tags: ["location"],
+      tags: [],
       lockGrant: { grant: "intercept", amount: 1, sect: "anarch", ownOnly: true },
     },
     usable: [],
@@ -9852,8 +9850,8 @@ export const cardSpecs: CardSpec[] = [
     combatLimit: "round",
     usable: [],
     modes: [
-      { level: "basic", discipline: "tha", effects: [{ kind: "prevent", base: 2, perBloodX: false }] },
-      { level: "superior", discipline: "tha", effects: [{ kind: "prevent", base: 4, perBloodX: false }] },
+      { level: "basic", discipline: "tha", effects: [{ kind: "prevent", base: 2, perBloodX: false, opposingStrikeOnly: true }] },
+      { level: "superior", discipline: "tha", effects: [{ kind: "prevent", base: 4, perBloodX: false, opposingStrikeOnly: true }] },
     ],
   },
   {
@@ -10361,7 +10359,7 @@ export const cardSpecs: CardSpec[] = [
     name: "Lost in Crowds",
     cardType: "actionModifier",
     bloodCost: 0,
-    // Into Thin Air clause is moot: that card is not in the V5 pool.
+    incompatibleActionCards: ["Into Thin Air"],
     usable: [],
     modes: [
       { level: "basic", discipline: "obf", effects: [{ kind: "modifyStealth", amount: 1 }] },
@@ -14707,14 +14705,8 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     poolCost: 0,
     trifle: true,
-    permanent: {
-      where: "seat",
-      statics: {},
-      tags: ["Family Gathering"],
-      cryptPeek: { clan: "Hecata", blood: 1 },
-    },
     usable: [],
-    modes: [{ level: "basic", discipline: null, effects: [] }],
+    modes: [{ level: "basic", discipline: null, effects: [{ kind: "cryptPeek", clan: "Hecata", blood: 1 }] }],
   },
   {
     // "Unique location. Requires a ready Sabbat vampire. If a political
@@ -15094,7 +15086,7 @@ export const cardSpecs: CardSpec[] = [
     requiresClan: ["Lasombra"],
     cardType: "politicalAction",
     bloodCost: 0,
-    unique: true,
+    onePerMethuselah: true,
     permanent: {
       where: "seat",
       statics: {},
@@ -15631,7 +15623,7 @@ export const cardSpecs: CardSpec[] = [
     // The card PRINTS "Assamite"; the registry clan is Banu Haqim, which
     // is what an imported vampire carries (the Priority Contract trap).
     requiresClan: ["Banu Haqim"],
-    usable: [],
+    usable: ["onlyIfNoActionsYet"],
     modes: [
       {
         level: "basic",
@@ -17090,12 +17082,12 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "basic",
         discipline: "dom",
-        effects: [{ kind: "endAction", unlockActor: true, barRepeat: "minion" }],
+        effects: [{ kind: "endAction", beforeCombatWithYoungerActor: true, unlockActor: true, barRepeat: "minion" }],
       },
       {
         level: "superior",
         discipline: "dom",
-        effects: [{ kind: "endAction", barRepeat: "minion" }],
+        effects: [{ kind: "endAction", beforeCombatWithYoungerActor: true, barRepeat: "minion" }],
       },
     ],
   },
@@ -17526,7 +17518,7 @@ export const cardSpecs: CardSpec[] = [
     name: "Augury of Doom",
     cardType: "action",
     bloodCost: 0,
-    unique: true,
+    onePerMethuselah: true,
     permanent: {
       where: "seat",
       statics: {},
@@ -18640,7 +18632,7 @@ export const cardSpecs: CardSpec[] = [
       where: "bearer",
       statics: { blockedPoolToll: { amount: 1 } },
       tags: [],
-      attach: { scope: "own", kind: "vampire", path: "Cathari" },
+      attach: { scope: "any", kind: "vampire", path: "Cathari" },
       exclusiveKey: "Terrifying Visage",
     },
     usable: [],
@@ -19006,6 +18998,7 @@ export const cardSpecs: CardSpec[] = [
             kind: "becomesVampire",
             capacity: 1,
             clan: "Ministry",
+            mustHuntThisTurn: true,
             searchDisciplineMaster: true,
           },
         ],
@@ -19036,6 +19029,7 @@ export const cardSpecs: CardSpec[] = [
             capacity: 1,
             clanFromActor: true,
             sect: "anarch",
+            mustHuntThisTurn: true,
             searchDisciplineMaster: true,
           },
         ],
@@ -19874,7 +19868,7 @@ export const cardSpecs: CardSpec[] = [
         level: "superior",
         variant: "press",
         discipline: "for",
-        effects: [{ kind: "deferTorporUntilCombatEnds", press: true }],
+        effects: [{ kind: "press", continueOnly: false }],
       },
       {
         level: "superior",
@@ -20178,22 +20172,24 @@ export const cardSpecs: CardSpec[] = [
     krcgId: 100585,
     name: "Drawing Out the Beast",
     cardType: "combat",
+    frenzy: true,
     bloodCost: 0,
     usable: ["onlyFirstRound"],
     combatLimit: "combat",
     modes: [
-      { level: "basic", discipline: "ani", effects: [{ kind: "opposingStrength", amount: 1, scope: "round" }, { kind: "restrictOpponent", press: true }, { kind: "restrictOpponent", equipment: true }] },
+      { level: "basic", discipline: "ani", usable: ["onlyAgainstVampire"], effects: [{ kind: "opposingStrength", amount: 1, scope: "combat", vampireOnly: true }, { kind: "restrictOpponent", pressToEnd: true, maneuverToLong: true, vampireOnly: true }, { kind: "restrictOpponent", equipment: true, vampireOnly: true }] },
       {
         level: "superior",
         discipline: "ani",
+        usable: ["onlyAgainstVampire"],
         effects: [
-          { kind: "opposingStrength", amount: 1, scope: "round" },
-          { kind: "restrictOpponent", press: true },
-          { kind: "restrictOpponent", equipment: true },
+          { kind: "opposingStrength", amount: 1, scope: "combat", vampireOnly: true },
+          { kind: "restrictOpponent", pressToEnd: true, maneuverToLong: true, vampireOnly: true },
+          { kind: "restrictOpponent", equipment: true, vampireOnly: true },
           // "…the opposing vampire takes 1 unpreventable damage during the
           // PRESS STEP each round" — not `roundDamage` at strike
           // resolution, and NOT preventable.
-          { kind: "pressStepDamage", amount: 1 },
+          { kind: "pressStepDamage", amount: 1, combat: true, vampireOnly: true },
         ],
       },
     ],
@@ -20297,7 +20293,7 @@ export const cardSpecs: CardSpec[] = [
           // "…the opposing vampire takes 1 unpreventable environmental
           // damage during the press step THIS ROUND (only effective if this
           // strike was made at close range)."
-          { kind: "pressStepDamage", amount: 1, ifCloseStrikeThisRound: true },
+          { kind: "pressStepDamage", amount: 1, ifCloseStrikeThisRound: true, vampireOnly: true },
         ],
       },
     ],
@@ -21460,14 +21456,15 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Camaraderie [100283] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Camaraderie: bleed reduction, not intercept.
     krcgId: 100283,
     name: "Camaraderie",
     cardType: "reaction",
     bloodCost: 0,
-    usable: [],
+    usable: ["bleedTargetsYou"],
     modes: [
-      { level: "basic", discipline: "san", effects: [{ kind: "modifyIntercept", amount: 1 }] }
+      { level: "basic", discipline: "san", effects: [{ kind: "modifyBleed", amount: -1, limited: false }] },
+      { level: "superior", discipline: "san", effects: [{ kind: "modifyBleed", amount: -3, limited: false }] },
     ],
   },
   {
@@ -22112,12 +22109,13 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     usable: [],
     modes: [
-      { level: "basic", discipline: "obf", effects: [{ kind: "modifyStealth", amount: 1 }] },
-      { level: "basic", discipline: "tem", effects: [{ kind: "actorCombatRider", combatAggravated: true }] },
+      { level: "basic", discipline: "obf", variant: "obf", effects: [{ kind: "modifyStealth", amount: 1 }] },
+      { level: "basic", discipline: "tem", variant: "tem", effects: [{ kind: "actorCombatRider", combatAggravated: true }] },
       {
         level: "superior",
         discipline: "tem",
-        effects: [{ kind: "unlockAfterResolution", blood: 0, target: "self", ifSuccessful: true }],
+        usable: ["afterResolutionByActor", "ifActionSucceeded", "oncePerTurnPerVampireAtSuperior"],
+        effects: [{ kind: "unlockActor" }],
       },
     ],
   },
@@ -22235,9 +22233,11 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     unique: true,
     requiresCapacity: 10,
-    usable: [],
+    usable: ["afterResolutionByActor", "ifBleedSucceeded", "bleedTargetIsPrey"],
     modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "modifyBleed", amount: 1, limited: false }] }
+      { level: "basic", discipline: null, effects: [
+        { kind: "afterResolutionAttach", tags: ["enkilCog"], statics: { bleed: 1 } },
+      ] },
     ],
   },
   {
@@ -22252,14 +22252,16 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Entombment [100651] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // [obt] Strike: burn the opposing ally.
+    // [OBT] Strike: send the opposing vampire to torpor.
     krcgId: 100651,
     name: "Entombment",
     cardType: "combat",
     bloodCost: 2,
     usable: [],
     modes: [
-      { level: "basic", discipline: "obt", effects: [{ kind: "maneuver" }] }
+      { level: "basic", discipline: "obt", effects: [{ kind: "strikeIncapacitate", target: "ally" }] },
+      { level: "superior", discipline: "obt", effects: [{ kind: "strikeIncapacitate", target: "vampire" }] },
     ],
   },
   {
@@ -22323,7 +22325,10 @@ export const cardSpecs: CardSpec[] = [
       statics: {
         bleed: 1,
         strength: 1,
-        disciplineGrant: { discipline: "pot", level: "superior" },
+        disciplineGrants: [
+          { discipline: "pot", level: "superior" },
+          { discipline: "chi", level: "superior" },
+        ],
         playCostMod: { amount: -1, pays: "blood", cardTypes: ["combat"], minions: "bearer" },
       },
       rushGrant: { who: { scope: "bearer" }, target: { scope: "any" } },
@@ -22828,7 +22833,8 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Goth Band [100844] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // Goth Band's +1 stealth belongs to its counter-moving action, not
+    // the action used to recruit it.
     krcgId: 100844,
     name: "Goth Band",
     cardType: "ally",
@@ -22836,9 +22842,7 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     poolCost: 2,
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "modifyStealth", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Gran Madre di Dio, Italy [100847] — fala 50 wierna (300) pełna zgodność bez wydmuszek
@@ -23312,9 +23316,12 @@ export const cardSpecs: CardSpec[] = [
     name: "Into Thin Air",
     cardType: "actionModifier",
     bloodCost: 0,
+    delayedReplace: "unlock",
+    incompatibleActionCards: ["Lost in Crowds"],
     usable: [],
     modes: [
-      { level: "basic", discipline: "obf", effects: [{ kind: "modifyStealth", amount: 1 }] }
+      { level: "basic", discipline: "obf", effects: [{ kind: "modifyStealth", amount: 1 }] },
+      { level: "superior", discipline: "obf", effects: [{ kind: "modifyStealth", amount: 2 }] },
     ],
   },
   {
@@ -24157,11 +24164,13 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: "obf", effects: [{ kind: "strikeDodge" }] },
-      { level: "basic", discipline: "tem", effects: [{ kind: "strikeDodge", riders: { maneuver: 1 } }] },
+      { level: "basic", variant: "dodge", discipline: "tem", effects: [{ kind: "strikeDodge", riders: { maneuver: 1 } }] },
+      { level: "basic", variant: "maneuver", discipline: "tem", effects: [{ kind: "maneuver" }] },
       {
         level: "superior",
         discipline: "tem",
-        effects: [{ kind: "roundDamage", amount: 2, targets: "opposing", ranged: true, when: "beforeRange" }],
+        usable: ["oncePerRoundAtSuperior"],
+        effects: [{ kind: "roundDamage", amount: 2, targets: "opposing", ranged: true, when: "beforeRange", once: true, inflictedByMinion: true }],
       },
     ],
   },
@@ -24343,9 +24352,12 @@ export const cardSpecs: CardSpec[] = [
     name: "Propaganda of the Deed",
     cardType: "actionModifier",
     bloodCost: 0,
-    usable: [],
+    requiresSect: ["anarch"],
+    usable: ["afterResolutionByActor", "ifActionSucceeded", "ifActionDirected"],
     modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "modifyStealth", amount: 1 }] }
+      { level: "basic", discipline: null, effects: [
+        { kind: "afterResolutionAttach", where: "controller", tags: [] },
+      ] },
     ],
   },
   {
@@ -25078,7 +25090,7 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     usable: [],
     modes: [
-      { level: "basic", discipline: "obt", effects: [{ kind: "modifyStealth", amount: 1 }] },
+      { level: "basic", discipline: "obt", usable: ["notDuringBleed"], effects: [{ kind: "modifyStealth", amount: 1 }] },
       { level: "superior", discipline: "obt", effects: [{ kind: "modifyStealth", amount: 1 }] },
     ],
   },
@@ -26489,7 +26501,9 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "basic",
         discipline: null,
-        effects: [{ kind: "actionEnterCombat", targets: "minion", riders: { maneuver: 1, press: 1 } }],
+        // Red List is not yet modelled: do not grant its conditional rider to
+        // every target. The Red List maneuver-or-press and unlock remain open.
+        effects: [{ kind: "actionEnterCombat", targets: "minion" }],
       }
     ],
   },
@@ -28433,15 +28447,19 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Hackerspace [100876] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // Hackerspace: its initial counters and entry/sect triggers are in the
+    // overlay below; the cost source is persisted with the location.
     krcgId: 100876,
     name: "Hackerspace",
     cardType: "master",
     bloodCost: 0,
+    permanent: {
+      where: "seat", statics: {}, tags: ["location"],
+      bloodStore: { start: 0 },
+      costSource: { pays: ["blood", "pool"], for: "equipment", sect: "anarch" },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Hall of Hades' Court [100878] — fala 50 wierna (300) pełna zgodność bez wydmuszek
@@ -29035,12 +29053,12 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "basic",
         discipline: "dem",
-        effects: [{ kind: "actionBleed", bonus: 0 }, { kind: "poolGainOnBleedSuccess", amount: 1 }],
+        effects: [{ kind: "actionBleed", bonus: 0, anyMethuselah: true }, { kind: "poolGainOnBleedSuccess", amount: 1 }],
       },
       {
         level: "superior",
         discipline: "dem",
-        effects: [{ kind: "actionBleed", bonus: 1 }, { kind: "poolGainOnBleedSuccess", amount: 1 }],
+        effects: [{ kind: "actionBleed", bonus: 1, anyMethuselah: true }, { kind: "poolGainOnBleedSuccess", amount: 1 }],
       },
     ],
   },
@@ -31648,11 +31666,12 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     usable: [],
     modes: [
-      { level: "basic", discipline: "dom", effects: [{ kind: "actionBleed", bonus: 1 }] },
+      { level: "basic", discipline: "dom", variant: "dom", effects: [{ kind: "actionBleed", bonus: 1 }] },
       {
         level: "basic",
         discipline: "obe",
-        effects: [{ kind: "actionBleed", bonus: 1 }, { kind: "targetLocksOwnMinion" }],
+        variant: "obe",
+        effects: [{ kind: "actionBleed", bonus: 1 }, { kind: "lockPreyMinion" }],
       },
       {
         level: "superior",
@@ -31817,11 +31836,14 @@ export const cardSpecs: CardSpec[] = [
     cardType: "master",
     bloodCost: 0,
     unique: true,
+    burnOption: true,
+    requiresClan: ["True Brujah"],
+    requiresControlledClan: ["True Brujah"],
     permanent: {
       where: "seat",
       statics: { handSize: 1 },
-      huntingGround: { amount: 1, clan: "True Brujah" },
-      tags: ["location"],
+      vulnerableTo: { who: { kind: "vampire" }, stealth: 1, via: "politicalAction" },
+      tags: [],
     },
     usable: [],
     modes: [
@@ -32260,7 +32282,8 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     usable: [],
     modes: [
-      { level: "basic", discipline: "san", effects: [{ kind: "actionStealth", amount: 1 }] }
+      { level: "basic", discipline: "san", effects: [{ kind: "actionStealth", amount: 1 }] },
+      { level: "superior", discipline: "san", effects: [{ kind: "actionStealth", amount: 1 }] },
     ],
   },
   {
@@ -32842,10 +32865,10 @@ export const cardSpecs: CardSpec[] = [
     name: "Ashur Tablets",
     cardType: "master",
     bloodCost: 0,
+    oncePerTurnByName: true,
+    permanent: { where: "seat", statics: {}, tags: ["Ashur Tablets"] },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 3 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Augur [100110] — fala 49 wierna (300) pełna zgodność bez wydmuszek
@@ -33550,10 +33573,11 @@ export const cardSpecs: CardSpec[] = [
     name: "Enticement",
     cardType: "action",
     bloodCost: 0,
+    requiresEdge: "self",
     usable: [],
     modes: [
-      { level: "basic", discipline: "ser", effects: [{ kind: "actionStealPool", amount: 2 }] },
-      { level: "superior", discipline: "ser", effects: [{ kind: "actionStealPool", amount: 3 }] },
+      { level: "basic", discipline: "ser", effects: [{ kind: "actionBurnEdgeForPreyPool", amount: 2 }] },
+      { level: "superior", discipline: "ser", effects: [{ kind: "actionBurnEdgeForPreyPool", amount: 3 }] },
     ],
   },
   {
@@ -33970,17 +33994,21 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "basic",
         discipline: "pot",
+        variant: "pot",
         effects: [{ kind: "actionStealth", amount: 1 }, { kind: "actionDrawThenDiscard", count: 3 }],
       },
       {
         level: "basic",
         discipline: "tem",
-        effects: [{ kind: "actionStealth", amount: 1 }, { kind: "actionDrawThenDiscard", count: 4 }],
+        variant: "tem",
+        // Success is handled below: this mode returns cards to the TOP,
+        // rather than discarding down like the Potence mode.
+        effects: [{ kind: "actionStealth", amount: 1 }],
       },
       {
         level: "superior",
         discipline: "tem",
-        effects: [{ kind: "actionStealth", amount: 1 }, { kind: "attachSelf", statics: { handSize: 1 } }],
+        effects: [{ kind: "actionStealth", amount: 1 }, { kind: "attachSelf", statics: {} }],
       },
     ],
   },
@@ -34304,7 +34332,7 @@ export const cardSpecs: CardSpec[] = [
     delayedReplace: "discard",
     usable: [],
     modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 3 }] }
+      { level: "basic", discipline: null, effects: [{ kind: "burnLibraryForPool", count: 7, pool: 3 }] }
     ],
   },
   {
@@ -36559,9 +36587,8 @@ export const cryptSpecs: CardSpec[] = [
   }),
   cryptPerm(201771, "Sakura, The Merciless (G6)", {
     // "During your turn … a successful action requiring the Path of Death
-    // and the Soul." A Path is printed on the CRYPT card, so the
-    // requirement is a property of the acting vampire
-    // (docs/path-cards-design.md §0).
+    // and the Soul." This is a requirement on the action, not merely a
+    // trait of the acting vampire.
     unlockAfterAction: {
       whose: "self",
       unlocks: "self",
@@ -36657,7 +36684,7 @@ export const cryptSpecs: CardSpec[] = [
   // Prevention for somebody ELSE — the bystander prevention Martyr's
   // Resilience built, as an ability of a card in play.
   cryptPerm(201680, "Opikun (G7)", {
-    preventForOther: { blood: 1, amount: 2, nonAggravated: true, kind: "vampire" },
+    preventForOther: { blood: 1, amount: 2, nonAggravated: true, kind: "vampire", allowSelf: true, opposingStrikeOnly: true },
   }),
   cryptPerm(201757, "Huldu, The Desecrator (G6)", {
     statics: { bleed: 1 },
@@ -36665,8 +36692,8 @@ export const cryptSpecs: CardSpec[] = [
   }),
 
   // "1 press (mandatory) each combat, only usable to continue combat" —
-  // `continuePressPerCombat`, built for Righteous Blade.
-  flatCrypt(201664, "Adrino Manauara (G6)", { continuePressPerCombat: 1 }), // fala 40 wierna (31) — ostatnie vanilla crypt, pełna implementacja
+  // Unlike Righteous Blade's optional press, Adrino's is mandatory.
+  flatCrypt(201664, "Adrino Manauara (G6)", { mandatoryContinuePressPerCombat: 1 }), // fala 40 wierna (31) — ostatnie vanilla crypt, pełna implementacja
 
   // "Inflicts +1 damage with ranged strikes (even at close range)."
   flatCrypt(201785, "Noluthando (G7)", { rangedDamageBonus: 1 }), // fala 40 wierna (31) — ostatnie vanilla crypt, pełna implementacja
@@ -36792,9 +36819,7 @@ export const cryptSpecs: CardSpec[] = [
   }),
 
   // "After Gostoso successfully bleeds YOUR PREY (for 1 or more), he can
-  // gain 1 blood." Costless, purely beneficial and unpunished by anything
-  // on the card, so it is taken automatically (the Cursed Abattoir
-  // reading); `BloodGained` clamps at capacity, so it can never hurt.
+  // gain 1 blood." The effect is optional even when it looks beneficial.
   cryptPerm(201754, "Gostoso (G6)", {
     bleedSuccessBlood: { amount: 1, preyOnly: true },
   }),
@@ -37609,8 +37634,8 @@ export const cryptSpecs: CardSpec[] = [
         flatCrypt(200076, "Anarch Convert (ANY)", {}), // fala 46 wierna (300) dobrane vanilla
         flatCrypt(200078, "Anastasz di Zagreb (G3)", {}), // fala 46 wierna (300) dobrane vanilla
     cryptPerm(200079, "Anatole, Prophet of Gehenna (G2)", { statics: { intercept: 1 } }), // fala 46 wierna (300) cryptPerm Gehenna
-    flatCrypt(200080, "Andre LeRoux (G5)", { bleed: 2 }), // fala 46 wierna (300) statics
-        flatCrypt(200081, "André the Manipulator (G5)", {}), // fala 46 wierna (300) dobrane vanilla
+    flatCrypt(200080, "Andre LeRoux (G5)", {}),
+        condCrypt(200081, "André the Manipulator (G5)", [{ handSize: 2 }]), // fala 46 wierna (300) dobrane vanilla
     cryptPerm(200082, "Andrea Giovanni (G2)", {}), // fala 46 wierna (300) cryptPerm Gehenna
     flatCrypt(200083, "Andreas, The Bard of Crete (G1)", { intercept: 1 }), // fala 46 wierna (300) statics
         cryptPerm(200086, "Andrew Stuart (G4)", { requiresReady: true }), // fala 46 wierna (300) cryptPerm
@@ -37642,7 +37667,7 @@ export const cryptSpecs: CardSpec[] = [
         flatCrypt(200116, "Antonio d'Erlette (G4)", {}), // fala 46 wierna (300) dobrane vanilla
         cryptPerm(200117, "Antonio Delgado (G2)", {}), // fala 46 wierna (300) cryptPerm
     cryptPerm(200118, "Antonio Veradas (G3)", {}), // fala 46 wierna (300) cryptPerm Gehenna
-    cryptPerm(200119, "Anu Diptinatpa (G6)", {}), // fala 46 wierna (300) cryptPerm Gehenna
+    cryptPerm(200119, "Anu Diptinatpa (G6)", { bleedForBlood: { blood: 1, amount: 1, target: "any" } }), // fala 46 wierna (300) cryptPerm Gehenna
         flatCrypt(200121, "Anwar (G2)", {}), // fala 46 wierna (300) dobrane vanilla
         flatCrypt(200123, "Apolonia Czarnecki (G5)", {}), // fala 46 wierna (300) dobrane vanilla
     flatCrypt(200124, "Appius Claudius Corvus (G5)", { stealth: 1 }), // fala 46 wierna (300) dobrane
@@ -37772,7 +37797,7 @@ export const cryptSpecs: CardSpec[] = [
     cryptPerm(200294, "Count Jocalo (G6)", { statics: { bleed: 1 } }), // fala 46 wierna (300) cryptPerm Gehenna
     cryptPerm(200296, "Count Vladimir Rustovitch (G4)", {}), // fala 46 wierna (300) cryptPerm Gehenna
       flatCrypt(200297, "Count Zaroff (G5)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
-    flatCrypt(200302, "Cristos Mantigo (G3)", { stealth: 1 }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
+    cryptPerm(200302, "Cristos Mantigo (G3)", { searchToHand: { cardTypes: ["equipment"], stealth: 1, discardDown: true } }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
     flatCrypt(200304, "Crusher (G1)", { strength: 1 }), // fala 46 wierna (300) statics
     flatCrypt(200305, "Cybele (G4)", { bleed: 2 }), // fala 46 wierna (300) statics
     flatCrypt(200306, "Cynthia Ingold (G2)", { conditional: [{strength: 1, inCombatWith: {kind: "vampire", sect: "camarilla"}}] }), // fala 46 wierna (300) statics
@@ -37893,7 +37918,7 @@ export const cryptSpecs: CardSpec[] = [
       flatCrypt(200469, "Flavia, Avenging Angel (G6)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
       cryptPerm(200470, "Fleurdumal (G3)", {}), // fala 46 wierna (300) cryptPerm
     flatCrypt(200475, "Francis Milliner (G4)", { conditional: [{strength: 1, inCombatWith: {kind: "vampire", clans: ["Toreador", "Toreador antitribu"]}}] }), // fala 46 wierna (300) statics
-    flatCrypt(200476, "Francisco Domingo de Polonia (G2)", { bleed: 1 }), // fala 46 wierna (300) statics
+    cryptPerm(200476, "Francisco Domingo de Polonia (G2)", { bleedForBlood: { blood: 1, amount: 1, limit: "turn" } }), // fala 46 wierna (300) statics
       cryptPerm(200477, "Franciscus (G2)", {}), // fala 46 wierna (300) cryptPerm
     flatCrypt(200478, "François Villon (G2)", { bleed: 1, stealth: 1 }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
     flatCrypt(200482, "Freddy Gage (G5)", { bleed: 1 }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
@@ -37961,7 +37986,7 @@ export const cryptSpecs: CardSpec[] = [
       flatCrypt(200564, "Hanna Redmonds (G3)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
       flatCrypt(200565, "Hannibal (G2)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
       cryptPerm(200566, "Hannibal (G2 ADV)", {}), // fala 46 wierna (300) cryptPerm
-    cryptPerm(200568, "Hardestadt (G4)", { statics: { bleed: 1, strength: 2 } }), // fala 46 wierna (300) cryptPerm Gehenna
+    cryptPerm(200568, "Hardestadt (G4)", { statics: { bleed: 1, strength: 2, forceTitleContestYield: true } }), // fala 46 wierna (300) cryptPerm Gehenna
       flatCrypt(200569, "Harika Guljan (G2)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
       cryptPerm(200570, "Harlan Graves (G6)", {}), // fala 46 wierna (300) cryptPerm
       flatCrypt(200571, "Harold Tanner (G4)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
@@ -37988,11 +38013,11 @@ export const cryptSpecs: CardSpec[] = [
     cryptPerm(200597, "High Priest Angra Mainyu (G2)", {}), // fala 46 wierna (300) cryptPerm Gehenna
     cryptPerm(200598, "Hillanvale (G6)", {}), // fala 46 wierna (300) cryptPerm Gehenna
   flatCrypt(200599, "Hiram \"Hide\" DeVries (G5)", {}), // fala 34 wierna (28) — ostatnie crypt vanilla
-    flatCrypt(200604, "Horatio Ballard (G3)", { stealth: 1 }), // fala 46 wierna (300) statics
+    flatCrypt(200604, "Horatio Ballard (G3)", {}), // fala 46 wierna (300) statics
     cryptPerm(200605, "The Horde (G6)", {}), // fala 46 wierna (300) cryptPerm Gehenna
       flatCrypt(200606, "Horrock (G3)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
     flatCrypt(200607, "Howler (G2)", { strength: 1, maneuverPerCombat: 1, cannotUseWeapons: true }),
-      flatCrypt(200608, "Hrothulf (G3)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
+      rushCrypt(200608, "Hrothulf (G3)", { targets: "minion", othersOnly: true, cost: { burnEdge: true } }), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
       flatCrypt(200609, "Huang, Blood Cultist (G2)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
       flatCrypt(200610, "Hugo (G2)", { conditional: [{intercept: -1, actingMinion: {kind: "vampire", clans: ["Lasombra", "Tzimisce"]}}] }), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
     cryptPerm(200611, "Huitzilopochtli (G2)", { statics: { bleed: 1 } }), // fala 46 wierna (300) cryptPerm Gehenna
@@ -38046,7 +38071,7 @@ export const cryptSpecs: CardSpec[] = [
       cryptPerm(200676, "Janni (G4)", {}), // fala 47 wierna (300) cryptPerm
       cryptPerm(200677, "Jara Drory (G3)", {}), // fala 47 wierna (300) cryptPerm
     flatCrypt(200678, "Jaroslav Pascek (G3)", { intercept: 1 }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
-    flatCrypt(200679, "Jason, The World's Voice (G3)", { bleed: 1 }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
+    cryptPerm(200679, "Jason, The World's Voice (G3)", { bleedForBlood: { blood: 1, amount: 1 } }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
     cryptPerm(200680, "Javier Montoya (G2)", { statics: { bleed: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
       cryptPerm(200681, "Javier Montoya (G2 ADV)", {}), // fala 47 wierna (300) cryptPerm
       flatCrypt(200682, "Jayakumar (G5)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
@@ -38085,7 +38110,7 @@ export const cryptSpecs: CardSpec[] = [
       flatCrypt(200730, "Juanita Santiago (G2)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
     cryptPerm(200731, "Jubal (G4)", { statics: { conditional: [{intercept: 1, actingMinion: {kind: "vampire", clan: "Ministry"}}] } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
       flatCrypt(200733, "Juggler (G3)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
-    flatCrypt(200734, "Julia Prima (G2)", { bleed: 1 }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
+    cryptPerm(200734, "Julia Prima (G2)", { bleedForBlood: { blood: 1, amount: 1 } }), // wierna fala 30 (500) // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
       flatCrypt(200735, "Julian Sanders (G2)", { pressPerCombat: 1 }), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
     cryptPerm(200736, "Julio Martinez (G3)", { statics: { strength: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
       flatCrypt(200737, "Julius (G2)", {}), // wierna fala 31 (500): przejrzane // wierna fala 30 (500): przejrzane // fala 28 wierna (500+) // fala 27 wierna (500) // fala 26 wierna (500)
@@ -38282,16 +38307,16 @@ export const cryptSpecs: CardSpec[] = [
     flatCrypt(200984, "Mictlantecuhtli (G5)", { strength: 1 }), // wierna fala 31 (500)
     flatCrypt(200985, "Midget (G3)", {}), // wierna fala 31 (500): przejrzane
     cryptPerm(200986, "Miguel Cordovera (G5)", { statics: { bleed: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
-    cryptPerm(200987, "Miguel Santo Domingo (G3)", {}), // fala 47 wierna (300) cryptPerm Gehenna/statics
+    cryptPerm(200987, "Miguel Santo Domingo (G3)", { bleedForBlood: { blood: 1, amount: 1, target: "otherControlledSabbat" } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     flatCrypt(200988, "Mikael Birkholm (G6)", {}), // fala 47 wierna (300) vanilla
     flatCrypt(200989, "Miller Delmardigan, Teacher of Bahari (G2)", { strength: 1 }), // wierna fala 31 (500)
     flatCrypt(200991, "Mimir (G5)", { bleed: 1 }), // fala 47 wierna (300) statics
-    flatCrypt(200992, "Mina Grotius (G3)", { bleed: 1 }), // wierna fala 31 (500)
+    cryptPerm(200992, "Mina Grotius (G3)", { bleedForBlood: { blood: 1, amount: 1 } }), // wierna fala 31 (500)
     cryptPerm(200993, "Miranda Sanova (G1)", {}), // fala 47 wierna (300) cryptPerm
     cryptPerm(200995, "Miriam Benyona (G2)", {}), // fala 47 wierna (300) cryptPerm
-    flatCrypt(200999, "Mistress Fanchon (G4)", { bleed: 2, stealth: 1 }), // wierna fala 31 (500)
+    cryptPerm(200999, "Mistress Fanchon (G4)", { statics: { bleed: 2 }, searchToHand: { cardTypes: ["action", "actionModifier", "reaction", "combat", "equipment", "retainer", "ally", "politicalAction"], stealth: 1 } }), // wierna fala 31 (500)
     flatCrypt(201000, "Mitchell, The Headhunter (G2)", {}), // wierna fala 31 (500): przejrzane
-    flatCrypt(201001, "Mithras (G3)", { bleed: 2, strength: 1 }), // fala 47 wierna (300) statics
+    flatCrypt(201001, "Mithras (G3)", { bleed: 2, strength: 1, votes: 2 }), // fala 47 wierna (300) statics
     flatCrypt(201002, "Mitru the Hunter (G4)", {}), // wierna fala 31 (500): przejrzane
     cryptPerm(201006, "Montano (G3)", { statics: { bleed: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     flatCrypt(201007, "Montecalme (G5)", { stealth: 1 }), // wierna fala 31 (500)
@@ -38333,7 +38358,9 @@ export const cryptSpecs: CardSpec[] = [
     flatCrypt(201045, "Nehsi (G2)", { maneuverPerCombat: 1 }), // fala 32 wierna (421): przejrzane
     flatCrypt(201046, "Neighbor John (G4)", { intercept: 1 }), // fala 32 wierna (421)
     flatCrypt(201048, "Nergal (G5)", { bleed: 2 }), // fala 32 wierna (421)
-    cryptPerm(201049, "Nergal (G5 ADV)", {}), // fala 47 wierna (300) cryptPerm Gehenna/statics
+    cryptPerm(201049, "Nergal (G5 ADV)", { statics: { playCostMod: {
+      amount: 1, pays: "blood", cardTypes: ["reaction"], whileBearerActing: true,
+    } } }),
     cryptPerm(201051, "Nettie Hale (G2)", { statics: { conditional: [{stealth: 1, actionCardTypes: ["ally", "retainer"]}] } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     cryptPerm(201052, "New Blood (ANY)", {}), // fala 47 wierna (300) cryptPerm
     flatCrypt(201053, "Ngozi Ekwensu (G5)", {}), // fala 32 wierna (421): przejrzane
@@ -38366,13 +38393,13 @@ export const cryptSpecs: CardSpec[] = [
     cryptPerm(201087, "Owain Evans, The Wanderer (G3)", {}), // fala 47 wierna (300) cryptPerm
     flatCrypt(201089, "Ozmo (G1)", { bleed: 1 }), // fala 32 wierna (421)
     flatCrypt(201092, "Paolo Sardenzo (G5)", { intercept: 1 }), // fala 32 wierna (421)
-    cryptPerm(201093, "Papa Legba (G5)", {}), // fala 47 wierna (300) cryptPerm Gehenna/statics
+    cryptPerm(201093, "Papa Legba (G5)", { bleedForBlood: { blood: 1, amount: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     cryptPerm(201094, "Pariah (G2)", { statics: { strength: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     flatCrypt(201095, "Parmenides (G2)", { strength: 1 }), // fala 32 wierna (421)
     flatCrypt(201096, "Parnassus (G2)", { strength: 1 }), // fala 32 wierna (421)
     flatCrypt(201098, "Patrizia Giovanni, Collector of Secrets (G2)", {}), // fala 32 wierna (421): przejrzane
     flatCrypt(201100, "Paul Cordwood (G4)", { intercept: 1, stealth: 1 }), // fala 32 wierna (421)
-    cryptPerm(201102, "Paul Forrest, False Prophet (G4)", {}), // fala 47 wierna (300) cryptPerm Gehenna/statics
+    cryptPerm(201102, "Paul Forrest, False Prophet (G4)", { bleedForBlood: { blood: 1, amount: 1, target: "controlledRavnos" } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     cryptPerm(201104, "Paulo de Castille (G4)", {}), // fala 47 wierna (300) cryptPerm
     cryptPerm(201105, "Pavlo (G5)", {}), // fala 47 wierna (300) cryptPerm
     flatCrypt(201107, "Pedrag Hasek (G5)", {}), // fala 47 wierna (300) vanilla
@@ -38413,7 +38440,7 @@ export const cryptSpecs: CardSpec[] = [
     cryptPerm(201148, "Rachel Brandywine (G3)", { statics: { bleed: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     flatCrypt(201149, "Radeyah (G2)", {}), // fala 32 wierna (421): przejrzane
     cryptPerm(201150, "Radu Bistri (G4)", {}), // fala 47 wierna (300) cryptPerm
-    cryptPerm(201151, "Rafael de Corazon (G4)", { statics: { bleed: 2 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
+    cryptPerm(201151, "Rafael de Corazon (G4)", { statics: { bleed: 2, forceTitleContestYield: true } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     flatCrypt(201152, "Rafaele Giovanni (G2)", { bleed: 1 }), // fala 32 wierna (421)
     flatCrypt(201153, "Raful al-Zarqa (G2)", { stealth: 1 }), // fala 32 wierna (421)
     flatCrypt(201154, "Rain (G4)", { conditional: [{stealth: 1, actionDirected: true, targetReady: {exists: false, minion: {kind: "vampire", titled: true}}}] }), // fala 47 wierna (300) statics
@@ -38484,7 +38511,7 @@ export const cryptSpecs: CardSpec[] = [
     cryptPerm(201253, "Scout Youngwood (G6)", {}), // fala 47 wierna (300) cryptPerm
     flatCrypt(201255, "Sean Rycek (G4)", { stealth: 1 }), // fala 32 wierna (421)
     flatCrypt(201256, "Sebastian Marley (G1)", { strength: 1 }), // fala 32 wierna (421)
-    flatCrypt(201257, "Sébastien Goulet (G3)", { bleed: 1 }), // fala 32 wierna (421)
+    cryptPerm(201257, "Sébastien Goulet (G3)", { bleedForBlood: { blood: 1, amount: 1 } }), // fala 32 wierna (421)
     flatCrypt(201258, "Sébastien Goulet (G3 ADV)", { conditional: [{stealth: 1, actionCardTypes: ["ally", "retainer"]}] }), // fala 47 wierna (300) statics
     flatCrypt(201259, "Sela (G2)", { bleed: 1 }), // fala 32 wierna (421)
     flatCrypt(201260, "Sela (G2 ADV)", { conditional: [{stealth: 1, actionDirected: true, targetReady: {exists: true, minion: {kind: "vampire", titles: ["bishop"]}}}] }), // fala 47 wierna (300) statics
@@ -38531,7 +38558,7 @@ export const cryptSpecs: CardSpec[] = [
     flatCrypt(201321, "Styles Margs (G5)", {}), // fala 32 wierna (421): przejrzane
     flatCrypt(201322, "Suhailah (G2)", { bleed: 1, stealth: 1 }), // fala 47 wierna (300) statics
     flatCrypt(201323, "Sukainah (G5)", {}), // fala 32 wierna (421): przejrzane
-    cryptPerm(201324, "Sundervere, The Devil Brahmin (G4)", { statics: { bleed: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
+    cryptPerm(201324, "Sundervere, The Devil Brahmin (G4)", { statics: { bleed: 1 }, bleedForBlood: { blood: 1, amount: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     cryptPerm(201325, "Sundown (G3)", {}), // fala 47 wierna (300) cryptPerm
     cryptPerm(201326, "Sundown (G3 ADV)", {}), // fala 47 wierna (300) cryptPerm
     cryptPerm(201327, "Sutekh, The Dark God (G2)", { statics: { bleed: 1 } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
@@ -38578,7 +38605,7 @@ export const cryptSpecs: CardSpec[] = [
     cryptPerm(201371, "Tiberius, The Scandalmonger (G1)", {}), // fala 47 wierna (300) cryptPerm
     flatCrypt(201374, "Titus Camille (G4)", { strength: 1 }), // fala 32 wierna (421)
     flatCrypt(201375, "Tobias Smith (G3)", {}), // fala 32 wierna (421): przejrzane
-    cryptPerm(201376, "Toby (G4)", {}), // fala 47 wierna (300) cryptPerm Gehenna/statics
+    cryptPerm(201376, "Toby (G4)", { bleedForBlood: { blood: 1, amount: 1, target: "anarch" } }), // fala 47 wierna (300) cryptPerm Gehenna/statics
     flatCrypt(201378, "Tom (G2)", {}), // fala 32 wierna (421): przejrzane
     flatCrypt(201379, "Tomaine (G4)", {}), // fala 47 wierna (300) vanilla
     cryptPerm(201382, "Topaz (G4)", {}), // fala 47 wierna (300) cryptPerm
@@ -38636,7 +38663,7 @@ export const cryptSpecs: CardSpec[] = [
     flatCrypt(201448, "Vincent Day, Paladin and Paragon (G2)", {}), // fala 32 wierna (421): przejrzane
     flatCrypt(201449, "Violet Tremain (G2)", {}), // fala 32 wierna (421): przejrzane
     flatCrypt(201451, "Virgil (G2)", { stealth: 1 }), // fala 32 wierna (421)
-    flatCrypt(201452, "Virginie, Prodigy (G4)", { bleed: 1 }), // fala 32 wierna (421)
+    cryptPerm(201452, "Virginie, Prodigy (G4)", { bleedForBlood: { blood: 1, amount: 1 } }), // fala 32 wierna (421)
     flatCrypt(201453, "Viri (G6)", { strength: 1 }), // fala 32 wierna (421)
     flatCrypt(201454, "Virstania, The Great Mother (G3)", { bleed: 1, stealth: 1 }), // fala 32 wierna (421)
     flatCrypt(201456, "Vlad Tepes (G3)", { bleed: 1 }), // fala 32 wierna (421)
@@ -38645,7 +38672,7 @@ export const cryptSpecs: CardSpec[] = [
 
     cryptPerm(201460, "Vulture (G2)", {}), // fala 32 wierna (421)
     flatCrypt(201461, "Wah Chun-Yuen (G3)", {}), // fala 32 wierna (421): przejrzane
-    flatCrypt(201462, "Walker Grimes (G5)", {}), // fala 32 wierna (421): przejrzane
+    flatCrypt(201462, "Walker Grimes (G5)", { playCostMod: { amount: 1, pays: "pool", cardTypes: ["master"], onTarget: true, controllerOnly: true } }), // fala 32 wierna (421): przejrzane
     flatCrypt(201463, "Wamukota (G4)", { bleed: 1 }), // fala 32 wierna (421)
     flatCrypt(201464, "Watenda (G2)", {}), // fala 32 wierna (421): przejrzane
     flatCrypt(201465, "Weirich Waldburg (G3)", { stealth: 1 }), // fala 32 wierna (421)
@@ -38710,7 +38737,11 @@ export const cryptSpecs: CardSpec[] = [
     flatCrypt(201642, "Gwenllian Arwyn (G6)", { strength: 1 }), // fala 32 wierna (421)
     flatCrypt(201643, "Lady Scarlett Churchill (G6)", {}), // fala 32 wierna (421): przejrzane
     flatCrypt(201644, "Mickey Wheeler (G6)", { conditional: [{strength: 1, inCombatWith: {kind: "vampire", older: true}}] }), // fala 32 wierna (421)
-    flatCrypt(201645, "Mithras (G6)", { bleed: 2, strength: 1 }), // fala 32 wierna (421)
+    flatCrypt(201645, "Mithras (G6)", {
+      bleed: 2, strength: 1, votes: 2,
+      blockToll: { amount: 1, payWith: "blood", kinds: ["vampire"], youngerOnly: true },
+      voteTollAgainst: { blood: 1, youngerOnly: true },
+    }), // fala 32 wierna (421)
     flatCrypt(201646, "Oskar Anasov (G6)", { intercept: 1, stealth: 1 }), // fala 32 wierna (421)
     flatCrypt(201647, "Queen Anne (G6)", { bleed: 1 }), // fala 32 wierna (421)
     flatCrypt(201648, "Regina Blake (G6)", {}), // fala 32 wierna (421): przejrzane
@@ -39145,7 +39176,10 @@ const anarchTroublemaker: CardHandler = {
     const out: LegalOption[] = [];
     // "…lock up to two vampires they control": one option per unordered
     // choice of 1 or 2, the `combinations` shape.
-    const lockable = prey.minions.filter((m) => m.kind === "vampire" && !m.locked && isReady(m));
+    // No "ready" or "unlocked" qualifier: vampires in torpor are still
+    // controlled and eligible, and locking a locked vampire is a legal
+    // no-op. Contested vampires are stored separately and are out of play.
+    const lockable = prey.minions.filter((m) => m.kind === "vampire");
     for (const m of lockable) {
       out.push({
         id: `ability:${this.name}:${entry.card.id}:lock:${m.id}`,
@@ -39187,7 +39221,10 @@ const anarchTroublemaker: CardHandler = {
     const controller = entry.controller ?? owner.seat;
     if (choice.params["act"] === "lock") {
       for (const id of (choice.params["targets"] ?? "").split(",")) {
-        if (id && findMinion(ops.state, id)) {
+        const target = id ? findMinion(ops.state, id) : null;
+        // No transition and therefore no lock trigger for an already locked
+        // vampire, although that vampire may still have been chosen.
+        if (target && !target.locked) {
           ops.emit({ type: "MinionLocked", minion: id });
         }
       }
@@ -39825,7 +39862,7 @@ const specialReport: CardHandler = {
     }
     if (af.step !== "A" || af.pendingAutoBlock) return [];
     return getSeat(ctx.state, ctx.seat)
-      .minions.filter((m) => m.kind === "vampire" && canForceBlock(ctx, af, ctx.seat, m))
+      .minions.filter((m) => m.kind === "vampire" && !(af.noUnlock && m.locked) && canForceBlock(ctx, af, ctx.seat, m))
       .map(mk);
   },
   resolve(play, ops) {
@@ -39838,7 +39875,7 @@ const specialReport: CardHandler = {
     if (!attempting) {
       // Re-derived at resolution: the action can have moved on.
       if (af.step !== "A" || top?.kind !== "action" || af.pendingAutoBlock) return;
-      if (!mayAttemptBlock(ops.state, af, m)) return;
+      if ((af.noUnlock && m.locked) || !mayAttemptBlock(ops.state, af, m)) return;
       ops.unlockAndAttemptBlock(m.id, {});
     }
     ops.grantBurnForIntercept(m.id, { payer: play.seat, source: this.name });
@@ -41669,7 +41706,7 @@ const guardDuty: CardHandler = {
     if (!m || ctx.seat !== m.controller) return [];
     const loc = locationsInPlay(ctx.state).find((l) => l.entry.card.id === entry.chosenCard);
     if (!loc || loc.controller !== m.controller) return [];
-    if (!canForceBlock(ctx, af, m.controller, m)) return [];
+    if ((af.noUnlock && m.locked) || !canForceBlock(ctx, af, m.controller, m)) return [];
     const out: LegalOption[] = [];
     if (m.blood >= 1) {
       out.push({
@@ -41691,6 +41728,8 @@ const guardDuty: CardHandler = {
   },
   useAbility(entry, owner, choice, ops) {
     if (!owner.minion) return;
+    const minion = findMinion(ops.state, owner.minion);
+    if (!minion || (ops.action()?.noUnlock && minion.locked)) return;
     if (choice.params["pay"] === "card") {
       ops.burnPermanent(entry.card.id);
       ops.unlockAndAttemptBlock(owner.minion, { interceptBonus: 1 });
@@ -41883,10 +41922,9 @@ function bloodMoverAbility(
       // "Their" phase: the bearer's controller's own phase — `turn.unlock`
       // is also offered to seats other than the turn's (Homunculus), so
       // both the deciding seat and the turn must be the controller's.
-      if (ctx.seat !== owner.seat || ctx.turnSeat !== owner.seat) return [];
-      const seat = getSeat(ctx.state, owner.seat);
-      const bearer = seat.minions.find((m) => m.id === owner.minion);
-      if (!bearer) return [];
+      const bearer = findMinion(ctx.state, owner.minion);
+      if (!bearer || bearer.kind !== "vampire" || ctx.seat !== bearer.controller || ctx.turnSeat !== bearer.controller) return [];
+      const seat = getSeat(ctx.state, bearer.controller);
       const options: LegalOption[] = [];
       if (bearer.blood >= 1) {
         options.push({
@@ -41914,12 +41952,14 @@ function bloodMoverAbility(
     },
     useAbility(entry, owner, choice, ops) {
       if (!owner.minion) throw new Error(`${cardName}: no bearer`);
+      const bearer = findMinion(ops.state, owner.minion);
+      if (!bearer || bearer.kind !== "vampire") return;
       entry.usedThisPhase = true;
       if (choice.params["dir"] === "toPool") {
         ops.emit({ type: "BloodBurned", minion: owner.minion, amount: 1 });
-        ops.emit({ type: "PoolGained", seat: owner.seat, amount: 1 });
+        ops.emit({ type: "PoolGained", seat: bearer.controller, amount: 1 });
       } else {
-        ops.emit({ type: "PoolBurned", seat: owner.seat, amount: 1 });
+        ops.emit({ type: "PoolBurned", seat: bearer.controller, amount: 1 });
         ops.emit({ type: "BloodGained", minion: owner.minion, amount: 1 });
       }
     },
@@ -41930,6 +41970,7 @@ function bloodMoverAbility(
  *  blood mover (usable the turn it is played, ruling p. 47). */
 const bloodDoll: CardHandler = {
   name: "Blood Doll",
+  abilityAnySeat: true,
   bloodCost: 0,
   poolCost: 0,
   isMasterCard: true,
@@ -41941,7 +41982,7 @@ const bloodDoll: CardHandler = {
   playEffects: () => [{ tag: "board" }, { tag: "poolGain", amount: 1 }, { tag: "bloodGain", amount: 1 }],
   options(card, ctx) {
     if (ctx.window !== "turn.master") return [];
-    return getSeat(ctx.state, ctx.seat).minions.map(
+    return getSeat(ctx.state, ctx.seat).minions.filter((m) => m.kind === "vampire").map(
       (m): LegalOption => ({
         id: playOptionId(this.name, null, m.id, card.id),
         kind: "playCard",
@@ -42021,6 +42062,7 @@ const societyOfLeopold: CardHandler = {
  *  (NOT usable the turn it is played — its phase has passed). */
 const vessel: CardHandler = {
   name: "Vessel",
+  abilityAnySeat: true,
   bloodCost: 0,
   poolCost: 1,
   isMasterCard: true,
@@ -42041,6 +42083,7 @@ const vessel: CardHandler = {
     for (const s of ctx.state.seats) {
       if (s.ousted) continue;
       for (const m of s.minions) {
+        if (m.kind !== "vampire") continue;
         for (const bd of ["none", ...bloodDolls]) {
           options.push({
             id: playOptionId(this.name, null, m.id, bd, card.id),
@@ -42063,6 +42106,7 @@ const vessel: CardHandler = {
     ops.putPermanentInPlay({
       card: play.card,
       seat: play.seat,
+      controller: play.seat,
       attachTo: target,
       statics: {},
       tags: [],
@@ -42139,7 +42183,7 @@ const magnum44: CardHandler = {
     // (docs/ledger-closeout.md §6).
     if (cf.restrict[side].equipment) return [];
     if (ctx.window === "combat.range") {
-      if (cf.awaiting !== side) return [];
+      if (cf.awaiting !== side || !canUseCombatManeuver(cf, side)) return [];
       if (cf.usedWeaponManeuver[side] !== null) return [];
       return [
         {
@@ -42574,7 +42618,6 @@ const warGhoul: CardHandler = {
   options(card, ctx) {
     if (ctx.window !== "turn.minion") return [];
     const seat = getSeat(ctx.state, ctx.seat);
-    if (seat.pool < 3) return [];
     const options: LegalOption[] = [];
     // Burn candidates: own allies and retainers in play, plus the
     // entering Ghoul itself ("self").
@@ -42586,20 +42629,23 @@ const warGhoul: CardHandler = {
       }
     }
     for (const m of seat.minions) {
-      if (!canAct(m)) continue;
+      if (!canAct(m) || m.kind !== "vampire" || !meetsRequirements(m, specByName("War Ghoul"))) continue;
+      if (m.attached.some(p => (p.statics.cannotPlayCardTypes ?? []).includes("ally"))) continue;
       if (m.playedSinceUnlock.includes("War Ghoul")) continue;
-      for (const burn of burnTargets) {
-        options.push({
-          id: playOptionId("War Ghoul", "basic", m.id, burn, card.id),
-          kind: "playCard",
-          label: `War Ghoul (basic) — ${m.name} → burn ${burn}`,
-          card: card.id,
-          name: "War Ghoul",
-          minion: m.id,
-          mode: "basic",
-          params: { burn },
-        });
-      }
+      const cost = playCostFor(ctx.state, { name: "War Ghoul", bloodCost: 0, poolCost: 3,
+        types: ["ally"], requires: [], requiresClans: ["Tzimisce"], tags: ["ghoul"] }, m, ctx.action, ctx.combat, null, ctx.seat);
+      if (seat.pool < cost.pool || m.blood < cost.blood) continue;
+      for (const burn of burnTargets) options.push({
+        id: playOptionId("War Ghoul", "basic", m.id, burn, card.id),
+        kind: "playCard",
+        label: `War Ghoul (basic) — ${m.name} → burn ${burn}`,
+        card: card.id,
+        name: "War Ghoul",
+        minion: m.id,
+        mode: "basic",
+        cost,
+        params: { burn },
+      });
     }
     return options;
   },
@@ -42753,7 +42799,7 @@ const banishment: CardHandler = {
       if (s.ousted) continue;
       for (const m of s.minions) {
         if (m.kind !== "vampire" || !isReady(m)) continue;
-        if (m.capacity >= actor.capacity) continue; // "younger"
+        if (capacityOf(m) >= capacityOf(actor)) continue; // "younger"
         options.push({
           id: `terms:${m.id}`,
           kind: "chooseTerms",
@@ -42897,7 +42943,7 @@ const cardinalBenediction = titleGrant({
  * substrate (docs/counters-design.md). A unique seat card: each lock adds
  * 1 counter and the card burns at 3 counters. All three lock abilities
  * are modeled — "gain 1 pool if you have the Edge" (unlock phase), "add 1
- * blood to a vampire in your uncontrolled region" (master phase), and
+ * blood to a vampire in your uncontrolled region", and
  * "+2 hand size until the end of the turn".
  *
  * The hand size is a grant on the TURN frame, so it lapses when the frame
@@ -42911,6 +42957,88 @@ const cardinalBenediction = titleGrant({
  * windows a non-turn seat is asked in).
  * docs/temporary-hand-size-design.md
  */
+// Ordinary impulses where a card with no printed timing restriction can
+// be used. This deliberately excludes card.asPlayed and the specialised
+// damage/prevention windows; more windows must be verified individually.
+function isFreeEffectImpulse(window: PlayContext["window"]): boolean {
+  return window === "turn.unlock" || window === "turn.master" ||
+    window === "turn.minion" || window === "turn.influence" ||
+    window === "turn.discard" || window === "action.announce" ||
+    window === "action.effects" || window === "action.afterResolution" ||
+    window === "referendum.polling" || window === "referendum.afterResolution" ||
+    window === "combat.beforeRange" || window === "combat.range" ||
+    window === "combat.beforeStrikes" || window === "combat.chooseStrike" ||
+    window === "combat.beforeResolution" || window === "combat.press" ||
+    window === "combat.endOfRound" || window === "combat.grantAdditionalStrikes";
+}
+/** In-play master cards with generic counters. Their controller can differ
+ * from the controller of a vampire to which the master is attached. */
+function counterMasters(state: GameState, registry: HandlerRegistry): Array<{ entry: PermanentInPlay; controller: SeatId }> {
+  const entries: Array<{ entry: PermanentInPlay; controller: SeatId }> = [];
+  for (const seat of state.seats) {
+    if (seat.ousted) continue;
+    for (const p of seat.permanents) {
+      if (registry[p.card.name]?.isMasterCard && p.counters !== undefined)
+        entries.push({ entry: p, controller: p.controller ?? seat.id });
+    }
+    for (const m of seat.minions) {
+      for (const p of m.attached) {
+        if (registry[p.card.name]?.isMasterCard && p.counters !== undefined)
+          entries.push({ entry: p, controller: p.controller ?? m.controller });
+      }
+    }
+  }
+  return entries;
+}
+
+const gothBandBase = compileSpec({
+  ...specByName("Goth Band"),
+  unique: true,
+  requiresClan: ["Toreador antitribu"],
+  requiresVampire: true,
+  permanent: { where: "bearer", statics: {}, tags: ["mortal"] },
+});
+const gothBand: CardHandler = {
+  ...gothBandBase,
+  actionOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.minion" || ctx.seat !== owner.seat || !owner.minion) return [];
+    const actor = findMinion(ctx.state, owner.minion);
+    if (!actor || !canAct(actor) || entry.grantedActionUses?.some(u => u.minion === actor.id && u.key === "moveCounter")) return [];
+    const masters = counterMasters(ctx.state, ctx.registry);
+    const sources = masters.filter(x => x.controller !== owner.seat && (x.entry.counters ?? 0) > 0);
+    const destinations = masters.filter(x => x.controller === owner.seat);
+    return sources.flatMap(source => destinations.map(destination => ({
+      id: `act:Goth Band:${entry.card.id}:counter:${actor.id}:${source.entry.card.id}:${destination.entry.card.id}`,
+      kind: "useEntryAction" as const,
+      label: `${actor.name}: move a counter from ${source.entry.card.name} to ${destination.entry.card.name} (Ⓓ, +1 stealth)`,
+      source: entry.card.id,
+      minion: actor.id,
+      params: { from: source.entry.card.id, to: destination.entry.card.id },
+    })));
+  },
+  useActionOption(entry, _owner, choice, ops) {
+    const from = choice.params["from"];
+    const to = choice.params["to"];
+    if (!from || !to) return;
+    ops.announceEntryAction(entry, choice.minion, {
+      effect: { key: "moveCounter", params: { from, to } },
+      targetPermanent: from,
+      stealth: 1,
+    });
+  },
+  resolveGrantedAction(_entry, af, ops) {
+    const from = af.grantedEffect?.params["from"];
+    const to = af.grantedEffect?.params["to"];
+    if (af.grantedEffect?.key !== "moveCounter" || !from || !to) return;
+    const masters = counterMasters(ops.state, ops.registry);
+    const source = masters.find(x => x.entry.card.id === from && x.controller !== af.actingSeat && (x.entry.counters ?? 0) > 0);
+    const destination = masters.find(x => x.entry.card.id === to && x.controller === af.actingSeat);
+    if (!source || !destination) return;
+    ops.removeCounters(from, 1);
+    ops.addCounters(to, 1);
+  },
+};
+
 const dreamsOfTheSphinx: CardHandler = {
   name: "Dreams of the Sphinx",
   bloodCost: 0,
@@ -42941,7 +43069,7 @@ const dreamsOfTheSphinx: CardHandler = {
       seat: play.seat,
       attachTo: null,
       statics: {},
-      tags: ["location"],
+      tags: [],
       counters: 0,
     });
   },
@@ -42962,9 +43090,12 @@ const dreamsOfTheSphinx: CardHandler = {
         params: { do: "pool" },
       });
     }
-    // "Lock to add 1 blood to a vampire in your uncontrolled region."
-    if (ctx.window === "turn.master") {
+    // Neither blood nor hand-size ability has a phase restriction. They
+    // share the same impulse windows, including during another turn.
+    const unrestrictedImpulse = isFreeEffectImpulse(ctx.window);
+    if (unrestrictedImpulse) {
       for (const u of getSeat(ctx.state, owner.seat).uncontrolled) {
+        if (u.card.kind !== "vampire") continue;
         opts.push({
           id: `ability:Dreams of the Sphinx:${entry.card.id}:blood:${u.card.id}`,
           kind: "useAbility",
@@ -42980,13 +43111,7 @@ const dreamsOfTheSphinx: CardHandler = {
     // which are the only ones a NON-turn seat is asked in (the Szczecin
     // lesson) — locking it during a predator's turn to dig for a reaction
     // is a real play.
-    if (
-      ctx.window === "turn.master" ||
-      ctx.window === "turn.minion" ||
-      ctx.window === "turn.discard" ||
-      ctx.window === "action.announce" ||
-      ctx.window === "action.effects"
-    ) {
+    if (unrestrictedImpulse) {
       opts.push({
         id: `ability:Dreams of the Sphinx:${entry.card.id}:hand`,
         kind: "useAbility",
@@ -43014,8 +43139,16 @@ const dreamsOfTheSphinx: CardHandler = {
       if (!target) throw new Error("Dreams of the Sphinx: no uncontrolled target");
       ops.emit({ type: "UncontrolledBloodAdded", seat: owner.seat, minion: target, amount: 1 });
     }
-    // "Add 1 counter each time you lock it. Burn this card if it has 3."
+  },
+  onPermanentLocked(entry, ops) {
+    // This triggers for every actual lock, including effects other than
+    // Dreams' own abilities. The chosen ability still resolves if the third
+    // counter burns the card while its lock cost is being paid.
     ops.addCounters(entry.card.id, 1);
+  },
+  onCountersChanged(entry, ops) {
+    // The threshold also applies to counters moved here by other effects,
+    // not just to counters placed by Dreams' own activated abilities.
     if ((entry.counters ?? 0) >= 3) ops.burnPermanent(entry.card.id);
   },
 };
@@ -43115,7 +43248,7 @@ const organizedResistance: CardHandler = {
       }
     }
     // Use 2: unlock a locked Anarch you control → force-block with +1.
-    if (af.step === "A" && !ba && blockEligibleSeats(ctx.state, af).includes(ctx.seat)) {
+    if (af.step === "A" && !ba && !af.noUnlock && blockEligibleSeats(ctx.state, af).includes(ctx.seat)) {
       for (const m of seat.minions) {
         if (m.kind === "vampire" && m.sect === "anarch" && isReady(m) && m.locked) {
           opts.push(mk({ use: "unlock", target: m.id }, `unlock ${m.name} to block (+1 intercept)`));
@@ -43137,7 +43270,7 @@ const organizedResistance: CardHandler = {
         delta: 1,
         source: "Organized Resistance",
       });
-    } else {
+    } else if (!af.noUnlock) {
       ops.unlockAndAttemptBlock(target, { interceptBonus: 1 });
     }
   },
@@ -43520,7 +43653,8 @@ const yorubaShrine: CardHandler = {
     // `onlyAsAnnounced` is: state A, with no block attempt underway.
     if (ctx.window !== "action.effects") return [];
     const af = ctx.action;
-    if (!af || af.step !== "A" || ctx.inBlockAttempt) return [];
+    if (!af || af.step !== "A" || af.announcementWindowClosed || ctx.inBlockAttempt ||
+        ctx.state.eventLog.some(e => e.type === "BlockDeclared" && e.actionId === af.actionId)) return [];
     if (!af.directed || !af.targetMinion) return [];
     if (!mine.some((m) => m.id === af.targetMinion)) return [];
     return opt("fail the action");
@@ -43753,6 +43887,328 @@ const saulotsHealingTouch: CardHandler = {
   },
 };
 
+const hourglassBase = compileSpec(specByName("Hourglass of the Mind"));
+const hourglass: CardHandler = {
+  ...hourglassBase,
+  resolveCardAction(af, ops) {
+    if (af.card?.mode !== "basic" || af.card.params["variant"] !== "tem") {
+      hourglassBase.resolveCardAction?.(af, ops);
+      return;
+    }
+    ops.suspendActionForChoices();
+    ops.drawCardsThenChoice({ seat: af.actingSeat, count: 4, cardName: "Hourglass of the Mind",
+      cardId: af.card.instance.id, key: "top", choiceCount: 4,
+      choiceParams: { acting: af.acting } });
+  },
+  choiceOptions(frame, state, registry) {
+    if (frame.key !== "top") return hourglassBase.choiceOptions?.(frame, state, registry) ?? [];
+    const hand = getSeat(state, frame.seat).hand;
+    if (!hand.length) return [{ id: `choice:Hourglass of the Mind:${frame.cardId}:top:done`,
+      kind: "answerChoice", label: "No cards to move", params: { done: "1" } }];
+    return hand.map(c => ({ id: `choice:Hourglass of the Mind:${frame.cardId}:top:${c.id}`,
+      kind: "answerChoice" as const, label: `Put ${c.name} on top of your library`, params: { pick: c.id } }));
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key !== "top") { hourglassBase.applyChoice?.(frame, choice, ops); return; }
+    const pick = choice.params["pick"];
+    if (pick) ops.moveHandCardToLibraryTop(frame.seat, pick);
+    const left = Number(frame.params["left"] ?? "0") - (pick ? 1 : 0);
+    if (left > 0 && getSeat(ops.state, frame.seat).hand.length) {
+      ops.raiseChoice({ seat: frame.seat, cardName: frame.cardName, cardId: frame.cardId,
+        key: "top", params: { ...frame.params, left: String(left) } });
+    } else {
+      const actor = findMinion(ops.state, frame.params["acting"] ?? "");
+      const action = ops.state.frames.find(f => f.kind === "action" && f.acting === actor?.id);
+      if (actor?.locked && !(action?.kind === "action" && action.noUnlock)) {
+        ops.emit({ type: "MinionUnlocked", minion: actor.id });
+      }
+    }
+  },
+};
+
+/** Nergal ADV's action-scoped paid stealth. The reaction tax is a static. */
+const nergalAdvanced: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Nergal (G5 ADV)")!),
+  abilityOptions(entry, owner, ctx) {
+    const af = ctx.action;
+    const m = owner.minion ? findMinion(ctx.state, owner.minion) : null;
+    if (!af || !m || ctx.seat !== owner.seat || af.acting !== m.id || m.blood < 1 ||
+        ctx.window !== "action.effects" || !ctx.blockAttempt ||
+        !blockWouldSucceed(ctx.state, af.actionId, ctx.blockAttempt.blocker) ||
+        af.usedInPlayAbilities.includes(entry.card.id)) return [];
+    return [{ id: `ability:Nergal (G5 ADV):${entry.card.id}:stealth`, kind: "useAbility",
+      label: "Nergal: burn 1 blood for +1 stealth", source: entry.card.id, params: {} }];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    const af = ops.action();
+    if (!af || !owner.minion) return;
+    ops.markInPlayAbilityUsed(entry.card.id);
+    ops.emit({ type: "BloodBurned", minion: owner.minion, amount: 1 });
+    ops.emit({ type: "StealthModified", actionId: af.actionId, delta: 1, source: entry.card.name });
+  },
+};
+
+/** Andre's optional replacement at the would-be-successful bleed window. */
+const andreLeRoux: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Andre LeRoux (G5)")!),
+  abilityWhenActionWouldSucceed: true,
+  abilityOptions(entry, owner, ctx) {
+    const af = ctx.action;
+    const actor = af ? findMinion(ctx.state, af.acting) : null;
+    if (ctx.window !== "action.effects" || ctx.inBlockAttempt || !af || af.step !== "C" ||
+        af.actionKind !== "bleed" || ctx.seat !== owner.seat || !owner.minion ||
+        !findMinion(ctx.state, owner.minion) || !actor || actor.kind !== "vampire" ||
+        actor.controller !== owner.seat || currentBleed(ctx.state, af) < 1 ||
+        af.usedInPlayAbilities.includes(entry.card.id)) return [];
+    return [{ id: `ability:Andre LeRoux (G5):${entry.card.id}:reduce`, kind: "useAbility",
+      label: "Andre LeRoux: reduce this bleed by 1 for +2 bleed this turn", source: entry.card.id, params: {} }];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    const af = ops.action();
+    const turn = ops.state.frames.find(f => f.kind === "turn");
+    if (!af || !owner.minion || turn?.kind !== "turn") return;
+    ops.markInPlayAbilityUsed(entry.card.id);
+    ops.emit({ type: "BleedAmountModified", actionId: af.actionId, delta: -1, source: entry.card.name, limited: false });
+    (turn.bleedBonuses ??= []).push({ minion: owner.minion, amount: 2 });
+    af.bleedWouldSucceedOnly = true;
+  },
+};
+
+/** The unnamed: its inherent ranged strike and optional bleed payoff. */
+const theUnnamed: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "The unnamed (G6)")!),
+  abilityOptions(entry, owner, ctx) {
+    const cf = ctx.combat;
+    if (ctx.window !== "combat.chooseStrike" || !cf || !owner.minion || ctx.seat !== owner.seat) return [];
+    const side = cf.acting === owner.minion ? "acting" : cf.opposing === owner.minion ? "opposing" : null;
+    const m = findMinion(ctx.state, owner.minion);
+    const order = cf.opposingChoosesFirst ? (["opposing", "acting"] as const) : (["acting", "opposing"] as const);
+    const next = order.find(s => !cf.cannotStrikeRound?.[s] && cf.strikes[s] === null &&
+      (cf.strikeRound === "normal" || cf.additionalStrikes[s] > 0));
+    if (!side || side !== next || !m || m.blood < 1 || cf.strikes[side] !== null || cf.handStrikesOnly ||
+        (cf.strikeRound === "additional" && (cf.additionalStrikes[side] <= 0 || cf.forcedAdditionalStrike[side])) ||
+        (cf.strikeRound === "normal" && cf.forcedHandStrike?.[side] != null) ||
+        (cf.committedStrike[side] !== null && m.attached.some(p => p.card.id === cf.committedStrike[side]))) return [];
+    return [{ id: `ability:The unnamed (G6):${entry.card.id}:strike`, kind: "useAbility",
+      label: "The unnamed: burn 1 blood to strike for 2 ranged aggravated damage", source: entry.card.id, params: {} }];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    if (!owner.minion) return;
+    ops.emit({ type: "BloodBurned", minion: owner.minion, amount: 1 });
+    ops.chooseAbilityDamageStrike(owner.minion, entry.card.name, 2, true, true);
+  },
+  onBleedSuccess(entry, owner, info, ops) {
+    if (!owner.minion || owner.minion !== info.actingMinion) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    ops.raiseChoice({ seat: info.actingSeat, cardName: "The unnamed (G6)", cardId: entry.card.id,
+      key: "bleedPool", optional: true });
+  },
+  choiceOptions(frame) {
+    if (frame.key !== "bleedPool") return [];
+    return [{ id: `choice:The unnamed (G6):${frame.cardId}:bleedPool:yes`, kind: "answerChoice",
+      label: "The unnamed: gain 2 pool", params: {} }];
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key === "bleedPool" && choice.id.endsWith(":yes")) {
+      ops.emit({ type: "PoolGained", seat: frame.seat, amount: 2 });
+    }
+  },
+};
+
+/** Propaganda grants the Methuselah two votes by burning the in-play card. */
+const propagandaOfTheDeed: CardHandler = {
+  ...compileSpec(specByName("Propaganda of the Deed")),
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "referendum.polling" || ctx.seat !== owner.seat || !ctx.referendum ||
+        ctx.referendum.variant !== "political" || !referendumOpenToPlay(ctx.referendum)) return [];
+    return [{ id: `ability:Propaganda of the Deed:${entry.card.id}:votes`, kind: "useAbility",
+      label: "Burn Propaganda of the Deed for 2 votes", source: entry.card.id, params: {} }];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    // Vote grants are independent sources and survive their card being burned.
+    ops.grantVotes({ seat: owner.seat, card: entry.card.id, name: "Propaganda of the Deed" }, 2);
+    ops.burnPermanent(entry.card.id);
+  },
+};
+
+/** Tabriz's controller gets one vote only in the referendum to burn it. */
+const tabrizAssembly: CardHandler = {
+  ...compileSpec(specByName("Tabriz Assembly")),
+  referendumControllerVotes(entry, frame) {
+    return frame.fromCardInPlay && frame.cardInstanceId === entry.card.id ? 1 : 0;
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.unlock" || ctx.turnSeat !== owner.seat || ctx.seat !== owner.seat ||
+        entry.usedThisPhase) return [];
+    // This is not a Hunting Ground: its blood neither uses nor checks the
+    // per-vampire hunting-ground allowance. No ready-region restriction is
+    // printed on the recipient.
+    return getSeat(ctx.state, owner.seat).minions
+      .filter(m => m.kind === "vampire" && m.clan === "True Brujah" && canGainBlood(m))
+      .map(m => ({ id: `ability:Tabriz Assembly:${entry.card.id}:${m.id}`,
+        kind: "useAbility" as const, label: `Tabriz Assembly: ${m.name} gains 1 blood`,
+        source: entry.card.id, params: { target: m.id } }));
+  },
+  useAbility(entry, owner, choice, ops) {
+    const m = findMinion(ops.state, choice.params["target"] ?? "");
+    if (entry.usedThisPhase || !m || m.controller !== owner.seat || m.kind !== "vampire" ||
+        m.clan !== "True Brujah" || !canGainBlood(m)) return;
+    entry.usedThisPhase = true;
+    ops.emit({ type: "BloodGained", minion: m.id, amount: 1 });
+  },
+};
+
+/** Cedric may pay after successfully blocking a directed action. */
+const cedric: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Cedric (G4)")!),
+  abilityOptions(entry, owner, ctx) {
+    const af = ctx.action;
+    if (ctx.window !== "action.afterResolution" || !af || !af.directed ||
+        af.blockedBy !== owner.minion || !owner.minion ||
+        (af.usedInPlayAbilities ?? []).includes(entry.card.id)) return [];
+    const m = findMinion(ctx.state, owner.minion);
+    if (!m || m.controller !== ctx.seat || !m.locked || m.blood < 1) return [];
+    return [{ id: `ability:Cedric (G4):${entry.card.id}:unlock`, kind: "useAbility",
+      label: "Cedric: burn 1 blood to unlock", source: entry.card.id, params: {} }];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    const af = ops.action();
+    const m = owner.minion ? findMinion(ops.state, owner.minion) : null;
+    if (!af || !m || !af.directed || af.blockedBy !== m.id || !m.locked || m.blood < 1 ||
+        (af.usedInPlayAbilities ?? []).includes(entry.card.id)) return;
+    ops.markInPlayAbilityUsed(entry.card.id);
+    ops.emit({ type: "BloodBurned", minion: m.id, amount: 1 });
+    ops.emit({ type: "MinionUnlocked", minion: m.id });
+  },
+};
+
+/** Alex: after his successful bleed the final target may pay to steal him. */
+const alexWilkins: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Alex Wilkins (G5)")!),
+  onActionResolved(entry, owner, info, ops) {
+    if (!info.success || info.actionKind !== "bleed" || owner.minion !== info.acting) return;
+    const af = ops.action();
+    if (!af || af.actionId !== info.actionId || !af.target ||
+        Math.min(currentBleed(ops.state, af), af.bleedPoolCap ?? Infinity) < 1) return;
+    const target = getSeat(ops.state, af.target);
+    if (target.ousted || target.pool < 1 || !findMinion(ops.state, info.acting)) return;
+    ops.raiseChoice({ seat: af.target, cardName: "Alex Wilkins (G5)", cardId: entry.card.id,
+      key: "stealAlex", params: { minion: info.acting }, optional: true });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== "stealAlex" || getSeat(state, frame.seat).pool < 1 ||
+        !findMinion(state, frame.params["minion"] ?? "")) return [];
+    return [{ id: `choice:Alex Wilkins (G5):${frame.cardId}:stealAlex:yes`,
+      kind: "answerChoice", label: "Burn 1 pool to steal Alex Wilkins", params: {} }];
+  },
+  applyChoice(frame, _choice, ops) {
+    const minion = frame.params["minion"];
+    if (!minion || !findMinion(ops.state, minion) || getSeat(ops.state, frame.seat).pool < 1) return;
+    ops.emit({ type: "PoolBurned", seat: frame.seat, amount: 1 });
+    ops.changeMinionControl(minion, frame.seat);
+  },
+};
+
+/** Shalmath may unlock once in each player's turn, in an impulse window.
+ * His special is not a wake/cancel and cannot be used as a card is played
+ * [LSJ 20100614]. The ordinary rules do not require him to be ready. */
+const shalmath: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Shalmath (G6)")!),
+  abilityOptions(entry, owner, ctx) {
+    const windows = ["turn.unlock", "turn.master", "turn.minion", "turn.influence", "turn.discard",
+      "action.announce", "action.effects", "action.afterResolution", "referendum.polling",
+      "referendum.afterResolution", "combat.beforeRange", "combat.beforeStrikes", "combat.endOfRound"];
+    if (!windows.includes(ctx.window) || !owner.minion || entry.usedThisTurn) return [];
+    const bearer = findMinion(ctx.state, owner.minion);
+    if (!bearer || bearer.controller !== ctx.seat || !bearer.locked) return [];
+    // The Sleeping Mind's superior bar includes the after-resolution impulse.
+    if (ctx.action?.noUnlock) return [];
+    return [{ id: `ability:Shalmath (G6):${entry.card.id}:unlock`, kind: "useAbility",
+      label: "Shalmath: unlock (once each turn)", source: entry.card.id, params: { act: "unlock" } }];
+  },
+  useAbility(entry, owner, choice, ops) {
+    if (choice.params["act"] !== "unlock" || !owner.minion) return;
+    entry.usedThisTurn = true;
+    ops.emit({ type: "MinionUnlocked", minion: owner.minion });
+  },
+};
+
+/** Gustav locks himself (not his crypt entry) for his own five votes. */
+const gustavBreidenstein: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Gustav Breidenstein (G4)")!),
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "referendum.polling" || ctx.seat !== owner.seat || !owner.minion) return [];
+    const gustav = findMinion(ctx.state, owner.minion);
+    if (!gustav || gustav.controller !== ctx.seat || !isReady(gustav) || gustav.locked) return [];
+    return [{ id: `ability:Gustav Breidenstein (G4):${entry.card.id}:votes`, kind: "useAbility",
+      label: "Gustav: lock for +5 votes", source: entry.card.id, params: { act: "votes" } }];
+  },
+  useAbility(_entry, owner, choice, ops) {
+    if (choice.params["act"] !== "votes" || !owner.minion) return;
+    ops.emit({ type: "MinionLocked", minion: owner.minion });
+    ops.grantVotes({ minion: owner.minion }, 5);
+  },
+};
+
+/** Horatio calls his own referendum; there is no political card in play. */
+const horatioBallard: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Horatio Ballard (G3)")!),
+  actionOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.minion" || owner.seat !== ctx.seat || !owner.minion) return [];
+    const m = findMinion(ctx.state, owner.minion);
+    if (!m || m.controller !== ctx.seat || m.kind !== "vampire" || !canAct(m) ||
+        m.sect !== "camarilla" || m.title !== null || m.calledPoliticalThisTurn ||
+        auraBlocksPolitical(ctx.state, m) || !canRepeatAction(ctx.state, m, "cardEffect") ||
+        entry.grantedActionUses?.some(u => u.minion === m.id && u.key === "horatioPrince")) return [];
+    return [{ id: `act:Horatio Ballard (G3):${entry.card.id}:prince`, kind: "useEntryAction",
+      label: `${m.name}: call a referendum to become Prince of Chicago (+1 stealth)`,
+      source: entry.card.id, minion: m.id, params: {} }];
+  },
+  useActionOption(entry, _owner, choice, ops) {
+    ops.announceEntryAction(entry, choice.minion, {
+      effect: { key: "horatioPrince" }, political: true, stealth: 1,
+      referendumSource: { cardName: entry.card.name, cardInstanceId: entry.card.id, fromCardInPlay: true },
+    });
+  },
+  applyReferendum(frame, ops) {
+    const m = frame.callingMinion ? findMinion(ops.state, frame.callingMinion) : null;
+    if (!m || m.kind !== "vampire" || m.sect !== "camarilla") return;
+    // A new title makes a vampire yield any title they were contesting.
+    if (m.titleContest) ops.emit({ type: "TitleYielded", minion: m.id, title: m.titleContest.title });
+    ops.emit({ type: "TitleGranted", minion: m.id, title: "prince", city: "Chicago" });
+  },
+};
+
+/** Mithras [G3]: cancel a younger vampire's reaction during his action. */
+const mithrasG3: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Mithras (G3)")!),
+  abilityInAsPlayed: true,
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "card.asPlayed" || !owner.minion || !ctx.action || !ctx.pendingCard) return [];
+    const actor = findMinion(ctx.state, owner.minion);
+    const pending = ctx.pendingCard;
+    const reactor = pending.minion ? findMinion(ctx.state, pending.minion) : null;
+    if (!actor || !isReady(actor) || actor.controller !== ctx.seat || ctx.action.acting !== actor.id ||
+        actor.blood < 2 || ctx.action.usedInPlayAbilities.includes(entry.card.id) ||
+        pending.canceled || !pending.isReaction || !reactor || reactor.kind !== "vampire" ||
+        capacityOf(reactor) >= capacityOf(actor)) return [];
+    return [{
+      id: `ability:Mithras (G3):${entry.card.id}:cancelReaction`,
+      kind: "useAbility",
+      label: `Mithras: burn 2 blood to cancel ${pending.card.name}`,
+      source: entry.card.id,
+      params: { act: "cancelReaction" },
+    }];
+  },
+  useAbility(entry, owner, choice, ops) {
+    if (choice.params["act"] !== "cancelReaction" || !owner.minion) return;
+    ops.markInPlayAbilityUsed(entry.card.id);
+    ops.emit({ type: "BloodBurned", minion: owner.minion, amount: 2 });
+    ops.cancelPendingCard(true);
+  },
+};
+
 /** The phase-limited self-unlocks of Nu and Ibn Khaldun. Their printed
  * abilities do not require readiness, so a controlled vampire in torpor can
  * use them too. The existing per-phase latch is reset in each unlock sweep. */
@@ -43775,8 +44231,8 @@ function phaseBloodSelfUnlock(name: string, phase: "minion" | "discard"): CardHa
         ? ["turn.minion", "action.announce", "action.effects", "action.afterResolution", "referendum.polling", "referendum.afterResolution"]
         : ["turn.discard"];
       if (!windows.includes(ctx.window) || entry.usedThisPhase) return [];
-      // The Sleeping Mind's superior bar applies until the action resolves.
-      if (ctx.action?.noUnlock && ctx.action.step !== "afterResolution") return [];
+      // The Sleeping Mind's superior bar includes the after-resolution impulse.
+      if (ctx.action?.noUnlock) return [];
       if (bearer.id !== entry.card.id || !bearer.locked || bearer.blood < 1) return [];
       return [{
         id: `ability:${name}:${entry.card.id}:unlock`,
@@ -43794,6 +44250,60 @@ function phaseBloodSelfUnlock(name: string, phase: "minion" | "discard"): CardHa
     },
   };
 }
+
+/** Alabástrom: during your turn, unlock another ready Gargoyle once. */
+const alabastrom: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Alabástrom (G6)")!),
+  abilityOptions(entry, owner, ctx) {
+    if (!owner.minion || entry.usedThisTurn || ctx.seat !== ctx.turnSeat) return [];
+    const actor = findMinion(ctx.state, owner.minion);
+    if (!actor || actor.id !== entry.card.id || actor.controller !== ctx.seat || !isReady(actor)) return [];
+    const windows = ["turn.unlock", "turn.master", "turn.minion", "turn.influence", "turn.discard",
+      "action.announce", "action.effects", "action.afterResolution", "referendum.polling", "referendum.afterResolution",
+      "combat.beforeRange", "combat.range", "combat.beforeStrikes", "combat.beforeResolution", "combat.press", "combat.endOfRound"];
+    if (!windows.includes(ctx.window) || (ctx.action?.noUnlock)) return [];
+    return getSeat(ctx.state, actor.controller).minions.filter(m => m.id !== actor.id && m.kind === "vampire" && m.clan === "Gargoyle" && isReady(m) && m.locked).map(m => ({
+      id: `ability:Alabástrom (G6):${entry.card.id}:unlock:${m.id}`, kind: "useAbility" as const,
+      label: `${actor.name}: unlock ${m.name}`, source: entry.card.id, params: { target: m.id },
+    }));
+  },
+  useAbility(entry, owner, choice, ops) {
+    const actor = owner.minion ? findMinion(ops.state, owner.minion) : null;
+    const target = findMinion(ops.state, choice.params["target"] ?? "");
+    if (!actor || !target || target.controller !== actor.controller || !isReady(actor) || !isReady(target) || !target.locked || target.clan !== "Gargoyle" || target.id === actor.id) return;
+    entry.usedThisTurn = true;
+    ops.emit({ type: "MinionUnlocked", minion: target.id });
+  },
+};
+
+/** Silas: the phase wording limits the optional purchase to once per discard phase. */
+const silas: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Silas (G6)")!),
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.discard" || entry.usedThisPhase || !owner.minion) return [];
+    const m = findMinion(ctx.state, owner.minion);
+    if (!m || m.id !== entry.card.id || !isReady(m) || m.controller !== ctx.seat || ctx.turnSeat !== ctx.seat || m.blood < 1) return [];
+    return [{ id: `ability:Silas (G6):${entry.card.id}:discard`, kind: "useAbility", label: `${m.name}: burn 1 blood for an additional discard phase action`, source: entry.card.id, params: {} }];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    if (!owner.minion) return;
+    entry.usedThisPhase = true;
+    ops.emit({ type: "BloodBurned", minion: owner.minion, amount: 1 });
+    ops.addDiscardPhaseActions(1);
+  },
+};
+
+/** Donald: the caller is recorded independently of whether the caller remains in play. */
+const donaldCargill: CardHandler = {
+  ...compileSpec(cryptSpecs.find(s => s.name === "Donald Cargill (G5)")!),
+  onReferendumPassed(_entry, owner, info, ops) {
+    if (!owner.minion) return;
+    const m = findMinion(ops.state, owner.minion);
+    if (m && m.blood > 0 && info.caller === predatorOf(ops.state, m.controller)) {
+      ops.emit({ type: "BloodBurned", minion: m.id, amount: 1 });
+    }
+  },
+};
 
 const nuSelfUnlock = phaseBloodSelfUnlock("Nu, The Pillar (G2)", "minion");
 const ibnSelfUnlock = phaseBloodSelfUnlock("Ibn Khaldun, Scholar (G4)", "discard");
@@ -43937,7 +44447,7 @@ const brujahDebate: CardHandler = {
     const candidates = oldestBrujah(ops.state, turnSeat);
     if (candidates.length === 0) return;
     if (candidates.length === 1) {
-      ops.emit({ type: "MinionLocked", minion: candidates[0]!.id });
+      if (!candidates[0]!.locked) ops.emit({ type: "MinionLocked", minion: candidates[0]!.id });
       return;
     }
     ops.raiseChoice({
@@ -43957,20 +44467,246 @@ const brujahDebate: CardHandler = {
   },
   applyChoice(_frame, choice, ops) {
     const minion = choice.params["minion"];
-    if (minion) ops.emit({ type: "MinionLocked", minion });
+    if (minion && !findMinion(ops.state, minion)?.locked) ops.emit({ type: "MinionLocked", minion });
   },
 };
 
-/** The unlocked ready Brujah of highest capacity a seat controls — the
+/** The controlled Brujah of highest capacity a seat controls — the
  *  candidates for Brujah Debate's forced lock ("one of the oldest"). */
 function oldestBrujah(state: GameState, seat: SeatId): MinionState[] {
   const brujah = getSeat(state, seat).minions.filter(
-    (m) => m.kind === "vampire" && m.clan === "Brujah" && isReady(m) && !m.locked,
+    (m) => m.kind === "vampire" && m.clan === "Brujah",
   );
   if (brujah.length === 0) return [];
-  const oldest = Math.max(...brujah.map((m) => m.capacity));
-  return brujah.filter((m) => m.capacity === oldest);
+  const oldest = Math.max(...brujah.map(capacityOf));
+  return brujah.filter((m) => capacityOf(m) === oldest);
 }
+
+/** The superior requires another ready, unlocked Blood Brother in the
+ * reacting Blood Brother's circle. Angelo's special only applies to cards
+ * requiring Sanguinus played by a Blood Brother, not to non-Blood Brothers. */
+const camaraderieCompiled = compileSpec(specByName("Camaraderie"));
+const camaraderie: CardHandler = {
+  ...camaraderieCompiled,
+  options(card, ctx) {
+    return (camaraderieCompiled.options?.(card, ctx) ?? []).filter(option => {
+      if (option.kind !== "playCard" || option.mode !== "superior" || !option.minion) return true;
+      const reactor = findMinion(ctx.state, option.minion);
+      if (!reactor || reactor.clan !== "Blood Brother") return false;
+      return getSeat(ctx.state, ctx.seat).minions.some(other =>
+        other.id !== reactor.id && other.kind === "vampire" && other.clan === "Blood Brother" &&
+        isReady(other) && !other.locked &&
+        (vampireCircle(other) === vampireCircle(reactor) ||
+          reactor.name === "Angelo (G3)" || other.name === "Angelo (G3)"));
+    });
+  },
+};
+
+/** Circle-aware Unwholesome Bond. Angelo's "as if" special applies only
+ * while controlled and only to Sanguinus cards played by Blood Brothers. */
+const unwholesomeBondCompiled = compileSpec(specByName("Unwholesome Bond"));
+const unwholesomeBond: CardHandler = {
+  ...unwholesomeBondCompiled,
+  options(card, ctx) {
+    const base = unwholesomeBondCompiled.options?.(card, ctx) ?? [];
+    return base.flatMap(option => {
+      if (option.kind !== "playCard" || !option.minion) return [option];
+      const actor = findMinion(ctx.state, option.minion);
+      if (!actor || actor.name !== "Angelo (G3)" || actor.clan !== "Blood Brother") return [option];
+      // One circle for the entire card, not every circle simultaneously.
+      // Unknown opponents' face-down crypt cards are not exposed here.
+      const circles = new Set<string>(BLOOD_BROTHER_CIRCLES.map(c => `named:${c}`));
+      for (const s of ctx.state.seats) {
+        if (s.ousted) continue;
+        for (const m of s.minions) if (m.kind === "vampire") circles.add(vampireCircle(m));
+      }
+      for (const u of getSeat(ctx.state, ctx.seat).uncontrolled) {
+        if (u.card.kind === "vampire") circles.add(vampireCircle(u.card, false));
+      }
+      return [...circles].map(circle => ({ ...option,
+        id: `${option.id}:circle:${circle}`, label: `${option.label} — ${circle}`,
+        params: { ...option.params, circle } }));
+    });
+  },
+  resolveCardAction(af, ops) {
+    unwholesomeBondCompiled.resolveCardAction?.(af, ops);
+    const actor = findMinion(ops.state, af.acting);
+    if (!actor || !af.card) return;
+    const circle = af.card.params["circle"] ?? vampireCircle(actor);
+    if (af.card.mode === "superior") {
+      for (const u of getSeat(ops.state, af.actingSeat).uncontrolled) {
+        if (u.card.kind === "vampire" && u.card.clan === "Blood Brother" &&
+            vampireCircle(u.card, false) === circle) {
+          ops.emit({ type: "UncontrolledBloodAdded", seat: af.actingSeat, minion: u.card.id, amount: 1 });
+        }
+      }
+    } else {
+      const count = ops.state.seats.filter(s => !s.ousted).flatMap(s => s.minions).filter(m =>
+        m.kind === "vampire" && m.clan === "Blood Brother" && isReady(m) && !m.locked &&
+        (vampireCircle(m) === circle || (actor.clan === "Blood Brother" && m.name === "Angelo (G3)")),
+      ).length;
+      ops.emit({ type: "BloodGained", minion: actor.id, amount: count + 1 });
+    }
+  },
+};
+
+/** Choose as New Blood enters during its controller's influence phase,
+ * before it can be contested. The crypt draw happens on the same entry. */
+const newBlood: CardHandler = {
+  ...compileSpec(cryptSpecs.find((s) => s.name === "New Blood (ANY)")!),
+  beforeVampireEnteredPlay(seat, minion, duringInfluenceEnd, ops) {
+    const tf = ops.state.frames[0];
+    if (tf?.kind !== "turn" || tf.seat !== seat ||
+        (tf.phase !== "influence" && !duringInfluenceEnd)) return false;
+    ops.raiseChoice({ seat, cardName: "New Blood (ANY)", cardId: minion, key: "circle",
+      params: { minion, duringInfluenceEnd: duringInfluenceEnd ? "1" : "0" } });
+    return true;
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== "circle") return [];
+    const out: LegalOption[] = BLOOD_BROTHER_CIRCLES.map(circle => ({
+      id: `choice:New Blood (ANY):${frame.cardId}:circle:named:${circle}`,
+      kind: "answerChoice" as const, label: `${circle} circle`, params: { circle: `named:${circle}` },
+    }));
+    // Public vampires have individual circles, including non-Blood Brothers.
+    // The chooser may also use their own known uncontrolled cards, but may
+    // not peek at another Methuselah's face-down uncontrolled region.
+    const candidates = state.seats.filter(s => !s.ousted).flatMap(s => s.minions)
+      .map(m => ({ m, inPlay: true }));
+    candidates.push(...getSeat(state, frame.seat).uncontrolled.map(u => ({ m: u.card, inPlay: false })));
+    const seen = new Set<string>();
+    for (const { m, inPlay } of candidates) {
+      if (m.kind !== "vampire") continue;
+      const circle = vampireCircle(m, inPlay);
+      if (!circle.startsWith("individual:") || seen.has(circle)) continue;
+      seen.add(circle);
+      out.push({ id: `choice:New Blood (ANY):${frame.cardId}:circle:${circle}`,
+        kind: "answerChoice", label: `Circle of ${m.name} (${m.id})`, params: { circle } });
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    const minion = frame.params["minion"];
+    const circle = choice.params["circle"];
+    const entry = getSeat(ops.state, frame.seat).uncontrolled.find(u => u.card.id === minion);
+    if (!entry || !circle || !minion) return;
+    ops.emit({ type: "VampireCircleChosen", seat: frame.seat, minion, circle });
+    ops.moveUncontrolledToReady(frame.seat, minion, frame.params["duringInfluenceEnd"] === "1", true);
+  },
+  onVampireEnteredFromUncontrolled(seat, _minion, duringInfluence, ops) {
+    if (duringInfluence) ops.drawFromCrypt(seat);
+  },
+};
+
+/** Hackerspace counts even Anarchs in torpor, and its triggers belong to
+ * each copy separately (the location is not unique). */
+const hackerspace: CardHandler = {
+  ...compileSpec(specByName("Hackerspace")),
+  onEnterPlay(entry, owner, ops) {
+    const controller = entry.controller ?? owner.seat;
+    const count = ops.state.seats.flatMap(s => s.minions)
+      .filter(m => m.kind === "vampire" && m.controller === controller && m.sect === "anarch").length;
+    if (count > 0) ops.addCounters(entry.card.id, count);
+  },
+  onVampireEnteredPlay(entry, owner, vampire, ops) {
+    if (vampire.controller === (entry.controller ?? owner.seat) && vampire.sect === "anarch") {
+      ops.addCounters(entry.card.id, 1);
+    }
+  },
+  onVampireSectChanged(entry, owner, vampire, previous, ops) {
+    if (vampire.controller === (entry.controller ?? owner.seat) && vampire.sect === "anarch" && previous !== "anarch") {
+      ops.addCounters(entry.card.id, 1);
+    }
+  },
+};
+
+/** The convert's as-enter choice must precede state-based contesting. */
+const anarchConvert: CardHandler = {
+  ...compileSpec(cryptSpecs.find((s) => s.name === "Anarch Convert (ANY)")!),
+  beforeVampireEnteredPlay(seat, minion, duringInfluenceEnd, ops) {
+    if (!getSeat(ops.state, seat).minions.some(m => m.kind === "vampire" && m.title === null)) return false;
+    ops.raiseChoice({ seat, cardName: "Anarch Convert (ANY)", cardId: minion, key: "convert",
+      params: { minion, duringInfluenceEnd: duringInfluenceEnd ? "1" : "0" }, optional: false });
+    return true;
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== "convert") return [];
+    const seat = getSeat(state, frame.seat);
+    const out: LegalOption[] = [{ id: `choice:Anarch Convert (ANY):${frame.cardId}:convert:keep`,
+      kind: "answerChoice", label: "Keep Anarch Convert in play", params: { keep: "1" } }];
+    for (const m of seat.minions) {
+      if (m.kind !== "vampire" || m.title !== null) continue;
+      // Drawing from an empty crypt is legal: draw as many as possible
+      // [LSJ 20060620]. The conversion is still a meaningful effect.
+      for (const benefit of ["pool", "crypt"]) out.push({
+        id: `choice:Anarch Convert (ANY):${frame.cardId}:convert:${m.id}:${benefit}`,
+        kind: "answerChoice", label: `Remove convert: make ${m.name} Anarch and ${benefit === "pool" ? "gain 1 pool" : "draw from crypt"}`,
+        params: { target: m.id, benefit },
+      });
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    const convert = frame.params["minion"];
+    if (!convert || !getSeat(ops.state, frame.seat).uncontrolled.some(u => u.card.id === convert)) return;
+    ops.moveUncontrolledToReady(frame.seat, convert, frame.params["duringInfluenceEnd"] === "1", true);
+    if (choice.params["keep"]) return;
+    const target = findMinion(ops.state, choice.params["target"] ?? "");
+    if (!target || target.controller !== frame.seat || target.kind !== "vampire" || target.title !== null) return;
+    ops.removeMinionFromGame(convert);
+    ops.emit({ type: "MinionSectChanged", minion: target.id, sect: "anarch" });
+    if (choice.params["benefit"] === "pool") ops.emit({ type: "PoolGained", seat: frame.seat, amount: 1 });
+    else if (choice.params["benefit"] === "crypt") ops.drawFromCrypt(frame.seat);
+  },
+};
+
+/** A set of three is spent together, including copies controlled by other
+ * Methuselahs. Choices stay in frames, not closures, so they survive saves. */
+const ashurTablets: CardHandler = {
+  ...compileSpec(specByName("Ashur Tablets")),
+  onEnterPlay(entry, owner, ops) {
+    const controller = entry.controller ?? owner.seat;
+    const controlled = ops.state.seats.flatMap(s => s.permanents
+      .filter(p => p.card.name === "Ashur Tablets" && (p.controller ?? s.id) === controller));
+    if (controlled.length < 3) return;
+    for (const s of ops.state.seats) for (const p of [...s.permanents]) {
+      if (p.card.name === "Ashur Tablets") ops.emit({ type: "PermanentBurned", cardId: p.card.id, name: p.card.name, removed: true });
+    }
+    ops.emit({ type: "PoolGained", seat: controller, amount: 3 });
+    if ((getSeat(ops.state, controller).ashHeap ?? []).length > 0) {
+      ops.raiseChoice({ seat: controller, cardName: "Ashur Tablets", cardId: entry.card.id,
+        key: "ashurHand", optional: false });
+    }
+  },
+  choiceOptions(frame, state, registry) {
+    if (frame.key !== "ashurHand" && frame.key !== "ashurMore") return [];
+    const selected = JSON.parse(frame.params["selected"] ?? "[]") as string[];
+    const candidates = (getSeat(state, frame.seat).ashHeap ?? [])
+      .filter(c => !selected.includes(c.id) && !c.crypt && !registry[c.name]?.isCryptCard);
+    const out: LegalOption[] = [{ id: `choice:Ashur Tablets:${frame.cardId}:${frame.key}:done`,
+      kind: "answerChoice", label: frame.key === "ashurHand" ? "Choose no cards" : "Finish choosing cards",
+      params: { done: "1" } }];
+    if (selected.length < 13) for (const card of candidates) out.push({
+      id: `choice:Ashur Tablets:${frame.cardId}:${frame.key}:${card.id}`,
+      kind: "answerChoice", label: frame.key === "ashurHand" ? `Move ${card.name} to hand` : `Shuffle ${card.name} into library`,
+      params: { card: card.id }, card: card.id,
+    });
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    const selected = JSON.parse(frame.params["selected"] ?? "[]") as string[];
+    const card = choice.params["card"];
+    if (card) selected.push(card);
+    if (card && selected.length < 13) {
+      ops.raiseChoice({ seat: frame.seat, cardName: frame.cardName, cardId: frame.cardId,
+        key: "ashurMore", params: { selected: JSON.stringify(selected) }, optional: false });
+      return;
+    }
+    if (selected[0]) ops.takeFromAshHeap(frame.seat, selected[0]);
+    for (const id of selected.slice(1)) ops.ashToLibrary(frame.seat, id, "bottom");
+    if (selected.length > 1) ops.shuffleLibrary(frame.seat);
+  },
+};
 
 /**
  * Mob Connections (101229) — "you can lock this card to give a minion you
@@ -44220,15 +44956,14 @@ const theRack: CardHandler = {
  * cards (discard down afterward)". The discard-down is a *repeated*
  * non-optional ChoiceFrame: the seat picks which cards go, but cannot stop
  * above hand size. Discards here draw no replacement (they are not plays,
- * p. 7). Deviation: the lock ability is offered only during its
- * controller's own turn phases; the card prints no timing restriction, so
- * "any time" would be more faithful.
+ * p. 7). Ordinary impulses are shared with Dreams of the Sphinx; card
+ * "as played" and specialised damage windows are not normal impulses.
  */
 const nodFragment: CardHandler = {
   ...compileSpec(specByName("Fragment of the Book of Nod")),
   abilityOptions(entry, owner, ctx) {
-    if (ctx.seat !== owner.seat || ctx.turnSeat !== owner.seat) return [];
-    if (entry.locked || !ctx.window.startsWith("turn.")) return [];
+    if (ctx.seat !== (entry.controller ?? owner.seat)) return [];
+    if (entry.locked || !isFreeEffectImpulse(ctx.window)) return [];
     return [
       {
         id: `ability:Fragment of the Book of Nod:${entry.card.id}:draw`,
@@ -44241,10 +44976,11 @@ const nodFragment: CardHandler = {
   },
   useAbility(entry, owner, _choice, ops) {
     ops.lockPermanent(entry.card.id);
-    ops.drawCards(owner.seat, 2);
-    raiseDiscardDown(ops, owner.seat, entry.card.id);
+    ops.drawCardsThenChoice({ seat: owner.seat, count: 2, cardName: "Fragment of the Book of Nod",
+      cardId: entry.card.id, key: "discardDown", choiceCount: 0 });
   },
   choiceOptions(frame, state) {
+    if (getSeat(state, frame.seat).hand.length <= handSizeOf(state, frame.seat)) return [];
     return getSeat(state, frame.seat).hand.map((c) => ({
       id: `choice:Fragment of the Book of Nod:${frame.cardId}:discardDown:${c.id}`,
       kind: "answerChoice" as const,
@@ -44598,7 +45334,7 @@ const pitOfContemplation: CardHandler = {
     for (const seatId of new Set(neighbours)) {
       if (seatId === owner.seat) continue;
       for (const m of getSeat(ctx.state, seatId).minions) {
-        if (m.kind !== "vampire" || m.capacity >= x) continue;
+        if (m.kind !== "vampire" || capacityOf(m) >= x) continue;
         opts.push({
           id: `ability:Pit of Contemplation:${entry.card.id}:${m.id}`,
           kind: "useAbility",
@@ -44615,8 +45351,8 @@ const pitOfContemplation: CardHandler = {
     if (!target) throw new Error("Pit of Contemplation: no target");
     const m = findMinion(ops.state, target);
     if (!m) return;
-    // "Their owner's uncontrolled region" — owner and controller coincide
-    // until control-change lands (design §6.2).
+    // The event locates the current controller; its reducer moves the
+    // vampire to its owner's uncontrolled region, even after theft.
     ops.emit({ type: "MovedToUncontrolled", seat: m.controller, minion: m.id });
     ops.burnPermanent(entry.card.id);
   },
@@ -44636,7 +45372,7 @@ const underSiege: CardHandler = {
     if (!blockEligibleSeats(ctx.state, af).includes(ctx.seat)) return [];
     const opts: LegalOption[] = [];
     for (const m of getSeat(ctx.state, owner.seat).minions) {
-      if (m.kind === "vampire" && m.sect === "sabbat" && isReady(m)) {
+      if (m.kind === "vampire" && m.sect === "sabbat" && isReady(m) && !(af.noUnlock && m.locked)) {
         opts.push({
           id: `ability:Under Siege:${entry.card.id}:${m.id}`,
           kind: "useAbility",
@@ -44651,6 +45387,8 @@ const underSiege: CardHandler = {
   useAbility(entry, _owner, choice, ops) {
     const target = choice.params["target"];
     if (!target) return;
+    const minion = findMinion(ops.state, target);
+    if (!minion || (ops.action()?.noUnlock && minion.locked)) return;
     ops.removeCounters(entry.card.id, 1);
     ops.markInPlayAbilityUsed(entry.card.id);
     ops.unlockAndAttemptBlock(target, { interceptBonus: 1 });
@@ -44968,7 +45706,7 @@ const platinumProtocol: CardHandler = {
     const prey = getSeat(ctx.state, preyOf(ctx.state, ctx.seat));
     const opts: LegalOption[] = [];
     for (const m of seat.minions) {
-      if (m.kind !== "vampire" || !canAct(m) || m.bledThisTurn || m.sect !== "anarch") continue;
+      if (m.kind !== "vampire" || !canAct(m) || m.bledThisTurn || cannotAttemptBleed(ctx.state, m) || m.sect !== "anarch") continue;
       // Tainted Vitae's announcement tax (docs/hunt-success-design.md §3).
       if (m.blood < bleedAnnounceTax(m, prey.id)) continue;
       const mk = (params: Record<string, string>): LegalOption => ({
@@ -45332,7 +46070,7 @@ const dabbler: CardHandler = {
       cardName: "Dabbler",
       cardId: entry.card.id,
       key: "dabble",
-      params: { minion: bearer.id },
+      params: { minion: bearer.id, noUnlock: af.noUnlock ? "1" : "0" },
       optional: true,
     });
   },
@@ -45342,7 +46080,7 @@ const dabbler: CardHandler = {
     const options: LegalOption[] = [];
     // "Burn 1 blood to unlock" is only a thing for a locked vampire that
     // has the blood; an unlocked Dabbler simply takes the gain.
-    if (bearer.locked && bearer.blood >= 1) {
+    if (frame.params["noUnlock"] !== "1" && bearer.locked && bearer.blood >= 1) {
       options.push({
         id: `choice:Dabbler:${frame.cardId}:dabble:unlock`,
         kind: "answerChoice" as const,
@@ -45385,7 +46123,7 @@ const dabbler: CardHandler = {
 const monster: CardHandler = {
   ...compileSpec(specByName("Monster")),
   onCombatEnded(entry, owner, info, ops) {
-    if (entry.usedThisTurn || owner.minion === null) return;
+    if (entry.usedThisTurn || owner.minion === null || ops.action()?.noUnlock) return;
     const bearer = findMinion(ops.state, owner.minion);
     if (!bearer || !bearer.locked || bearer.blood < 1) return;
     const otherId =
@@ -46829,6 +47567,14 @@ export function buildHandlerRegistry(): HandlerRegistry {
   }
   // Bespoke handlers and spec-plus-bespoke overlays override compiled specs.
   for (const bespoke of [
+    hourglass,
+    andreLeRoux,
+    nergalAdvanced,
+    theUnnamed,
+    shalmath,
+    gustavBreidenstein,
+    horatioBallard,
+    mithrasG3,
     flamingCandle,
     giantsBlood,
     golcondaInnerPeace,
@@ -46876,6 +47622,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     shadowCast,
     shadowCloak,
     feverPitch,
+    propagandaOfTheDeed,
+    tabrizAssembly,
     theBarrens,
     bloodDoll,
     vessel,
@@ -46891,6 +47639,13 @@ export function buildHandlerRegistry(): HandlerRegistry {
     yorubaShrine,
     saulotsGuidingWisdom,
     saulotsHealingTouch,
+    silas,
+    alexWilkins,
+    unwholesomeBond,
+    camaraderie,
+    cedric,
+    donaldCargill,
+    alabastrom,
     nuSelfUnlock,
     ibnSelfUnlock,
     nehemiah,
@@ -46900,6 +47655,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     investiture,
     cardinalBenediction,
     dreamsOfTheSphinx,
+    gothBand,
     doggedPursuit,
     organizedResistance,
     melange,
@@ -46914,6 +47670,10 @@ export function buildHandlerRegistry(): HandlerRegistry {
     toreadorGrandBall,
     brujahDebate,
     mobConnections,
+    ashurTablets,
+    hackerspace,
+    anarchConvert,
+    newBlood,
     powerbaseMunich,
     creepingSabotage,
     armyOfRats,
@@ -46962,6 +47722,13 @@ export function buildHandlerRegistry(): HandlerRegistry {
     registry[bespoke.name] = bespoke;
   }
   for (const h of Object.values(registry)) backfillCentralQueries(h);
+  // Path icons are printed on library cards as well as vampire cards.
+  // Expose the actual requirement to effects asking what an action requires.
+  for (const card of libraryCards) {
+    if (!card.path || !registry[card.name]) continue;
+    const handler = registry[card.name]!;
+    registry[card.name] = { ...handler, requiresPaths: () => [card.path!] };
+  }
   // Overlays replace compiled handlers and may omit the printed uniqueness
   // metadata or its own-copy gate. Preserve their other windows and abilities.
   // Compile-time uniqueness already handles ordinary compiled play options.

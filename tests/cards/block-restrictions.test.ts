@@ -7,7 +7,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { VtesEngine } from "../../src/engine/index.ts";
+import { VtesEngine, type GameState } from "../../src/engine/index.ts";
 import { makeAlly, makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
 /** Options offered at the current decision, or throw if none pending. */
@@ -87,4 +87,38 @@ describe("Seduction (101712) — chosen vampire cannot block", () => {
     expect(ids.some((i) => i.includes(":W:"))).toBe(false);
     expect(ids.some((i) => i.includes(":N:"))).toBe(false);
   });
+});
+
+describe("unrestricted vampire targets", () => {
+  it("Seduction superior can choose its acting vampire, and other vampires in torpor or locked", () => {
+    const state = threeSeatGame();
+    const actor = state.seats[0]!.minions[0]!;
+    actor.disciplines.dom = "superior";
+    const other = state.seats[1]!.minions.find(m => m.id === "M")!;
+    other.inTorpor = true; other.locked = true;
+    state.seats[0]!.hand.push({id:"sed-self", name:"Seduction"});
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    const options = engine.decision()!.options;
+    const self = options.find(o => o.kind === "playCard" && o.name === "Seduction" && o.mode === "superior" && o.params.target === "V1");
+    expect(self).toBeDefined();
+    expect(options.some(o => o.kind === "playCard" && o.name === "Seduction" && o.mode === "superior" && o.params.target === "M")).toBe(true);
+    expect(options.some(o => o.kind === "playCard" && o.name === "Seduction" && o.mode === "basic" && o.params.target === "V1")).toBe(false);
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    resumed.choose(self!.id);
+    for (let i=0;i<10 && resumed.state.frames.some(f=>f.kind==='cardPlay');i++) resumed.choose('pass');
+    const af=saved.frames.find(f=>f.kind==='action');
+    expect(af?.kind === 'action' && af.blockRestrictions.cannotBlock).toContain('V1');
+  });
+  it("Sleeping Mind basic may name its locked acting vampire", () => {
+    const state=threeSeatGame();
+    state.seats[0]!.minions[0]!.disciplines.dom='superior';
+    state.seats[0]!.minions[0]!.blood=5;
+    state.seats[0]!.hand.push({id:'sleep-self',name:'The Sleeping Mind'});
+    const engine=new VtesEngine(state,testRegistry);
+    runTrace(engine, [["Alice","bleed:V1"],["Alice","pass"],["Bob","pass"],["Carol","pass"]]);
+    expect(engine.decision()!.options.some(o=>o.kind==='playCard' && o.name==='The Sleeping Mind' && o.mode==='basic' && o.params.target==='V1')).toBe(true);
+  });
+
 });

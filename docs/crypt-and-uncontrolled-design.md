@@ -138,19 +138,17 @@ built two waves apart:
   pushed. "If a political action is successful, before the referendum" is
   therefore that window with `resolvedSuccess === true` and a referendum
   pending, and nothing needed moving.
-- **`ActionFrame.queuedCombats`** (the other-vampire-modifiers wave) is a
-  combat between two minions *neither of which need be the acting
-  minion*, flushed after the action pops. The combat therefore happens
-  before the referendum, because `finishAction` flushes the queue and
-  then pushes the referendum.
+- **`ActionFrame.queuedCombats`** holds the pre-referendum combat while
+  the action remains on the stack. After the window closes, the engine
+  drains the queue and any follow-up combat before calling the referendum.
 - The 2 damage is an **`AfterCombatRider`** with `source: null` —
-  "environmental", which is what `null` has meant since Daring the Dawn.
-
-**Reading on record: "the referendum is conducted as normal" describes
-what happens anyway.** The sentence is reassurance to a human reader that
-the combat does not cancel the vote; the engine pushes the referendum
-from `finishAction` regardless. Reading it as an instruction would be the
-"the minion chooses a strike again" trap for the third time.
+  environmental damage. In a Psyche! sequence it is applied between combats.
+- **`preReferendumCombat`** records if the acting vampire leaves the ready
+  region, so the action ends without a referendum even if that vampire
+  returns before the window closes [LSJ 20060902, LSJ 20090325-1]. The
+  state is serializable across save/load. Tests cover a real torpor from
+  hand strike and a simulated immediate return; Warsaw Station's actual
+  mid-action rescue window is not implemented and remains to be tested.
 
 **Reading on record: the 2 damage is a PRICE, not a penalty for
 failure.** It is taken when the acting vampire is *still ready* — i.e.

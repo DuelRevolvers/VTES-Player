@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { runLocalTraining } from "../../src/ui/ai-lab.ts";
 import { runLocalHeuristicGame } from "../../src/ui/training-games.ts";
 import type { TrainingGameTask } from "../../src/ai/trainer.ts";
+import { preconDeck } from "../../src/ui/deckimport.ts";
+import type { DeckList } from "../../src/ui/decks.ts";
 
 class GameWorker {
   static instances: GameWorker[] = [];
@@ -10,9 +12,9 @@ class GameWorker {
   onmessageerror: (() => void) | null = null;
   terminated = false;
   constructor() { GameWorker.instances.push(this); }
-  postMessage(message: { index: number; task: TrainingGameTask }) {
+  postMessage(message: { index: number; task: TrainingGameTask; candidateDeck?: DeckList }) {
     setTimeout(() => {
-      if (!this.terminated) this.onmessage?.({ data: { index: message.index, result: runLocalHeuristicGame(message.task) } } as MessageEvent);
+      if (!this.terminated) this.onmessage?.({ data: { index: message.index, result: runLocalHeuristicGame(message.task, message.candidateDeck) } } as MessageEvent);
     }, message.index % 2 ? 0 : 3);
   }
   terminate() { this.terminated = true; }
@@ -34,6 +36,17 @@ describe("heuristic training worker integration", () => {
     expect(GameWorker.instances.every((worker) => worker.terminated)).toBe(true);
     expect(parallel.candidates.every((candidate) => candidate.errors === 0)).toBe(true);
   }, 30_000);
+
+  it("uses the same custom deck and results in serial and worker games", async () => {
+    const candidateDeck = preconDeck("Fifth Edition (Anarch)", "Brujah", "candidate")!;
+    const options = { population: 2, generations: 1, gamesPerCandidate: 1, seed: 42, workers: 2, candidateDeck };
+    vi.stubGlobal("Worker", undefined);
+    const serial = await runLocalTraining(options);
+    vi.stubGlobal("Worker", GameWorker);
+    const parallel = await runLocalTraining(options);
+    expect(parallel).toEqual(serial);
+    expect(parallel.candidates.every((candidate) => candidate.errors === 0)).toBe(true);
+  }, 60_000);
 
   it("cleans up workers when a game fails", async () => {
     class BrokenWorker extends GameWorker {

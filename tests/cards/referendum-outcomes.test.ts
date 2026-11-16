@@ -737,3 +737,17 @@ describe("a referendum passing AUTOMATICALLY takes none of them [PIB 20150105]",
     expect(hands).toEqual(expect.arrayContaining(["aura", "tr", "pp", "vd"]));
   });
 });
+
+
+describe("Donald Cargill", () => {
+  it.each([["Bob", true, 3], ["Bob", false, 4], ["Carol", true, 4]] as const)("burns after a passed predator referendum only (%s, pass=%s)", (controller, passed, expected) => {
+    const state = votingGame();
+    const bearer = minion(state, controller === "Bob" ? "W" : "N");
+    bearer.blood = 4;
+    bearer.attached.push({ card: { id: bearer.id, name: "Donald Cargill (G5)" }, locked: false, usedThisPhase: false, statics: testRegistry["Donald Cargill (G5)"]!.cryptEntry!().statics, tags: [] });
+    const engine = new VtesEngine(state, testRegistry);
+    drive(engine, state, [CALL, ["Alice", `vote:V1:${passed ? "for" : "against"}`]]);
+    expect(resolved(state).passed).toBe(passed);
+    expect(bearer.blood).toBe(expected);
+  });
+});

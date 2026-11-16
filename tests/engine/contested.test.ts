@@ -509,6 +509,8 @@ describe("two vampires claiming one city", () => {
     const b = new VtesEngine(state, testRegistry);
     b.decision();
     expect(state.seats[1]!.minions.find((m) => m.id === "arch")!.title).toBe("archbishop");
+    expect(state.seats[1]!.minions.find((m) => m.id === "arch")!.titleCity).toBe("Mannheim");
+    expect(titleContestKey(state.seats[1]!.minions.find((m) => m.id === "arch")!)).toBe("city:mannheim");
     expect(state.seats[1]!.minions.find((m) => m.id === "arch")!.titleContest).toBeUndefined();
   });
 });

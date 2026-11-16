@@ -30,7 +30,11 @@ const toStrikesNoManeuver: Array<[string, string]> = [
   ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // before strikes
 ];
 
-describe("Flamethrower (100742) — aggravated gun", () => {
+describe("Flamethrower (100742) — aggravated weapon", () => {
+  it("is a weapon, not a gun", () => {
+    expect(testRegistry["Flamethrower"]!.permanentTags).toContain("weapon");
+    expect(testRegistry["Flamethrower"]!.permanentTags).not.toContain("gun");
+  });
   it("strikes for 2R aggravated, sending a full-blood attacker to torpor", () => {
     const state = threeSeatGame();
     const v1 = state.seats[0]!.minions[0]!;

@@ -1,4 +1,5 @@
 import type { TrainingGameExecutor, TrainingGameResult, TrainingGameTask } from "../ai/trainer.ts";
+import type { DeckList } from "./decks.ts";
 
 type Response = { index: number; result?: TrainingGameResult; error?: string };
 
@@ -6,7 +7,7 @@ type Response = { index: number; result?: TrainingGameResult; error?: string };
 export class HeuristicWorkerPool {
   private readonly workers: Worker[] = [];
 
-  constructor(count: number, factory: () => Worker = () => new Worker(new URL("./heuristic-game-worker.ts", import.meta.url), { type: "module" })) {
+  constructor(count: number, factory: () => Worker = () => new Worker(new URL("./heuristic-game-worker.ts", import.meta.url), { type: "module" }), private readonly candidateDeck?: DeckList) {
     try {
       if (!Number.isInteger(count) || count < 1) throw new Error("At least one training worker is required.");
       for (let i = 0; i < count; i++) this.workers.push(factory());
@@ -30,7 +31,7 @@ export class HeuristicWorkerPool {
         const index = next++;
         assigned.set(worker, index);
         running++;
-        worker.postMessage({ index, task: tasks[index] });
+        worker.postMessage({ index, task: tasks[index], ...(this.candidateDeck ? { candidateDeck: this.candidateDeck } : {}) });
       } else if (running === 0 && !settled) {
         settled = true; clear(); resolve();
       }

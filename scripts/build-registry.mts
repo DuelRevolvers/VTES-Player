@@ -110,6 +110,7 @@ function toLibraryDef(card: RawKrcgCard, poolSets: string[]): LibraryCardDef {
     image: typeof card.url === "string" ? card.url : "",
     sets: intersectSets(card, poolSets),
   };
+  if (typeof card.path === "string" && card.path !== "") def.path = card.path;
   const raw = pool.raw ?? blood.raw;
   if (raw !== undefined) def.rawCost = raw;
   return def;

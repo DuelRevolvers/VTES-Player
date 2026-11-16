@@ -376,6 +376,9 @@ describe("Black Forest Base (100165)", () => {
   it("a Sabbat vampire calls a referendum that pays its caller 2 pool", () => {
     const state = threeSeatGame();
     setup(state);
+    // A referendum called by a card in play supplies no political-card vote.
+    // Give the caller a real vote so the referendum can pass.
+    must(state, "V1").title = "bishop";
     const engine = new VtesEngine(state, testRegistry);
     const pool = state.seats[0]!.pool;
     expect(offered(engine)).toContain("act:Black Forest Base:L1:referendum:V1");
@@ -389,9 +392,10 @@ describe("Black Forest Base (100165)", () => {
     expect(
       state.eventLog.some((e) => e.type === "StealthModified" && e.delta === 1),
     ).toBe(true);
-    // Polling: Alice votes with the calling card, nobody opposes.
+    // Polling: Alice votes with her bishop, nobody opposes.
     toPolling(engine, state);
-    runTrace(engine, [["Alice", "vote:caller:for"]]);
+    expect(offered(engine)).not.toContain("vote:caller:for");
+    runTrace(engine, [["Alice", "vote:V1:for"]]);
     for (let i = 0; i < 8; i++) {
       if (!state.frames.some((f) => f.kind === "referendum")) break;
       const dp = engine.decision()!;

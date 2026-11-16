@@ -287,6 +287,25 @@ describe("Parity Shift (101353)", () => {
 });
 
 describe("Banishment (100131)", () => {
+  it("compares derived capacity of both the acting and target vampires", () => {
+    const state = threeSeatGame();
+    const actor = state.seats[0]!.minions[0]!;
+    actor.capacity = 5;
+    actor.attached.push(entry("actor-boost", "boost", { statics: { capacityBonus: 2 } }));
+    const bob = state.seats[1]!;
+    const w = bob.minions.find((x) => x.id === "W")!;
+    const m = bob.minions.find((x) => x.id === "M")!;
+    w.capacity = 6;
+    m.capacity = 4;
+    m.attached.push(entry("target-boost", "boost", { statics: { capacityBonus: 3 } }));
+    state.seats[0]!.hand.push({ id: "ban1", name: "Banishment" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, politicalActionTrace("play:Banishment"));
+    const ids = engine.decision()!.options.map((o) => o.id);
+    expect(ids).toContain("terms:W");
+    expect(ids).not.toContain("terms:M");
+  });
+
   it("moves a ready younger vampire to its controller's uncontrolled region", () => {
     const state = threeSeatGame();
     const bob = state.seats[1]!;

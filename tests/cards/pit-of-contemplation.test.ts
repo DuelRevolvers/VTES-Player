@@ -177,4 +177,21 @@ describe("Pit of Contemplation (102291)", () => {
     expect(bob.uncontrolled.some((u) => u.card.id === "W")).toBe(true);
     expect(state.seats[0]!.permanents.some((p) => p.card.id === "pit1")).toBe(false); // burned
   });
+  it("uses current capacity and returns a stolen vampire to its owner's uncontrolled region", () => {
+    const state = hecataGame();
+    const tf = state.frames[0]!;
+    if (tf.kind === "turn") { tf.phase = "unlock"; tf.unlockDone = false; tf.unlockAbilitiesDone = false; }
+    state.seats[0]!.permanents.push(pit(4));
+    const bob = state.seats[1]!;
+    const v = bob.minions[0]!;
+    Object.assign(v, { capacity: 3, owner: "Carol" });
+    v.attached.push({ card: { id: "cap", name: "Potence" }, locked: false, usedThisPhase: false, statics: { capacityBonus: 1 }, tags: [] });
+    const engine = new VtesEngine(state, testRegistry);
+    expect(engine.decision()!.options.some(o => o.id === "ability:Pit of Contemplation:pit1:W")).toBe(false);
+    v.attached[0]!.statics.capacityBonus = 0;
+    engine.choose("ability:Pit of Contemplation:pit1:W");
+    expect(bob.uncontrolled.some(u => u.card.id === "W")).toBe(false);
+    expect(state.seats[2]!.uncontrolled.some(u => u.card.id === "W")).toBe(true);
+  });
+
 });

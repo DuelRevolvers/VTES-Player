@@ -90,10 +90,27 @@ describe("Angel's Gift (102349)", () => {
     expect(find(state, "V1").attached.some((p) => p.card.name === "Sengir Dagger")).toBe(true);
     expect(state.seats[0]!.pool).toBe(pool - 2);
     expect(state.seats[0]!.hand.some((c) => c.id === "kf")).toBe(false);
-    // It IS played (p. 9) — the log is what game-wide uniqueness reads.
-    expect(
-      state.eventLog.some((e) => e.type === "CardPlayed" && e.name === "Sengir Dagger"),
-    ).toBe(true);
+    // The weapon was equipped, not played [ANK 20211228].
+    expect(state.eventLog.some((e) => e.type === "CardPlayed" && e.name === "Sengir Dagger")).toBe(false);
+    expect(state.eventLog.some((e) => e.type === "CardLeftZone" && e.cardId === "kf" && e.zone === "hand")).toBe(true);
+  });
+
+  it("includes the weapon tax in affordability and actual payment", () => {
+    const { state, engine } = intoCombat(hand, { clan: "Salubri" });
+    state.seats[1]!.permanents.push({
+      card: { id: "cbc", name: "Centralized Background Check" }, locked: false,
+      usedThisPhase: false, tags: ["location"],
+      statics: testRegistry["Centralized Background Check"]!.permanentStatics ?? {},
+    });
+    state.seats[0]!.pool = 3;
+    expect(engine.decision()!.options.some((o) => o.id.includes(":equip:kf:"))).toBe(false);
+    state.seats[0]!.pool = 4;
+    const resumed = new VtesEngine(JSON.parse(JSON.stringify(state)) as GameState, testRegistry);
+    const opt = resumed.decision()!.options.find((o) => o.id.includes(":equip:kf:"));
+    expect(opt).toBeDefined();
+    resumed.choose(opt!.id);
+    for (let i = 0; i < 10 && resumed.state.frames.some((f) => f.kind === "cardPlay"); i++) resumed.choose("pass");
+    expect(resumed.state.seats[0]!.pool).toBe(1);
   });
 
   it("requires a Salubri", () => {
@@ -190,6 +207,20 @@ describe("Contraband (102352)", () => {
     ]);
   });
 
+  it("does not move the chosen equipment when Contraband is canceled", () => {
+    const { state, engine } = intoCombat(hand, { clan: "Ravnos", disciplines: { obf: "basic" } });
+    state.seats[1]!.hand.push({ id: "di", name: "Direct Intervention" });
+    engine.choose(engine.decision()!.options.find((o) => o.id.startsWith("play:Contraband:basic"))!.id);
+    for (let i = 0; i < 12 && !engine.decision()?.options.some((o) => o.id.startsWith("play:Direct Intervention")); i++) engine.choose("pass");
+    const di = engine.decision()!.options.find((o) => o.id.startsWith("play:Direct Intervention"));
+    expect(di).toBeDefined();
+    engine.choose(di!.id);
+    for (let i = 0; i < 20 && state.frames.some((f) => f.kind === "cardPlay"); i++) engine.choose("pass");
+    expect(state.seats[0]!.hand.some((c) => c.id === "mag")).toBe(true);
+    expect(find(state, "V1").attached.some((p) => p.card.id === "mag")).toBe(false);
+    expect(state.eventLog.some((e) => e.type === "CardPlayed" && e.cardId === "mag")).toBe(false);
+  });
+
   it("actually charges the chosen split", () => {
     const { state, engine } = intoCombat(hand, {
       clan: "Ravnos",
@@ -204,6 +235,8 @@ describe("Contraband (102352)", () => {
     expect(state.seats[0]!.pool).toBe(pool - 1);
     expect(find(state, "V1").blood).toBe(blood - 1);
     expect(find(state, "V1").attached.some((p) => p.card.name === ".44 Magnum")).toBe(true);
+    expect(state.eventLog.some(e => e.type === "CardPlayed" && e.cardId === "mag")).toBe(false);
+    expect(state.eventLog.some(e => e.type === "CardLeftZone" && e.cardId === "mag" && e.zone === "hand")).toBe(true);
   });
 });
 
@@ -312,6 +345,38 @@ describe("Piper (101401)", () => {
     expect(ally!.kind).toBe("ally");
     // "This is not an action": no ActionFrame was ever announced for it.
     expect(state.eventLog.some((e) => e.type === "ActionAnnounced")).toBe(false);
+  });
+
+  it("does not apply Charisma's action discount to Piper, either at choice or payment", () => {
+    const { state, engine } = game();
+    find(state, "V1").attached.push({
+      card: { id: "charisma", name: "Charisma" }, locked: false, usedThisPhase: false,
+      statics: testRegistry["Charisma"]!.permanentStatics ?? {}, tags: ["Charisma"],
+    });
+    state.seats[0]!.pool = 2;
+    expect(engine.decision()!.options.some((o) => o.id.startsWith("play:Piper:"))).toBe(false);
+    state.seats[0]!.pool = 3;
+    runTrace(engine, [
+      ["Alice", "play:Piper:-:pal:basic:V1:pi"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(state.seats[0]!.pool).toBe(1);
+    expect(state.seats[0]!.minions.some((m) => m.id === "pal")).toBe(true);
+  });
+
+  it("still applies a general ally cost modifier to Piper", () => {
+    const { state, engine } = game();
+    state.seats[0]!.permanents.push({
+      card: { id: "general", name: "test discount" }, locked: false, usedThisPhase: false,
+      tags: [], statics: { playCostMod: { amount: -1, pays: "pool", cardTypes: ["ally"] } },
+    });
+    state.seats[0]!.pool = 2;
+    runTrace(engine, [
+      ["Alice", "play:Piper:-:pal:basic:V1:pi"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(state.seats[0]!.pool).toBe(1);
+    expect(state.seats[0]!.minions.some((m) => m.id === "pal")).toBe(true);
   });
 
   it("is not playable at all without a ready Anarch", () => {
@@ -555,5 +620,17 @@ describe("p. 7 replacement for a card played from hand", () => {
     expect(state.seats[0]!.hand).toHaveLength(handBefore);
     expect(drawn(state)).toEqual([]);
     expect(state.seats[0]!.library.map((c) => c.id)).toEqual(["L1"]);
+    expect(state.eventLog.some(e => e.type === "CardPlayed" && e.cardId === "rs")).toBe(false);
+    expect(state.eventLog.some(e => e.type === "CardLeftZone" && e.cardId === "rs" && e.zone === "library")).toBe(true);
   });
+  it("normal equip action still records an actual CardPlayed", () => {
+    const state = threeSeatGame();
+    state.seats[0]!.hand.push({ id: "dagger-normal", name: "Sengir Dagger" });
+    const engine = new VtesEngine(state, testRegistry);
+    const opt = engine.decision()!.options.find((o) => o.kind === "playCard" && o.card === "dagger-normal");
+    expect(opt).toBeDefined();
+    engine.choose(opt!.id);
+    expect(state.eventLog.some((e) => e.type === "CardPlayed" && e.cardId === "dagger-normal")).toBe(true);
+  });
+
 });

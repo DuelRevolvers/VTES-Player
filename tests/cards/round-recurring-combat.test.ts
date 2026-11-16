@@ -622,7 +622,9 @@ describe("frenzy classification (docs/round-recurring-combat-design.md §6)", ()
     // docs/last-buildable-design.md §3
     const combatFrenzy = frenzy.filter((s) => s.cardType === "combat");
     expect(combatFrenzy.map((s) => s.name).sort()).toEqual([
+      "Drawing Out the Beast",
       "Rage of Apedemak",
+      "Scourge of Alecto",
       "Terror Frenzy",
     ]);
     // …and the non-combat ones are named too, so a new frenzy card of
@@ -638,6 +640,9 @@ describe("frenzy classification (docs/round-recurring-combat-design.md §6)", ()
       const mode = spec.modes.find((m) => m.level === level)!;
       return frenzyTargetSide(mode, "acting");
     };
+    // Drawing Out the Beast affects the opposing vampire in both modes.
+    expect(target("Drawing Out the Beast", "basic")).toBe("opposing");
+    expect(target("Drawing Out the Beast", "superior")).toBe("opposing");
     // Terror Frenzy reaches across in both modes (restrict, then cost).
     expect(target("Terror Frenzy", "basic")).toBe("opposing");
     expect(target("Terror Frenzy", "superior")).toBe("opposing");
