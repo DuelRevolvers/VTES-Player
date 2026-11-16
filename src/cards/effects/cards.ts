@@ -26162,7 +26162,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Agent of Power [100025] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Agent of Power [100025] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 100025,
     name: "Agent of Power",
     cardType: "master",
@@ -26219,7 +26219,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Anachronism [100050] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Anachronism [100050] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 100050,
     name: "Anachronism",
     cardType: "master",
@@ -26989,7 +26989,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Cavalier [100310] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Cavalier [100310] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 100310,
     name: "Cavalier",
     cardType: "master",
@@ -27034,7 +27034,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Chanjelin Ward [100326] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Chanjelin Ward [100326] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 100326,
     name: "Chanjelin Ward",
     cardType: "master",
@@ -27312,7 +27312,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Conniver [100407] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Conniver [100407] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 100407,
     name: "Conniver",
     cardType: "master",
@@ -27502,7 +27502,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Curmudgeon [100482] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Curmudgeon [100482] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 100482,
     name: "Curmudgeon",
     cardType: "master",
@@ -28783,7 +28783,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Inceptor [100969] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // Inceptor [100969] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 100969,
     name: "Inceptor",
     cardType: "master",
@@ -29112,7 +29112,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Legacy of Caine [101086] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // Legacy of Caine [101086] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 101086,
     name: "Legacy of Caine",
     cardType: "master",
@@ -29225,7 +29225,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Loner [101121] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // Loner [101121] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 101121,
     name: "Loner",
     cardType: "master",
@@ -35612,7 +35612,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Toy Chest Test [102002] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // Toy Chest Test [102002] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 102002,
     name: "Toy Chest Test",
     cardType: "master",
@@ -35693,7 +35693,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Trophy: Retainers [102036] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // Trophy: Retainers [102036] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
     krcgId: 102036,
     name: "Trophy: Retainers",
     cardType: "master",
