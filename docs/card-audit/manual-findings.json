@@ -2937,7 +2937,7 @@
     "id": 100490,
     "name": "The Damned",
     "status": "FIXED_TARGETED",
-    "evidence": "Naprawiono: mistrz dołączany do własnego vampire z capacity poniżej 5 (maxCapacity: 4 w attach), unique; statyka bleedSuccessBloodBurn spala 1 dodatkowy blood po każdym udanym bleedzie wampira (po rozstrzygnięciu akcji, notifyActionResolved). Test: tests/cards/the-damned.test.ts (3/3: filtr capacity, udany bleed = o 1 mniej krwi niż bez karty). Nie testowano bleedu nieudanego ani bleedu zablokowanego."
+    "evidence": "Naprawiono: mistrz dołączany do własnego vampire z capacity poniżej 5 (maxCapacity: 4, scope any: dowolny vampire, także przeciwnika), unique; statyka bleedSuccessBloodBurn spala 1 dodatkowy blood po każdym udanym bleedzie wampira (po rozstrzygnięciu akcji, notifyActionResolved). Test: tests/cards/the-damned.test.ts (3/3: filtr capacity, udany bleed = o 1 mniej krwi niż bez karty). Nie testowano bleedu nieudanego ani bleedu zablokowanego."
   },
   {
     "id": 100491,
@@ -7185,7 +7185,7 @@
     "id": 101198,
     "name": "Memories of Mortality",
     "status": "FIXED_TARGETED",
-    "evidence": "Naprawiono: ręczny handler mistrza na własnym vampire (statyki cannotBlockKind: ally oraz allyDamageZeroed). Obrażenia bearera wobec allies są zerowane w pushPendingDamage (DamagePrevented). Ability w turn.influence: 1 blood z bearera, karta spalona, bearer w torpor. Test: tests/cards/memories-of-mortality.test.ts (4/4: zagranie i statyki, kontrola obrażeń 1 vs 0, bearer nie blokuje akcji allies (kontrola: może), ability w influence). Założenie: 'put on a vampire' = vampire kontrolera, jak przy The Damned."
+    "evidence": "Naprawiono: ręczny handler mistrza na własnym vampire (statyki cannotBlockKind: ally oraz allyDamageZeroed). Obrażenia bearera wobec allies są zerowane w pushPendingDamage (DamagePrevented). Ability w turn.influence: 1 blood z bearera, karta spalona, bearer w torpor. Test: tests/cards/memories-of-mortality.test.ts (4/4: zagranie i statyki, kontrola obrażeń 1 vs 0, bearer nie blokuje akcji allies (kontrola: może), ability w influence). Mistrz kładziony na DOWOLNYM vampire (także przeciwnika), jak mistrzowie dyscyplin i ruling o kosztach mistrzów na celu."
   },
   {
     "id": 101199,
@@ -11126,8 +11126,8 @@
   {
     "id": 101855,
     "name": "Spontaneous Power",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast unique dołączenia z wyborem i poziomem dyscypliny oraz traktowania jako discipline master. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: ręczny handler mistrza (unique), zagrywany na DOWOLNYM vampire z wyborem dyscypliny w opcji zagrania (play:...:vampire:karta:dyscyplina). Pary z dyscypliną już na superior nie są oferowane. Statyka disciplineBoost daje +1 poziom, tag discipline. Test: tests/cards/spontaneous-power.test.ts (4/4). Nie testowano kosztu w puli przy zagraniu na cudzym vampire."
   },
   {
     "id": 101856,

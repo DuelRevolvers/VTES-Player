@@ -46,6 +46,13 @@ function passUntil(state: GameState, engine: VtesEngine, pred: (ids: string[]) =
 }
 
 describe("Memories of Mortality (101198)", () => {
+  it("is offered on any vampire, including another Methuselah's", () => {
+    const { state, engine } = setup(true);
+    find(state, "W").capacity = 3;
+    const opts = engine.decision()!.options.map((o) => o.id);
+    expect(opts.some((o) => o.startsWith("play:Memories of Mortality") && o.includes(":W:"))).toBe(true);
+  });
+
   it("is put on a vampire and carries the no-ally-blocks and zero-ally-damage statics", () => {
     const { state, engine } = setup(true);
     expect(engine.decision()!.options.map((o) => o.id)).toContain("play:Memories of Mortality:-:V1:mem");

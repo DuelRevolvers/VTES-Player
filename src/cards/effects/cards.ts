@@ -7,7 +7,7 @@
  */
 
 import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { BLOOD_BROTHER_CIRCLES, vampireCircle, auraBlocksPolitical, canRepeatAction, blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, cannotAttemptBleed, canReact, mayAttemptBlock, canAct, canUseCombatManeuver, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, CLANS, disciplinesOf, handSizeOf, minionHasTag, cannotBeEquipped, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
+import { BLOOD_BROTHER_CIRCLES, vampireCircle, auraBlocksPolitical, canRepeatAction, blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, cannotAttemptBleed, canReact, mayAttemptBlock, canAct, canUseCombatManeuver, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, CLANS, disciplinesOf, DISCIPLINES, handSizeOf, minionHasTag, cannotBeEquipped, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -27538,7 +27538,7 @@ export const cardSpecs: CardSpec[] = [
       where: "bearer",
       statics: { bleedSuccessBloodBurn: 1 },
       tags: ["The Damned"],
-      attach: { scope: "own", kind: "vampire", maxCapacity: 4, inTorporToo: true },
+      attach: { scope: "any", kind: "vampire", maxCapacity: 4, inTorporToo: true },
     },
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
@@ -31677,18 +31677,6 @@ export const cardSpecs: CardSpec[] = [
         discipline: "obe",
         effects: [{ kind: "actionStealth", amount: 1 }, { kind: "actionBleed", bonus: 2 }],
       },
-    ],
-  },
-  {
-    // Spontaneous Power [101855] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
-    krcgId: 101855,
-    name: "Spontaneous Power",
-    cardType: "master",
-    bloodCost: 0,
-    poolCost: 2,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {
@@ -42008,9 +41996,9 @@ function bloodMoverAbility(
  *  inflicts on allies is reduced to 0. This vampire may burn 1 blood during
  *  his or her controller's influence phase to burn this card; he or she
  *  then goes into torpor." Hand-rolled because the influence-phase burn is
- *  an ability, which a spec does not carry. Put on the controller's own
- *  vampire, as the other masters placed on "a vampire" are (the text does
- *  not say "you control"; see docs/card-audit). */
+ *  an ability, which a spec does not carry. "A vampire" is any vampire, as
+ *  for the Discipline masters: the bearer's controller may differ from the
+ *  master's. */
 const MEMORIES_OF_MORTALITY_STATICS = { cannotBlockKind: "ally" as const, allyDamageZeroed: true };
 const memoriesOfMortality: CardHandler = {
   name: "Memories of Mortality",
@@ -42023,7 +42011,10 @@ const memoriesOfMortality: CardHandler = {
   playEffects: () => [{ tag: "board" }],
   options(card, ctx) {
     if (ctx.window !== "turn.master") return [];
-    return getSeat(ctx.state, ctx.seat).minions.filter((m) => m.kind === "vampire").map(
+    // A master is put on ANY vampire, including another Methuselah's
+    // (ruling: "playing Master cards on the target" is charged to every
+    // Methuselah, the target's controller included).
+    return ctx.state.seats.flatMap((seat) => seat.minions).filter((m) => m.kind === "vampire").map(
       (m): LegalOption => ({
         id: playOptionId(this.name, null, m.id, card.id),
         kind: "playCard",
@@ -42071,6 +42062,59 @@ const memoriesOfMortality: CardHandler = {
     ops.emit({ type: "BloodBurned", minion: bearer.id, amount: 1 });
     ops.burnPermanent(entry.card.id);
     ops.sendToTorpor(bearer.id);
+  },
+};
+
+/** Spontaneous Power (101855) — "Unique master. Put this card on a vampire
+ *  and choose a Discipline. This vampire gains 1 level of the chosen
+ *  Discipline. While in play, this card counts as a master: Discipline
+ *  card." The Discipline is chosen as the card is played, so each play
+ *  option names a vampire AND a Discipline. A vampire already at superior
+ *  in the chosen Discipline gets nothing from it, so that pair is not
+ *  offered. Hand-rolled: a spec's modes cannot carry a per-play Discipline
+ *  into the attached statics. */
+const spontaneousPower: CardHandler = {
+  name: "Spontaneous Power",
+  abilityAnySeat: true,
+  bloodCost: 0,
+  poolCost: 2,
+  isMasterCard: true,
+  isUnique: true,
+  permanentTags: ["discipline"],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const out: LegalOption[] = [];
+    for (const m of ctx.state.seats.flatMap((seat) => seat.minions)) {
+      if (m.kind !== "vampire") continue;
+      const have = disciplinesOf(m);
+      for (const code of DISCIPLINES) {
+        if (have[code] === "superior") continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id, code),
+          kind: "playCard",
+          label: `Spontaneous Power on ${m.name} (${code})`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id, discipline: code },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    const code = play.params["discipline"];
+    if (!target || !code) throw new Error("Spontaneous Power: no target or discipline");
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: { disciplineBoost: code },
+      tags: ["discipline"],
+    });
   },
 };
 
@@ -47735,6 +47779,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     theBarrens,
     bloodDoll,
     memoriesOfMortality,
+    spontaneousPower,
     vessel,
     magnum44,
     doubleDeuce,
