@@ -26229,18 +26229,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Anachronism [100050] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 100050,
-    name: "Anachronism",
-    cardType: "master",
-    bloodCost: 0,
-    poolCost: 1,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Anarch Secession [100057] — fala 49 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 100057,
     name: "Anarch Secession",
@@ -42128,6 +42116,63 @@ const spontaneousPower: CardHandler = {
   },
 };
 
+/** Anachronism (100050) — "Master. Put this card on a vampire with capacity
+ *  above 6. This vampire cannot have or use any ranged weapons except the
+ *  Ivory Bow. (If he or she currently has any, they are burned.)"
+ *  Hand-rolled: the attach target is ANY vampire (the text says "a vampire",
+ *  not "you control"), and playing it burns the weapons already held. The
+ *  restriction itself is read where a weapon is offered (compile.ts). */
+const anachronism: CardHandler = {
+  name: "Anachronism",
+  bloodCost: 0,
+  poolCost: 1,
+  isMasterCard: true,
+  permanentTags: [],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const out: LegalOption[] = [];
+    for (const seat of ctx.state.seats) {
+      for (const m of seat.minions) {
+        if (m.kind !== "vampire" || capacityOf(m) <= 6) continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id),
+          kind: "playCard",
+          label: `Anachronism on ${m.name}`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    if (!target) throw new Error("Anachronism: no target");
+    const bearer = findMinion(ops.state, target);
+    if (!bearer) throw new Error(`Anachronism: unknown minion ${target}`);
+    // "If he or she currently has any, they are burned." The Ivory Bow is the
+    // one ranged weapon the restriction allows, so it is not burned.
+    const burn = bearer.attached
+      .filter((p) => {
+        const w = ops.registry[p.card.name]?.weaponProfile;
+        return w?.ranged === true && p.card.name !== "Ivory Bow";
+      })
+      .map((p) => p.card.id);
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: { cannotHaveRangedWeapons: true },
+      tags: [],
+    });
+    for (const id of burn) ops.burnPermanent(id);
+  },
+};
+
 /** Agent of Power (100025) — "Master: Discipline. Trifle. Unique. Put this
  *  card on a vampire you control and choose a Discipline. This vampire gains
  *  1 level of that Discipline. Burn this card during your discard phase."
@@ -47887,6 +47932,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     memoriesOfMortality,
     spontaneousPower,
     agentOfPower,
+    anachronism,
     vessel,
     magnum44,
     doubleDeuce,

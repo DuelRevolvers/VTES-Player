@@ -797,6 +797,9 @@ export interface PermanentStatics {
   cannotBeEquipped?: { retainers?: boolean };
   /** May possess weapons but cannot activate or strike with them (Howler). */
   cannotUseWeapons?: boolean;
+  /** "This vampire cannot have or use any ranged weapons except the Ivory
+   *  Bow" (Anachronism). Read where a weapon is offered to the bearer. */
+  cannotHaveRangedWeapons?: boolean;
   /** The bearer cannot take any hunt action (Talbot's Chainsaw). */
   cannotHunt?: boolean;
   /** "This ally cannot gain life" (Rotting Behemoth) — read in the

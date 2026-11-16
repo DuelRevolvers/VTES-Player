@@ -296,8 +296,8 @@
   {
     "id": 100050,
     "name": "Anachronism",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast dołączenia do wampira o capacity powyżej 6 oraz zakazu i niszczenia ranged weapons. Tekst: src/cards/registry.json, ID 100050; implementacja: src/cards/effects/cards.ts. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz na dowolnym vampire z kapitałem powyżej 6 (ręczny handler). Statyk cannotHaveRangedWeapons blokuje założenie broni dystansowej z wyjątkiem Ivory Bow (compile.ts cannotHaveRangedWeapon). Przy zagraniu spalana jest broń dystansowa już trzymana (oprócz Ivory Bow). Test: tests/cards/anachronism.test.ts (3/3). Nie objęte: kradzież/diablerie przenoszące broń omijają bramkę na razie."
   },
   {
     "id": 100051,

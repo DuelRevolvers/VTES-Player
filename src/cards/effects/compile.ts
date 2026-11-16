@@ -264,6 +264,18 @@ function rulesHold(
 /** "Requires a …" clauses: the playing vampire's title/sect/clan/capacity
  *  (docs/clan-sect-design.md §3). Allies (no clan/sect/title) fail any
  *  such requirement. */
+/** "This vampire cannot have or use any ranged weapons except the Ivory Bow"
+ *  (Anachronism): true when the bearer carries the restriction and this
+ *  weapon is a ranged one other than the Ivory Bow. */
+export function cannotHaveRangedWeapon(
+  bearer: MinionState,
+  name: string,
+  h: { weaponProfile?: { ranged: boolean } },
+): boolean {
+  const restricted = bearer.attached.find((p) => p.card.id === bearer.id)?.statics.cannotHaveRangedWeapons;
+  return !!restricted && h.weaponProfile?.ranged === true && name !== "Ivory Bow";
+}
+
 export function meetsRequirements(m: MinionState, spec: CardSpec): boolean {
   if (spec.requiresTitle && (m.title === null || !spec.requiresTitle.includes(m.title))) {
     return false;
@@ -659,6 +671,7 @@ export function playFromHandChoices(
       const types = h.costTypes?.(null, undefined) ?? [];
       if (!filter.types.some((t) => types.includes(t))) continue;
       if (h.isEquipment && cannotBeEquipped(bearer, "equipment")) continue;
+      if (h.isEquipment && cannotHaveRangedWeapon(bearer, card.name, h)) continue;
       if (h.isRetainer && cannotBeEquipped(bearer, "retainer")) continue;
       // "a melee weapon", "an animal retainer" — printed sub-types the
       // permanent already carries as tags.
