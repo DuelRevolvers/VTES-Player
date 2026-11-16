@@ -1226,6 +1226,10 @@ export interface PermanentStatics {
    *  announcement beside the torpor tax, which is the one existing tax of
    *  this shape. §4 */
   directedActionBloodTax?: number;
+  /** "Other Methuselahs\' actions targeting this vampire cost an additional
+   *  blood" (Chanjelin Ward). Carried by the TARGET and charged to the ACTOR
+   *  when an action names this minion and its controller is another seat. */
+  targetedActionBloodTax?: number;
   /** "This vampire must burn 2 blood to attempt any action EXCEPT HUNTS AND
    *  ACTIONS TO ENTER COMBAT" (Enrage superior). Charged at announcement by
    *  the one helper all three announce paths call, and gated where the

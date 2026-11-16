@@ -4418,6 +4418,7 @@ export class VtesEngine implements EngineOps {
             })
           ? "enterCombat"
           : "other",
+      params.targetMinion ?? null
     );
     this.emit({
       type: "ActionAnnounced",
@@ -7017,6 +7018,7 @@ export class VtesEngine implements EngineOps {
             })
           ? "enterCombat"
           : "other",
+      targetMinion ?? null
     );
     this.emit({
       type: "ActionAnnounced",
@@ -13928,7 +13930,20 @@ export class VtesEngine implements EngineOps {
     m: MinionState,
     directed: boolean,
     kind: "hunt" | "enterCombat" | "other",
+    targetMinion: MinionId | null = null,
   ): void {
+    // "Other Methuselahs' actions targeting this vampire cost an additional
+    // blood" (Chanjelin Ward): the target carries it, the actor pays it.
+    if (targetMinion !== null) {
+      const t = findMinion(this.state, targetMinion);
+      if (t && t.controller !== m.controller) {
+        const tax = Math.min(
+          t.attached.reduce((n, p) => n + (p.statics.targetedActionBloodTax ?? 0), 0),
+          m.blood,
+        );
+        if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
+      }
+    }
     // "DIRECTED actions cost this vampire an additional blood" (Kaymakli
     // Barrier) — a surcharge carried by a card ON THE ACTOR.
     if (directed) {
@@ -14020,7 +14035,7 @@ export class VtesEngine implements EngineOps {
       if (tax > 0) this.emit({ type: "BloodBurned", minion: m.id, amount: tax });
     }
     // No built-in action enters combat; a hunt is exempt by name.
-    this.chargeActionTolls(m, directed, kind === "hunt" ? "hunt" : "other");
+    this.chargeActionTolls(m, directed, kind === "hunt" ? "hunt" : "other", targetMinion);
     this.emit({
       type: "ActionAnnounced",
       actionId,

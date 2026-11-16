@@ -9458,6 +9458,29 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  {
+    // Chanjelin Ward [100326] — "Master. Put this card on a vampire you control.
+    // Other Methuselahs' actions targeting this vampire cost an additional
+    // blood. This vampire can burn this card to cause an action targeting him
+    // or her to fail. A vampire may have only one Chanjelin Ward."
+    // PARTIAL: the surcharge is here (`targetedActionBloodTax`, charged to the
+    // actor). The burn-to-fail option is NOT built: it is an optional window
+    // in an action targeting the bearer, which needs its own offer.
+    krcgId: 100326,
+    name: "Chanjelin Ward",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { targetedActionBloodTax: 1 },
+      tags: [],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "chanjelin-ward",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // Wave 107: five more archetypes on the same skeleton, each paying 1 blood
   // once per turn, automatically (docs/archetypes-design.md §7). Four print
   // "a Sabbat vampire you control".
@@ -27066,17 +27089,6 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: "dom", effects: [{ kind: "actionStealth", amount: 1 }] }
-    ],
-  },
-  {
-    // Chanjelin Ward [100326] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 100326,
-    name: "Chanjelin Ward",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {

@@ -1952,8 +1952,8 @@
   {
     "id": 100326,
     "name": "Chanjelin Ward",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast dołączenia, podatku za akcję oraz spalenia karty dla niepowodzenia akcji (wcześniejszy wpis). Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono CZĘŚCIOWO: karta na własnym vampire (spec) z podatkiem po stronie celu targetedActionBloodTax (+1 krew, płaci aktor, gdy cel to vampire innego Methuselaha; chargeActionTolls dostaje targetMinion). Test: tests/cards/chanjelin-ward.test.ts (3/3). NIE ZBUDOWANO: opcji 'spal tę kartę, by akcja wobec tego vampire się nie udała' (opcjonalne okno w akcji celującej w bearera; EngineOps.failAction istnieje, brak oferty)."
   },
   {
     "id": 100327,
