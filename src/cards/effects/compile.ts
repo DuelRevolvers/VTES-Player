@@ -6883,7 +6883,9 @@ export function attachTargets(
       ? [getSeat(state, seatId)]
       : a.scope === "prey"
         ? [getSeat(state, preyOf(state, seatId))]
-        : state.seats.filter((s) => !s.ousted);
+        : a.scope === "other"
+          ? state.seats.filter((s) => !s.ousted && s.id !== seatId)
+          : state.seats.filter((s) => !s.ousted);
   const out: MinionState[] = [];
   for (const s of seats) {
     if (s.ousted) continue;

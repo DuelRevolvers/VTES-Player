@@ -12003,6 +12003,22 @@ export class VtesEngine implements EngineOps {
         });
       }
     }
+    // Legacy of Caine: a bearer who is not obliged to hunt may still steal
+    // blood as a Ⓓ hunt action (the basic hunt is barred by its `cannotHunt`).
+    for (const m of actors) {
+      if (mustHunt(m) || !m.attached.some((p) => p.statics.legacyStealHunt === true)) continue;
+      for (const v of stealHuntTargets(this.state, m)) {
+        options.push({
+          id: `hunt:${m.id}:steal:${v.id}`,
+          kind: "takeAction",
+          label: `${m.name}: hunt — steal blood from ${v.name} (Legacy of Caine)`,
+          minion: m.id,
+          action: "hunt",
+          targetMinion: v.id,
+          gain: Math.min(v.blood, huntGain(this.state, m)),
+        });
+      }
+    }
     // Action cards: their handlers enumerate legal announcements here. A
     // hunt action card is a hunt, so Restricted Vitae bars it like the
     // basic one (docs/hunt-success-design.md §5).

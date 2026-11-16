@@ -9481,6 +9481,25 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  {
+    // Legacy of Caine [101086] — "Master. Put this card on a vampire with a
+    // capacity above 6 controlled by another Methuselah. This vampire cannot
+    // hunt as normal. He or she may hunt by stealing 1 blood from another
+    // vampire as a Ⓓ action."
+    krcgId: 101086,
+    name: "Legacy of Caine",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { cannotHunt: true, legacyStealHunt: true },
+      tags: [],
+      attach: { scope: "other", kind: "vampire", minCapacity: 7 },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // Wave 107: five more archetypes on the same skeleton, each paying 1 blood
   // once per turn, automatically (docs/archetypes-design.md §7). Four print
   // "a Sabbat vampire you control".
@@ -29153,17 +29172,6 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "strikeCombatEnds", unlockSelf: false }] }
-    ],
-  },
-  {
-    // Legacy of Caine [101086] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 101086,
-    name: "Legacy of Caine",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {

@@ -2971,7 +2971,8 @@ export interface CardSpec {
      *  player (p. 16). */
     attach?: {
       /** Whose minion: your own, your prey's, or any Methuselah's. */
-      scope: "own" | "prey" | "any";
+      /** "…controlled by another Methuselah" (Legacy of Caine): any seat but the playing one. */
+      scope: "own" | "prey" | "any" | "other";
       kind?: "vampire" | "ally";
       clan?: string;
       sect?: Sect;

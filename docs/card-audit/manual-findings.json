@@ -6512,8 +6512,8 @@
   {
     "id": 101086,
     "name": "Legacy of Caine",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast dołączenia do capacity >6 przeciwnika i zastąpienia hunt kradzieżą blood. Porównano tekst i metadane registry z aktualnym kodem; bez nowego testu scenariuszowego. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz na vampire z kapitałem powyżej 6 kontrolowanym przez innego Methuselaha (scope 'other', minCapacity 7). Bearer: cannotHunt (zwykłe polowanie zablokowane) i legacyStealHunt — kradzież 1 krwi z dowolnego innego vampire jako akcja Ⓓ (derived stealHuntTargets, pętla opcji w engine dla bearera niezobowiązanego do polowania). Test: tests/cards/legacy-of-caine.test.ts (3/3). Nie objęte: reguła 'nie łączy się z innymi niestandardowymi polowaniami' (LSJ 20090606) nie jest egzekwowana."
   },
   {
     "id": 101087,

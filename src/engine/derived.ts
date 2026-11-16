@@ -750,6 +750,15 @@ export function huntingRestricted(state: GameState): boolean {
  * turn, as an action granted by a card in play [RBK]. §5
  */
 export function stealHuntTargets(state: GameState, m: MinionState): MinionState[] {
+  // Legacy of Caine: the bearer's own steal hunt, at any other vampire, with
+  // no mandatory hunt and no Restricted Vitae needed (once per turn).
+  if (m.attached.some((p) => p.statics.legacyStealHunt === true)) {
+    if (!canRepeatAction(state, m, "stealHunt")) return [];
+    return state.seats
+      .filter((s) => s.id !== m.controller && !s.ousted)
+      .flatMap((s) => s.minions)
+      .filter((v) => v.kind === "vampire" && !untargetableBy(v, m.controller, m));
+  }
   if (!huntingRestricted(state) || !mustHunt(m)) return [];
   if (!canRepeatAction(state, m, "stealHunt")) return [];
   return state.seats

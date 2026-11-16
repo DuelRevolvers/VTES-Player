@@ -1226,6 +1226,10 @@ export interface PermanentStatics {
    *  announcement beside the torpor tax, which is the one existing tax of
    *  this shape. §4 */
   directedActionBloodTax?: number;
+  /** "…he or she may hunt by stealing 1 blood from another vampire as a Ⓓ
+   *  action" (Legacy of Caine) — the bearer's steal hunt, without the
+   *  Restricted Vitae condition. Once per turn, by `stealHuntTargets`. */
+  legacyStealHunt?: boolean;
   /** "Other Methuselahs\' actions targeting this vampire cost an additional
    *  blood" (Chanjelin Ward). Carried by the TARGET and charged to the ACTOR
    *  when an action names this minion and its controller is another seat. */
