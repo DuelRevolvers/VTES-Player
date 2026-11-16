@@ -2937,7 +2937,7 @@
     "id": 100490,
     "name": "The Damned",
     "status": "FIXED_TARGETED",
-    "evidence": "Naprawiono: mistrz dołączany do własnego vampire z capacity poniżej 5 (maxCapacity: 4, scope any: dowolny vampire, także przeciwnika), unique; statyka bleedSuccessBloodBurn spala 1 dodatkowy blood po każdym udanym bleedzie wampira (po rozstrzygnięciu akcji, notifyActionResolved). Test: tests/cards/the-damned.test.ts (3/3: filtr capacity, udany bleed = o 1 mniej krwi niż bez karty). Nie testowano bleedu nieudanego ani bleedu zablokowanego."
+    "evidence": "Naprawiono: mistrz dołączany do własnego vampire z capacity poniżej 5 (maxCapacity: 4, scope any: dowolny vampire, także przeciwnika), unique; statyka bleedSuccessBloodBurn spala 1 dodatkowy blood po każdym udanym bleedzie wampira (po rozstrzygnięciu akcji, notifyActionResolved). Test: tests/cards/the-damned.test.ts (3/3: filtr capacity, udany bleed = o 1 mniej krwi niż bez karty). Nie testowano bleedu nieudanego ani bleedu zablokowanego. | Test dodany: tests/cards/the-damned.test.ts (3/3): udany bleed zabiera 1 dodatkową krew po akcji; brak bleedu nie zabiera nic; vampire z kapitałem 5 nie dostaje opcji zagrania. Nieudany bleed (blokada) nie jest jeszcze pokryty testem: fixture nie ma minionu Boba."
   },
   {
     "id": 100491,
