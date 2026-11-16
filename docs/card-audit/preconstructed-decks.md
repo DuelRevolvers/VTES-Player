@@ -84,7 +84,7 @@ Występuje w **3** taliach. Naprawiono wybór vampire przeciwnika: karta nie wym
 <a id="karta-100159"></a>
 ### Big Game (100159) — PARTIAL_FIX
 
-Występuje w **1** taliach. Usunięto błędnie przyznawane każdemu celowi maneuver i press. tests/cards/rush-cards.test.ts potwierdza rush na zwykły cel bez obu bonusów i bez unlock. Red List nie jest jeszcze modelowana: prawidłowy opcjonalny maneuver albo press i unlock przy celu Red List pozostają do zrobienia; karta nie jest w pełni poprawna.
+Występuje w **1** taliach. Usunięto błędnie przyznawane każdemu celowi maneuver i press. tests/cards/rush-cards.test.ts potwierdza rush na zwykły cel bez obu bonusów i bez unlock. Red List nie jest jeszcze modelowana: prawidłowy opcjonalny maneuver albo press i unlock przy celu Red List pozostają do zrobienia; karta nie jest w pełni poprawna. Paczka 2: tekst (Ⓓ, Red List: optional maneuver lub press i unlock przy końcu akcji) pozostaje częściowo niezaimplementowany wg ustaleń paczki 1; status bez zmian.
 
 <a id="karta-100227"></a>
 ### Blur (100227) — UNRESOLVED
@@ -109,17 +109,17 @@ Występuje w **2** taliach. Oba poziomy niedostępne przeciw ally [PIB 20121028]
 <a id="karta-100645"></a>
 ### Enkil Cog (100645) — PARTIAL_FIX
 
-Występuje w **1** taliach. Po successful bleed przeciw prey karta jest teraz unikalnym permanentem na aktorze capacity >=10 i daje mu stałe +1 bleed. tests/cards/enkil-cog-audit.test.ts. Wciąż brak dodatkowej akcji w dowolnej minion phase, a relacja prey po oust wymaga weryfikacji.
+Występuje w **1** taliach. Po successful bleed przeciw prey karta jest teraz unikalnym permanentem na aktorze capacity >=10 i daje mu stałe +1 bleed. tests/cards/enkil-cog-audit.test.ts. Wciąż brak dodatkowej akcji w dowolnej minion phase, a relacja prey po oust wymaga weryfikacji. Paczka 2: LSJ 20081213-1 (anulowana akcja przy zagraniu nie zużywa Cog) nie ma testu; dodatkowa akcja w minion phase nadal brakuje. Status bez zmian.
 
 <a id="karta-100678"></a>
 ### Eye of Hazimel (100678) — PARTIAL_FIX
 
-Występuje w **1** taliach. Naprawiono jednoczesne nadawanie superior Potence i Chimerstry; tests/cards/eye-hazimel-audit.test.ts sprawdza oba poziomy oraz usunięcie bonusów po utracie karty. Nadal brak zakazu przenoszenia/kradzieży, upkeep 1 pool i 5 unpreventable damage przy spaleniu; te istotne błędy pozostają otwarte.
+Występuje w **1** taliach. Naprawiono jednoczesne nadawanie superior Potence i Chimerstry; tests/cards/eye-hazimel-audit.test.ts sprawdza oba poziomy oraz usunięcie bonusów po utracie karty. Nadal brak zakazu przenoszenia/kradzieży, upkeep 1 pool i 5 unpreventable damage przy spaleniu; te istotne błędy pozostają otwarte. Paczka 2: dodano 5 unpreventable environmental damage na bearera przy spaleniu przez burnPermanent (onLeavePlay, eye-hazimel-audit.test.ts). Nadal brak: upkeep w unlock phase (1 pool albo spalenie karty), zakaz przenoszenia/kradzieży przy ready bearerze; spalenia poza burnPermanent nie wywołują hooka.
 
 <a id="karta-100785"></a>
 ### Fragment of the Book of Nod (100785) — PARTIAL_FIX
 
-Występuje w **1** taliach. Fragment of the Book of Nod: osobny handler realizuje draw/discard i ogranicza ability do faz własnej tury; jego komentarz wskazuje możliwe szersze okno. Tekst nie określa timingu; potrzebne rozstrzygnięcie zasad oraz testy poza własną turą. Aktualizacja: Poszerzono dostępność o zwykłe impulsy w turze innych Methuselahów, akcjach i walce, z wyłączeniem as-played. Dwa dobierania są kontynuowane przed discard down także przy przekierowaniu i po save/load; tests/cards/fragment-impulse-audit.test.ts. Zakres innych specjalnych okien nadal wymaga sprawdzenia; ruling ANK 20200616 https://www.vekn.net/forum/rules-questions/78687-the-erciyes-fragments-fragment-of-the-book-of-nod-barrens-impulse#100110.
+Występuje w **1** taliach. Fragment of the Book of Nod: osobny handler realizuje draw/discard i ogranicza ability do faz własnej tury; jego komentarz wskazuje możliwe szersze okno. Tekst nie określa timingu; potrzebne rozstrzygnięcie zasad oraz testy poza własną turą. Aktualizacja: Poszerzono dostępność o zwykłe impulsy w turze innych Methuselahów, akcjach i walce, z wyłączeniem as-played. Dwa dobierania są kontynuowane przed discard down także przy przekierowaniu i po save/load; tests/cards/fragment-impulse-audit.test.ts. Zakres innych specjalnych okien nadal wymaga sprawdzenia; ruling ANK 20200616 https://www.vekn.net/forum/rules-questions/78687-the-erciyes-fragments-fragment-of-the-book-of-nod-barrens-impulse#100110. Paczka 2: RTR 20040501 (nie można użyć, gdy karta jest zagrywana, by dobrać kartę anulującą 'as it is played') nieweryfikowane. Status bez zmian.
 
 <a id="karta-100903"></a>
 ### Heart of Nizchetus (100903) — PARTIAL_FIX
@@ -334,7 +334,7 @@ Występuje w **1** taliach. Dodano directed rush Hrothulfa na ready miniona inne
 <a id="karta-201052"></a>
 ### New Blood (ANY) (201052) — PARTIAL_FIX
 
-Występuje w **2** taliach. Dodano wybór dowolnego nazwanego circle albo circle jednego znanego wampira przed wejściem i contest, model identyfikacji circle oraz dobór crypt w swojej influence; wybór przeżywa save/load i jest usuwany po powrocie do uncontrolled. Wykorzystują go Unwholesome Bond i Camaraderie (także circle of one oraz save/load); pozostałe karty Sanguinus nie są jeszcze zintegrowane z modelem, a wszystkie sposoby wejścia i interakcje contest wymagają kontroli. tests/cards/new-blood-audit.test.ts, blood-brother-circle-audit.test.ts, unwholesome-bond-circle-audit.test.ts. Korekta poprzedniego ustalenia: późniejszy ruling Rules Director z 13.11.2021 pozwala New Blood dołączyć do circle of one innego wampira, wbrew starszej interpretacji z 2019: https://www.vekn.net/forum/rules-questions/79465-unwholesome-bond-angelo-circle-of-one-new-blood-and-circle.
+Występuje w **2** taliach. Dodano wybór dowolnego nazwanego circle albo circle jednego znanego wampira przed wejściem i contest, model identyfikacji circle oraz dobór crypt w swojej influence; wybór przeżywa save/load i jest usuwany po powrocie do uncontrolled. Wykorzystują go Unwholesome Bond i Camaraderie (także circle of one oraz save/load); pozostałe karty Sanguinus nie są jeszcze zintegrowane z modelem, a wszystkie sposoby wejścia i interakcje contest wymagają kontroli. tests/cards/new-blood-audit.test.ts, blood-brother-circle-audit.test.ts, unwholesome-bond-circle-audit.test.ts. Korekta poprzedniego ustalenia: późniejszy ruling Rules Director z 13.11.2021 pozwala New Blood dołączyć do circle of one innego wampira, wbrew starszej interpretacji z 2019: https://www.vekn.net/forum/rules-questions/79465-unwholesome-bond-angelo-circle-of-one-new-blood-and-circle. Paczka 2: ANK 20211113 (dwa uncontrolled New Blood w różnych kręgach) nie ma osobnego testu w tej paczce. Status bez zmian.
 
 <a id="karta-201274"></a>
 ### Shalmath (G6) (201274) — PARTIAL_FIX
@@ -359,7 +359,7 @@ Występuje w **1** taliach. Poprawiono ofertę: opcjonalny wybór bezpośrednio 
 <a id="karta-201680"></a>
 ### Opikun (G7) (201680) — PARTIAL_FIX
 
-Występuje w **2** taliach. Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; pozostałe interakcje nieweryfikowane. Aktualizacja: zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental; test z pakietami i starym zapisem w tests/cards/hecata-huldu-audit.test.ts. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń.
+Występuje w **2** taliach. Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; pozostałe interakcje nieweryfikowane. Aktualizacja: zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental; test z pakietami i starym zapisem w tests/cards/hecata-huldu-audit.test.ts. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń. Paczka 2: ponownie sprawdzono tekst (independent, do 2 nieaggravated z jednego strike). Wciąż otwarte: okno kolejności obrażeń i stare zapisy bez pochodzenia; status bez zmian.
 
 <a id="karta-201750"></a>
 ### Eulogio Sánchez de los Reyes (G6) (201750) — PARTIAL_FIX

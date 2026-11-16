@@ -38860,6 +38860,25 @@ function condCrypt(
  * burns it (the Giant's Blood / Open War precedent).
  */
 const flamingCandleBase = compileSpec(specByName("Flaming Candle"));
+/**
+ * Eye of Hazimel (100678) — "If this equipment is burned, it inflicts 5
+ * unpreventable environmental damage on the bearer." The bearer is read
+ * while the card is still attached: `burnPermanent` runs `onLeavePlay`
+ * before it emits `PermanentBurned` and removes the card. Burns that do
+ * not go through `burnPermanent` (e.g. a bearer burned with its
+ * equipment) do not reach this hook.
+ */
+const eyeOfHazimel: CardHandler = {
+  ...compileSpec(specByName("Eye of Hazimel")),
+  onLeavePlay(entry, _owner, ops) {
+    const bearer = ops.state.seats
+      .flatMap((s) => s.minions)
+      .find((m) => m.attached.some((p) => p.card.id === entry.card.id));
+    if (!bearer || bearer.kind !== "vampire") return;
+    ops.applyEnvironmentalDamage(bearer.id, 5, false);
+  },
+};
+
 const flamingCandle: CardHandler = {
   ...flamingCandleBase,
   options(card, ctx) {
@@ -47672,6 +47691,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     mobConnections,
     ashurTablets,
     hackerspace,
+    eyeOfHazimel,
     anarchConvert,
     newBlood,
     powerbaseMunich,
