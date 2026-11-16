@@ -2936,8 +2936,8 @@
   {
     "id": 100490,
     "name": "The Damned",
-    "status": "PARTIAL_FIX",
-    "evidence": "Brak unique dołączanego do vampire capacity poniżej 5 i blood po successful bleed; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte."
+    "status": "CODE_DISCREPANCY",
+    "evidence": "Brak unique dołączanego do vampire capacity poniżej 5 i blood po successful bleed; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
   },
   {
     "id": 100491,
@@ -7185,7 +7185,7 @@
     "id": 101198,
     "name": "Memories of Mortality",
     "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast dołączenia do vampire z zakazem bloku allies, redukcją damage i opcją spalenia/torpor. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "evidence": "Master daje gainPool zamiast dołączenia do vampire z zakazem bloku allies, redukcją damage i opcją spalenia/torpor. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
   },
   {
     "id": 101199,
@@ -11126,8 +11126,8 @@
   {
     "id": 101855,
     "name": "Spontaneous Power",
-    "status": "PARTIAL_FIX",
-    "evidence": "Master daje gainPool zamiast unique dołączenia z wyborem i poziomem dyscypliny oraz traktowania jako discipline master. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte."
+    "status": "CODE_DISCREPANCY",
+    "evidence": "Master daje gainPool zamiast unique dołączenia z wyborem i poziomem dyscypliny oraz traktowania jako discipline master. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
   },
   {
     "id": 101856,
@@ -12231,7 +12231,7 @@
     "id": 102039,
     "name": "Trophy: Wealth",
     "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast Trophy z pięcioma counterami do zapłaty za equipment; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "evidence": "Master daje gainPool zamiast Trophy z pięcioma counterami do zapłaty za equipment; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
   },
   {
     "id": 102040,
@@ -12525,7 +12525,7 @@
     "id": 102088,
     "name": "Vampiric Disease",
     "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast disease counter z propagacją, zakazem gain blood z hunt i kosztem przy unlock. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "evidence": "Master daje gainPool zamiast disease counter z propagacją, zakazem gain blood z hunt i kosztem przy unlock. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
   },
   {
     "id": 102089,

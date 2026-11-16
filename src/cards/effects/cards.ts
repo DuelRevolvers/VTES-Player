@@ -27524,7 +27524,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // The Damned [100490] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // The Damned [100490] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
     krcgId: 100490,
     name: "The Damned",
     cardType: "master",
@@ -29511,7 +29511,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Memories of Mortality [101198] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // Memories of Mortality [101198] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
     krcgId: 101198,
     name: "Memories of Mortality",
     cardType: "master",
@@ -31684,7 +31684,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Spontaneous Power [101855] — fala 51 wierna (300) pełna zgodność bez wydmuszek
+    // Spontaneous Power [101855] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
     krcgId: 101855,
     name: "Spontaneous Power",
     cardType: "master",
@@ -35704,7 +35704,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Trophy: Wealth [102039] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // Trophy: Wealth [102039] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
     krcgId: 102039,
     name: "Trophy: Wealth",
     cardType: "master",
@@ -35787,7 +35787,7 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Vampiric Disease [102088] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // Vampiric Disease [102088] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
     krcgId: 102088,
     name: "Vampiric Disease",
     cardType: "master",

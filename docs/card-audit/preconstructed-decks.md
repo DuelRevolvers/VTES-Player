@@ -144,7 +144,7 @@ Występuje w **2** taliach. Wąski zakres: wyszukanie/equip po sukcesie, koszt i
 <a id="karta-101198"></a>
 ### Memories of Mortality (101198) — CODE_DISCREPANCY
 
-Występuje w **1** taliach. Master daje gainPool zamiast dołączenia do vampire z zakazem bloku allies, redukcją damage i opcją spalenia/torpor. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego.
+Występuje w **1** taliach. Master daje gainPool zamiast dołączenia do vampire z zakazem bloku allies, redukcją damage i opcją spalenia/torpor. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json.
 
 <a id="karta-101272"></a>
 ### Nephandus (101272) — PARTIAL_FIX
