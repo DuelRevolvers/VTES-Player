@@ -2936,8 +2936,8 @@
   {
     "id": 100490,
     "name": "The Damned",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Brak unique dołączanego do vampire capacity poniżej 5 i blood po successful bleed; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz dołączany do własnego vampire z capacity poniżej 5 (maxCapacity: 4 w attach), unique; statyka bleedSuccessBloodBurn spala 1 dodatkowy blood po każdym udanym bleedzie wampira (po rozstrzygnięciu akcji, notifyActionResolved). Test: tests/cards/the-damned.test.ts (3/3: filtr capacity, udany bleed = o 1 mniej krwi niż bez karty). Nie testowano bleedu nieudanego ani bleedu zablokowanego."
   },
   {
     "id": 100491,

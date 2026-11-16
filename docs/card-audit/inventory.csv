@@ -488,7 +488,7 @@
 "100487","Dagger","library","true","PARTIAL_FIX",""
 "100488","Dagon's Call","library","true","CONFIRMED_BUG",""
 "100489","Dam the Heart's River","library","true","CONFIRMED_BUG",""
-"100490","The Damned","library","true","CODE_DISCREPANCY","simple_gain_pool_text_mismatch_review"
+"100490","The Damned","library","true","FIXED_TARGETED",""
 "100491","Danse Macabre","library","true","CONFIRMED_BUG","simple_gain_pool_text_mismatch_review"
 "100492","Daring the Dawn","library","true","REVIEWED_NO_ISSUE_FOUND",""
 "100493","Dark Influences","library","true","REVIEWED_NO_ISSUE_FOUND",""

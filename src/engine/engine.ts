@@ -4920,6 +4920,17 @@ export class VtesEngine implements EngineOps {
     // the card there: played on its own acting vampire, it would otherwise
     // burn on its own resolution. A card cancelled as it was played opened
     // no action, so it never reaches here [LSJ 20090208].
+    // "…burns 1 additional blood for each bleeding action he or she
+    // successfully performs (after resolving the action)" (The Damned).
+    const bleeder = findMinion(this.state, af.acting);
+    if (success && af.actionKind === "bleed" && bleeder) {
+      const extra = (bleeder.attached ?? []).reduce(
+        (n, p) => n + (p.statics.bleedSuccessBloodBurn ?? 0),
+        0,
+      );
+      const toBurn = Math.min(extra, bleeder.blood);
+      if (toBurn > 0) this.emit({ type: "BloodBurned", minion: bleeder.id, amount: toBurn });
+    }
     const actor = findMinion(this.state, af.acting);
     const spent = (actor?.attached ?? [])
       .filter((p) => p.statics.burnAfterBearerAction && p.card.id !== af.card?.instance.id)

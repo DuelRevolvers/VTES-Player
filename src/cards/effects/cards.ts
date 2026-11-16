@@ -27524,16 +27524,24 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // The Damned [100490] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
+    // The Damned [100490] — "Unique master. Put this card on a vampire with
+    // a capacity below 5. The vampire with this card burns 1 additional
+    // blood for each bleeding action he or she successfully performs (after
+    // resolving the action)." Attached, so it reads its bearer's statics.
     krcgId: 100490,
     name: "The Damned",
     cardType: "master",
     bloodCost: 0,
     poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { bleedSuccessBloodBurn: 1 },
+      tags: ["The Damned"],
+      attach: { scope: "own", kind: "vampire", maxCapacity: 4, inTorporToo: true },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Danse Macabre [100491] — fala 49 wierna (300) pełna zgodność bez wydmuszek

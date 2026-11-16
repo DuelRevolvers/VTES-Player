@@ -1229,6 +1229,10 @@ export interface PermanentStatics {
    *  superior) — the BEARER's next action, whatever its outcome, and never
    *  the action that put the card in play. */
   burnAfterBearerAction?: boolean;
+  /** "The vampire with this card burns 1 additional blood for each bleeding
+   *  action he or she successfully performs (after resolving the action)"
+   *  (The Damned). Read on the actor when the action resolves. */
+  bleedSuccessBloodBurn?: number;
   /** "Burn this card at the end of this turn" (Enrage inferior, Bloodlust)
    *  — swept once as the turn ends. */
   burnAtEndOfTurn?: boolean;

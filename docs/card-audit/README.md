@@ -8,7 +8,7 @@ To **triage, nie ręczny audyt ani potwierdzenie poprawności**. UNREVIEWED ozna
 |---|---:|
 | crypt_empty_spec_with_text_review | 648 |
 | no_runtime_handler | 8 |
-| simple_gain_pool_text_mismatch_review | 179 |
+| simple_gain_pool_text_mismatch_review | 178 |
 
 ## Udokumentowane ustalenia ręczne
 
@@ -505,7 +505,7 @@ To udokumentowane ustalenia, a nie pełne sprawdzenie wszystkich interakcji tych
 | 100487 | Dagger | PARTIAL_FIX | Spec sprzętu nie implementuje melee strike, rzutu na dystans, obrażeń aggravated przeciw Kiasyd, dodatkowego Dagger ani spalenia po prevent. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts. Aktualizacja: poprawiono drukowany podtyp w metadanych i karcie wchodzącej do gry (tests/cards/printed-subtypes.test.ts); wcześniejsze wzmianki o braku tego podtypu są już nieaktualne. Pozostałe wskazane błędy i niezweryfikowane interakcje pozostają otwarte. |
 | 100488 | Dagon's Call | CONFIRMED_BUG | Brak hand strike i powtarzanych niepreventowalnych obrażeń, limitu per combat oraz superior; spec daje press i prevent. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. |
 | 100489 | Dam the Heart's River | CONFIRMED_BUG | Brak frenzy, limitu, wzrostu damage i superior kosztu strikes; zamiast tego maneuver. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. |
-| 100490 | The Damned | CODE_DISCREPANCY | Brak unique dołączanego do vampire capacity poniżej 5 i blood po successful bleed; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json. |
+| 100490 | The Damned | FIXED_TARGETED | Naprawiono: mistrz dołączany do własnego vampire z capacity poniżej 5 (maxCapacity: 4 w attach), unique; statyka bleedSuccessBloodBurn spala 1 dodatkowy blood po każdym udanym bleedzie wampira (po rozstrzygnięciu akcji, notifyActionResolved). Test: tests/cards/the-damned.test.ts (3/3: filtr capacity, udany bleed = o 1 mniej krwi niż bez karty). Nie testowano bleedu nieudanego ani bleedu zablokowanego. |
 | 100491 | Danse Macabre | CONFIRMED_BUG | Brak wyboru ready Sabbat i jednorazowego płatnego unlock po successful action; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. |
 | 100492 | Daring the Dawn | REVIEWED_NO_ISSUE_FOUND | W sprawdzonym zakresie: Dwa poziomy blokują vampire i zadają właściwe 2/1 aggravated po akcji; block-tax.test.ts. Szczególne interakcje niezbadane. |
 | 100493 | Dark Influences | REVIEWED_NO_ISSUE_FOUND | W sprawdzonym zakresie: Osobny out-of-turn handler anuluje minion card, zapisuje zakaz i osłonę przed kolejnym anulowaniem; out-of-turn-cancels.test.ts obejmuje kilka wariantów osłony. |

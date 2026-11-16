@@ -2983,6 +2983,8 @@ export interface CardSpec {
       path?: string;
       /** "…with capacity 8 or more" (Regent). */
       minCapacity?: number;
+      /** "…a vampire with capacity below 5" (The Damned) is `maxCapacity: 4`. */
+      maxCapacity?: number;
       /** "Cannot be put on a vampire with superior Celerity [CEL]" — the
        *  Discipline master cards have nothing to give a vampire already at
        *  superior in that Discipline. */

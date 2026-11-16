@@ -6876,6 +6876,8 @@ export function attachTargets(
       // Visage) — a printed crypt trait, like the two filters above it.
       if (a.path !== undefined && m.path !== a.path) continue;
       if (a.minCapacity !== undefined && capacityOf(m) < a.minCapacity) continue;
+      // "…a vampire with capacity below 5" (The Damned).
+      if (a.maxCapacity !== undefined && capacityOf(m) > a.maxCapacity) continue;
       // "Cannot be put on a vampire with superior Celerity [CEL]" — the
       // Discipline master cards, which raise a level and so have nothing
       // left to give once the vampire is already at superior.
