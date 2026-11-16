@@ -7,9 +7,9 @@ To zestawienie aktualnych wpisów audytu, nie ponowna weryfikacja wszystkich kla
 ## Podsumowanie
 
 - Unikalne karty: **727**; z wpisem w audycie: **727**; bez wpisu: **0**. Brakujące ID w registry: **0**; karty bez flagi supported: **0**.
-- Otwarte ustalenia dotyczą **61 różnych kart**: CODE_DISCREPANCY 5, PARTIAL_FIX 52, CONFIRMED_BUG 3, UNRESOLVED 1. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
+- Otwarte ustalenia dotyczą **60 różnych kart**: CODE_DISCREPANCY 5, PARTIAL_FIX 52, CONFIRMED_BUG 2, UNRESOLVED 1. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
 - **29/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
-- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **76**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
+- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **77**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
 
 ## Dodatkowe scenariusze odtworzone w silniku
 
@@ -56,7 +56,7 @@ Liczby to **różne ID kart**, a nie liczba kopii. Listy obejmują tylko otwarte
 | Sabbat V5 / Path of Cathari | pełna | 35 | 3 | [Anarch Troublemaker](#karta-100058), [Fever Pitch](#karta-102321), [Gostoso (G6)](#karta-201754) |
 | Sabbat V5 / Path of Death | pełna | 41 | 3 | [Obedience](#karta-101309), [Dance of the Dead](#karta-102314), [Eulogio Sánchez de los Reyes (G6)](#karta-201750) |
 | Sabbat V5 / Path of Power and the Inner Voice | pełna | 42 | 1 | [Věnceslava, The Implacable (G6)](#karta-201776) |
-| 🏆 Tournament Winners 2025 / 2025-10-19 — Shalmath Toolbox (EC Day 2, Aarhus — Nerijus Mikalajūnas, 50p) | pełna | 36 | 17 | [Big Game](#karta-100159), [The Book of Going Forth by Night](#karta-100239), [Enkil Cog](#karta-100645), [Eye of Hazimel](#karta-100678), [Heart of Nizchetus](#karta-100903), [Hourglass of the Mind](#karta-100941), [Nephandus](#karta-101272), [Outside the Hourglass](#karta-101338), [Summon History](#karta-101897), [Talbot's Chainsaw](#karta-101931), [Tye Cooper](#karta-102053), [Alex Wilkins (G5)](#karta-200048), [Anarch Convert (ANY)](#karta-200076), [Donald Cargill (G5)](#karta-200365), [New Blood (ANY)](#karta-201052), [Shalmath (G6)](#karta-201274), [Walker Grimes (G5)](#karta-201462) |
+| 🏆 Tournament Winners 2025 / 2025-10-19 — Shalmath Toolbox (EC Day 2, Aarhus — Nerijus Mikalajūnas, 50p) | pełna | 36 | 16 | [Big Game](#karta-100159), [Enkil Cog](#karta-100645), [Eye of Hazimel](#karta-100678), [Heart of Nizchetus](#karta-100903), [Hourglass of the Mind](#karta-100941), [Nephandus](#karta-101272), [Outside the Hourglass](#karta-101338), [Summon History](#karta-101897), [Talbot's Chainsaw](#karta-101931), [Tye Cooper](#karta-102053), [Alex Wilkins (G5)](#karta-200048), [Anarch Convert (ANY)](#karta-200076), [Donald Cargill (G5)](#karta-200365), [New Blood (ANY)](#karta-201052), [Shalmath (G6)](#karta-201274), [Walker Grimes (G5)](#karta-201462) |
 | 🏆 Tournament Winners 2025 / 2025-06-21 — Gangrel Death Star (NAC 2025, Columbus — Martin Weinmayer, 62p, Wall) | pełna | 41 | 2 | [Heart of Nizchetus](#karta-100903), [André the Manipulator (G5)](#karta-200081) |
 | 🏆 Tournament Winners 2024 / 2024-06-22 — Govern Resistance (NAC 2024, Columbus — Bill Troxel, 54p, Tzimisce Toolbox) | pełna | 35 | 1 | [New Blood (ANY)](#karta-201052) |
 | 🏆 Tournament Winners 2024 / 2024-11-16 — Gangrel Swarm v3 (Slovak NC, Bratislava — Jakub Rypar, 22p, Wall/Swarm) | pełna | 38 | 0 | — |
@@ -89,17 +89,12 @@ Występuje w **1** taliach. Usunięto błędnie przyznawane każdemu celowi mane
 <a id="karta-100227"></a>
 ### Blur (100227) — UNRESOLVED
 
-Występuje w **1** taliach. Basic i superior zawierają ograniczone odpowiednio 1 i 2 additional strikes; combat-strikes.test.ts sprawdza superior po zwykłej parze strike. docs/additional-strike-followups.md wskazuje problem okna kolejnych źródeł przy pending strikes; brak odrębnego rozstrzygnięcia interakcji Blur z dalszymi źródłami.
-
-<a id="karta-100239"></a>
-### The Book of Going Forth by Night (100239) — CONFIRMED_BUG
-
-Występuje w **1** taliach. Jest unique i superior Serpentis, ale brak zastąpienia spalenia ally przejęciem i lock. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts.
+Występuje w **1** taliach. Basic i superior zawierają ograniczone odpowiednio 1 i 2 additional strikes; combat-strikes.test.ts sprawdza superior po zwykłej parze strike. docs/additional-strike-followups.md wskazuje problem okna kolejnych źródeł przy pending strikes; brak odrębnego rozstrzygnięcia interakcji Blur z dalszymi źródłami. Paczka 3: bez zmian; wymaga decyzji o oknie kolejnych źródeł additional strikes (docs/additional-strike-followups.md).
 
 <a id="karta-100475"></a>
 ### Cry Wolf (100475) — CONFIRMED_BUG
 
-Występuje w **1** taliach. Spec ma rush i press, ale brak obowiązku rush, torpor aktora gdy rekrutacja jest blokowana, zakazu normalnego unlock i spalenia locked werewolfa w unlock. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts.
+Występuje w **1** taliach. Spec ma rush i press, ale brak obowiązku rush, torpor aktora gdy rekrutacja jest blokowana, zakazu normalnego unlock i spalenia locked werewolfa w unlock. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts. Paczka 3: nadal brak obowiązku rush, torpora przy zablokowanej rekrutacji, zakazu normalnego unlock i spalenia locked werewolfa w unlock (CONFIRMED_BUG bez zmian). LSJ 20031014 (unlock w unlock phase bez spalenia) i LSJ 20090226 nieprzetestowane.
 
 <a id="karta-100585"></a>
 ### Drawing Out the Beast (100585) — PARTIAL_FIX

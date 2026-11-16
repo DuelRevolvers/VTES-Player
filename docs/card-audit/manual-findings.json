@@ -1359,7 +1359,7 @@
     "id": 100227,
     "name": "Blur",
     "status": "UNRESOLVED",
-    "evidence": "Basic i superior zawierają ograniczone odpowiednio 1 i 2 additional strikes; combat-strikes.test.ts sprawdza superior po zwykłej parze strike. docs/additional-strike-followups.md wskazuje problem okna kolejnych źródeł przy pending strikes; brak odrębnego rozstrzygnięcia interakcji Blur z dalszymi źródłami."
+    "evidence": "Basic i superior zawierają ograniczone odpowiednio 1 i 2 additional strikes; combat-strikes.test.ts sprawdza superior po zwykłej parze strike. docs/additional-strike-followups.md wskazuje problem okna kolejnych źródeł przy pending strikes; brak odrębnego rozstrzygnięcia interakcji Blur z dalszymi źródłami. Paczka 3: bez zmian; wymaga decyzji o oknie kolejnych źródeł additional strikes (docs/additional-strike-followups.md)."
   },
   {
     "id": 100228,
@@ -1430,8 +1430,8 @@
   {
     "id": 100239,
     "name": "The Book of Going Forth by Night",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Jest unique i superior Serpentis, ale brak zastąpienia spalenia ally przejęciem i lock. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Paczka 3: superior Serpentis oraz zamiana burn opozycyjnego allya w przejęcie i lock z 1 life, gdy ally miał 0 (engine.stealAllyInsteadOfBurn, static stealOpposingAllyInsteadOfBurn na karcie; walka kończy się). tests/cards/book-going-forth.test.ts z kontrolą bez Book. Nie modelowano Imbued (ANK 20220816), bo Imbued nie jest allyem w silniku."
   },
   {
     "id": 100240,
@@ -2847,7 +2847,7 @@
     "id": 100475,
     "name": "Cry Wolf",
     "status": "CONFIRMED_BUG",
-    "evidence": "Spec ma rush i press, ale brak obowiązku rush, torpor aktora gdy rekrutacja jest blokowana, zakazu normalnego unlock i spalenia locked werewolfa w unlock. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts."
+    "evidence": "Spec ma rush i press, ale brak obowiązku rush, torpor aktora gdy rekrutacja jest blokowana, zakazu normalnego unlock i spalenia locked werewolfa w unlock. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts. Paczka 3: nadal brak obowiązku rush, torpora przy zablokowanej rekrutacji, zakazu normalnego unlock i spalenia locked werewolfa w unlock (CONFIRMED_BUG bez zmian). LSJ 20031014 (unlock w unlock phase bez spalenia) i LSJ 20090226 nieprzetestowane."
   },
   {
     "id": 100476,

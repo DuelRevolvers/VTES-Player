@@ -237,7 +237,7 @@
 "100236","Bonding","library","true","REVIEWED_NO_ISSUE_FOUND",""
 "100237","Bone Spur","library","true","REVIEWED_NO_ISSUE_FOUND",""
 "100238","Bonecraft","library","true","CONFIRMED_BUG",""
-"100239","The Book of Going Forth by Night","library","true","CONFIRMED_BUG",""
+"100239","The Book of Going Forth by Night","library","true","FIXED_TARGETED",""
 "100240","Border Skirmish","library","true","CONFIRMED_BUG",""
 "100241","Botched Move","library","true","CONFIRMED_BUG",""
 "100242","Bounty","library","true","CONFIRMED_BUG","simple_gain_pool_text_mismatch_review"

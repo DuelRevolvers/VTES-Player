@@ -968,6 +968,11 @@ export interface PermanentStatics {
    *  burn it" (FBI Special Affairs Division).
    *  docs/counter-clock-events-design.md §3 */
   allyBurnedInCombat?: { damage: number; burnAt: number };
+  /** "If an ally opposing this vampire in combat would be burned, instead
+   *  steal and lock the ally; if the ally has lost their last life, they
+   *  gain 1 life" (The Book of Going Forth by Night). Read off the bearer
+   *  while the ally's burn is decided, in `burnDepleted`. */
+  stealOpposingAllyInsteadOfBurn?: true;
   /** "Rescuing an OLDER vampire from torpor costs +N blood" (Torpid
    *  Blood). Older = greater capacity; the rescuer pays the extra. */
   olderRescueTax?: number;

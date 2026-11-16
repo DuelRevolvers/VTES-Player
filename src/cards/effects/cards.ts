@@ -21342,7 +21342,10 @@ export const cardSpecs: CardSpec[] = [
     unique: true,
     permanent: {
       where: "bearer",
-      statics: { disciplineGrant: { discipline: "ser", level: "superior" } },
+      statics: {
+        disciplineGrant: { discipline: "ser", level: "superior" },
+        stealOpposingAllyInsteadOfBurn: true,
+      },
       tags: ["equipment"],
     },
     usable: [],

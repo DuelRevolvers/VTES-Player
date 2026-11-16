@@ -2196,6 +2196,7 @@ export class VtesEngine implements EngineOps {
       }
       for (const m of seat.minions) {
         if (m.kind === "ally" && m.blood <= 0) {
+          if (this.stealAllyInsteadOfBurn(m)) return true;
           this.burnMinion(m.id);
           return true;
         }
@@ -2212,6 +2213,36 @@ export class VtesEngine implements EngineOps {
       }
     }
     return false;
+  }
+
+  /**
+   * "If an ally opposing this vampire in combat would be burned, instead
+   * steal and lock the ally; if the ally has lost their last life, they
+   * gain 1 life" (The Book of Going Forth by Night). The replacement is for
+   * a burn only, so it is checked where an ally at 0 life would be burned,
+   * and it needs the Book's bearer to be one of the two combatants with the
+   * ally as the other. The combat ends, because the ally is no longer the
+   * opposing minion it was.
+   */
+  private stealAllyInsteadOfBurn(ally: MinionState): boolean {
+    const cf = this.combatFrame();
+    if (!cf) return false;
+    const other =
+      cf.opposing === ally.id ? cf.acting : cf.acting === ally.id ? cf.opposing : null;
+    if (!other) return false;
+    const bearer = findMinion(this.state, other);
+    if (!bearer || bearer.kind !== "vampire") return false;
+    if (!bearer.attached.some((p) => p.statics.stealOpposingAllyInsteadOfBurn)) {
+      return false;
+    }
+    const taker = bearer.controller;
+    if (ally.controller !== taker) this.changeMinionControl(ally.id, taker);
+    this.emit({ type: "MinionLocked", minion: ally.id });
+    // "…if the ally has lost their last life, they gain 1 life": at 0 blood
+    // it has, so it survives with 1.
+    if (ally.blood <= 0) this.emit({ type: "BloodGained", minion: ally.id, amount: 1 });
+    cf.endedPrematurely = true;
+    return true;
   }
 
   burnMinion(minionId: MinionId): void {
