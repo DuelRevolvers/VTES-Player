@@ -8,7 +8,7 @@ To **triage, nie ręczny audyt ani potwierdzenie poprawności**. UNREVIEWED ozna
 |---|---:|
 | crypt_empty_spec_with_text_review | 648 |
 | no_runtime_handler | 8 |
-| simple_gain_pool_text_mismatch_review | 176 |
+| simple_gain_pool_text_mismatch_review | 175 |
 
 ## Udokumentowane ustalenia ręczne
 
@@ -2054,7 +2054,7 @@ To udokumentowane ustalenia, a nie pełne sprawdzenie wszystkich interakcji tych
 | 102036 | Trophy: Retainers | CODE_DISCREPANCY | Master daje gainPool zamiast Trophy z opcjonalnym employ retainera z library/hand w unlock; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER. |
 | 102037 | Trophy: Revered | CODE_DISCREPANCY | Master daje jednorazowy limited bleed zamiast Trophy ze stałym +2 bleed i limitem jednej kopii; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |
 | 102038 | Trophy: Safe Passage | CODE_DISCREPANCY | Master daje gainPool zamiast Trophy chroniącego ready bearera przed cudzymi actions; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |
-| 102039 | Trophy: Wealth | CODE_DISCREPANCY | Master daje gainPool zamiast Trophy z pięcioma counterami do zapłaty za equipment; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json. |
+| 102039 | Trophy: Wealth | FIXED_TARGETED | Naprawiono: mistrz dołączany do DOWOLNEGO vampire, startsWithCounters 5 i burnWhenCountersEmpty (spalenie po zużyciu ostatniego licznika); costSource for equipment, pays blood/pool. paymentSplits czyta też dołączone karty bearera (wcześniej tylko lokacje w seat.permanents). Test: tests/cards/trophy-wealth.test.ts (3/3: 5 liczników, płatność 2 pool z liczników i brak zmiany puli, spalenie po ostatnim liczniku). |
 | 102040 | True Faith | PARTIAL_FIX | Master daje gainPool zamiast unique attach na non-infernal z ochroną, aggravated damage i warunkowym burn. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. |
 | 102041 | True Love's Face | FIXED_TARGETED | Koszt anulowania przez blokującego dotyczy tylko superior, także gdy basic zagrano w trakcie próby bloku. tests/cards/cheap-tail.test.ts. |
 | 102042 | Trumped-Up Charges | CODE_DISCREPANCY | Political action daje stealth zamiast wymogu titled non-Red List, wyboru i nadania Red List oraz referendum burn i głosów. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. |

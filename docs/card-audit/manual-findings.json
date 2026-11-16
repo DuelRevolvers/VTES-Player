@@ -12230,8 +12230,8 @@
   {
     "id": 102039,
     "name": "Trophy: Wealth",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast Trophy z pięcioma counterami do zapłaty za equipment; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz dołączany do DOWOLNEGO vampire, startsWithCounters 5 i burnWhenCountersEmpty (spalenie po zużyciu ostatniego licznika); costSource for equipment, pays blood/pool. paymentSplits czyta też dołączone karty bearera (wcześniej tylko lokacje w seat.permanents). Test: tests/cards/trophy-wealth.test.ts (3/3: 5 liczników, płatność 2 pool z liczników i brak zmiany puli, spalenie po ostatnim liczniku)."
   },
   {
     "id": 102040,

@@ -2037,7 +2037,7 @@
 "102036","Trophy: Retainers","library","true","CODE_DISCREPANCY","simple_gain_pool_text_mismatch_review"
 "102037","Trophy: Revered","library","true","CODE_DISCREPANCY",""
 "102038","Trophy: Safe Passage","library","true","CODE_DISCREPANCY","simple_gain_pool_text_mismatch_review"
-"102039","Trophy: Wealth","library","true","CODE_DISCREPANCY","simple_gain_pool_text_mismatch_review"
+"102039","Trophy: Wealth","library","true","FIXED_TARGETED",""
 "102040","True Faith","library","true","PARTIAL_FIX","simple_gain_pool_text_mismatch_review"
 "102041","True Love's Face","library","true","FIXED_TARGETED",""
 "102042","Trumped-Up Charges","library","true","CODE_DISCREPANCY",""

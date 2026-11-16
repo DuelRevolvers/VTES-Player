@@ -557,7 +557,10 @@ export function paymentSplits(
 ): Array<{ params: Record<string, string>; blood: number; pool: number }> {
   const splits = [{ params: {} as Record<string, string>, ...cost }];
   if (cost.blood === 0 && cost.pool === 0) return splits;
-  for (const entry of getSeat(ctx.state, ctx.seat).permanents) {
+  // Sources are the seat's locations AND the cards attached to this minion:
+  // "The vampire with this card can use these counters" (Trophy: Wealth)
+  // names the bearer, so its own attachments are offered to it.
+  for (const entry of [...getSeat(ctx.state, ctx.seat).permanents, ...minion.attached]) {
     const src = entry.costSource;
     if (!src || src.for !== cardType) continue;
     if (src.clan !== undefined && minion.clan !== src.clan) continue;

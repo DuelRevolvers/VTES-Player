@@ -35688,15 +35688,26 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Trophy: Wealth [102039] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
+    // Trophy: Wealth [102039] — "Master. Trophy. When this card is placed on a
+    // vampire, put five counters on it. The vampire with this card can use
+    // these counters to pay some or all of the blood or pool cost of
+    // equipment. Burn this card when the last counter is removed."
+    // Counters on an attached card are a cost source for its bearer
+    // (paymentSplits reads the minion's own attachments).
     krcgId: 102039,
     name: "Trophy: Wealth",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { startsWithCounters: 5, burnWhenCountersEmpty: true },
+      tags: ["Trophy: Wealth"],
+      attach: { scope: "any", kind: "vampire", inTorporToo: true },
+      costSource: { pays: ["blood", "pool"], for: "equipment" },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // True Faith [102040] — fala 45 wierna (300) pełna zgodność bez wydmuszek
