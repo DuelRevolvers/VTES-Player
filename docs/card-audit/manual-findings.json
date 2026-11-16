@@ -2846,8 +2846,8 @@
   {
     "id": 100475,
     "name": "Cry Wolf",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Spec ma rush i press, ale brak obowiązku rush, torpor aktora gdy rekrutacja jest blokowana, zakazu normalnego unlock i spalenia locked werewolfa w unlock. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts. Paczka 3: nadal brak obowiązku rush, torpora przy zablokowanej rekrutacji, zakazu normalnego unlock i spalenia locked werewolfa w unlock (CONFIRMED_BUG bez zmian). LSJ 20031014 (unlock w unlock phase bez spalenia) i LSJ 20090226 nieprzetestowane."
+    "status": "PARTIAL_FIX",
+    "evidence": "Paczka 4: zablokowana zagrywka (recruit) wysyła działającego anarcha do torporu (hook onActionBlockedAsPlayed); werewolf pozostaje locked (bearerDoesNotUnlock), a jeśli jest locked w unlock phase, zostaje spalony. tests/cards/cry-wolf.test.ts z kontrolą bez bloku. Nadal brak obowiązkowego Ⓓ rush na minion innego Methuselah i pressa przy walce (press jest statycznie). LSJ 20090226 i LSJ 20031014 nieprzetestowane osobno."
   },
   {
     "id": 100476,

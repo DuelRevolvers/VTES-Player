@@ -27447,7 +27447,7 @@ export const cardSpecs: CardSpec[] = [
     ally: { life: 3, strength: 2, bleed: 0 },
     permanent: {
       where: "bearer",
-      statics: { pressPerCombat: 1 },
+      statics: { pressPerCombat: 1, bearerDoesNotUnlock: true },
       rushGrant: { who: { scope: "bearer" }, target: { scope: "any", othersOnly: true } },
       tags: ["werewolf"],
     },
@@ -38882,6 +38882,25 @@ const eyeOfHazimel: CardHandler = {
   },
 };
 
+/**
+ * Cry Wolf (100475). Its unlock clause is the engine's `bearerDoesNotUnlock`
+ * (it stays locked); "if he is locked during your unlock phase, burn him"
+ * is the conditional part, read here. "If the action to recruit this ally
+ * is blocked, the acting anarch goes to torpor" fires from the blocked
+ * play, before the werewolf would have entered play.
+ */
+const cryWolf: CardHandler = {
+  ...compileSpec(specByName("Cry Wolf")),
+  onControllerUnlock(_entry, owner, ops) {
+    if (owner.minion === null) return;
+    const m = findMinion(ops.state, owner.minion);
+    if (m?.locked) ops.burnMinion(owner.minion);
+  },
+  onActionBlockedAsPlayed(info, ops) {
+    ops.sendToTorpor(info.acting);
+  },
+};
+
 const flamingCandle: CardHandler = {
   ...flamingCandleBase,
   options(card, ctx) {
@@ -47695,6 +47714,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     ashurTablets,
     hackerspace,
     eyeOfHazimel,
+    cryWolf,
     anarchConvert,
     newBlood,
     powerbaseMunich,

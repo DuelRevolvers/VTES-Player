@@ -1783,6 +1783,14 @@ export interface CardHandler {
     },
     ops: EngineOps,
   ): void;
+  /** The action that PLAYED this card was blocked, so the card never
+   *  entered play (Cry Wolf: "If the action to recruit this ally is
+   *  blocked, the acting anarch goes to torpor"). Fired on the handler of
+   *  the card being played, with the acting minion. */
+  onActionBlockedAsPlayed?(
+    info: { acting: MinionId; actingSeat: SeatId },
+    ops: EngineOps,
+  ): void;
   /** A combat has ended (Monster). The `CombatEnded` event carries only
    *  the round count, so the combatants come from the frame, read before
    *  it pops. */

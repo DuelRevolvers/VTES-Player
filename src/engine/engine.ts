@@ -10885,6 +10885,12 @@ export class VtesEngine implements EngineOps {
   }
 
   private resolveActionInner(af: ActionFrame, success: boolean, resumeEntered?: boolean): void {
+    if (resumeEntered === undefined && !success && af.blockedBy != null && af.card) {
+      this.handler(af.card.instance.name)?.onActionBlockedAsPlayed?.(
+        { acting: af.acting, actingSeat: af.actingSeat },
+        this,
+      );
+    }
     const enteredAtSuccess = resumeEntered ?? (success ? this.applySuccessEffects(af) : false);
     if (resumeEntered === undefined && af.pendingSuccessChoices) {
       af.pendingSuccessChoices.entered = enteredAtSuccess;

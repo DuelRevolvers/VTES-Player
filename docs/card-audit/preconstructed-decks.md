@@ -7,7 +7,7 @@ To zestawienie aktualnych wpisów audytu, nie ponowna weryfikacja wszystkich kla
 ## Podsumowanie
 
 - Unikalne karty: **727**; z wpisem w audycie: **727**; bez wpisu: **0**. Brakujące ID w registry: **0**; karty bez flagi supported: **0**.
-- Otwarte ustalenia dotyczą **60 różnych kart**: CODE_DISCREPANCY 5, PARTIAL_FIX 52, CONFIRMED_BUG 2, UNRESOLVED 1. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
+- Otwarte ustalenia dotyczą **60 różnych kart**: CODE_DISCREPANCY 5, PARTIAL_FIX 53, CONFIRMED_BUG 1, UNRESOLVED 1. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
 - **29/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
 - REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **77**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
 
@@ -92,9 +92,9 @@ Występuje w **1** taliach. Usunięto błędnie przyznawane każdemu celowi mane
 Występuje w **1** taliach. Basic i superior zawierają ograniczone odpowiednio 1 i 2 additional strikes; combat-strikes.test.ts sprawdza superior po zwykłej parze strike. docs/additional-strike-followups.md wskazuje problem okna kolejnych źródeł przy pending strikes; brak odrębnego rozstrzygnięcia interakcji Blur z dalszymi źródłami. Paczka 3: bez zmian; wymaga decyzji o oknie kolejnych źródeł additional strikes (docs/additional-strike-followups.md).
 
 <a id="karta-100475"></a>
-### Cry Wolf (100475) — CONFIRMED_BUG
+### Cry Wolf (100475) — PARTIAL_FIX
 
-Występuje w **1** taliach. Spec ma rush i press, ale brak obowiązku rush, torpor aktora gdy rekrutacja jest blokowana, zakazu normalnego unlock i spalenia locked werewolfa w unlock. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts. Paczka 3: nadal brak obowiązku rush, torpora przy zablokowanej rekrutacji, zakazu normalnego unlock i spalenia locked werewolfa w unlock (CONFIRMED_BUG bez zmian). LSJ 20031014 (unlock w unlock phase bez spalenia) i LSJ 20090226 nieprzetestowane.
+Występuje w **1** taliach. Paczka 4: zablokowana zagrywka (recruit) wysyła działającego anarcha do torporu (hook onActionBlockedAsPlayed); werewolf pozostaje locked (bearerDoesNotUnlock), a jeśli jest locked w unlock phase, zostaje spalony. tests/cards/cry-wolf.test.ts z kontrolą bez bloku. Nadal brak obowiązkowego Ⓓ rush na minion innego Methuselah i pressa przy walce (press jest statycznie). LSJ 20090226 i LSJ 20031014 nieprzetestowane osobno.
 
 <a id="karta-100585"></a>
 ### Drawing Out the Beast (100585) — PARTIAL_FIX
