@@ -72,6 +72,15 @@ describe("announcement modifiers", () => {
     runTrace(a.engine, [["Alice", "pass"], ["Bob", "block:M"]]);
     expect(a.engine.decision()!.options.some((o) => o.id.startsWith("play:Seduction:"))).toBe(false);
   });
+  it("Seduction is not offered in state A reopened by a failed block", () => {
+    const a = actionSetup("Seduction", { dom: "superior", obf: "basic" });
+    a.state.seats[0]!.hand.push({ id: "lost", name: "Lost in Crowds" });
+    announce(a.engine);
+    runTrace(a.engine, [["Alice", "pass"], ["Bob", "block:M"], ["Alice", "play:Lost in Crowds:basic"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    const af = a.state.frames.find((f) => f.kind === "action");
+    expect(af?.kind === "action" && af.step).toBe("A");
+    expect(a.engine.decision()!.options.some((o) => o.id.startsWith("play:Seduction:"))).toBe(false);
+  });
   it.each([["basic", 1], ["superior", 2]] as const)("Serenading %s adds %i strength in blocked combat", (mode, bonus) => {
     const a = actionSetup("Serenading the Kami", { tha: "superior" });
     announce(a.engine);
@@ -158,5 +167,107 @@ describe("Shadow Strike", () => {
     a.cf.handStrikesOnly = true;
     expect(walk(a.engine, "combat.range").options.some((o) => o.id.includes("Shadow Strike"))).toBe(false);
     expect(walk(a.engine, "combat.chooseStrike").options.some((o) => o.id.includes("Shadow Strike"))).toBe(false);
+  });
+});
+
+
+describe("Shroud of Night", () => {
+  it("forbids basic during a bleed but permits superior when stealth is needed", () => {
+    const a = actionSetup("Shroud of Night", { obt: "superior" });
+    announce(a.engine);
+    runTrace(a.engine, [["Alice", "pass"], ["Bob", "block:M"]]);
+    const ids = a.engine.decision()!.options.map(o => o.id);
+    expect(ids.some(i => i.startsWith("play:Shroud of Night:basic"))).toBe(false);
+    expect(ids.some(i => i.startsWith("play:Shroud of Night:superior"))).toBe(true);
+  });
+  it("permits basic during a non-bleed action", () => {
+    const a = actionSetup("Shroud of Night", { obt: "basic" });
+    a.state.seats[1]!.minions.find(m => m.id === "M")!.attached.push({ card: { id: "intercept", name: "fixture" }, locked: false, usedThisPhase: false, statics: { intercept: 1 }, tags: [] });
+    runTrace(a.engine, [["Alice", "hunt:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "block:M"]]);
+    expect(a.engine.decision()!.options.some(o => o.id.startsWith("play:Shroud of Night:basic"))).toBe(true);
+  });
+});
+
+describe("announcement-only effects after an ordinary modifier", () => {
+  it("allows Seduction drawn as replacement of the action card", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { dom: "superior" }, blood: 5, capacity: 8 });
+    state.seats[0]!.hand = [{ id: "govern", name: "Govern the Unaligned" }];
+    state.seats[0]!.library = [{ id: "sed", name: "Seduction" }];
+    const engine = new VtesEngine(state, testRegistry);
+    engine.choose(engine.decision()!.options.find(o => o.id.startsWith("play:Govern the Unaligned:basic:V1"))!.id);
+    for (let i = 0; i < 20 && !(engine.decision()?.seat === "Alice" &&
+      engine.decision()?.options.some(o => o.id.startsWith("play:Seduction:"))); i++) engine.choose("pass");
+    expect(engine.decision()!.options.some(o => o.id.startsWith("play:Seduction:"))).toBe(true);
+  });
+  it.each(["Seduction", "The Sleeping Mind"])("%s cannot follow Conditioning", (name) => {
+    const a = actionSetup(name, { dom: "superior" });
+    a.state.seats[0]!.hand.push({ id: "cond", name: "Conditioning" });
+    announce(a.engine);
+    expect(a.engine.decision()!.options.some(o => o.id.startsWith(`play:${name}:`))).toBe(true);
+    const conditioning = a.engine.decision()!.options.find(o => o.id.startsWith("play:Conditioning:basic"));
+    expect(conditioning).toBeDefined();
+    a.engine.choose(conditioning!.id);
+    settleCard(a.engine);
+    expect(a.engine.decision()!.options.some(o => o.id.startsWith(`play:${name}:`))).toBe(false);
+  });
+  it("allows another announcement-only card after Seduction, including after save/load", () => {
+    const a = actionSetup("Seduction", { dom: "superior" });
+    a.state.seats[0]!.hand.push({ id: "sleep", name: "The Sleeping Mind" });
+    announce(a.engine);
+    const seduction = a.engine.decision()!.options.find(o => o.id.startsWith("play:Seduction:superior"));
+    expect(seduction).toBeDefined();
+    a.engine.choose(seduction!.id);
+    settleCard(a.engine);
+    const saved = JSON.parse(JSON.stringify(a.state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    expect(resumed.decision()!.options.some(o => o.id.startsWith("play:The Sleeping Mind:superior"))).toBe(true);
+  });
+  it("can use Dreams to draw and play Seduction as the action is announced", () => {
+    const state = threeSeatGame();
+    Object.assign(state.seats[0]!.minions[0]!, { disciplines: { dom: "superior" }, blood: 5 });
+    state.seats[0]!.hand = [{ id: "cond", name: "Conditioning" }];
+    state.seats[0]!.library = [{ id: "sed", name: "Seduction" }];
+    state.seats[0]!.permanents.push({ card: { id: "dreams", name: "Dreams of the Sphinx" },
+      locked: false, usedThisPhase: false, tags: [], statics: {}, counters: 0 });
+    const engine = new VtesEngine(state, testRegistry);
+    announce(engine);
+    engine.choose("ability:Dreams of the Sphinx:dreams:hand");
+    expect(state.seats[0]!.hand.some(c => c.id === "sed")).toBe(true);
+    expect(engine.decision()!.options.some(o => o.id.startsWith("play:Seduction:superior"))).toBe(true);
+  });
+  it("does not reopen when the ordinary modifier is cancelled", () => {
+    const a = actionSetup("Seduction", { dom: "superior" });
+    a.state.seats[0]!.hand.push({ id: "cond", name: "Conditioning" });
+    a.state.seats[2]!.hand.push({ id: "di", name: "Direct Intervention" });
+    announce(a.engine);
+    a.engine.choose(a.engine.decision()!.options.find(o => o.id.startsWith("play:Conditioning:basic"))!.id);
+    runTrace(a.engine, [["Alice", "pass"], ["Bob", "pass"], ["Carol", "play:Direct Intervention"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    expect(a.state.eventLog.some(e => e.type === "CardCanceled" && e.name === "Conditioning")).toBe(true);
+    expect(a.engine.decision()!.options.some(o => o.id.startsWith("play:Seduction:"))).toBe(false);
+  });
+  it("also closes announcement-only Club Illusion after an ordinary modifier", () => {
+    const a = actionSetup("Seduction", { dom: "superior" });
+    a.state.seats[0]!.minions[0]!.sect = "anarch";
+    a.state.seats[0]!.permanents.push({ card: { id: "ci", name: "Club Illusion" },
+      locked: false, usedThisPhase: false, statics: {}, tags: ["location"] });
+    a.state.seats[0]!.hand.push({ id: "cond", name: "Conditioning" });
+    announce(a.engine);
+    expect(a.engine.decision()!.options.some(o => o.id === "ability:Club Illusion:ci:bleed")).toBe(true);
+    a.engine.choose(a.engine.decision()!.options.find(o => o.id.startsWith("play:Conditioning:basic"))!.id);
+    settleCard(a.engine);
+    expect(a.engine.decision()!.options.some(o => o.id === "ability:Club Illusion:ci:bleed")).toBe(false);
+  });
+  it("keeps the window closed through save/load", () => {
+    const a = actionSetup("Seduction", { dom: "superior" });
+    a.state.seats[0]!.hand.push({ id: "cond", name: "Conditioning" });
+    announce(a.engine);
+    a.engine.choose(a.engine.decision()!.options.find(o => o.id.startsWith("play:Conditioning:basic"))!.id);
+    settleCard(a.engine);
+    const resumed = new VtesEngine(JSON.parse(JSON.stringify(a.state)) as GameState, testRegistry);
+    expect(resumed.decision()!.options.some(o => o.id.startsWith("play:Seduction:"))).toBe(false);
   });
 });

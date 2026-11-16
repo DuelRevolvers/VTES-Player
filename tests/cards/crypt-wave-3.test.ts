@@ -326,7 +326,30 @@ describe("statics the library already had", () => {
   it("Adrino carries a continue-only press credit", () => {
     const state = threeSeatGame();
     const v = asVampire(state.seats[0]!.minions[0]!, "Adrino Manauara (G6)");
-    expect(v.attached[0]!.statics.continuePressPerCombat).toBe(1);
+    expect(v.attached[0]!.statics.mandatoryContinuePressPerCombat).toBe(1);
+  });
+
+  it("Adrino must press to continue and spends the press only once per combat", () => {
+    const state = threeSeatGame();
+    const actor = asVampire(state.seats[0]!.minions[0]!, "Adrino Manauara (G6)");
+    Object.assign(actor, { blood: 10, capacity: 10 });
+    Object.assign(state.seats[1]!.minions[1]!, { blood: 10, capacity: 10 });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "bleed:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "block:M"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    expect(walkTo(engine, "press:continue")).toBe(true);
+    let dp = engine.decision()!;
+    expect(dp.seat).toBe("Alice");
+    expect(dp.options.map(o => o.id)).not.toContain("pass");
+    engine.choose("press:continue");
+    const cf = state.frames.find(f => f.kind === "combat");
+    expect(cf?.kind === "combat" && cf.mandatoryContinuePresses?.acting).toBe(0);
+    for (let i = 0; i < 80 && !state.eventLog.some(e => e.type === "CombatEnded"); i++) {
+      dp = engine.decision()!;
+      engine.choose((dp.options.find(o => o.id === "pass") ?? dp.options.find(o => o.id === "strike:hand") ?? dp.options[0]!).id);
+    }
+    expect(state.eventLog.filter(e => e.type === "PressUsed" && e.seat === "Alice")).toHaveLength(1);
+    expect(state.eventLog.some(e => e.type === "CombatEnded")).toBe(true);
   });
 
   it("Noluthando adds damage to a RANGED strike only", () => {

@@ -90,7 +90,7 @@ export interface TrainingOptions {
   seed: number;
   seats: SeatId[];
   registry: HandlerRegistry;
-  buildState: (seed: number) => GameState;
+  buildState: (seed: number, candidateSeat: SeatId) => GameState;
   shouldCancel?: () => boolean;
   onProgress?: (p: TrainingProgress) => void;
   onGeneration?: (trend: GenerationTrend) => void;
@@ -205,7 +205,7 @@ function yieldToUi(): Promise<void> {
 }
 
 /** One independently seeded game; shared by the serial path and workers. */
-export function runTrainingGame(task: TrainingGameTask, seats: SeatId[], buildState: (seed: number) => GameState, registry: HandlerRegistry): TrainingGameResult {
+export function runTrainingGame(task: TrainingGameTask, seats: SeatId[], buildState: (seed: number, candidateSeat: SeatId) => GameState, registry: HandlerRegistry): TrainingGameResult {
   const candidateSeat = seats[task.gameIndex % seats.length]!;
   const agents: Record<SeatId, Agent> = {};
   const styles = stylesForOpponents();
@@ -218,7 +218,7 @@ export function runTrainingGame(task: TrainingGameTask, seats: SeatId[], buildSt
       agents[seat] = new HeuristicAgent({ seed: agentSeed, weights: PLAYSTYLES[styles[styleIndex]!] });
     }
   });
-  const result = runGame(task.seed, buildState(task.seed), agents, registry);
+  const result = runGame(task.seed, buildState(task.seed, candidateSeat), agents, registry);
   return {
     victoryPoints: result.victoryPoints[candidateSeat] ?? 0,
     won: result.winner === candidateSeat,

@@ -49,7 +49,8 @@ import {
   statusBadge,
   traitLine,
 } from "./cardsearch.ts";
-import { MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY } from "./decks.ts";
+import { MAX_LIBRARY, MIN_CRYPT, MIN_LIBRARY, type DeckList } from "./decks.ts";
+import { resolveTrainingDeck } from "./training-deck.ts";
 
 /**
  * The Deck Builder's three tabs, in the order the owner asked for them:
@@ -235,6 +236,10 @@ export class Shell {
 
   // --- local AI training lab -----------------------------------------------
   private trainerConfig = { population: 6, generations: 2, gamesPerCandidate: 3, seed: 42, workers: Math.min(16, navigator.hardwareConcurrency || 1) };
+  private labDeckSource = "default";
+  private labDeckText = "";
+  private labDeckError = "";
+  private labDeckWarning = "";
   private trainerRunning = false;
   private trainerCancelRequested = false;
   private trainerProgress: TrainingProgress | null = null;
@@ -1714,6 +1719,60 @@ export class Shell {
 
   // --- AI training lab ------------------------------------------------------
 
+  /** Capture a validated immutable deck at the start of each run. */
+  private selectedLabDeck(): { deck: DeckList | null; label: string; warnings: string[] } | null {
+    this.labDeckError = "";
+    this.labDeckWarning = "";
+    const recordWarnings = (warnings: string[]) => {
+      if (warnings.length) this.labDeckWarning = `Crypt abilities marked unimplemented: ${warnings.join(", ")}.`;
+    };
+    try {
+      if (this.labDeckSource === "default") return { deck: null, label: "Bundled snapshots", warnings: [] };
+      if (this.labDeckSource === "paste") {
+        const resolved = resolveTrainingDeck({ kind: "paste", text: this.labDeckText });
+        recordWarnings(resolved.warnings);
+        return { ...resolved, label: "Pasted deck" };
+      }
+      if (this.labDeckSource.startsWith("saved:")) {
+        const name = this.labDeckSource.slice("saved:".length);
+        const deck = findDeck(name);
+        if (!deck) throw new Error(`Saved deck not found: ${name}`);
+        const resolved = resolveTrainingDeck({ kind: "saved", deck });
+        recordWarnings(resolved.warnings);
+        return { ...resolved, label: name };
+      }
+      throw new Error("Select a deck source.");
+    } catch (error) {
+      this.labDeckError = error instanceof Error ? error.message : String(error);
+      this.paint();
+      return null;
+    }
+  }
+
+  private labDeckMarkup(disabled: string): string {
+    const saved = loadDecks();
+    return `<div class="supported">
+      <div class="sethead">Candidate deck for training and comparison</div>
+      <label class="field"><span>Deck source</span><select id="lab-deck-source"${disabled}>
+        <option value="default"${this.labDeckSource === "default" ? " selected" : ""}>Bundled mid-game snapshots (default)</option>
+        <option value="paste"${this.labDeckSource === "paste" ? " selected" : ""}>Paste a deck list</option>
+        ${saved.map((d) => `<option value="${esc(`saved:${d.name}`)}"${this.labDeckSource === `saved:${d.name}` ? " selected" : ""}>Saved: ${esc(d.name)}</option>`).join("")}
+      </select></label>
+      <label id="lab-deck-paste-label" class="field"${this.labDeckSource === "paste" ? "" : " hidden"}>
+        <span>Paste deck list (e.g. VDB, Amaranth or ARDB)</span>
+        <textarea id="lab-deck-paste" rows="10" maxlength="100000" placeholder="Crypt:
+4 Vampire name (G5)
+...
+Library:
+4 Card name
+..."${disabled}>${esc(this.labDeckText)}</textarea>
+      </label>
+      <p class="note dim">The candidate uses this full deck in every seat rotation. Other seats use four distinct full Fifth Edition precons; all start at 30 pool with no ready minions. Default snapshots retain the original setup. Decks are validated at run start; pasted text stays on this page, and saved decks come from My decks. A selected deck is copied for the entire run, including comparison resume. This changes the test environment; do not compare its scores directly with snapshot runs. Ollama is not trained here: the deck is used to compare its decisions.</p>
+      ${this.labDeckError ? `<p id="lab-deck-error" class="err">${esc(this.labDeckError)}</p>` : ""}
+      ${this.labDeckWarning ? `<p id="lab-deck-warning" class="note">${esc(this.labDeckWarning)}</p>` : ""}
+    </div>`;
+  }
+
   private trainerScreen(): string {
     const c = this.trainerConfig;
     const disabled = this.trainerRunning || this.mlRunning || this.compareRunning ? " disabled" : "";
@@ -1794,6 +1853,7 @@ export class Shell {
     return `<div class="card trainer">
       <div class="row cardhead"><h1>AI Training Lab</h1><button id="trainer-back">Back</button></div>
       <p class="note">Generate and evolve alternative heuristic bots, then test them in local five-seat games against a rotating mix of built-in styles. No network is used; the same seed reproduces the same run.</p>
+      ${this.labDeckMarkup(disabled)}
       <div class="supported">
         <div class="sethead">Tournament setup</div>
         <div class="trainer-controls">
@@ -1803,7 +1863,7 @@ export class Shell {
           <label class="field"><span>Parallel game workers (1–32)</span><input id="trainer-workers" type="number" min="1" max="32" value="${c.workers}"${disabled} /></label>
           <label class="field"><span>Seed</span><input id="trainer-seed" type="number" value="${c.seed}"${disabled} /></label>
         </div>
-        <p class="note dim">The first generation includes the current default bot and seeded random weight variants. Later generations keep top performers, mutate them, and re-run a Balanced control on the same seeds. The five-seat table repeats the bundled playtest decks; the candidate rotates seats. Independent games run on browser workers; more workers use more CPU and memory. A generation waits for all its games. Larger runs take longer.</p>
+        <p class="note dim">The first generation includes the current default bot and seeded random weight variants. Later generations keep top performers, mutate them, and re-run a Balanced control on the same seeds. With the default selection, the five-seat table repeats the bundled playtest snapshots; the candidate rotates seats. Independent games run on browser workers; more workers use more CPU and memory. A generation waits for all its games. Larger runs take longer.</p>
         <div class="row">
           <button id="trainer-run" class="primary"${this.trainerRunning || this.mlRunning || this.compareRunning ? " disabled" : ""}>${this.trainerRunning ? "Training…" : "Run training"}</button>
           <button id="trainer-new-seed"${disabled}>Roll new seed</button>
@@ -1836,7 +1896,7 @@ export class Shell {
     const rows = this.mlHistory.length
       ? `<table class="lbtable"><thead><tr><th>Round</th><th>Games</th><th>ML mean VP</th><th>Opponents mean VP</th><th>Δ VP</th><th>Wins</th><th>Ousted</th><th>Samples</th><th>Backend</th></tr></thead><tbody>${this.mlHistory.map((r) => `<tr><td>${r.round}</td><td>${r.games}</td><td>${r.meanVp.toFixed(2)}</td><td>${r.opponentVp.toFixed(2)}</td><td>${r.delta >= 0 ? "+" : ""}${r.delta.toFixed(2)}</td><td>${r.wins}</td><td>${r.ousts}</td><td>${r.examples}</td><td>${esc(r.device)}</td></tr>`).join("")}</tbody></table>`
       : "";
-    const disabled = this.mlRunning || this.trainerRunning ? " disabled" : "";
+    const disabled = this.mlRunning || this.trainerRunning || this.compareRunning ? " disabled" : "";
     return `<div class="supported trainer-ml">
       <div class="sethead">Neural agent · local PyTorch</div>
       <p class="note">Train a selectable neural-network bot with real five-seat games. The candidate uses only its masked PlayerView and plays four changing built-in bot styles; PyTorch updates the policy through the local dev-server bridge. CUDA is used automatically when your Python environment has CUDA-enabled PyTorch; otherwise it reports CPU. To use your RTX 3070, run the Vite app on the PC with that GPU—an Arena/cloud preview cannot access the GPU on your own computer.</p>
@@ -1863,7 +1923,7 @@ export class Shell {
   private comparisonMarkup(): string {
     const c = this.compareConfig;
     const disabled = this.compareRunning || this.mlRunning || this.trainerRunning ? " disabled" : "";
-    const options: Array<[ComparedBot, string]> = [["ollama", "Ollama LLM"], ["balanced", "Balanced"], ["neural", "Saved neural model"], ["trained", "Saved trained heuristic"]];
+    const options: Array<[ComparedBot, string]> = [["ollama", "Ollama LLM (card guidance)"], ["ollama-unguided", "Ollama LLM (without card guidance)"], ["balanced", "Balanced"], ["neural", "Saved neural model"], ["trained", "Saved trained heuristic"]];
     const select = (selected: ComparedBot) => options.map(([value, label]) => `<option value="${value}"${selected === value ? " selected" : ""}>${label}</option>`).join("");
     const rows = this.comparePairs.length ? (["a", "b"] as const).map((key) => {
       const games = this.comparePairs.map((pair) => pair[key]);
@@ -1872,7 +1932,9 @@ export class Shell {
       const decisions = games.reduce((sum, g) => sum + g.decisions, 0);
       const ms = games.reduce((sum, g) => sum + g.decisionMs, 0);
       const calls = games.reduce((sum, g) => sum + g.ollamaRequests, 0);
-      return `<tr><td>${esc(options.find(([id]) => id === c[key])?.[1] ?? c[key])}</td><td>${games.length}</td><td>${mean.toFixed(2)}</td><td>${wins}</td><td>${decisions ? (ms / decisions / 1000).toFixed(2) : "—"}</td><td>${calls}</td></tr>`;
+      const counts = games.flatMap((g) => g.maxPromptTokens === null ? [] : [g.maxPromptTokens]);
+      const maxTokens = counts.length ? Math.max(...counts) : "—";
+      return `<tr><td>${esc(options.find(([id]) => id === c[key])?.[1] ?? c[key])}</td><td>${games.length}</td><td>${mean.toFixed(2)}</td><td>${wins}</td><td>${decisions ? (ms / decisions / 1000).toFixed(2) : "—"}</td><td>${calls}</td><td>${maxTokens}</td></tr>`;
     }).join("") : "";
     const delta = this.comparePairs.length ? this.comparePairs.reduce((sum, p) => sum + p.a.vp - p.b.vp, 0) / this.comparePairs.length : null;
     return `<div class="supported trainer-compare"><div class="sethead">Bot comparison</div>
@@ -1883,9 +1945,9 @@ export class Shell {
         <label class="field"><span>Deals (1–100)</span><input id="compare-deals" type="number" min="1" max="100" value="${c.deals}"${disabled} /></label>
         <label class="field"><span>Seed</span><input id="compare-seed" type="number" value="${c.seed}"${disabled} /></label>
       </div><div class="row"><button id="compare-run" class="primary"${disabled}>Run comparison</button><button id="compare-resume"${!disabled && this.compareRunConfig && this.comparePairs.length < this.compareRunConfig.deals * 5 ? "" : " disabled"}>Resume previous comparison</button><button id="compare-cancel"${this.compareRunning ? "" : " disabled"}>Cancel</button></div>
-      <p class="note">${this.comparePairs.length * 2}/${c.deals * 10} games completed in matched pairs. ${esc(this.compareMessage)}</p>
-      ${rows ? `<table class="lbtable"><thead><tr><th>Bot</th><th>Games</th><th>Mean VP</th><th>Wins</th><th>Seconds / decision</th><th>LLM requests</th></tr></thead><tbody>${rows}</tbody></table><p class="note">A − B: ${delta! >= 0 ? "+" : ""}${delta!.toFixed(2)} VP. Small samples are noisy; changing seed tests new deals.</p>` : ""}
-      <p class="note dim">LLM fallback games are not counted. Resume retains completed pairs in this page until a new comparison or reload. Comparison uses the local Vite/Ollama bridge on this computer, not the cloud preview.</p>
+      <p class="note">${this.comparePairs.length * 2}/${c.deals * 10} games completed in matched pairs. ${this.compareRunConfig?.deckLabel ? `Deck: ${esc(this.compareRunConfig.deckLabel)}. ` : ""}${esc(this.compareMessage)}</p>
+      ${rows ? `<table class="lbtable"><thead><tr><th>Bot</th><th>Games</th><th>Mean VP</th><th>Wins</th><th>Seconds / decision</th><th>LLM requests</th><th>Max prompt tokens reported</th></tr></thead><tbody>${rows}</tbody></table><p class="note">A − B: ${delta! >= 0 ? "+" : ""}${delta!.toFixed(2)} VP. Small samples are noisy; changing seed tests new deals.</p>` : ""}
+      <p class="note dim">Compare guided and unguided Ollama to measure the card advice; both use the same model and context selection. Token counts are reported by Ollama and do not prove the prompt was not truncated. LLM fallback games are not counted. Resume retains completed pairs in this page until a new comparison or reload. Comparison uses the local Vite/Ollama bridge on this computer, not the cloud preview.</p>
     </div>`;
   }
 
@@ -1898,7 +1960,7 @@ export class Shell {
       this.compareConfig = { a: config.a, b: config.b, deals: config.deals, seed: config.seed };
     } else {
       const read = (id: string) => this.root.querySelector<HTMLInputElement | HTMLSelectElement>(id)?.value ?? "";
-      const valid = (value: string): value is ComparedBot => ["balanced", "trained", "neural", "ollama"].includes(value);
+      const valid = (value: string): value is ComparedBot => ["balanced", "trained", "neural", "ollama", "ollama-unguided"].includes(value);
       const a = read("#compare-a"), b = read("#compare-b");
       if (!valid(a) || !valid(b)) return;
       const deals = Number(read("#compare-deals")), seed = Number(read("#compare-seed"));
@@ -1906,13 +1968,16 @@ export class Shell {
       if ((a === "neural" || b === "neural") && !settings.trainedMlModel) { this.compareMessage = "No neural model saved."; this.paint(); return; }
       if ((a === "trained" || b === "trained") && !settings.trainedBotWeights) { this.compareMessage = "No trained heuristic saved."; this.paint(); return; }
       this.compareConfig = { a, b, deals: Number.isFinite(deals) ? Math.max(1, Math.min(100, Math.floor(deals))) : 1, seed: Number.isFinite(seed) ? Math.floor(seed) | 0 : 4242 };
-      config = { ...this.compareConfig, model: settings.ollamaModel ?? "qwen3:8b", neural: settings.trainedMlModel ?? null, trained: settings.trainedBotWeights ?? null };
+      const selection = this.selectedLabDeck();
+      if (!selection) return;
+      config = { ...this.compareConfig, model: settings.ollamaModel ?? "qwen3:8b", neural: settings.trainedMlModel ?? null, trained: settings.trainedBotWeights ?? null,
+        deckLabel: selection.label, ...(selection.deck ? { candidateDeck: selection.deck } : {}) };
       this.comparePairs = [];
       this.compareRunConfig = config;
     }
     this.compareRunning = true; this.compareMessage = resume ? "Resuming…" : "Starting…"; this.paint();
     const runId = ++this.compareRunId;
-    if (config.a === "ollama" || config.b === "ollama") {
+    if ([config.a, config.b].some((bot) => bot === "ollama" || bot === "ollama-unguided")) {
       const status = await this.checkOllama(config.model);
       if (!this.compareRunning || this.compareRunId !== runId) return;
       if (!status.startsWith("Connected:")) { this.compareMessage = status; this.compareRunning = false; this.paint(); return; }
@@ -1936,6 +2001,8 @@ export class Shell {
 
   private async startMlTraining(): Promise<void> {
     if (this.mlRunning || this.trainerRunning || this.compareRunning) return;
+    const selection = this.selectedLabDeck();
+    if (!selection) return;
     const number = (selector: string, fallback: number): number => {
       const value = Number(this.root.querySelector<HTMLInputElement>(selector)?.value);
       return Number.isFinite(value) ? Math.floor(value) : fallback;
@@ -1951,7 +2018,7 @@ export class Shell {
     this.mlProgress = null;
     this.mlHistory = [];
     this.mlError = "";
-    this.mlMessage = "Preparing a five-seat self-play batch…";
+    this.mlMessage = `Preparing a five-seat self-play batch with ${selection.label}…${selection.warnings.length ? ` ${selection.warnings.length} crypt abilities are marked unimplemented.` : ""}`;
     let model: MlModel = loadSettings().trainedMlModel ?? createInitialMlModel(this.mlConfig.seed);
     const priorRounds = model.training?.rounds ?? 0;
     const priorGames = model.training?.games ?? 0;
@@ -1969,6 +2036,7 @@ export class Shell {
         const tasks = Array.from({ length: this.mlConfig.gamesPerRound }, (_, index) => ({
           seed: (this.mlConfig.seed + (priorRounds + round - 1) * 100_003 + index) | 0,
           gameIndex: priorGames + (round - 1) * this.mlConfig.gamesPerRound + index,
+          ...(selection.deck ? { candidateDeck: selection.deck } : {}),
         }));
         // Workers finish already-started games when cancelled, then stop scheduling.
         // Results are returned in task order, irrespective of completion order.
@@ -2073,6 +2141,8 @@ export class Shell {
 
   private async startTraining(): Promise<void> {
     if (this.trainerRunning || this.mlRunning || this.compareRunning) return;
+    const selection = this.selectedLabDeck();
+    if (!selection) return;
     const number = (selector: string, fallback: number): number => {
       const input = this.root.querySelector<HTMLInputElement>(selector);
       const value = Number(input?.value);
@@ -2097,6 +2167,7 @@ export class Shell {
     try {
       this.trainerReport = await runLocalTraining({
         ...this.trainerConfig,
+        ...(selection.deck ? { candidateDeck: selection.deck } : {}),
         shouldCancel: () => this.trainerCancelRequested,
         onProgress: (progress) => {
           this.trainerProgress = progress;
@@ -2772,6 +2843,24 @@ export class Shell {
     this.on("#m-decks, #p-decks", () => this.go("deckbuilder"));
     this.on("#m-profile", () => this.go("profile"));
     this.on("#m-leaderboard", () => this.go("leaderboard"));
+    const labSource = this.root.querySelector<HTMLSelectElement>("#lab-deck-source");
+    labSource?.addEventListener("change", () => {
+      this.labDeckSource = labSource.value;
+      this.labDeckError = "";
+      this.labDeckWarning = "";
+      this.root.querySelector("#lab-deck-error")?.remove();
+      this.root.querySelector("#lab-deck-warning")?.remove();
+      const label = this.root.querySelector<HTMLElement>("#lab-deck-paste-label");
+      if (label) label.hidden = labSource.value !== "paste";
+    });
+    const labPaste = this.root.querySelector<HTMLTextAreaElement>("#lab-deck-paste");
+    labPaste?.addEventListener("input", () => {
+      this.labDeckText = labPaste.value;
+      this.labDeckError = "";
+      this.labDeckWarning = "";
+      this.root.querySelector("#lab-deck-error")?.remove();
+      this.root.querySelector("#lab-deck-warning")?.remove();
+    });
     this.on("#m-trainer", () => this.go("trainer"));
     this.on("#trainer-back", () => this.go("menu"));
     this.on("#trainer-run", () => void this.startTraining());

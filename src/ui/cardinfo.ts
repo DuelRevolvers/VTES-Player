@@ -11,7 +11,7 @@
 import registry from "../cards/registry.json";
 import type { CardRegistry, CryptCardDef } from "../cards/types.ts";
 import type { DisciplineLevel, Sect, VampireTitle } from "../engine/index.ts";
-import { CITY_TITLES } from "../engine/index.ts";
+import { BLOOD_BROTHER_CIRCLES, CITY_TITLES } from "../engine/index.ts";
 import { scanUrl } from "./localcards.ts";
 
 const reg = registry as unknown as CardRegistry;
@@ -116,6 +116,8 @@ export interface CryptImport {
   scarce: boolean;
   /** Printed restrictions on using cards requiring particular Disciplines. */
   cannotUseDisciplines: string[];
+  /** Printed circle, not incidental mentions of another vampire's circle. */
+  printedCircle?: string;
   /** Standalone printed Flight trait, rather than an ability mentioning flight. */
   flight: boolean;
   /** The city a prince/baron/archbishop holds their title in — "Camarilla
@@ -277,6 +279,15 @@ export function importCryptCard(id: number): CryptImport {
     cardText: card.cardText,
     hasUnimplementedAbility,
   };
+  // Only standalone circle declarations, not e.g. "a Blood Brother of
+  // the Kiev circle" in another vampire's ability. Named circles are traits
+  // and remain visible on the crypt card while it is uncontrolled.
+  if (card.clan === "Blood Brother") {
+    const unmerged = card.cardText.split(/\[MERGED\]/i, 1)[0]!;
+    const circle = BLOOD_BROTHER_CIRCLES.find(name =>
+      new RegExp(`(?:^|[.:]\\s*)${name}\\s+circle\\s*[.:]`, "i").test(unmerged));
+    if (circle) out.printedCircle = circle;
+  }
   if (card.path !== undefined) out.path = card.path;
   if (titleCity !== undefined) out.titleCity = titleCity;
   return out;

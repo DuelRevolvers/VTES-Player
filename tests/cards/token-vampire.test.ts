@@ -3,9 +3,8 @@
  * owner on 2026-09-03.
  *
  * Waters of Duat (102159) and Childe of the Revolution (102246): a LIBRARY
- * card that becomes a 1-capacity vampire. That is the ally machinery with
- * `kind: "vampire"`, and because the token enters with 0 blood, "must hunt
- * this turn" is p. 21's mandatory hunt rather than anything new.
+ * card that becomes a 1-capacity vampire. The printed hunt obligation
+ * also applies if the token gains blood before its first action.
  */
 
 import { describe, expect, it } from "vitest";
@@ -81,6 +80,17 @@ describe("Waters of Duat (102159)", () => {
     expect(token.blood).toBe(0);
     expect(token.locked).toBe(false);
     expect(token.inTorpor).toBe(false);
+  });
+
+  it("still must hunt this turn after gaining blood, then discharges the obligation", () => {
+    const { state, engine } = board();
+    resolve(engine, state, "play:Waters of Duat");
+    if (engine.decision()?.window === "choice") engine.choose("choice:Waters of Duat:wd:searchDiscipline:none");
+    const token = find(state, "wd")!;
+    token.blood = 1;
+    expect(engine.decision()!.options.map(o => o.id)).toEqual(["hunt:wd"]);
+    engine.choose("hunt:wd");
+    expect(token.mustHuntThisTurn).toBe(false);
   });
 
   it("the token MUST HUNT — and that is p. 21, not new code", () => {
@@ -183,6 +193,40 @@ describe("Childe of the Revolution (102246)", () => {
     seatOf(state, "Alice").hand.push({ id: "cr", name: "Childe of the Revolution" });
     return { state, engine: new VtesEngine(state, testRegistry) };
   }
+
+  it("must hunt this turn even after gaining blood", () => {
+    const { state, engine } = board();
+    resolve(engine, state, "play:Childe of the Revolution");
+    if (engine.decision()?.window === "choice") engine.choose("choice:Childe of the Revolution:cr:searchDiscipline:none");
+    find(state, "cr")!.blood = 1;
+    expect(engine.decision()!.options.map(o => o.id)).toEqual(["hunt:cr"]);
+  });
+
+  it("expires the hunt obligation at end of turn even when banished to uncontrolled", () => {
+    const { state, engine } = board();
+    resolve(engine, state, "play:Childe of the Revolution");
+    if (engine.decision()?.window === "choice") engine.choose("choice:Childe of the Revolution:cr:searchDiscipline:none");
+    const token = find(state, "cr")!;
+    token.blood = 1;
+    expect(token.mustHuntThisTurn).toBe(true);
+    // Simulate Banishment's zone move; unlike a burned card this remains a vampire.
+    engine.emit({ type: "MovedToUncontrolled", seat: "Alice", minion: "cr" });
+    const moved = seatOf(state, "Alice").uncontrolled.find(u => u.card.id === "cr")!;
+    expect(moved.card.mustHuntThisTurn).toBe(true);
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    for (let i = 0; i < 80 && saved.frames.some(f => f.kind === "turn" && f.seat === "Alice"); i++) {
+      const dp = resumed.decision()!;
+      const opt = dp.options.find(o => o.id === "pass") ?? dp.options.find(o => o.id === "end");
+      if (!opt) throw new Error(`cannot finish turn in ${dp.window}`);
+      resumed.choose(opt.id);
+    }
+    expect(saved.frames.some(f => f.kind === "turn" && f.seat === "Alice")).toBe(false);
+    expect(seatOf(saved, "Alice").uncontrolled.find(u => u.card.id === "cr")!.card.mustHuntThisTurn).toBe(false);
+    resumed.moveUncontrolledToReady("Alice", "cr");
+    expect(find(saved, "cr")!.blood).toBe(1);
+    expect(find(saved, "cr")!.mustHuntThisTurn).toBe(false);
+  });
 
   it("makes an ANARCH of the acting vampire's own clan", () => {
     const { state, engine } = board();

@@ -791,8 +791,42 @@ describe("Věnceslava", () => {
       if (state.eventLog.some((e) => e.type === "ActionResolved")) break;
       runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
     }
-    // The bleed took a pool from Bob (the prey), so the clause fires.
+    // The bleed took a pool from Bob; taking the optional gain uses it.
+    expect(engine.decision()!.window).toBe("choice");
+    engine.choose("choice:Věnceslava, The Implacable (G6):V1:actionPoolGain:yes");
     expect(state.seats[0]!.pool).toBe(before + 1);
+  });
+
+  it("declining preserves the once-per-turn gain for a later qualifying action", () => {
+    const state = threeSeatGame();
+    const v = asVampire(find(state, "V1"), "Věnceslava, The Implacable (G6)");
+    v.title = "prince";
+    state.seats[0]!.hand.push({ id: "krc", name: "Kine Resources Contested" });
+    let engine = new VtesEngine(state, testRegistry);
+    engine.choose("bleed:V1");
+    for (let i = 0; i < 40 && engine.decision()?.window !== "choice"; i++) engine.choose("pass");
+    expect(engine.decision()!.window).toBe("choice");
+    // Save and restore the pending optional question.
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    engine = new VtesEngine(saved, testRegistry);
+    engine.choose("pass");
+    const actor = find(saved, "V1");
+    expect(actor.attached.find(p => p.card.id === "V1")!.usedThisTurn).not.toBe(true);
+    actor.locked = false;
+    const play = engine.decision()!.options.find(o => o.id.startsWith("play:Kine Resources Contested:basic:V1"));
+    expect(play).toBeDefined();
+    engine.choose(play!.id);
+    for (let i = 0; i < 100 && engine.decision()?.window !== "choice"; i++) {
+      const dp = engine.decision()!;
+      const pick = dp.options.find(o => o.id === "terms:Bob=2,Carol=2") ??
+        dp.options.find(o => o.id === "vote:V1:for") ?? dp.options.find(o => o.id === "pass") ?? dp.options[0]!;
+      engine.choose(pick.id);
+    }
+    expect(engine.decision()!.window).toBe("choice");
+    const before = saved.seats[0]!.pool;
+    engine.choose("choice:Věnceslava, The Implacable (G6):V1:actionPoolGain:yes");
+    expect(saved.seats[0]!.pool).toBe(before + 1);
+    expect(actor.attached.find(p => p.card.id === "V1")!.usedThisTurn).toBe(true);
   });
 
   it("gains nothing from a HUNT — the prey burns no pool", () => {
@@ -815,7 +849,7 @@ describe("Věnceslava", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Gostoso: an automatic payoff
+// Gostoso: an optional payoff
 // ---------------------------------------------------------------------------
 
 describe("Gostoso", () => {
@@ -833,7 +867,24 @@ describe("Gostoso", () => {
       if (state.eventLog.some((e) => e.type === "ActionResolved")) break;
       runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
     }
+    expect(engine.decision()!.window).toBe("choice");
+    engine.choose("choice:Gostoso (G6):V1:bleedSuccessBlood:yes");
     expect(g.blood).toBe(3);
+  });
+
+  it("can decline the blood gain after a save and restore", () => {
+    const state = threeSeatGame();
+    const g = asVampire(find(state, "V1"), "Gostoso (G6)");
+    g.blood = 2;
+    const engine = new VtesEngine(state, testRegistry);
+    engine.choose("bleed:V1");
+    for (let i = 0; i < 40 && engine.decision()?.window !== "choice"; i++) engine.choose("pass");
+    expect(engine.decision()!.window).toBe("choice");
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    expect(resumed.decision()!.options.some(o => o.id === "choice:Gostoso (G6):V1:bleedSuccessBlood:yes")).toBe(true);
+    resumed.choose("pass");
+    expect(find(saved, "V1").blood).toBe(2);
   });
 
   it("gains nothing when the bleed is BLOCKED", () => {

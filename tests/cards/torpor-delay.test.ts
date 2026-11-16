@@ -212,3 +212,32 @@ describe("Undead Persistence and Undying Tenacity torpor timing", () => {
     expect(state.eventLog.some((e) => e.type === "DamagePrevented" && e.minion === "M" && e.amount === 2)).toBe(true);
   });
 });
+
+it("Undying Tenacity superior offers an ordinary press without waiting for torpor", () => {
+  const state = threeSeatGame();
+  const vampire = bob(state);
+  vampire.blood = 5;
+  vampire.disciplines = { for: "superior" };
+  state.seats[1]!.hand.push({ id: "ut-press", name: "Undying Tenacity" });
+  const engine = new VtesEngine(state, testRegistry);
+  enterCombat(engine);
+  passUntilChooseStrikes(engine);
+  let played = false;
+  for (let i = 0; i < 60 && !played; i++) {
+    const dp = engine.decision()!;
+    const option = dp.options.find(o => o.id.startsWith("play:Undying Tenacity:superior:M:press:continue:ut-press"));
+    if (option) {
+      expect(dp.window).toBe("combat.press");
+      engine.choose(option.id);
+      runTrace(engine, [["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+      played = true;
+      break;
+    }
+    engine.choose(dp.options.find(o => o.id === (dp.window === "combat.chooseStrike" ? "strike:hand" : "pass"))!.id);
+  }
+  expect(played).toBe(true);
+  expect(state.eventLog.some(e => e.type === "CardResolved" && e.cardId === "ut-press")).toBe(true);
+  const cf = state.frames.find(f => f.kind === "combat");
+  expect(cf?.kind === "combat" && cf.willContinue).toBe(true);
+  expect(cf?.kind === "combat" && cf.deferredTorpor?.length).toBeFalsy();
+});

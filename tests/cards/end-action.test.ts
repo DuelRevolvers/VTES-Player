@@ -206,6 +206,51 @@ describe("Obedience (101309)", () => {
     return { state, engine };
   }
 
+  it("only the blocker can react and only to a younger vampire, using derived capacity", () => {
+    const { state, engine } = game("superior");
+    Object.assign(find(state, "W"), { capacity: 9, disciplines: { dom: "superior" } });
+    runTrace(engine, [["Alice", "pass"]]);
+    const offered = () => engine.decision()!.options.filter((o) => o.id.includes("Obedience")).map((o) => o.id);
+    expect(offered().some((id) => id.includes(":M:"))).toBe(true);
+    expect(offered().some((id) => id.includes(":W:"))).toBe(false);
+    find(state, "V1").capacity = 8;
+    expect(offered()).toEqual([]);
+    find(state, "M").attached.push({ card: { id: "boost", name: "Potence" }, locked: false, usedThisPhase: false, statics: { capacityBonus: 1 }, tags: [] });
+    expect(offered().some((id) => id.includes(":M:"))).toBe(true);
+    find(state, "V1").kind = "ally";
+    expect(offered()).toEqual([]);
+  });
+
+  it("is unavailable while the block would fail", () => {
+    const { state, engine } = game("basic");
+    runTrace(engine, [["Alice", "pass"]]);
+    const af = state.frames.find((f) => f.kind === "action");
+    if (!af || af.kind !== "action") throw new Error("fixture");
+    engine.emit({ type: "StealthModified", actionId: af.actionId, delta: 1, source: "test" });
+    expect(engine.decision()!.options.some((o) => o.id.includes("Obedience"))).toBe(false);
+  });
+
+  it("can stop a successful rush against the reacting vampire without blocking", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { blood: 3, capacity: 3 });
+    Object.assign(find(state, "M"), { capacity: 8, disciplines: { dom: "basic" } });
+    Object.assign(find(state, "W"), { capacity: 8, disciplines: { dom: "basic" } });
+    state.seats[0]!.hand.push({ id: "br", name: "Bum's Rush" });
+    state.seats[1]!.hand.push({ id: "ob", name: "Obedience" });
+    const engine = new VtesEngine(state, testRegistry);
+    const rush = engine.decision()!.options.find((o) => o.id.startsWith("play:Bum's Rush") && o.id.includes(":M:"))!;
+    runTrace(engine, [["Alice", rush.id], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"]]);
+    const dp = engine.decision()!;
+    expect(dp.seat).toBe("Bob");
+    expect(dp.options.some((o) => o.id.includes("Obedience:basic:M"))).toBe(true);
+    expect(dp.options.some((o) => o.id.includes("Obedience:basic:W"))).toBe(false);
+    runTrace(engine, [["Bob", "play:Obedience:basic:M"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    settle(engine, state);
+    expect(find(state, "V1").locked).toBe(false);
+    expect(find(state, "V1").cannotRepeat).toContain("Bum's Rush");
+    expect(state.eventLog.some((e) => e.type === "CombatBegan")).toBe(false);
+  });
+
   it("basic unlocks the acting vampire and ends the action", () => {
     const { state, engine } = game("basic");
     runTrace(engine, [

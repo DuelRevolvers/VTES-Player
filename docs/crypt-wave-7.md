@@ -92,8 +92,9 @@ The reveal is **named to the table** — that is exactly what revealing
 means, and it is the opposite of wave 5's `LibraryCardMoved`, which
 carries no name because a reorder shows nobody anything.
 
-He must be able to pay the penalty for the option to be offered: a card
-that could lose is still a card that must be able to settle up.
+A possible blood burn is an effect, not a cost: the reveal is available
+at zero blood. The reveal is also legal when stealth is not needed, but
+no stealth is gained unless a block would currently succeed [ANK 20231031].
 
 **Once per action (bug fix, 0.11.05 — owner report).** The reveal shipped
 with no latch, and the action window re-offers until it is empty, so the

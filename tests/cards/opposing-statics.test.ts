@@ -395,6 +395,36 @@ describe("Haqim's Law: Retribution (102226)", () => {
     expect(seatOf(state, "Alice").hand.some((c) => c.id === "L1")).toBe(true);
   });
 
+  it("each copy is usable once per action, independently of a second copy", () => {
+    const { state, engine } = lawGame("Banu Haqim");
+    seatOf(state, "Alice").hand.push({ id: "soak2", name: "Soak" });
+    const first = seatOf(state, "Alice").permanents[0]!;
+    seatOf(state, "Alice").permanents.push({ ...first, card: { id: "hl2", name: first.card.name } });
+    runTrace(engine, [["Alice", "bleed:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    const id = "ability:Haqim's Law: Retribution:hl:bleedsale:soak";
+    expect(walkTo(engine, id)).toBe(true);
+    runTrace(engine, [["Alice", id]]);
+    const opts = optionIds(engine);
+    expect(opts.some((o) => o.includes(":hl:bleedsale:"))).toBe(false);
+    expect(opts.some((o) => o.includes(":hl2:bleedsale:soak2"))).toBe(true);
+  });
+
+  it("does not offer the ability during combat or after resolution", () => {
+    const { state, engine } = lawGame("Banu Haqim");
+    runTrace(engine, [["Alice", "bleed:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    const action = state.frames.find((f) => f.kind === "action");
+    if (!action || action.kind !== "action") throw new Error("fixture");
+    const entry = seatOf(state, "Alice").permanents[0]!;
+    const handler = testRegistry[entry.card.name]!;
+    const ctx = { state, seat: "Alice", turnSeat: "Alice", window: "action.effects" as const, action, blockAttempt: null, inBlockAttempt: false, combat: null, pendingCard: null, referendum: null, registry: testRegistry };
+    const options = (window: typeof ctx.window | "combat.damageResolution" | "action.afterResolution") => handler.abilityOptions!(entry, { seat: "Alice", minion: null }, { ...ctx, window });
+    expect(options("action.effects").some((o) => o.id.includes("bleedsale"))).toBe(true);
+    expect(options("combat.damageResolution").some((o) => o.id.includes("bleedsale"))).toBe(false);
+    expect(options("action.afterResolution").some((o) => o.id.includes("bleedsale"))).toBe(false);
+    action.step = "blocked";
+    expect(options("action.effects").some((o) => o.id.includes("bleedsale"))).toBe(false);
+  });
+
   it("NEGATIVE SPACE: the LEGACY name matches nothing", () => {
     // The Priority Contract trap, guarded for the fourth time.
     const { engine } = lawGame("Assamite");

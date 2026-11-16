@@ -125,22 +125,26 @@ describe("True Brujah phase unlocks", () => {
     expect(options(engine)).toContain(`hunt:${vampire.id}`);
   });
 
-  it("The Sleeping Mind superior bars Nu until the action has resolved", () => {
+  it("The Sleeping Mind superior bars Nu through the after-resolution impulse", () => {
     const { state, vampire, engine } = fixture(201067);
     vampire.locked = true;
-    state.seats[0]!.minions.push(makeMinion("actor", "Alice", { blood: 4, disciplines: { dom: "superior" } }));
+    state.seats[0]!.minions.push(makeMinion("actor", "Alice", { blood: 4, disciplines: { dom: "superior", obl: "superior" } }));
     state.seats[1]!.minions.find((m) => m.id === "M")!.locked = true;
-    state.seats[0]!.hand = [{ id: "sleep", name: "The Sleeping Mind" }];
+    // Shadow Cloak keeps the post-resolution window open without unlocking.
+    state.seats[0]!.hand = [{ id: "sleep", name: "The Sleeping Mind" }, { id: "cloak", name: "Shadow Cloak" }];
     runTrace(engine, [["Alice", "bleed:actor"]]);
     expect(options(engine)).toContain(ability(state));
     runTrace(engine, [["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
-    runTrace(engine, [["Alice", "play:The Sleeping Mind:superior:actor:M"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    runTrace(engine, [["Alice", "play:The Sleeping Mind:superior:actor:sleep"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
     expect(options(engine)).not.toContain(ability(state));
     for (let i = 0; i < 20 && engine.decision()!.window !== "action.afterResolution"; i++) {
       const dp = engine.decision()!;
       runTrace(engine, [[dp.seat, "pass"]]);
     }
     expect(engine.decision()!.window).toBe("action.afterResolution");
+    expect(options(engine)).not.toContain(ability(state));
+    for (let i = 0; i < 10 && engine.decision()!.window === "action.afterResolution"; i++) engine.choose("pass");
+    expect(engine.decision()!.window).toBe("turn.minion");
     expect(options(engine)).toContain(ability(state));
   });
 

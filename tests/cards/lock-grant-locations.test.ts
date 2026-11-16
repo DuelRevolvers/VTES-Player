@@ -226,6 +226,19 @@ describe("KRCG News Radio (101067) — helping someone else block", () => {
 });
 
 describe("The Anarch Free Press (100052)", () => {
+  it("enters play without the location subtype", () => {
+    const state = threeSeatGame();
+    state.seats[0]!.minions[0]!.sect = "anarch";
+    state.seats[0]!.hand.push({ id: "afp", name: "The Anarch Free Press" });
+    const tf = state.frames[0]!;
+    if (tf.kind !== "turn") throw new Error("fixture");
+    tf.phase = "master";
+    tf.masterActionsLeft = 1;
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [["Alice", "play:The Anarch Free Press"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    expect(state.seats[0]!.permanents.find((p) => p.card.id === "afp")!.tags).not.toContain("location");
+  });
+
   it("cannot be played without a ready Anarch", () => {
     const state = threeSeatGame();
     const tf = state.frames.find((f) => f.kind === "turn")!;

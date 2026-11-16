@@ -104,6 +104,8 @@ export interface EngineOps {
   // the frame mechanics):
   /** Set the playing minion's strike for this round. */
   chooseCardStrike(play: CardPlayFrame, strike: CardStrikeParams): void;
+  /** Declare a strike from a minion's inherent ability (not a played card). */
+  chooseAbilityDamageStrike(minion: MinionId, name: string, damage: number, ranged: boolean, aggravated: boolean): void;
   /** Toggle range; the opponent gets the next maneuver opportunity. */
   applyManeuver(play: CardPlayFrame): void;
   /** Use a press: continue combat, or cancel a standing press to
@@ -145,7 +147,7 @@ export interface EngineOps {
       stealth?: number;
       /** "…as a Ⓓ action that costs 2 pool / 1 blood" — paid at
        *  resolution, only on success (p. 27). */
-      cost?: { pool?: number; blood?: number };
+      cost?: { pool?: number; blood?: number; burnEdge?: boolean };
       riders?: { maneuver?: number; press?: number };
       /** "…as a +1 stealth POLITICAL action" (Anarch Revolt, War of Ages):
        *  one per vampire per turn (p. 24), and undirected — such a grant
@@ -183,6 +185,7 @@ export interface EngineOps {
   setCombatStrength(play: CardPlayFrame, value: number): void;
   /** "Gets +N strength this combat" — additive, whole-combat. */
   addCombatStrength(play: CardPlayFrame, amount: number): void;
+  addCombatHandStrikeDamage(play: CardPlayFrame, amount: number): void;
   /** Add strength that grows by the given amount each later round, starting now. */
   addCombatStrengthPerRound(play: CardPlayFrame, amount: number): void;
   addPotenceStrikeDamageBonus(play: CardPlayFrame, amount: number): void;
@@ -250,7 +253,7 @@ export interface EngineOps {
   preventTorpor(minion: MinionId): void;
   /** "Prevent all damage from the opposing minion's strikes this round"
    *  (Rolling with the Punches superior). */
-  preventAllFromOpponentThisRound(play: CardPlayFrame): void;
+  preventAllFromOpponentThisRound(play: CardPlayFrame, disciplines: string[]): void;
   /** "Prevent all damage from the opposing minion's NEXT STRIKE" — the
    *  printed clause behind King of the Mountain [for] and Superior Mettle,
    *  armed from the damage-resolution window so the item already on the
@@ -298,7 +301,7 @@ export interface EngineOps {
   /** "…takes N UNPREVENTABLE damage during the PRESS STEP each round"
    *  (Drawing Out the Beast superior) and its close-range-strike-gated
    *  sibling (Necrosis [THN]). */
-  armPressStepDamage(amount: number, opts?: { ifCloseStrikeThisRound?: boolean }): void;
+  armPressStepDamage(amount: number, opts?: { ifCloseStrikeThisRound?: boolean; combat?: boolean; vampireOnly?: boolean; fromFrenzy?: boolean }): void;
   /** "The opposing minion cannot use additional strikes this round"
    *  (Rigor Mortis). */
   barOpponentAdditionalStrikes(): void;
@@ -335,6 +338,11 @@ export interface EngineOps {
       equipment: boolean;
       additionalStrikes?: boolean;
       strengthPenalty?: number;
+      maneuverToClose?: boolean;
+      maneuverToLong?: boolean;
+      pressToContinue?: boolean;
+      pressToEnd?: boolean;
+      vampireOnly?: boolean;
     },
   ): void;
   /** Grant N additional strikes this round (Blur etc.); a "(limited)"
@@ -419,7 +427,7 @@ export interface EngineOps {
   addRoundStrengthTo(minion: MinionId, amount: number): void;
   /** "+N strength THAT COMBAT" (Kasim Bayar) — combat-long, unlike
    *  `addRoundStrengthTo`. docs/crypt-wave-4.md §1 */
-  addCombatStrengthTo(minion: MinionId | null, amount: number): void;
+  addCombatStrengthTo(minion: MinionId | null, amount: number, fromFrenzy?: boolean): void;
   /** "…the opposing minion cannot use cards requiring \<disciplines\>
    *  until the end of combat" (Powder of Rigidity).
    *  docs/equip-unlocks-design.md §4 */
@@ -556,6 +564,7 @@ export interface EngineOps {
     opts: {
       interceptBonus?: number;
       bloodCost?: number;
+      withoutUnlock?: boolean;
       noBlockPenalty?: { kind: "lock" } | { kind: "attach"; cardId: CardInstanceId; cardName: string };
     },
   ): void;
@@ -630,7 +639,7 @@ export interface EngineOps {
   corruptFailBlock(seat: SeatId): void;
   /** "If the bleed is successful, burn 2 of your corruption from a minion of
    *  the target to unlock" (Revelation of the Serpent). */
-  registerCorruptionUnlock(minion: MinionId, seat: SeatId): void;
+  registerCorruptionUnlock(minion: MinionId, seat: SeatId, cardId: CardInstanceId): void;
   /** "X cannot block this action" — allies/vampires/titled outright, or a
    *  chosen vampire by id (Seduction, Visions of Gehenna; p. 26). */
   restrictBlocking(
@@ -687,6 +696,8 @@ export interface EngineOps {
    *  charges its own vampire for a failed ambush.
    *  docs/crypt-and-uncontrolled-design.md §5 */
   queueCombat(a: MinionId, b: MinionId, outcome?: AfterCombatRider): void;
+  /** Queue a new combat after the current combat, not after the action. */
+  queueCombatAfterCurrent(): void;
   /** Hedonism's whole effect: fail the current block attempt, lock the
    *  interposing vampire and the blocker, and (inferior only) queue the
    *  combat between them. */
@@ -731,6 +742,10 @@ export interface EngineOps {
    *  vampire NOT in that combat — the victim is named, not assumed.
    *  docs/outside-combat-design.md */
   preventDamageFor(minion: MinionId, amount: number): void;
+  /** Prevent all pending packets from the opposing minion's current strike. */
+  preventOpposingStrikeDamage(minion: MinionId, disciplines: string[]): void;
+  /** Prevent up to amount of non-aggravated damage from the current opposing strike. */
+  preventNonAggravatedOpposingStrikeDamage(minion: MinionId, amount: number): void;
   /** "End a combat involving another minion you control", from outside it
    *  (Saulot's Guiding Wisdom). End of Round still runs (p. 32). */
   endCombatFromOutside(): void;
@@ -833,7 +848,15 @@ export interface EngineOps {
     cardName: string;
     cardId: CardInstanceId;
     key: string;
+    /** If supplied, the follow-up moves this many cards regardless of how
+     * many draws succeeded. The default is the number actually drawn. */
+    choiceCount?: number;
+    choiceParams?: Record<string, string>;
   }): void;
+  /** Pause the action's success-resolution tail until its choices finish. */
+  suspendActionForChoices(): void;
+  /** Move a private hand card to the library top without replacement. */
+  moveHandCardToLibraryTop(seat: SeatId, cardId: CardInstanceId): void;
   /** "…and draw a new one" / "…draws back up to his or her hand size"
    *  (Deal with the Devil, Lupine Assault). docs/hand-churn-design.md §2 */
   drawUpToHandSize(seat: SeatId): void;
@@ -852,8 +875,7 @@ export interface EngineOps {
   /** "Equip this vampire with a melee weapon from your hand" / "employ an
    *  animal retainer from your hand" / "recruit or employ an ally or
    *  retainer from your hand" — bring a permanent card into play from
-   *  hand with no action wrapped around it. The card leaves hand, a
-   *  `CardPlayed` is emitted, the cost is paid NOW (there is no action to
+   *  hand, or from another zone. The incoming card is not played; the cost is paid NOW (there is no action to
    *  fail, §4), and it enters play on `minion` exactly as a successful
    *  equip/employ/recruit would have put it there.
    *  docs/play-from-hand-design.md */
@@ -865,6 +887,8 @@ export interface EngineOps {
     mode: DisciplineLevel | null;
     /** Blood the bearer pays in place of pool (Contraband superior). */
     blood?: number;
+    /** The enclosing effect is itself an equip/employ/recruit action. */
+    asAction?: boolean;
     /** Which pile the card comes from — hand by default; the LIBRARY for
      *  a search (Magic of the Smith) and a card's out-of-play STORE for
      *  Fleshforge Chamber. docs/library-search-design.md §7 */
@@ -892,12 +916,12 @@ export interface EngineOps {
   spendTransfers(n: number): void;
   /** "…(discarding and shuffling afterward)" (Inconnu Tutelage) — p. 7's
    *  discard-down, asked of the engine, which owns the question. */
-  discardDownToHandSize(seat: SeatId, cardName: string, cardId: CardInstanceId): void;
+  discardDownToHandSize(seat: SeatId, cardName: string, cardId: CardInstanceId, shuffleAfter?: boolean): void;
   /** "Move that vampire from your uncontrolled region to your ready region,
    *  with any counters he or she has" (Gather, Tomb of Rameses III) — the
    *  same move `inf:out` makes, pool tax and all.
    *  docs/uncontrolled-graduation-design.md §2 */
-  moveUncontrolledToReady(seat: SeatId, minion: MinionId, duringInfluenceEnd?: boolean): void;
+  moveUncontrolledToReady(seat: SeatId, minion: MinionId, duringInfluenceEnd?: boolean, skipEnteringChoice?: boolean): void;
   /** "Choose a vampire in your uncontrolled region" (Gather, Tomb of
    *  Rameses III) — the card in play remembers which one. §2 */
   linkUncontrolled(cardId: CardInstanceId, minion: MinionId): void;
@@ -926,6 +950,7 @@ export interface EngineOps {
   /** "This round, this vampire gets 1 optional maneuver, only usable to
    *  get to close range" (Angel's Gift). */
   grantCloseManeuver(play: CardPlayFrame): void;
+  grantPaidCloseManeuver(play: CardPlayFrame, bloodCost: number): void;
   addStrength(minion: MinionId, amount: number): void;
   registerCelerityCancel(play: CardPlayFrame): void;
   conquerTheBeast(play: CardPlayFrame, counters: number, mandatoryPress: boolean): void;
@@ -1104,8 +1129,8 @@ export interface CardStrikeParams {
    *  (`source: null`), so no "damage from the opposing minion" prevention or
    *  reaction reads it. docs/aggravated-damage-design.md §4 */
   selfDamage?: { amount: number; aggravated?: boolean };
-  /** "Strike: send the opposing vampire to torpor or burn the ally". */
-  incapacitate?: boolean;
+  /** Close-range non-damage incapacitation, optionally restricted by kind. */
+  incapacitate?: boolean | "ally" | "vampire";
   combatEnds?: boolean;
   unlockSelf?: boolean;
   dodge?: boolean;
@@ -1205,6 +1230,8 @@ export interface CardHandler {
   bloodCost: number;
   /** True for action cards: playing the card announces an action. */
   isActionCard?: boolean;
+  /** Whether this particular play is restricted to the action announcement. */
+  onlyAsActionAnnounced?(mode: DisciplineLevel | null, variant?: string): boolean;
   /** The card prints "HUNT action" (Psychophagia): it announces a hunt, so
    *  a vampire who must hunt may play it and Restricted Vitae's bar reaches
    *  it. docs/hunt-success-design.md §1 */
@@ -1277,6 +1304,8 @@ export interface CardHandler {
    *  [LSJ 20090205]. Per MODE, for the reason `redirectsBleed` is.
    *  docs/boons-design.md §3 */
   playableWhenActionWouldSucceed?(mode: DisciplineLevel | null): boolean;
+  /** In-play ability usable at the would-be-successful bleed timing. */
+  abilityWhenActionWouldSucceed?: boolean;
   /** Trifles refund one master phase action per phase (p. 10). */
   isTrifle?: boolean;
   /** Out-of-turn masters: playable during another Methuselah's turn,
@@ -1418,6 +1447,7 @@ export interface CardHandler {
     state: GameState,
     seat: SeatId,
     params: Record<string, string>,
+    mode: DisciplineLevel | null,
   ): NonNullable<CardPlayFrame["payToCancel"]> | null;
   /** This mode, played, is a card that CANCELS the card whose as-played
    *  window it is played in (p. 7 — the only other thing allowed there is a
@@ -1461,6 +1491,8 @@ export interface CardHandler {
    *  Blood Doll). Read by "after a successful action requiring Hecata or
    *  [obl]" (Cappadocian Crypt). docs/blood-locations-design.md §5 */
   requiresClans?(): string[];
+  /** Path requirement printed on the library card, if any. */
+  requiresPaths?(): string[];
   /** Sects this card requires ("Requires an Anarch"). The sibling of
    *  requiresClans; a hand-rolled handler answering undefined would fail
    *  a filter silently, so backfillCentralQueries supplies a default. */
@@ -1478,6 +1510,10 @@ export interface CardHandler {
   /** Seed per-seat bonus votes when the referendum is created, before
    *  polling ("each Malkavian gets +1 vote", p. 28). */
   referendumSetup?(frame: ReferendumFrame, state: GameState): void;
+  /** Votes granted to this in-play card's controller while a particular
+   * referendum is being polled. Re-evaluated so control and leaving play
+   * are reflected without undoing votes already cast. */
+  referendumControllerVotes?(entry: PermanentInPlay, frame: ReferendumFrame, state: GameState): number;
   /** Action card that, on success, attaches its own card to the acting
    *  vampire as a persistent static (Heart of the City, Preternatural
    *  Strength). Mode-aware (basic vs superior bonus), and **null for a
@@ -1603,6 +1639,11 @@ export interface CardHandler {
   /** Ally stats entering play (mode-aware for the same reason), plus the
    *  self-attached entry carrying the ally's own card text (statics and
    *  abilities reuse the permanent machinery). */
+  /** A choice made as this vampire enters play, before contesting. Return
+   * true when entry has been suspended for the choice. */
+  beforeVampireEnteredPlay?(seat: SeatId, minion: MinionId, duringInfluenceEnd: boolean, ops: EngineOps): boolean;
+  /** The vampire has entered from uncontrolled; before state-based contesting. */
+  onVampireEnteredFromUncontrolled?(seat: SeatId, minion: MinionId, duringInfluence: boolean, ops: EngineOps): void;
   /** This card is a VAMPIRE (a crypt card), not a library card. */
   isCryptCard?: boolean;
   /** What a crypt card's own text puts on its vampire, as a self-attached
@@ -1640,7 +1681,16 @@ export interface CardHandler {
     sect: Sect | null;
     disciplines?: Record<string, "basic" | "superior">;
     cannotActThisTurn?: boolean;
+    mustHuntThisTurn?: boolean;
   } | null;
+  /** A vampire has entered play, after its entity is installed. */
+  onVampireEnteredPlay?(entry: PermanentInPlay, owner: { seat: SeatId; minion: MinionId | null }, vampire: MinionState, ops: EngineOps): void;
+  /** A vampire's sect changed; previous is captured before mutation. */
+  onVampireSectChanged?(entry: PermanentInPlay, owner: { seat: SeatId; minion: MinionId | null }, vampire: MinionState, previous: Sect | null, ops: EngineOps): void;
+  /** Automatic consequence when counters on this in-play card change. */
+  onCountersChanged?(entry: PermanentInPlay, ops: EngineOps): void;
+  /** Automatic consequence of this card actually becoming locked in play. */
+  onPermanentLocked?(entry: PermanentInPlay, ops: EngineOps): void;
   /** Automatic (non-optional) card text that runs during the controller's
    *  unlock phase ("If Double Deuce has 2 or fewer life…, he gains 1
    *  life") — no decision, so it is a hook, not an ability. */
@@ -2013,7 +2063,14 @@ export interface CardHandler {
   onReferendumPassed?(
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
-    info: { actionId: ActionId; callingMinion: MinionId | null },
+    info: { actionId: ActionId; callingMinion: MinionId | null; caller: SeatId },
+    ops: EngineOps,
+  ): void;
+  /** A master play has finished its as-played and resolution choices during its controller's master phase. */
+  onMasterCardPlayed?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    info: { seat: SeatId; cardId: CardInstanceId; name: string; canceled: boolean },
     ops: EngineOps,
   ): void;
   /** "During your influence phase, …" (Frontal Assault) — the influence

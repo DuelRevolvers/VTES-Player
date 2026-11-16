@@ -100,6 +100,9 @@ describe("Vial of Elder Vitae (102114)", () => {
     // does not, because a basic can still go up.
     expect(offered).not.toContain("ability:Vial of Elder Vitae:vial:disc:dom");
     expect(offered).toContain("ability:Vial of Elder Vitae:vial:disc:aus");
+    expect(offered).toContain("ability:Vial of Elder Vitae:vial:disc:abo");
+    expect(offered).toContain("ability:Vial of Elder Vitae:vial:disc:san");
+    expect(offered).not.toContain("ability:Vial of Elder Vitae:vial:disc:str");
 
     runTrace(engine, [["Alice", "ability:Vial of Elder Vitae:vial:disc:aus"]]);
     expect(disciplinesOf(find(engine.state, "V1"))["aus"]).toBe("superior");
@@ -128,7 +131,11 @@ describe("Vial of Elder Vitae (102114)", () => {
     }
     // DISCIPLINES must cover every Discipline used anywhere in the pool:
     // crypt cards (vampires HAVE them) and library cards (cards REQUIRE them).
-    const allPoolDisciplines = new Set([...onVampires, ...onLibrary]);
+    // The registry uses the same field for non-Discipline requirements:
+    // Flight, infernal Maleficia/Striga and the seven Imbued virtues.
+    const otherTraits = new Set(["flight", "mal", "str", "def", "inn", "jud", "mar", "red", "ven", "viz"]);
+    const allPoolDisciplines = new Set([...onVampires, ...onLibrary].filter(d => !otherTraits.has(d)));
     expect([...DISCIPLINES].sort()).toEqual([...allPoolDisciplines].sort());
+    for (const trait of otherTraits) expect(DISCIPLINES).not.toContain(trait);
   });
 });

@@ -266,6 +266,16 @@ describe("conditions on the board", () => {
     expect(bleedFor(withLocation)).toBe(1);
   });
 
+  it("André gives +2 hand size only while ready, including while locked", () => {
+    const state = threeSeatGame();
+    const andre = asVampire(state.seats[0]!.minions[0]!, "André the Manipulator (G5)");
+    expect(handSizeOf(state, "Alice")).toBe(9);
+    andre.locked = true;
+    expect(handSizeOf(state, "Alice")).toBe(9);
+    andre.inTorpor = true;
+    expect(handSizeOf(state, "Alice")).toBe(7);
+  });
+
   it("Carmelita gives +1 hand size, and Khin Aye only while behind", () => {
     const state = threeSeatGame();
     const base = handSizeOf(state, "Alice");
@@ -363,10 +373,10 @@ describe("the crypt pipeline", () => {
     expect(handlers[card.name]?.cryptEntry?.().statics.bleed).toBe(1);
   });
 
-  it("a vampire with a bare sect/title line gets NO entry", () => {
-    // 118 of the 217 are like this, and they must stay untouched.
+  it("a crypt ability and a distinct library handler coexist", () => {
     expect(handlers["Ariane (G5)"]?.cryptEntry).toBeDefined();
-    expect(handlers["Nosferatu Kingdom"]).toBeUndefined();
+    expect(handlers["Nosferatu Kingdom"]?.isMasterCard).toBe(true);
+    expect(handlers["Nosferatu Kingdom"]?.cryptEntry).toBeUndefined();
   });
 
   it("Azucena's age comparison uses DERIVED capacity", () => {

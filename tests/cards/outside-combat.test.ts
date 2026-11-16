@@ -82,6 +82,22 @@ describe("Martyr's Resilience (101175)", () => {
     expect(find(state, "W").blood).toBe(before);
   });
 
+  it("superior permits X above three and pays the selected blood", () => {
+    const state = combatGame();
+    state.seats[2]!.minions.push(makeMinion("C2", "Carol", { disciplines: { aus: "superior", for: "superior" }, blood: 7, capacity: 8 }));
+    state.seats[2]!.hand.push({ id: "mr1", name: "Martyr's Resilience" });
+    const engine = new VtesEngine(state, testRegistry);
+    intoCombat(engine);
+    engine.choose("pass");
+    const opts = engine.decision()!.options.map(o => o.id);
+    expect(opts).toContain("play:Martyr's Resilience:superior:C2:W:6:mr1");
+    expect(opts).not.toContain("play:Martyr's Resilience:superior:C2:W:8:mr1");
+    engine.choose("play:Martyr's Resilience:superior:C2:W:6:mr1");
+    runTrace(engine, [["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    expect(find(state, "C2").blood).toBe(1);
+    expect(state.eventLog.some(e => e.type === "DamagePrevented" && e.minion === "W")).toBe(true);
+  });
+
   it("is not offered to a vampire who IS in the combat", () => {
     const state = combatGame();
     // Bob's own combatant holds the disciplines and the card.

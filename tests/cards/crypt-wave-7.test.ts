@@ -281,7 +281,7 @@ describe("Elen Kamjian", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Nonu Dis — a window opened by the event log
+// Nonu Dis — one optional choice per master played
 // ---------------------------------------------------------------------------
 
 describe("Nonu Dis", () => {
@@ -313,7 +313,7 @@ describe("Nonu Dis", () => {
         runTrace(engine, [["Alice", play]]);
         for (let i = 0; i < 10; i++) {
           const dp = engine.decision();
-          if (!dp || dp.options.some((o) => o.id.includes("masterblood"))) break;
+          if (!dp || dp.options.some((o) => o.id.includes("masterBlood"))) break;
           runTrace(engine, [
             [dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id],
           ]);
@@ -324,25 +324,129 @@ describe("Nonu Dis", () => {
   }
 
   it("offers the blood only AFTER a master card has been played", () => {
-    expect(optionIds(masterGame(false).engine).some((o) => o.includes("masterblood"))).toBe(false);
-    expect(optionIds(masterGame(true).engine).some((o) => o.includes("masterblood"))).toBe(true);
+    expect(optionIds(masterGame(false).engine).some((o) => o.includes("masterBlood"))).toBe(false);
+    expect(optionIds(masterGame(true).engine).some((o) => o.includes("masterBlood"))).toBe(true);
   });
 
-  it("adds the blood to a ready Ministry, and spends the phase", () => {
+  it("adds the blood to a ready Ministry, and consumes that play's choice", () => {
     const { state, engine } = masterGame(true);
-    const opt = optionIds(engine).find((o) => o.includes("masterblood:V1"))!;
+    const opt = optionIds(engine).find((o) => o.includes("masterBlood:V1"))!;
     expect(opt).toBeDefined();
     const before = find(state, "V1").blood;
     runTrace(engine, [["Alice", opt]]);
     expect(find(state, "V1").blood).toBe(before + 1);
-    // Once each master phase.
-    expect(optionIds(engine).some((o) => o.includes("masterblood"))).toBe(false);
+    expect(optionIds(engine).some((o) => o.includes("masterBlood"))).toBe(false);
   });
 
-  it("does not reach a vampire of another clan", () => {
-    const { engine } = masterGame(true);
-    // Bob's W is not a Ministry, and is not his to feed anyway.
-    expect(optionIds(engine).some((o) => o.includes("masterblood:W"))).toBe(false);
+  it("triggers again for another master and does not reuse a declined trigger", () => {
+    const { state, engine } = masterGame(true);
+    const before = find(state, "V1").blood;
+    engine.choose("pass");
+    expect(find(state, "V1").blood).toBe(before);
+    expect(optionIds(engine).some(o => o.includes("masterBlood"))).toBe(false);
+    const tf = state.frames.find(f => f.kind === "turn");
+    if (!tf || tf.kind !== "turn") throw new Error("no turn");
+    tf.masterActionsLeft = 1;
+    state.seats[0]!.hand.push({ id: "highway", name: "Information Highway" });
+    const play = optionIds(engine).find(o => o.startsWith("play:Information Highway"))!;
+    expect(play).toBeDefined();
+    engine.choose(play);
+    for (let i = 0; i < 12 && engine.decision()!.window !== "choice"; i++) engine.choose("pass");
+    expect(engine.decision()!.window).toBe("choice");
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    resumed.choose("choice:Nonu Dis (G6):V1:masterBlood:V1");
+    expect(find(saved, "V1").blood).toBe(before + 1);
+    expect(optionIds(resumed).some(o => o.includes("masterBlood"))).toBe(false);
+  });
+
+  it("does not offer another use after a second master in the same phase", () => {
+    const { state, engine } = masterGame(true);
+    const before = find(state, "V1").blood;
+    engine.choose("choice:Nonu Dis (G6):V1:masterBlood:V1");
+    const tf = state.frames.find(f => f.kind === "turn");
+    if (!tf || tf.kind !== "turn") throw new Error("no turn");
+    tf.masterActionsLeft = 1;
+    state.seats[0]!.hand.push({ id: "highway", name: "Information Highway" });
+    engine.choose(optionIds(engine).find(o => o.startsWith("play:Information Highway"))!);
+    for (let i = 0; i < 12; i++) {
+      const decision = engine.decision()!;
+      if (decision.window === "turn.master") break;
+      expect(decision.options.some(o => o.id.includes("masterBlood"))).toBe(false);
+      engine.choose("pass");
+    }
+    expect(engine.decision()!.window).toBe("turn.master");
+    expect(optionIds(engine).some(o => o.includes("masterBlood"))).toBe(false);
+    expect(find(state, "V1").blood).toBe(before + 1);
+  });
+
+  it("resets the phase limit for a later master phase", () => {
+    const { state, engine } = masterGame(true);
+    engine.choose("choice:Nonu Dis (G6):V1:masterBlood:V1");
+    state.seats[0]!.hand.push({ id: "next", name: "Information Highway" });
+    // Leave Alice's current phase, then cycle back naturally to her next one.
+    engine.choose("pass");
+    for (let i = 0; i < 250; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.seat === "Alice" && dp.window === "turn.master") break;
+      engine.choose(dp.options.find(o => o.id === "pass")?.id ?? dp.options[0]!.id);
+    }
+    expect(engine.decision()!.window).toBe("turn.master");
+    expect(engine.decision()!.seat).toBe("Alice");
+    engine.choose(optionIds(engine).find(o => o.startsWith("play:Information Highway"))!);
+    for (let i = 0; i < 12 && engine.decision()!.window !== "choice"; i++) engine.choose("pass");
+    expect(optionIds(engine)).toContain("choice:Nonu Dis (G6):V1:masterBlood:V1");
+  });
+
+  it("does not let Blood Doll create a belated opportunity after the play", () => {
+    const { state, engine } = masterGame(false);
+    const nonu = find(state, "V1");
+    nonu.blood = nonu.capacity;
+    engine.choose(optionIds(engine).find(o => o.startsWith("play:Blood Doll"))!);
+    for (let i = 0; i < 12 && engine.decision()!.window !== "turn.master"; i++) engine.choose("pass");
+    expect(engine.decision()!.window).toBe("turn.master");
+    expect(optionIds(engine).some(o => o.includes("masterBlood"))).toBe(false);
+    const doll = optionIds(engine).find(o => o.startsWith("ability:Blood Doll") && o.endsWith(":toPool"));
+    expect(doll).toBeDefined();
+    engine.choose(doll!);
+    expect(nonu.blood).toBe(nonu.capacity - 1);
+    expect(optionIds(engine).some(o => o.includes("masterBlood"))).toBe(false);
+  });
+
+  it("waits for a master card's nested choices, including across save and restore", () => {
+    const { state, engine } = masterGame(false);
+    const alice = state.seats[0]!;
+    alice.hand = [{ id: "third", name: "Ashur Tablets" }];
+    alice.library = [];
+    alice.ashHeap = [{ id: "ash", name: "Conditioning" }];
+    for (const id of ["first", "second"]) alice.permanents.push({
+      card: { id, name: "Ashur Tablets" }, controller: "Alice", locked: false,
+      usedThisPhase: false, statics: {}, tags: ["Ashur Tablets"],
+    });
+    engine.choose("play:Ashur Tablets:-:third");
+    for (let i = 0; i < 12 && engine.decision()!.window !== "choice"; i++) engine.choose("pass");
+    expect(optionIds(engine)).toContain("choice:Ashur Tablets:third:ashurHand:done");
+    expect(optionIds(engine).some(o => o.includes("masterBlood"))).toBe(false);
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    resumed.choose("choice:Ashur Tablets:third:ashurHand:done");
+    expect(optionIds(resumed)).toContain("choice:Nonu Dis (G6):V1:masterBlood:V1");
+    resumed.choose("choice:Nonu Dis (G6):V1:masterBlood:V1");
+    expect(find(saved, "V1").blood).toBe(3);
+  });
+
+  it("targets only ready Ministry vampires controlled by Nonu's controller", () => {
+    const { state, engine } = masterGame(false);
+    state.seats[0]!.minions.push(makeMinion("otherClan", "Alice", { clan: "Brujah", blood: 1, capacity: 5 }));
+    state.seats[0]!.minions.push(makeMinion("torpor", "Alice", { clan: "Ministry", blood: 1, capacity: 5, inTorpor: true }));
+    state.seats[1]!.minions.push(makeMinion("foreign", "Bob", { clan: "Ministry", blood: 1, capacity: 5 }));
+    engine.choose(optionIds(engine).find(o => o.startsWith("play:Blood Doll"))!);
+    for (let i = 0; i < 12 && engine.decision()!.window !== "choice"; i++) engine.choose("pass");
+    expect(optionIds(engine)).toContain("choice:Nonu Dis (G6):V1:masterBlood:V1");
+    for (const id of ["otherClan", "torpor", "foreign"]) {
+      expect(optionIds(engine).some(o => o.endsWith(`:masterBlood:${id}`))).toBe(false);
+    }
   });
 });
 
@@ -376,14 +480,27 @@ describe("Gathii", () => {
     ).toBe(false);
   });
 
-  it("gives +1 stealth when it is anything else", () => {
+  it("does not gain unneeded stealth, but can reveal anyway", () => {
     const { state, engine } = gathiiBleed("Cats' Guidance");
     runTrace(engine, [["Alice", optionIds(engine).find((o) => o.includes(":reveal"))!]]);
-    expect(
-      state.eventLog.some((e) => e.type === "StealthModified" && e.source === "Gathii (G7)"),
-    ).toBe(true);
-    // …and no blood was burnt.
-    expect(state.eventLog.some((e) => e.type === "BloodBurned")).toBe(false);
+    expect(state.eventLog.some(e => e.type === "LibraryTopRevealed")).toBe(true);
+    expect(state.eventLog.some(e => e.type === "StealthModified" && e.source === "Gathii (G7)")).toBe(false);
+    expect(state.eventLog.some(e => e.type === "BloodBurned")).toBe(false);
+  });
+  it("gains stealth when the revealed card is not a master and a block would succeed", () => {
+    const { state, engine } = gathiiBleed("Cats' Guidance");
+    runTrace(engine, [["Alice","pass"],["Bob","pass"],["Carol","pass"],["Alice","pass"],["Bob","block:M"]]);
+    const opt=optionIds(engine).find(o => o.includes(":reveal"));
+    expect(opt).toBeDefined(); engine.choose(opt!);
+    expect(state.eventLog.some(e => e.type === "StealthModified" && e.source === "Gathii (G7)")).toBe(true);
+  });
+  it("can reveal without blood because the possible burn is an effect, not a cost", () => {
+    const { state, engine } = gathiiBleed("Blood Doll");
+    find(state,"V1").blood=0;
+    const opt=optionIds(engine).find(o => o.includes(":reveal"));
+    expect(opt).toBeDefined(); engine.choose(opt!);
+    expect(find(state,"V1").blood).toBe(0);
+    expect(state.eventLog.some(e => e.type === "LibraryTopRevealed")).toBe(true);
   });
 
   it("the OPTION does not say what the card is — it is a gamble", () => {

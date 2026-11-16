@@ -890,3 +890,80 @@ describe("Burial Site Hunting Ground (102311)", () => {
     expect(optionIds(engine).some((o) => o.endsWith(":V1"))).toBe(false);
   });
 });
+
+
+describe("Dance of the Dead — later combat windows", () => {
+  function inCombat(counters: number, allySeat: "Alice" | "Bob" = "Alice") {
+    const state = threeSeatGame();
+    ally(state, allySeat, "undead", "Aggressive Corpse", { blood: 5, capacity: 5, strength: 0 });
+    seatOf(state, "Alice").permanents.push({
+      card: { id: "dance", name: "Dance of the Dead" }, controller: "Alice",
+      locked: false, usedThisPhase: false, statics: {}, tags: [], counters,
+    });
+    const engine = new VtesEngine(state, testRegistry);
+    if (allySeat === "Alice") {
+      runTrace(engine, [["Alice", "bleed:undead"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+        ["Alice", "pass"], ["Bob", "block:M"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    } else {
+      runTrace(engine, [["Alice", "bleed:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+        ["Alice", "pass"], ["Bob", "block:undead"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"]]);
+    }
+    return { state, engine };
+  }
+  function atPress(engine: VtesEngine) {
+    for (let i = 0; i < 80; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.window === "combat.press" && dp.seat === "Alice") return;
+      engine.choose(dp.options.find(o => o.id === "pass")?.id ?? dp.options[0]!.id);
+    }
+    throw new Error("combat never reached Alice's press window");
+  }
+  it("can buy a press in the press step, burn the last counter and use the press", () => {
+    const { state, engine } = inCombat(1);
+    atPress(engine);
+    const id = "ability:Dance of the Dead:dance:combatgrant:press:undead";
+    expect(optionIds(engine)).toContain(id);
+    engine.choose(id);
+    expect(seatOf(state, "Alice").permanents.some(p => p.card.id === "dance")).toBe(false);
+    expect(seatOf(state, "Alice").ashHeap?.some(c => c.id === "dance")).toBe(true);
+    expect(optionIds(engine)).toContain("press:continue");
+    engine.choose("press:continue");
+    const cf = state.frames.find(f => f.kind === "combat");
+    expect(cf?.kind === "combat" && cf.willContinue).toBe(true);
+  });
+  it("only grants once each combat even with counters remaining", () => {
+    const { state, engine } = inCombat(3);
+    atPress(engine);
+    engine.choose("ability:Dance of the Dead:dance:combatgrant:press:undead");
+    expect(seatOf(state, "Alice").permanents.find(p => p.card.id === "dance")?.counters).toBe(2);
+    expect(optionIds(engine).some(id => id.includes("Dance of the Dead:dance:combatgrant"))).toBe(false);
+  });
+  it("preserves a maneuver bought at press for the next round and across save/restore", () => {
+    const { state, engine } = inCombat(2);
+    atPress(engine);
+    engine.choose("ability:Dance of the Dead:dance:combatgrant:maneuver:undead");
+    engine.grantCombatPressToMinion("undead"); // another source continues combat
+    const saved = JSON.parse(JSON.stringify(state)) as GameState;
+    const resumed = new VtesEngine(saved, testRegistry);
+    resumed.choose("press:continue");
+    for (let i = 0; i < 100; i++) {
+      const dp = resumed.decision();
+      const cf = saved.frames.find(f => f.kind === "combat");
+      if (cf?.kind === "combat" && cf.round === 2 && dp?.seat === "Alice" && dp.window === "combat.range") break;
+      if (!dp || !cf) throw new Error("combat ended before the next range step");
+      resumed.choose(dp.options.find(o => o.id === "pass")?.id ?? dp.options[0]!.id);
+    }
+    expect(optionIds(resumed)).toContain("maneuver:credit");
+    expect(optionIds(resumed).some(id => id.includes("Dance of the Dead:dance:combatgrant"))).toBe(false);
+    resumed.choose("maneuver:credit");
+    const cf = saved.frames.find(f => f.kind === "combat");
+    expect(cf?.kind === "combat" && cf.range).toBe("long");
+  });
+
+  it("does not grant to an opponent's undead ally", () => {
+    const { engine } = inCombat(2, "Bob");
+    atPress(engine);
+    expect(optionIds(engine).some(id => id.includes("Dance of the Dead:dance:combatgrant"))).toBe(false);
+  });
+});

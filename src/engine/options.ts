@@ -301,7 +301,7 @@ export type LegalOption =
       huntAction?: true;
       /** The granted action's own cost, paid on success (p. 27). The gate
        *  adds it to a toll paid at announcement. */
-      cost?: { blood?: number; pool?: number };
+      cost?: { blood?: number; pool?: number; burnEdge?: boolean };
     }
   /** Spend a "1 optional maneuver during that combat" credit. */
   /** Spend a "can prevent N damage during the resulting combat" credit

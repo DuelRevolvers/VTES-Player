@@ -764,7 +764,7 @@ describe("Aniel", () => {
     runTrace(engine, [["Alice", opt]]);
     resolve(engine, state);
     expect(find(state, "W").corruption?.["Alice"]).toBe(1);
-    // Somebody else's counters are not hers to burn.
+    // Selecting Alice's counter does not burn Bob's.
     expect(find(state, "W").corruption?.["Bob"]).toBe(1);
   });
 
@@ -799,12 +799,24 @@ describe("Aniel", () => {
     expect(ids.some((o) => o.includes("card:mine"))).toBe(false);
   });
 
-  it("does not offer a minion carrying nothing of hers", () => {
-    const { engine } = withCrypt("Aniel (G7)", (s) => {
-      find(s, "W").corruption = { Bob: 3 };
+  it("can select and burn another Methuselah's corruption counter", () => {
+    const { state, engine } = withCrypt("Aniel (G7)", (s) => {
+      find(s, "W").corruption = { Alice: 1, Bob: 3 };
     });
-    walkTo(engine, "end");
-    expect(optionIds(engine).some((o) => o.includes("corrupt:W"))).toBe(false);
+    expect(walkTo(engine, "act:Aniel (G7)")).toBe(true);
+    const ids = optionIds(engine);
+    expect(ids.some(o => o.endsWith("corrupt:W"))).toBe(true);
+    const foreign = ids.find(o => o.endsWith("corrupt:W:Bob"))!;
+    expect(foreign).toBeDefined();
+    runTrace(engine, [["Alice", foreign]]);
+    resolve(engine, state);
+    expect(find(state, "W").corruption).toMatchObject({ Alice: 1, Bob: 2 });
+  });
+
+  it("offers foreign counters even if Aniel's controller has none on the minion", () => {
+    const { engine } = withCrypt("Aniel (G7)", (s) => { find(s, "W").corruption = { Bob: 3 }; });
+    expect(walkTo(engine, "act:Aniel (G7)")).toBe(true);
+    expect(optionIds(engine).some(o => o.endsWith("corrupt:W:Bob"))).toBe(true);
   });
 });
 
@@ -871,5 +883,71 @@ describe("Abdelsobek — unlock a vampire or mummy", () => {
     // Model a separate unlock after combat; a blocked action still counts.
     engine.emit({ type: "MinionUnlocked", minion: "V1" });
     expect(optionIds(engine).some((id) => id.startsWith("act:Abdelsobek"))).toBe(false);
+  });
+});
+
+
+describe("Silas discard ability", () => {
+  it("allows a ready locked Silas to pay blood for one extra discard action", () => {
+    const state = threeSeatGame();
+    const m = asVampire(find(state, "V1"), "Silas (G6)");
+    Object.assign(m, { blood: 3, locked: true });
+    const tf = state.frames[0]!;
+    if (tf.kind !== "turn") throw new Error("fixture");
+    tf.phase = "discard"; tf.discardActionsLeft = 1;
+    const engine = new VtesEngine(state, testRegistry);
+    const id = "ability:Silas (G6):V1:discard";
+    expect(optionIds(engine)).toContain(id);
+    engine.choose(id);
+    expect(m.blood).toBe(2);
+    expect(tf.discardActionsLeft).toBe(2);
+    expect(optionIds(engine)).not.toContain(id);
+  });
+  it("does not offer the ability in torpor, without blood or on another turn", () => {
+    for (const scenario of ["torpor", "empty", "turn"] as const) {
+      const state = threeSeatGame();
+      const m = asVampire(find(state, "V1"), "Silas (G6)");
+      m.blood = scenario === "empty" ? 0 : 2;
+      m.inTorpor = scenario === "torpor";
+      const tf = state.frames[0]!;
+      if (tf.kind !== "turn") throw new Error("fixture");
+      tf.phase = "discard"; tf.discardActionsLeft = 1;
+      if (scenario === "turn") tf.seat = "Bob";
+      expect(optionIds(new VtesEngine(state, testRegistry)).some(o => o.startsWith("ability:Silas"))).toBe(false);
+    }
+  });
+});
+
+
+describe("Alabástrom", () => {
+  it("unlocks another ready Gargoyle while ready and locked, once per turn", () => {
+    const state = threeSeatGame();
+    const a = asVampire(find(state, "V1"), "Alabástrom (G6)");
+    Object.assign(a, { clan: "Gargoyle", locked: true });
+    state.seats[0]!.minions.push(makeMinion("garg", "Alice", { clan: "Gargoyle", locked: true }));
+    state.seats[0]!.minions.push(makeMinion("torpor", "Alice", { clan: "Gargoyle", locked: true, inTorpor: true }));
+    state.seats[0]!.minions.push(makeMinion("other", "Alice", { clan: "Brujah", locked: true }));
+    const engine = new VtesEngine(state, testRegistry);
+    const ids = optionIds(engine);
+    const id = "ability:Alabástrom (G6):V1:unlock:garg";
+    expect(ids).toContain(id);
+    expect(ids).not.toContain("ability:Alabástrom (G6):V1:unlock:V1");
+    expect(ids).not.toContain("ability:Alabástrom (G6):V1:unlock:torpor");
+    expect(ids).not.toContain("ability:Alabástrom (G6):V1:unlock:other");
+    engine.choose(id);
+    expect(find(state, "garg").locked).toBe(false);
+    find(state, "garg").locked = true;
+    expect(optionIds(engine)).not.toContain(id);
+  });
+  it("cannot use it while in torpor or during another player's turn", () => {
+    for (const situation of ["torpor", "turn"]) {
+      const state = threeSeatGame();
+      const a = asVampire(find(state, "V1"), "Alabástrom (G6)");
+      a.inTorpor = situation === "torpor";
+      state.seats[0]!.minions.push(makeMinion("garg", "Alice", { clan: "Gargoyle", locked: true }));
+      const tf = state.frames[0]!;
+      if (tf.kind === "turn" && situation === "turn") tf.seat = "Bob";
+      expect(optionIds(new VtesEngine(state, testRegistry)).some(o => o.startsWith("ability:Alabástrom"))).toBe(false);
+    }
   });
 });

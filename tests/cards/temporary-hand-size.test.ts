@@ -213,7 +213,8 @@ describe("Rage of Apedemak (102336) — +1 hand size this combat", () => {
     expect(handSizeOf(state, "Alice")).toBe(8);
     expect(seatOf(state, "Alice").hand).toHaveLength(8);
     // …and the damage half still landed.
-    expect(combat(state)!.strengthBonus.acting).toBe(1);
+    expect(combat(state)!.handStrikeDamageBonus?.acting).toBe(1);
+    expect(combat(state)!.strengthBonus.acting).toBe(0);
 
     // Run the combat out. However it ends, the bonus lifts with the frame.
     for (let i = 0; i < 120 && combat(state); i++) {

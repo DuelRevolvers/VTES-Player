@@ -89,6 +89,8 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   refPerSeatCards: "poolGain",
   // Tranche 3 wave 7 — the one-shot masters.
   gainPool: "poolGain",
+  cryptPeek: "board",
+  burnLibraryForPool: "poolGain",
   liftBloodCurseDiablerieBar: "board",
   gainPoolThreshold: "poolGain",
   preyBurnsPoolIfRicher: "poolDrain",
@@ -109,6 +111,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   lockAllMatching: "deny",
   distributePerVoteMargin: "poolGain",
   actionStealPool: "poolDrain",
+  actionBurnEdgeForPreyPool: "poolDrain",
   burnPoolVotedAgainst: "poolDrain",
   refAllocateBurn: "poolDrain",
   refBurnSeatOrLocation: "poolDrain",
@@ -216,6 +219,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   actionEnterCombat: "combat",
   actorCombatRider: "combat",
   addStrength: "combat",
+  handStrikeDamageBonus: "combat",
   potenceStrikeDamageBonus: "damage",
   bloodToWater: "damage",
   aggravateNextHandOrMeleeStrike: "damage",
@@ -303,6 +307,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   strikeCombatEnds: "deny",
   targetDiscardsOnBleed: "deny",
   targetLocksOwnMinion: "deny",
+  lockPreyMinion: "deny",
 
   // Taking what belongs to somebody else.
   actionSteal: "steal",

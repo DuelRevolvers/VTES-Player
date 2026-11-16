@@ -2,6 +2,7 @@
 
 import { trainHeuristic, type TrainingOptions } from "../ai/trainer.ts";
 import { HeuristicWorkerPool } from "./heuristic-worker-pool.ts";
+import type { DeckList } from "./decks.ts";
 import type { SeatId } from "../engine/state.ts";
 import { buildTrainingState, TRAINING_SEATS, TRAINING_REGISTRY } from "./training-games.ts";
 export { buildTrainingState, TRAINING_SEATS } from "./training-games.ts";
@@ -13,18 +14,20 @@ import { seatSeed } from "./settings.ts";
 
 const registry = TRAINING_REGISTRY;
 
-export type LocalTrainingOptions = Omit<TrainingOptions, "seats" | "registry" | "buildState" | "executeGames"> & { workers?: number };
+export type LocalTrainingOptions = Omit<TrainingOptions, "seats" | "registry" | "buildState" | "executeGames"> & { workers?: number; candidateDeck?: DeckList };
 
 export async function runLocalTraining(options: LocalTrainingOptions) {
-  const { workers = 1, ...training } = options;
+  const { workers = 1, candidateDeck, ...training } = options;
   // In environments without Web Workers (including node tests), keep the
   // original serial executor. A worker startup failure is reported, not hidden.
   const pool = typeof Worker === "undefined" ? undefined : new HeuristicWorkerPool(
     Math.max(1, Math.min(32, Math.floor(workers) || 1, options.population * options.gamesPerCandidate)),
+    undefined, candidateDeck,
   );
   try {
     return await trainHeuristic({
-      ...training, seats: TRAINING_SEATS, registry, buildState: buildTrainingState,
+      ...training, seats: TRAINING_SEATS, registry,
+      buildState: (seed, seat) => buildTrainingState(seed, candidateDeck ? { seat, deck: candidateDeck } : undefined),
       ...(pool ? { executeGames: pool.run } : {}),
     });
   } finally {
@@ -47,7 +50,7 @@ const ML_OPPONENT_STYLES = ["balanced", "bruiser", "stalker", "turtle", "politic
 
 /** Play a real five-seat engine game and collect only the candidate's
  *  masked-view decisions. Four changing heuristic styles provide opponents. */
-export function runLocalMlEpisode(model: MlModel, seed: number, gameIndex: number): MlTrainingEpisode {
+export function runLocalMlEpisode(model: MlModel, seed: number, gameIndex: number, candidateDeck?: DeckList): MlTrainingEpisode {
   const candidateSeat = TRAINING_SEATS[gameIndex % TRAINING_SEATS.length]!;
   const candidate = new MlAgent({ model, seed: seed ^ 0x1f123bb5, explore: true });
   const agents: Record<SeatId, MlAgent | HeuristicAgent> = {};
@@ -63,7 +66,7 @@ export function runLocalMlEpisode(model: MlModel, seed: number, gameIndex: numbe
     agents[seat] = new HeuristicAgent({ seed: styleSeed, weights: PLAYSTYLES[style] });
     opponent++;
   }
-  const result = runGame(seed, buildTrainingState(seed), agents, registry);
+  const result = runGame(seed, buildTrainingState(seed, candidateDeck ? { seat: candidateSeat, deck: candidateDeck } : undefined), agents, registry);
   const ownVp = result.victoryPoints[candidateSeat] ?? 0;
   const otherVps = TRAINING_SEATS.filter((seat) => seat !== candidateSeat)
     .map((seat) => result.victoryPoints[seat] ?? 0);

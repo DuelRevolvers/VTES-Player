@@ -81,6 +81,45 @@ describe("Brujah Debate (100260)", () => {
     expect(alice.minions.find((m) => m.id === "V1")!.locked).toBe(false);
   });
 
+  it("does not lock a younger Brujah when the oldest is already locked", () => {
+    const state = enteringMaster(threeSeatGame());
+    const alice = state.seats[0]!;
+    Object.assign(alice.minions[0]!, { clan: "Brujah", capacity: 7, locked: true });
+    alice.minions.push(makeMinion("B2", "Alice", { clan: "Brujah", capacity: 3 }));
+    alice.permanents.push(entry("bd1", "Brujah Debate", debateAura));
+    new VtesEngine(state, testRegistry).decision();
+    expect(alice.minions.find(m => m.id === "B2")!.locked).toBe(false);
+  });
+
+  it("includes tied locked elders in the choice and respects modified capacity", () => {
+    const state = enteringMaster(threeSeatGame());
+    const alice = state.seats[0]!;
+    Object.assign(alice.minions[0]!, { clan: "Brujah", capacity: 5, locked: true });
+    const b = makeMinion("B2", "Alice", { clan: "Brujah", capacity: 4 });
+    b.attached.push({ card: { id: "cap", name: "Potence" }, locked: false, usedThisPhase: false, statics: { capacityBonus: 1 }, tags: [] });
+    alice.minions.push(b);
+    alice.permanents.push(entry("bd1", "Brujah Debate", debateAura));
+    const engine = new VtesEngine(state, testRegistry);
+    const dp = engine.decision()!;
+    expect(dp.options.map(o => o.id)).toEqual(expect.arrayContaining([
+      "choice:Brujah Debate:bd1:lockBrujah:V1", "choice:Brujah Debate:bd1:lockBrujah:B2",
+    ]));
+    engine.choose("choice:Brujah Debate:bd1:lockBrujah:V1");
+    expect(b.locked).toBe(false);
+  });
+
+  it("considers an older Brujah in torpor", () => {
+    const state = enteringMaster(threeSeatGame());
+    const alice = state.seats[0]!;
+    Object.assign(alice.minions[0]!, { clan: "Brujah", capacity: 7, inTorpor: true, locked: false });
+    const b = makeMinion("B2", "Alice", { clan: "Brujah", capacity: 3 });
+    alice.minions.push(b);
+    alice.permanents.push(entry("bd1", "Brujah Debate", debateAura));
+    new VtesEngine(state, testRegistry).decision();
+    expect(alice.minions[0]!.locked).toBe(true);
+    expect(b.locked).toBe(false);
+  });
+
   it("does nothing for a Methuselah with no Brujah", () => {
     const state = enteringMaster(threeSeatGame());
     state.seats[0]!.permanents.push(entry("bd1", "Brujah Debate", debateAura));

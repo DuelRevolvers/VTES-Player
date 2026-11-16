@@ -71,7 +71,7 @@ export function ollamaBridge(): Plugin {
                   }),
                 });
                 if (!upstream.ok) throw new Error(`Ollama returned HTTP ${upstream.status}. Is the selected model installed?`);
-                const data = await upstream.json() as { message?: { content?: string }; done_reason?: string };
+                const data = await upstream.json() as { message?: { content?: string }; done_reason?: string; prompt_eval_count?: number };
                 let answer: { id?: unknown } | null;
                 try { answer = JSON.parse(data.message?.content ?? "") as { id?: unknown } | null; }
                 catch {
@@ -81,7 +81,10 @@ export function ollamaBridge(): Plugin {
                 if (!answer || typeof answer.id !== "string" || answer.id.length > 512 || (Array.isArray(ids) && !ids.includes(answer.id))) {
                   reply(502, { error: "Ollama returned a missing or illegal option ID.", retryable: true }); return;
                 }
-                reply(200, { id: answer.id });
+                // Optional Ollama telemetry; it is not proof the whole input fit,
+                // since some model/server versions may truncate it first.
+                const count = data.prompt_eval_count;
+                reply(200, { id: answer.id, ...(Number.isSafeInteger(count) && (count ?? -1) >= 0 ? { promptTokens: count } : {}) });
               }
             } catch (error) {
               reply(503, { error: `Local Ollama unavailable: ${error instanceof Error ? error.message : String(error)}` });

@@ -344,6 +344,21 @@ describe("Guard Duty (100864)", () => {
     expect(inCombat(state)).toBe(true);
   });
 
+  it.each([true, false])("Guard Duty honors Sleeping Mind superior=%s for a locked bearer", (superior) => {
+    const { state, engine } = guarded();
+    const actor = state.seats[0]!.minions[0]!;
+    actor.disciplines = { dom: "superior" };
+    state.seats[1]!.minions[0]!.locked = true;
+    state.seats[0]!.hand.push({ id: "sm", name: "The Sleeping Mind" });
+    runTrace(engine, [["Alice", "act:The Rack:rk:steal:V1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", superior ? "play:The Sleeping Mind:superior:V1:sm" : "play:The Sleeping Mind:basic:V1:W:sm"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"]]);
+    expect(ids(engine).includes("ability:Guard Duty:gd:blood")).toBe(!superior);
+    expect(ids(engine).includes("ability:Guard Duty:gd:burn")).toBe(!superior);
+    expect(state.seats[1]!.minions[1]!.locked).toBe(true);
+  });
+
   it("or burns itself instead", () => {
     const { state, engine } = guarded();
     runTrace(engine, [...STEAL_TO_BOB, ["Bob", "ability:Guard Duty:gd:burn"]]);

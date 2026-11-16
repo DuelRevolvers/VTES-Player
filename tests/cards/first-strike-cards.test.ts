@@ -90,6 +90,19 @@ describe("Quick Jab (101529)", () => {
 });
 
 describe("Forearm Block (100763)", () => {
+  it("does not prevent or spend Forearm Block on an unpreventable hand-strike packet", () => {
+    const { state, engine } = inCombat("Forearm Block");
+    const cf = combat(state)!;
+    cf.step = "damageResolution";
+    cf.preventHandStrike = { acting: 2, opposing: 0 };
+    cf.pendingDamage = [{ minion: "V1", amount: 2, source: "M", aggravated: false,
+      fromHandStrike: true, strikePhase: cf.strikePhaseId, unpreventable: true }];
+    engine.decision();
+    expect(find(state, "V1")!.blood).toBe(3);
+    expect(cf.preventHandStrike.acting).toBe(2);
+    expect(state.eventLog.some(e => e.type === "DamagePrevented" && e.minion === "V1")).toBe(false);
+  });
+
   it("prevents 2 of the currently-resolving hand strike", () => {
     // M strikes for 2 and all of it is stopped; V1's own strike is the
     // Forearm Block, which deals nothing.

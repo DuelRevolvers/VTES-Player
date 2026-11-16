@@ -25,12 +25,15 @@ agreement — **never add monetization**, and keep the Dark Pack attribution
 in the UI. Card data and scans come from **KRCG** (static.krcg.org,
 official VEKN data, used with permission).
 
-**Rules source of truth:** the official V5 rulebook PDF at
-`..\Vampire The Eternal Struggle Fifth Edition rulebook ENG.pdf` (one
-folder above the repo). Read it rather than guessing; its text layer
-extracts cleanly with a ~40-line Node script using only `zlib`. Verified
-sequencing citations: `docs/impulse-design.md` §10. **When card text
-contradicts the rulebook, card text wins** (the Golden Rule, p. 16).
+**Rules sources:** `docs/rules-reference/README.md` lists the official
+rulebook, other official references and a pinned local rulings database.
+Use `npm run rules:lookup -- "card name"` (or card ID) before card work;
+check both direct and group rulings, their sources and newer errata. The
+historical PDF at `..\Vampire The Eternal Struggle Fifth Edition rulebook ENG.pdf`
+and its text extract may be local, ignored files and are not guaranteed to be
+present. Read official sources rather than guessing; verified sequencing
+citations: `docs/impulse-design.md` §10. **When card text contradicts the
+rulebook, card text wins** (the Golden Rule, p. 16).
 
 ## Scope (locked)
 

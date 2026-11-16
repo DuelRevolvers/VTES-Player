@@ -76,13 +76,14 @@ playCardFromHand(args: {
 }): void;
 ```
 
-It removes the card from hand, emits `CardPlayed`, charges the cost, and
-calls `enterPermanent`.
-
-**`CardPlayed` is emitted, deliberately.** The card *is* being played
-(p. 9); the event log is the record every "only one X in a game" check
-reads (the Week of Nightmares precedent), and the English log should say
-so.
+It moves the card out of its source zone, charges the cost, and calls
+`enterPermanent`. The equipped, employed or recruited card is **not
+played**, so it does not emit `CardPlayed`; moving it from hand or library
+emits `CardLeftZone`. See [ANK 20211228](https://www.vekn.net/forum/rules-questions/79511-vidal-jarbeaux#104034).
+A card removed from hand is still replaced. Cost modifiers explicitly tied
+to recruit/employ/equip actions, such as Charisma, do not apply to effects
+outside such an action; general cost modifiers do. The caller marks search
+that is itself an equip action separately. See G00131 [LSJ 20090115-1].
 
 **Reading on record: the cost is paid immediately and unconditionally.**
 An equip action defers its cost to resolution because a blocked action
@@ -245,9 +246,9 @@ did not.
 > p. 7: "Whenever you play a card from your hand, you draw another from
 > your library to replace it."
 
-`playCardFromHand` (§4) already emits `CardPlayed` with the comment *"It
-IS played (p. 9)"* — so the rule applies by the engine's own reading of
-what this family does. It simply never drew.
+The original implementation treated the card as played; that reading was
+incorrect. The card still leaves the hand and is replaced, as illustrated
+by Concealed Weapon's replacement rulings [ANK 20180925-2].
 
 ### What went wrong, and it is the standing lesson verbatim
 
@@ -257,7 +258,7 @@ shape.** The ordinary play path ends in a twelve-branch chain that decides
 `unlock`, `delayedReplaceUntil`, `whileInPlay`, `discard`, `afterAction`,
 the per-action `delayReplaceTypes` deferral, and the store guard around
 all of them. §4 of this doc reproduced the *shape* of a card play — splice
-it out of the pile, emit `CardPlayed`, charge the price, enter play — and
+it out of the pile, charge the price, enter play — and
 none of the guards. The word "draw" appears nowhere in §1–§12.
 
 **The fix is a shared helper, not a `drawToReplace` call.** A bare draw at

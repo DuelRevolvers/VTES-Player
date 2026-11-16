@@ -304,6 +304,10 @@ describe("Szlachta Assistant (102360)", () => {
     runTrace(engine, [["Alice", "ability:Szlachta Assistant:sa:discount"]]);
     expect(maybeEntry(state, "sa")).toBeUndefined(); // burned
     expect(seatOf(state, "Alice").playCostMods?.length).toBe(1);
+    seatOf(state, "Alice").pool = 2;
+    const discounted = engine.decision()!.options.find(o => o.kind === "playCard" && o.name === "War Ghoul" && o.params["burn"] === "self");
+    expect(discounted?.kind === "playCard" && discounted.cost?.pool).toBe(1);
+    expect(discounted).toBeDefined();
   });
 
   it("NEGATIVE SPACE: the modifier does not touch a card that is not a Tzimisce ghoul ally", () => {

@@ -450,6 +450,17 @@ describe("Dance with the Devil (102315)", () => {
     expect(walkTo(engine, "play:Dance with the Devil", 25)).toBe(false);
   });
 
+  it("superior can be played without blood when the extra maneuver is declined", () => {
+    const { state, engine } = intoCombat([["Alice", "Dance with the Devil"]], { v1: { obf: "superior" } });
+    combat(state)!.range = "long";
+    find(state, "V1").blood = 0;
+    expect(walkTo(engine, "play:Dance with the Devil:superior")).toBe(true);
+    engine.choose(optionIds(engine).find(o => o.startsWith("play:Dance with the Devil:superior"))!);
+    for (let i = 0; i < 10 && combat(state)!.range !== "close"; i++) engine.choose("pass");
+    expect(find(state, "V1").blood).toBe(0);
+    expect(combat(state)!.range).toBe("close");
+  });
+
   it("superior: also grants a bought close-only maneuver credit", () => {
     const { state, engine } = intoCombat([["Alice", "Dance with the Devil"]], {
       v1: { obf: "superior" },
@@ -467,9 +478,18 @@ describe("Dance with the Devil (102315)", () => {
     }
     const cf = combat(state)!;
     const side = cf.acting === "V1" ? "acting" : "opposing";
-    // One maneuver performed, one credit granted, one blood paid for it.
+    // The printed maneuver is free; paying for the extra is optional.
     expect(cf.range).toBe("close");
-    expect(cf.closeManeuvers[side]).toBe(1);
+    expect(cf.paidCloseManeuvers?.[side]).toEqual([1]);
+    expect(find(state, "V1").blood).toBe(blood);
+    const other = side === "acting" ? "opposing" : "acting";
+    cf.maneuverCredits[other] = 1;
+    expect(engine.decision()!.options.some(o => o.id === "maneuver:credit")).toBe(true);
+    engine.choose("maneuver:credit");
+    expect(engine.decision()!.options.some(o => o.id === "maneuver:paidClose")).toBe(true);
+    engine.choose("maneuver:paidClose");
+    expect(cf.range).toBe("close");
     expect(find(state, "V1").blood).toBe(blood - 1);
+    expect(cf.paidCloseManeuvers?.[side]).toEqual([]);
   });
 });

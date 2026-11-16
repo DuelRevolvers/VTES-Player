@@ -1,7 +1,8 @@
+import type { DeckList } from "./decks.ts";
 import type { MlModel } from "../ai/ml-agent.ts";
 import type { MlTrainingEpisode } from "./ai-lab.ts";
 
-export interface MlGameTask { seed: number; gameIndex: number }
+export interface MlGameTask { seed: number; gameIndex: number; candidateDeck?: DeckList }
 type WorkerResponse = { index: number; episode?: MlTrainingEpisode; error?: string };
 
 /** Persistent pool: one model snapshot per worker/round, and ordered results. */
