@@ -71,7 +71,6 @@ describe("Cry Wolf in the unlock phase", () => {
     const state = threeSeatGame();
     const cw = makeAlly("cw", "Alice", 3);
     cw.name = "Cry Wolf";
-    cw.tags = ["werewolf"];
     cw.locked = locked;
     state.seats[0]!.minions.push(cw);
     cw.attached.push({ card: { id: "cw", name: "Cry Wolf" }, locked: false, usedThisPhase: false,
