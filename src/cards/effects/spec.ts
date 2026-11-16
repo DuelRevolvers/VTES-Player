@@ -4012,6 +4012,9 @@ export interface CardSpec {
       requiresDiscipline?: string[];
       /** "…requiring the Path of Death and the Soul" (Sakura). */
       requiresPath?: string;
+      /** "…a successful action costing blood" (Cavalier): the card played
+       *  has a printed blood cost. */
+      requiresBloodCost?: boolean;
     };
     /** "\<This vampire\> can search your library for a \<type\> card,
      *  reveal it and move it to your hand as a +N stealth action"

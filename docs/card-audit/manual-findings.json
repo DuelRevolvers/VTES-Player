@@ -1856,8 +1856,8 @@
   {
     "id": 100310,
     "name": "Cavalier",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast archetype, dołączenia i opcjonalnego unlock za blood. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: archetyp na własnym vampire (spec). Odblokowanie po udanej akcji kosztującej krew z jednorazowym spaleniem 1 krwi: wspólna klauzula unlockAfterAction (bloodCost 1, oncePerTurn) z warunkiem requiresBloodCost (playedCardCostsBlood w compile.ts). Test: tests/cards/cavalier.test.ts (2/2): oferta tylko na własnym vampire i reguła 'kosztujące krew' na prawdziwym rejestrze. CZĘŚCIOWO: pełnego przebiegu udanej akcji z kartą kosztującą krew nie zweryfikowano testem."
   },
   {
     "id": 100311,

@@ -9410,6 +9410,34 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
   },
+  {
+    // Cavalier [100310] — "Archetype. Put this card on a vampire you control.
+    // Once each turn, this vampire can burn 1 blood to unlock after performing
+    // a successful action costing blood. A vampire can have only one archetype."
+    // The unlock offer is the shared `unlockAfterAction` clause (the same one
+    // Keegan uses); `requiresBloodCost` is the "costing blood" test.
+    krcgId: 100310,
+    name: "Cavalier",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+      unlockAfterAction: {
+        whose: "self",
+        unlocks: "self",
+        bloodCost: 1,
+        oncePerTurn: true,
+        requiresBloodCost: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   // Wave 107: five more archetypes on the same skeleton, each paying 1 blood
   // once per turn, automatically (docs/archetypes-design.md §7). Four print
   // "a Sabbat vampire you control".
@@ -26984,17 +27012,6 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: "cel", effects: [{ kind: "actionStealth", amount: 1 }] }
-    ],
-  },
-  {
-    // Cavalier [100310] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 100310,
-    name: "Cavalier",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {

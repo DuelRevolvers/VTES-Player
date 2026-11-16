@@ -267,6 +267,17 @@ function rulesHold(
 /** "This vampire cannot have or use any ranged weapons except the Ivory Bow"
  *  (Anachronism): true when the bearer carries the restriction and this
  *  weapon is a ranged one other than the Ivory Bow. */
+/** "…a successful action COSTING BLOOD" (Cavalier): the card played has a
+ *  printed blood cost. A built-in action (a plain bleed or hunt) has no card
+ *  and costs no blood, so it never qualifies. */
+export function playedCardCostsBlood(
+  card: { instance: { name: string } } | null | undefined,
+  registry: HandlerRegistry,
+): boolean {
+  if (!card) return false;
+  return (registry[card.instance.name]?.bloodCost ?? 0) > 0;
+}
+
 export function cannotHaveRangedWeapon(
   bearer: MinionState,
   name: string,
@@ -13629,6 +13640,9 @@ function addCryptAbilities(
             (!card || !(ops.registry[card.instance.name]?.requiresPaths?.() ?? []).includes(ua.requiresPath))) return;
       }
 
+      // "…after performing a successful action COSTING BLOOD" (Cavalier): a
+      // property of the card played. A built-in action costs no blood.
+      if (ua.requiresBloodCost && !playedCardCostsBlood(card, ops.registry)) return;
       const target = ua.unlocks === "actor" ? actor : bearer;
       if (!target.locked) return;
       if (ua.bloodCost && bearer.blood < ua.bloodCost) return;
