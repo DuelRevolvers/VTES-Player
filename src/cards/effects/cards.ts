@@ -35706,15 +35706,24 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Trophy: Retainers [102036] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
+    // Trophy: Retainers [102036] — "Master. Trophy. During your unlock phase,
+    // if this card is on a vampire, you may search your library (shuffle
+    // afterward) or hand for a retainer. This vampire employs that retainer
+    // (he or she must meet the requirements, if any). Pay the cost as normal.
+    // This is not an action." Handler: `trophyRetainers`.
     krcgId: 102036,
     name: "Trophy: Retainers",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Trophy: Retainers"],
+      attach: { scope: "any", kind: "vampire" },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Trophy: Wealth [102039] — "Master. Trophy. When this card is placed on a
@@ -46763,6 +46772,93 @@ const loner: CardHandler = {
  * gain automatically rather than asking. A question for the controller would
  * be the faithful version; it is not built here.
  */
+const TROPHY_RETAINERS_PICK = "trophyRetainersPick";
+
+/** Names of the Retainer-type cards in the registry (types include "Retainer"). */
+const retainerCardNames: ReadonlySet<string> = new Set(
+  Object.values(cardRegistry.entries)
+    .filter((e) => ((e.card as { types?: string[] }).types ?? []).includes("Retainer"))
+    .map((e) => e.card.name),
+);
+
+/**
+ * Trophy: Retainers (102036): during the controller's unlock phase, if the card
+ * is on a vampire, the controller may pick a retainer from hand or library.
+ * The bearer employs it (`playCardFromHand`, not an action; cost paid as
+ * normal). A library search shuffles afterwards. Declining is the automatic
+ * "no" option of an optional choice.
+ *
+ * Not built: the requirement check of the retainer (the card says the bearer
+ * must meet it). `playCardFromHand` does not check requirements here.
+ */
+const trophyRetainers: CardHandler = {
+  ...compileSpec(specByName("Trophy: Retainers")),
+  onControllerUnlock(entry, owner, ops) {
+    if (owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    const seat = ops.state.seats.find((s) => s.id === owner.seat);
+    if (!seat) return;
+    const hasCandidate =
+      seat.hand.some((x) => retainerCardNames.has(x.name)) ||
+      seat.library.some((x) => retainerCardNames.has(x.name));
+    if (!hasCandidate) return;
+    ops.raiseChoice({
+      seat: owner.seat,
+      cardName: "Trophy: Retainers",
+      cardId: entry.card.id,
+      key: TROPHY_RETAINERS_PICK,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== TROPHY_RETAINERS_PICK) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    const seat = state.seats.find((s) => s.id === bearer.controller);
+    if (!seat) return [];
+    const out: Array<{ id: string; kind: "answerChoice"; label: string; params: Record<string, string> }> = [];
+    for (const zone of ["hand", "library"] as const) {
+      const pile = zone === "hand" ? seat.hand : seat.library;
+      for (const x of pile) {
+        if (!retainerCardNames.has(x.name)) continue;
+        out.push({
+          id: `choice:Trophy: Retainers:${frame.cardId}:${TROPHY_RETAINERS_PICK}:${zone}:${x.id}`,
+          kind: "answerChoice" as const,
+          label: `Trophy: Retainers: employ ${x.name} from ${zone === "hand" ? "your hand" : "your library"}`,
+          params: {},
+        });
+      }
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key !== TROPHY_RETAINERS_PICK) return;
+    // id tail: ...:<zone>:<instanceId>
+    const parts = choice.id.split(":");
+    const instanceId = parts[parts.length - 1]!;
+    const zone = parts[parts.length - 2] as "hand" | "library";
+    const bearerId = frame.params["minion"];
+    if (!bearerId) return;
+    const bearer = findMinion(ops.state, bearerId);
+    if (!bearer) return;
+    const seat = ops.state.seats.find((s) => s.id === bearer.controller);
+    if (!seat) return;
+    const pile = zone === "hand" ? seat.hand : seat.library;
+    const card = pile.find((x) => x.id === instanceId);
+    if (!card || !retainerCardNames.has(card.name)) return;
+    ops.playCardFromHand({
+      cardId: card.id,
+      seat: seat.id,
+      minion: bearer.id,
+      mode: null,
+      from: { zone },
+    });
+    if (zone === "library") ops.shuffleLibrary(seat.id);
+  },
+};
+
 const CURMUDGEON_LOCK = "curmudgeonLock";
 
 /**
@@ -48238,6 +48334,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     chanjelinWard,
     vampiricDisease,
     curmudgeon,
+    trophyRetainers,
     vessel,
     magnum44,
     doubleDeuce,

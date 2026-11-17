@@ -12212,8 +12212,8 @@
   {
     "id": 102036,
     "name": "Trophy: Retainers",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast Trophy z opcjonalnym employ retainera z library/hand w unlock; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zaimplementowano: mistrz Trophy na dowolnym vampire (scope any). W unlock phase kontrolera, gdy karta jest na vampire, kontroler może (opcjonalny wybór trophyRetainersPick) zatrudnić retainera z ręki albo z biblioteki (typ 'Retainer' z rejestru). Zatrudnienie przez playCardFromHand (nie akcja), na bearer; wybór z biblioteki tasuje ją potem. Test: tests/cards/trophy-retainers.test.ts (4/4): sługa z ręki zatrudniony i usunięty z ręki; sługa z biblioteki zatrudniony i usunięty z biblioteki; odmowa nic nie robi; brak sług = brak pytania. NIE ZROBIONO / NIE ZWERYFIKOWANO: wymóg sługi ('bearer must meet the requirements') nie jest sprawdzany; koszt i tasowanie nie są asercjami testu; brak testu end-to-end w fazie unlock."
   },
   {
     "id": 102037,
