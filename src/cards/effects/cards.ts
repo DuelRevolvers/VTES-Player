@@ -9463,9 +9463,9 @@ export const cardSpecs: CardSpec[] = [
     // Other Methuselahs' actions targeting this vampire cost an additional
     // blood. This vampire can burn this card to cause an action targeting him
     // or her to fail. A vampire may have only one Chanjelin Ward."
-    // PARTIAL: the surcharge is here (`targetedActionBloodTax`, charged to the
-    // actor). The burn-to-fail option is NOT built: it is an optional window
-    // in an action targeting the bearer, which needs its own offer.
+    // The surcharge is `targetedActionBloodTax`, charged to the actor for
+    // another Methuselah's action. The burn-to-fail option is the
+    // `chanjelinWard` handler (`onActionAnnounced`).
     krcgId: 100326,
     name: "Chanjelin Ward",
     cardType: "master",
@@ -42269,6 +42269,55 @@ const toyChestTest: CardHandler = {
   },
 };
 
+const CHANJELIN_BURN = "chanjelinBurn";
+
+/**
+ * Chanjelin Ward (100326) — "This vampire can burn this card to cause an
+ * action targeting him or her to fail." The bearer's controller decides, and
+ * may do so for an action announced by ANOTHER Methuselah against the bearer
+ * (ANK 20210309-3). Answering yes burns the ward and fails the action
+ * (`endAction`, unsuccessful end); the printed surcharge is the spec's `targetedActionBloodTax`.
+ */
+const chanjelinWard: CardHandler = {
+  ...compileSpec(specByName("Chanjelin Ward")),
+  onActionAnnounced(entry, owner, info, ops) {
+    if (owner.minion === null || info.targetMinion !== owner.minion) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    ops.raiseChoice({
+      seat: bearer.controller,
+      cardName: "Chanjelin Ward",
+      cardId: entry.card.id,
+      key: CHANJELIN_BURN,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== CHANJELIN_BURN) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    return [
+      {
+        id: `choice:Chanjelin Ward:${frame.cardId}:${CHANJELIN_BURN}:yes`,
+        kind: "answerChoice" as const,
+        label: `Chanjelin Ward: burn it to fail the action against ${bearer.name}`,
+        params: {},
+      },
+    ];
+  },
+  applyChoice(frame, _choice, ops) {
+    if (frame.key !== CHANJELIN_BURN) return;
+    const still = ops.state.seats
+      .flatMap((s) => s.minions)
+      .flatMap((m) => m.attached)
+      .some((p) => p.card.id === frame.cardId);
+    if (!still) return;
+    ops.burnPermanent(frame.cardId);
+    ops.endAction();
+  },
+};
+
 /** Agent of Power (100025) — "Master: Discipline. Trifle. Unique. Put this
  *  card on a vampire you control and choose a Discipline. This vampire gains
  *  1 level of that Discipline. Burn this card during your discard phase."
@@ -48094,6 +48143,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     agentOfPower,
     anachronism,
     toyChestTest,
+    chanjelinWard,
     vessel,
     magnum44,
     doubleDeuce,
