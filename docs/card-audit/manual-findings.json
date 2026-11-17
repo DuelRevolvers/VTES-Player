@@ -1953,7 +1953,7 @@
     "id": 100326,
     "name": "Chanjelin Ward",
     "status": "FIXED_TARGETED",
-    "evidence": "Naprawiono: karta na własnym vampire (spec, archetyp mistrza). Dwie części: (1) podatek celu targetedActionBloodTax, +1 krew płaci aktor, gdy akcja innego Methuselaha celuje w ten vampire (chargeActionTolls dostaje targetMinion); (2) opcja spalenia karty, by akcja wobec tego vampire się nie udała: handler chanjelinWard w onActionAnnounced pyta kontrolera bearera (opcjonalnie, choice chanjelinBurn); 'tak' spala kartę i kończy akcję nieudanie (endAction). Kontroler nie ma tej opcji wobec własnej akcji tylko z zasady 'innego Methuselaha' w surcharge; opcja spalenia dotyczy każdej akcji celującej w vampire (tekst karty). Ruling: opcja nie zmienia momentu zablokowania (ANK 20260316). Test: tests/cards/chanjelin-ward.test.ts (7/7): surcharge, brak karty, opcja wyboru, 'tak' spala i kończy akcję, 'nie' zostawia kartę, cudza cel nie pyta."
+    "evidence": "Naprawiono: karta na własnym vampire (spec, archetyp mistrza). Dwie części: (1) podatek celu targetedActionBloodTax: +1 krew płaci aktor akcji innego Methuselaha celującej w ten vampire (chargeActionTolls dostaje targetMinion); (2) opcja spalenia karty, by akcja celująca w ten vampire się nie udała: handler chanjelinWard w onActionAnnounced pyta kontrolera bearera (opcjonalny wybór chanjelinBurn). 'Tak' spala kartę i kończy akcję nieudanie (endAction); 'nie' zostawia kartę. Opcja dotyczy każdej akcji celującej w bearera, zgodnie z tekstem karty. Test: tests/cards/chanjelin-ward.test.ts (7/7): surcharge, brak karty, oferta wyboru, 'tak' spala i kończy akcję, 'nie' zostawia kartę, akcja wobec innego vampire nie pyta."
   },
   {
     "id": 100327,
