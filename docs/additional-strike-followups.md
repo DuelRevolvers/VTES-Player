@@ -12,10 +12,12 @@ is **not** a complete audit of the additional-strike timing model.
   that correctly requires re-opening the appropriate window after the strikes
   and respecting the initial opportunity and sequencing for both combatants.
 - **Optional weapon grants:** AK-47 and Caseless Rounds grant their optional
-  additional strike automatically when the engine sees the gun strike. The
-  limited-source guard now prevents a second limited grant, but there is no
-  choice to decline the weapon's grant and use a different limited source
-  instead. An actual post-strike choice is still needed; see the
+  additional strike when the engine sees the gun strike. The striker can now
+  DECLINE it in the additional sub-round (`strike:decline`: a no-damage
+  declaration, which releases the gun commitment; `CombatFrame.optionalAdditionalStrike`).
+  Still open: choosing a different limited source instead of the weapon's grant.
+  The limited-source guard already stops a second limited grant, and the
+  choice has to be made before the grant, not after it. See the
   [VEKN discussion](https://www.vekn.net/forum/rules-questions/69208-additional-strikes-compounded-card-effects).
 - **Strike-plus-additional modes:** the current compiler can offer a mode
   which declares a strike as a new card in the additional-strike grant window.

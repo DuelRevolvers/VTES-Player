@@ -7,7 +7,7 @@
  */
 
 import type { ActionFrame, CardHandler, CardInstanceId, CardPlayFrame, ChoiceFrame, ConditionalStatic, MinionId, EngineOps, GameState, HandlerRegistry, LegalOption, MinionState, PermanentInPlay, PermanentStatics, PlayContext, PlayCostCardType, SeatId, VampireTitle } from "../../engine/index.ts";
-import { BLOOD_BROTHER_CIRCLES, vampireCircle, auraBlocksPolitical, canRepeatAction, blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, cannotAttemptBleed, canReact, mayAttemptBlock, canAct, canUseCombatManeuver, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, CLANS, disciplinesOf, handSizeOf, minionHasTag, cannotBeEquipped, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
+import { BLOOD_BROTHER_CIRCLES, vampireCircle, auraBlocksPolitical, canRepeatAction, blockEligibleSeats, blockWouldSucceed, bleedAnnounceTax, bleedBarred, cannotAttemptBleed, canReact, mayAttemptBlock, canAct, canUseCombatManeuver, isMinionCardPlay, playCostFor, canGainBlood, capacityOf, CITY_TITLES, CLANS, disciplinesOf, DISCIPLINES, handSizeOf, minionHasTag, cannotBeEquipped, currentBleed, currentIntercept, currentStealth, findMinion, getMinion, getSeat, hasVoice, isReady, playOptionId, predatorOf, preyOf, referendumOpenToPlay, untargetableBy, vampireMayVote, vampireVotes } from "../../engine/index.ts";
 import {
   allocToParams,
   applyReferendumRiders,
@@ -6796,7 +6796,7 @@ export const cardSpecs: CardSpec[] = [
         discipline: "ani",
         effects: [
           { kind: "strikeDodge" },
-          { kind: "additionalStrike", count: 1, limited: false, burnEquipment: true },
+          { kind: "additionalStrike", count: 1, limited: false, burnEquipment: true, burnWeaponOnly: true },
         ],
       },
     ],
@@ -9385,6 +9385,117 @@ export const cardSpecs: CardSpec[] = [
       tags: ["archetype"],
       attach: { scope: "own", kind: "vampire" },
       exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // Loner [101121] — "Master: archetype. Put this card on a vampire you
+    // control. During your influence phase, if this vampire successfully
+    // performed an action this turn and none of your other minions attempted
+    // any actions this turn, he or she gains 1 blood from the blood bank, if
+    // he or she is ready. A vampire can have only one archetype."
+    krcgId: 101121,
+    name: "Loner",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // Cavalier [100310] — "Archetype. Put this card on a vampire you control.
+    // Once each turn, this vampire can burn 1 blood to unlock after performing
+    // a successful action costing blood. A vampire can have only one archetype."
+    // The unlock offer is the shared `unlockAfterAction` clause (the same one
+    // Keegan uses); `requiresBloodCost` is the "costing blood" test.
+    krcgId: 100310,
+    name: "Cavalier",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+      unlockAfterAction: {
+        whose: "self",
+        unlocks: "self",
+        bloodCost: 1,
+        oncePerTurn: true,
+        requiresBloodCost: true,
+      },
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // Conniver [100407] — "Master: archetype. Put this card on a vampire you
+    // control. If your prey loses pool when it is neither your turn nor your
+    // prey's turn, you may lock this card to move 1 blood from the blood bank
+    // to this vampire. A vampire can have only one archetype."
+    krcgId: 100407,
+    name: "Conniver",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // Chanjelin Ward [100326] — "Master. Put this card on a vampire you control.
+    // Other Methuselahs' actions targeting this vampire cost an additional
+    // blood. This vampire can burn this card to cause an action targeting him
+    // or her to fail. A vampire may have only one Chanjelin Ward."
+    // The surcharge is `targetedActionBloodTax`, charged to the actor for
+    // another Methuselah's action. The burn-to-fail option is the
+    // `chanjelinWard` handler (`onActionAnnounced`).
+    krcgId: 100326,
+    name: "Chanjelin Ward",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { targetedActionBloodTax: 1 },
+      tags: [],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "chanjelin-ward",
+    },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
+  {
+    // Legacy of Caine [101086] — "Master. Put this card on a vampire with a
+    // capacity above 6 controlled by another Methuselah. This vampire cannot
+    // hunt as normal. He or she may hunt by stealing 1 blood from another
+    // vampire as a Ⓓ action."
+    krcgId: 101086,
+    name: "Legacy of Caine",
+    cardType: "master",
+    bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { cannotHunt: true, legacyStealHunt: true },
+      tags: [],
+      attach: { scope: "other", kind: "vampire", minCapacity: 7 },
     },
     usable: [],
     modes: [{ level: "basic", discipline: null, effects: [] }],
@@ -16992,7 +17103,9 @@ export const cardSpecs: CardSpec[] = [
     permanent: {
       where: "bearer",
       statics: {},
-      tags: ["Fever Pitch"],
+      // "feverPitch" too: `attachFromZone` takes the tags from here when it
+      // puts the card on the vampire after the choice (see held attach).
+      tags: ["Fever Pitch", "feverPitch"],
       exclusiveKey: "Fever Pitch",
     },
     usable: [],
@@ -17004,21 +17117,17 @@ export const cardSpecs: CardSpec[] = [
         effects: [{ kind: "modifyBleed", amount: 1, limited: true }],
       },
       {
-        // The bleed bonus is applied when the card is played, in the
-        // ordinary window; the attach half is a SEPARATE mode played
-        // after resolution, because the two happen at different times.
-        level: "superior",
-        discipline: ["for", "pre"],
-        variant: "attach",
-        usable: ["afterResolutionByActor", "ifBleedSucceeded"],
-        effects: [{ kind: "afterResolutionAttach", tags: ["feverPitch"] }],
-      },
-      {
+        // ONE play: the +1 bleed is applied in the ordinary window, and the
+        // card is HELD on the action; if the bleed succeeds it is put on the
+        // vampire after resolution, otherwise filed (`held`).
         level: "superior",
         discipline: ["for", "pre"],
         variant: "bleed",
         usable: ["onlyDuringBleed"],
-        effects: [{ kind: "modifyBleed", amount: 1, limited: true }],
+        effects: [
+          { kind: "modifyBleed", amount: 1, limited: true },
+          { kind: "afterResolutionAttach", tags: ["feverPitch"], held: true },
+        ],
       },
     ],
   },
@@ -21342,7 +21451,10 @@ export const cardSpecs: CardSpec[] = [
     unique: true,
     permanent: {
       where: "bearer",
-      statics: { disciplineGrant: { discipline: "ser", level: "superior" } },
+      statics: {
+        disciplineGrant: { discipline: "ser", level: "superior" },
+        stealOpposingAllyInsteadOfBurn: true,
+      },
       tags: ["equipment"],
     },
     usable: [],
@@ -26159,17 +26271,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Agent of Power [100025] — fala 49 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 100025,
-    name: "Agent of Power",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Aggressive Tactics [100026] — fala 49 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 100026,
     name: "Aggressive Tactics",
@@ -26213,18 +26314,6 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "modifyIntercept", amount: 1 }] }
-    ],
-  },
-  {
-    // Anachronism [100050] — fala 49 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 100050,
-    name: "Anachronism",
-    cardType: "master",
-    bloodCost: 0,
-    poolCost: 1,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {
@@ -26986,17 +27075,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Cavalier [100310] — fala 49 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 100310,
-    name: "Cavalier",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Celestial Harmony [100313] — fala 49 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 100313,
     name: "Celestial Harmony",
@@ -27028,17 +27106,6 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: "dom", effects: [{ kind: "actionStealth", amount: 1 }] }
-    ],
-  },
-  {
-    // Chanjelin Ward [100326] — fala 49 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 100326,
-    name: "Chanjelin Ward",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {
@@ -27309,17 +27376,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Conniver [100407] — fala 49 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 100407,
-    name: "Conniver",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Conscripted Statue [100412] — fala 49 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 100412,
     name: "Conscripted Statue",
@@ -27444,7 +27500,7 @@ export const cardSpecs: CardSpec[] = [
     ally: { life: 3, strength: 2, bleed: 0 },
     permanent: {
       where: "bearer",
-      statics: { pressPerCombat: 1 },
+      statics: { pressPerCombat: 1, bearerDoesNotUnlock: true },
       rushGrant: { who: { scope: "bearer" }, target: { scope: "any", othersOnly: true } },
       tags: ["werewolf"],
     },
@@ -27499,15 +27555,25 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Curmudgeon [100482] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Curmudgeon [100482] — "Master: archetype. Trifle. Put this card on a
+    // vampire you control. During your prey's unlock phase, you may choose a
+    // minion controlled by your prey. If that minion is blocked this turn, you
+    // may lock this card to move 1 blood from the blood bank to this vampire.
+    // A vampire can have only one archetype." Handler: `curmudgeon`.
     krcgId: 100482,
     name: "Curmudgeon",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Daemonic Possession [100486] — fala 49 wierna (300) pełna zgodność bez wydmuszek
@@ -27521,16 +27587,24 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // The Damned [100490] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // The Damned [100490] — "Unique master. Put this card on a vampire with
+    // a capacity below 5. The vampire with this card burns 1 additional
+    // blood for each bleeding action he or she successfully performs (after
+    // resolving the action)." Attached, so it reads its bearer's statics.
     krcgId: 100490,
     name: "The Damned",
     cardType: "master",
     bloodCost: 0,
     poolCost: 1,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: { bleedSuccessBloodBurn: 1 },
+      tags: ["The Damned"],
+      attach: { scope: "any", kind: "vampire", maxCapacity: 4, inTorporToo: true },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Danse Macabre [100491] — fala 49 wierna (300) pełna zgodność bez wydmuszek
@@ -28780,15 +28854,25 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Inceptor [100969] — fala 50 wierna (300) pełna zgodność bez wydmuszek
+    // Inceptor [100969] — "Unique master. Put this card on a vampire of
+    // capacity 1, and put three cards from your hand, ash heap or library on
+    // this card, face up but out of play. This vampire may play other copies
+    // of these cards as if he or she had the Discipline required (if any) at
+    // superior." Handler: `inceptor` (placement only; see its comment).
     krcgId: 100969,
     name: "Inceptor",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Inceptor"],
+      attach: { scope: "any", kind: "vampire", minCapacity: 1, maxCapacity: 1 },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Infamous Warlock [100976] — fala 50 wierna (300) pełna zgodność bez wydmuszek
@@ -29109,17 +29193,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Legacy of Caine [101086] — fala 50 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 101086,
-    name: "Legacy of Caine",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Legacy of Pander [101087] — fala 50 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 101087,
     name: "Legacy of Pander",
@@ -29219,17 +29292,6 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: "pro", effects: [{ kind: "modifyStealth", amount: 1 }] }
-    ],
-  },
-  {
-    // Loner [101121] — fala 50 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 101121,
-    name: "Loner",
-    cardType: "master",
-    bloodCost: 0,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {
@@ -29505,18 +29567,6 @@ export const cardSpecs: CardSpec[] = [
     usable: [],
     modes: [
       { level: "basic", discipline: null, effects: [{ kind: "modifyStealth", amount: 1 }] }
-    ],
-  },
-  {
-    // Memories of Mortality [101198] — fala 50 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 101198,
-    name: "Memories of Mortality",
-    cardType: "master",
-    bloodCost: 0,
-    poolCost: 1,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {
@@ -31678,18 +31728,6 @@ export const cardSpecs: CardSpec[] = [
         discipline: "obe",
         effects: [{ kind: "actionStealth", amount: 1 }, { kind: "actionBleed", bonus: 2 }],
       },
-    ],
-  },
-  {
-    // Spontaneous Power [101855] — fala 51 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 101855,
-    name: "Spontaneous Power",
-    cardType: "master",
-    bloodCost: 0,
-    poolCost: 2,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
     ],
   },
   {
@@ -34312,16 +34350,19 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Lilith's Blessing [101108] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // "Master. Put this card in play. As a master phase action, you may lock
+    //  this card to search your library for a master: Discipline card and
+    //  choose a ready non-Bahari vampire you control who has no blood. That
+    //  vampire gains the Discipline card (if any) and 3 blood and becomes
+    //  Bahari." The bespoke `lilithsBlessing` handler below.
     krcgId: 101108,
     name: "Lilith's Blessing",
     cardType: "master",
     bloodCost: 0,
     poolCost: 1,
+    permanent: { where: "seat", statics: {}, tags: [] },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Liquidation [101112]
@@ -35395,7 +35436,8 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     usable: [],
     modes: [
-      { level: "basic", discipline: "tem", effects: [{ kind: "actionStealth", amount: 1 }] }
+      { level: "basic", discipline: "tem", effects: [{ kind: "variableBloodX" }, { kind: "searchCostXOnVampire", cardTypes: ["retainer", "equipment"] }, { kind: "actionStealth", amount: 1 }] },
+      { level: "superior", discipline: "tem", effects: [{ kind: "variableBloodX" }, { kind: "searchCryptForVampire" }] },
     ],
   },
   {
@@ -35609,20 +35651,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Toy Chest Test [102002] — fala 45 wierna (300) pełna zgodność bez wydmuszek
-    krcgId: 102002,
-    name: "Toy Chest Test",
-    cardType: "master",
-    requiresControlledSect: ["sabbat"],
-    requiresControlledCapacity: 5,
-    bloodCost: 0,
-    poolCost: 1,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Tragic Love Affair [102006] — fala 45 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 102006,
     name: "Tragic Love Affair",
@@ -35690,26 +35718,46 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Trophy: Retainers [102036] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // Trophy: Retainers [102036] — "Master. Trophy. During your unlock phase,
+    // if this card is on a vampire, you may search your library (shuffle
+    // afterward) or hand for a retainer. This vampire employs that retainer
+    // (he or she must meet the requirements, if any). Pay the cost as normal.
+    // This is not an action." Handler: `trophyRetainers`.
     krcgId: 102036,
     name: "Trophy: Retainers",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Trophy: Retainers"],
+      attach: { scope: "any", kind: "vampire" },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
-    // Trophy: Wealth [102039] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // Trophy: Wealth [102039] — "Master. Trophy. When this card is placed on a
+    // vampire, put five counters on it. The vampire with this card can use
+    // these counters to pay some or all of the blood or pool cost of
+    // equipment. Burn this card when the last counter is removed."
+    // Counters on an attached card are a cost source for its bearer
+    // (paymentSplits reads the minion's own attachments).
     krcgId: 102039,
     name: "Trophy: Wealth",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: { startsWithCounters: 5, burnWhenCountersEmpty: true },
+      tags: ["Trophy: Wealth"],
+      attach: { scope: "any", kind: "vampire", inTorporToo: true },
+      costSource: { pays: ["blood", "pool"], for: "equipment" },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // True Faith [102040] — fala 45 wierna (300) pełna zgodność bez wydmuszek
@@ -35784,15 +35832,27 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Vampiric Disease [102088] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // Vampiric Disease [102088] — "Put 1 disease counter on a vampire. If a
+    // vampire with a disease counter is in combat at close range with another
+    // vampire, the second vampire gets a disease counter before strikes are
+    // chosen. A vampire with a disease counter cannot gain blood by hunting.
+    // Each time a vampire with a disease counter unlocks, they burn 1 blood
+    // or, if unable, burn the disease counter. A vampire can have only one
+    // disease counter." The counters are on the vampire (`counters.disease`);
+    // the card's attached copy places the first one (`vampiricDisease`).
     krcgId: 102088,
     name: "Vampiric Disease",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [],
+      attach: { scope: "any", kind: "vampire" },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Veles' Hunt [102099] — fala 45 wierna (300) pełna zgodność bez wydmuszek
@@ -38860,6 +38920,44 @@ function condCrypt(
  * burns it (the Giant's Blood / Open War precedent).
  */
 const flamingCandleBase = compileSpec(specByName("Flaming Candle"));
+/**
+ * Eye of Hazimel (100678) — "If this equipment is burned, it inflicts 5
+ * unpreventable environmental damage on the bearer." The bearer is read
+ * while the card is still attached: `burnPermanent` runs `onLeavePlay`
+ * before it emits `PermanentBurned` and removes the card. Burns that do
+ * not go through `burnPermanent` (e.g. a bearer burned with its
+ * equipment) do not reach this hook.
+ */
+const eyeOfHazimel: CardHandler = {
+  ...compileSpec(specByName("Eye of Hazimel")),
+  onLeavePlay(entry, _owner, ops) {
+    const bearer = ops.state.seats
+      .flatMap((s) => s.minions)
+      .find((m) => m.attached.some((p) => p.card.id === entry.card.id));
+    if (!bearer || bearer.kind !== "vampire") return;
+    ops.applyEnvironmentalDamage(bearer.id, 5, false);
+  },
+};
+
+/**
+ * Cry Wolf (100475). Its unlock clause is the engine's `bearerDoesNotUnlock`
+ * (it stays locked); "if he is locked during your unlock phase, burn him"
+ * is the conditional part, read here. "If the action to recruit this ally
+ * is blocked, the acting anarch goes to torpor" fires from the blocked
+ * play, before the werewolf would have entered play.
+ */
+const cryWolf: CardHandler = {
+  ...compileSpec(specByName("Cry Wolf")),
+  onControllerUnlock(_entry, owner, ops) {
+    if (owner.minion === null) return;
+    const m = findMinion(ops.state, owner.minion);
+    if (m?.locked) ops.burnMinion(owner.minion);
+  },
+  onActionBlockedAsPlayed(info, ops) {
+    ops.sendToTorpor(info.acting);
+  },
+};
+
 const flamingCandle: CardHandler = {
   ...flamingCandleBase,
   options(card, ctx) {
@@ -41966,6 +42064,386 @@ function bloodMoverAbility(
   };
 }
 
+/** Memories of Mortality (101198) — "Master. Put this card on a vampire;
+ *  this vampire cannot attempt to block allies. Any damage this vampire
+ *  inflicts on allies is reduced to 0. This vampire may burn 1 blood during
+ *  his or her controller's influence phase to burn this card; he or she
+ *  then goes into torpor." Hand-rolled because the influence-phase burn is
+ *  an ability, which a spec does not carry. "A vampire" is any vampire, as
+ *  for the Discipline masters: the bearer's controller may differ from the
+ *  master's. */
+const MEMORIES_OF_MORTALITY_STATICS = { cannotBlockKind: "ally" as const, allyDamageZeroed: true };
+const memoriesOfMortality: CardHandler = {
+  name: "Memories of Mortality",
+  abilityAnySeat: true,
+  bloodCost: 0,
+  poolCost: 1,
+  isMasterCard: true,
+  permanentStatics: MEMORIES_OF_MORTALITY_STATICS,
+  permanentTags: ["Memories of Mortality"],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    // A master is put on ANY vampire, including another Methuselah's
+    // (ruling: "playing Master cards on the target" is charged to every
+    // Methuselah, the target's controller included).
+    return ctx.state.seats.flatMap((seat) => seat.minions).filter((m) => m.kind === "vampire").map(
+      (m): LegalOption => ({
+        id: playOptionId(this.name, null, m.id, card.id),
+        kind: "playCard",
+        label: `Memories of Mortality on ${m.name}`,
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: { target: m.id },
+      }),
+    );
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    if (!target) throw new Error("Memories of Mortality: no target");
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: MEMORIES_OF_MORTALITY_STATICS,
+      tags: ["Memories of Mortality"],
+    });
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.influence" || owner.minion === null) return [];
+    const bearer = findMinion(ctx.state, owner.minion);
+    if (!bearer || bearer.kind !== "vampire" || bearer.blood < 1) return [];
+    // "During his or her controller's influence phase": the controller
+    // deciding, in their own turn.
+    if (ctx.seat !== bearer.controller || ctx.turnSeat !== bearer.controller) return [];
+    return [
+      {
+        id: `ability:Memories of Mortality:${entry.card.id}:burn`,
+        kind: "useAbility",
+        label: `Memories of Mortality: ${bearer.name} burns 1 blood, this card, and goes to torpor`,
+        source: entry.card.id,
+        params: {},
+      },
+    ];
+  },
+  useAbility(entry, owner, _choice, ops) {
+    if (!owner.minion) throw new Error("Memories of Mortality: no bearer");
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || bearer.kind !== "vampire") return;
+    ops.emit({ type: "BloodBurned", minion: bearer.id, amount: 1 });
+    ops.burnPermanent(entry.card.id);
+    ops.sendToTorpor(bearer.id);
+  },
+};
+
+/** Spontaneous Power (101855) — "Unique master. Put this card on a vampire
+ *  and choose a Discipline. This vampire gains 1 level of the chosen
+ *  Discipline. While in play, this card counts as a master: Discipline
+ *  card." The Discipline is chosen as the card is played, so each play
+ *  option names a vampire AND a Discipline. A vampire already at superior
+ *  in the chosen Discipline gets nothing from it, so that pair is not
+ *  offered. Hand-rolled: a spec's modes cannot carry a per-play Discipline
+ *  into the attached statics. */
+const spontaneousPower: CardHandler = {
+  name: "Spontaneous Power",
+  abilityAnySeat: true,
+  bloodCost: 0,
+  poolCost: 2,
+  isMasterCard: true,
+  isUnique: true,
+  permanentTags: ["discipline"],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const out: LegalOption[] = [];
+    for (const m of ctx.state.seats.flatMap((seat) => seat.minions)) {
+      if (m.kind !== "vampire") continue;
+      const have = disciplinesOf(m);
+      for (const code of DISCIPLINES) {
+        if (have[code] === "superior") continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id, code),
+          kind: "playCard",
+          label: `Spontaneous Power on ${m.name} (${code})`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id, discipline: code },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    const code = play.params["discipline"];
+    if (!target || !code) throw new Error("Spontaneous Power: no target or discipline");
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: { disciplineBoost: code },
+      tags: ["discipline"],
+    });
+  },
+};
+
+/** Anachronism (100050) — "Master. Put this card on a vampire with capacity
+ *  above 6. This vampire cannot have or use any ranged weapons except the
+ *  Ivory Bow. (If he or she currently has any, they are burned.)"
+ *  Hand-rolled: the attach target is ANY vampire (the text says "a vampire",
+ *  not "you control"), and playing it burns the weapons already held. The
+ *  restriction itself is read where a weapon is offered (compile.ts). */
+const anachronism: CardHandler = {
+  name: "Anachronism",
+  bloodCost: 0,
+  poolCost: 1,
+  isMasterCard: true,
+  permanentTags: [],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const out: LegalOption[] = [];
+    for (const seat of ctx.state.seats) {
+      for (const m of seat.minions) {
+        if (m.kind !== "vampire" || capacityOf(m) <= 6) continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id),
+          kind: "playCard",
+          label: `Anachronism on ${m.name}`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    if (!target) throw new Error("Anachronism: no target");
+    const bearer = findMinion(ops.state, target);
+    if (!bearer) throw new Error(`Anachronism: unknown minion ${target}`);
+    // "If he or she currently has any, they are burned." The Ivory Bow is the
+    // one ranged weapon the restriction allows, so it is not burned.
+    const burn = bearer.attached
+      .filter((p) => {
+        const w = ops.registry[p.card.name]?.weaponProfile;
+        return w?.ranged === true && p.card.name !== "Ivory Bow";
+      })
+      .map((p) => p.card.id);
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: { cannotHaveRangedWeapons: true },
+      tags: [],
+    });
+    for (const id of burn) ops.burnPermanent(id);
+  },
+};
+
+/** Toy Chest Test (102002) — "Master. Requires a ready Sabbat vampire with a
+ *  capacity above 4. Burn a Sabbat vampire with a capacity below 4 that has
+ *  been put into play since your last turn (not usable on a vampire that has
+ *  been contested)."
+ *
+ *  Hand-rolled: the requirement is a ready Sabbat vampire of capacity above 4
+ *  that the playing seat controls. The target is ANY Sabbat vampire of
+ *  capacity below 4 that entered play after the playing seat's last turn
+ *  ended (`enteredPlayAt` against `lastTurnEndedAt`). A vampire in play is not
+ *  a contested one (a contested unique is face down and out of play), so the
+ *  parenthesis is met by the target being in play. */
+const toyChestTest: CardHandler = {
+  name: "Toy Chest Test",
+  bloodCost: 0,
+  poolCost: 1,
+  isMasterCard: true,
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    // The printed requirement, through the shared gate: ONE ready vampire
+    // that is Sabbat AND of capacity above 4, controlled by the playing seat.
+    if (!controllerMeetsRequirements(ctx.state, ctx.seat, { requiresControlledSect: ["sabbat"], requiresControlledCapacity: 5 })) return [];
+    const since = ctx.state.lastTurnEndedAt?.[ctx.seat] ?? -1;
+    const out: LegalOption[] = [];
+    for (const s of ctx.state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        if (m.kind !== "vampire" || m.sect !== "sabbat" || capacityOf(m) >= 4) continue;
+        if ((m.enteredPlayAt ?? -1) <= since) continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id),
+          kind: "playCard",
+          label: `Toy Chest Test: burn ${m.name}`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id },
+        });
+      }
+    }
+    // With the requirement met but no Sabbat vampire to burn, the master can
+    // still be played: it simply has nothing to burn.
+    if (out.length === 0) {
+      out.push({
+        id: playOptionId(this.name, null, "no-target", card.id),
+        kind: "playCard",
+        label: "Toy Chest Test (no Sabbat vampire to burn)",
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: {},
+      });
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    if (!target) return;
+    // TOTAL, as Vulnerability: the vampire chosen may have left play since.
+    if (findMinion(ops.state, target)) ops.burnMinion(target);
+  },
+};
+
+const vampiricDisease: CardHandler = {
+  ...compileSpec(specByName("Vampiric Disease")),
+  onEnterPlay(entry, owner, ops) {
+    if (owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    // One disease counter per vampire (the card's own rule).
+    if (!bearer || (bearer.counters?.["disease"] ?? 0) > 0) return;
+    ops.addMinionCounters(bearer.id, "disease", 1);
+  },
+};
+
+const CHANJELIN_BURN = "chanjelinBurn";
+
+/**
+ * Chanjelin Ward (100326) — "This vampire can burn this card to cause an
+ * action targeting him or her to fail." The bearer's controller decides, and
+ * may do so for an action announced by ANOTHER Methuselah against the bearer
+ * (ANK 20210309-3). Answering yes burns the ward and fails the action
+ * (`endAction`, unsuccessful end); the printed surcharge is the spec's `targetedActionBloodTax`.
+ */
+const chanjelinWard: CardHandler = {
+  ...compileSpec(specByName("Chanjelin Ward")),
+  onActionAnnounced(entry, owner, info, ops) {
+    if (owner.minion === null || info.targetMinion !== owner.minion) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    ops.raiseChoice({
+      seat: bearer.controller,
+      cardName: "Chanjelin Ward",
+      cardId: entry.card.id,
+      key: CHANJELIN_BURN,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== CHANJELIN_BURN) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    return [
+      {
+        id: `choice:Chanjelin Ward:${frame.cardId}:${CHANJELIN_BURN}:yes`,
+        kind: "answerChoice" as const,
+        label: `Chanjelin Ward: burn it to fail the action against ${bearer.name}`,
+        params: {},
+      },
+    ];
+  },
+  applyChoice(frame, _choice, ops) {
+    if (frame.key !== CHANJELIN_BURN) return;
+    const still = ops.state.seats
+      .flatMap((s) => s.minions)
+      .flatMap((m) => m.attached)
+      .some((p) => p.card.id === frame.cardId);
+    if (!still) return;
+    ops.burnPermanent(frame.cardId);
+    ops.endAction();
+  },
+};
+
+/** Agent of Power (100025) — "Master: Discipline. Trifle. Unique. Put this
+ *  card on a vampire you control and choose a Discipline. This vampire gains
+ *  1 level of that Discipline. Burn this card during your discard phase."
+ *  Hand-rolled like Spontaneous Power: the chosen Discipline is part of the
+ *  play option, and the discard-phase burn is an ability. "You control" is
+ *  narrower than the Discipline masters' "a vampire", so only your own
+ *  vampires are offered. */
+const agentOfPower: CardHandler = {
+  name: "Agent of Power",
+  abilityAnySeat: true,
+  bloodCost: 0,
+  poolCost: 0,
+  isMasterCard: true,
+  isUnique: true,
+  isTrifle: true,
+  permanentTags: ["discipline"],
+  playEffects: () => [{ tag: "board" }],
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const out: LegalOption[] = [];
+    for (const m of getSeat(ctx.state, ctx.seat).minions) {
+      if (m.kind !== "vampire") continue;
+      const have = disciplinesOf(m);
+      for (const code of DISCIPLINES) {
+        if (have[code] === "superior") continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id, code),
+          kind: "playCard",
+          label: `Agent of Power on ${m.name} (${code})`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id, discipline: code },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    const code = play.params["discipline"];
+    if (!target || !code) throw new Error("Agent of Power: no target or discipline");
+    ops.putPermanentInPlay({
+      card: play.card,
+      seat: play.seat,
+      attachTo: target,
+      statics: { disciplineBoost: code },
+      tags: ["discipline"],
+    });
+  },
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "turn.discard" || owner.minion === null) return [];
+    const bearer = findMinion(ctx.state, owner.minion);
+    if (!bearer || bearer.kind !== "vampire") return [];
+    // "Your discard phase": the controller's own turn.
+    if (ctx.seat !== bearer.controller || ctx.turnSeat !== bearer.controller) return [];
+    return [
+      {
+        id: `ability:Agent of Power:${entry.card.id}:burn`,
+        kind: "useAbility",
+        label: `Agent of Power: burn this card (${bearer.name})`,
+        source: entry.card.id,
+        params: {},
+      },
+    ];
+  },
+  useAbility(entry, _owner, _choice, ops) {
+    ops.burnPermanent(entry.card.id);
+  },
+};
+
 /** Blood Doll (100199) — bespoke: attach to an own vampire; master-phase
  *  blood mover (usable the turn it is played, ruling p. 47). */
 const bloodDoll: CardHandler = {
@@ -42314,6 +42792,82 @@ const shadowCloak: CardHandler = {
   ...compileSpec(specByName("Shadow Cloak")),
   onControllerUnlock(entry, _owner, ops) {
     if (entry.tags.includes("shadowCloak")) ops.burnPermanent(entry.card.id);
+  },
+};
+
+/**
+ * Lilith's Blessing (101108). The clan it gives is "Bahari" (the card text's
+ * own word: "non-Bahari", "becomes Bahari").
+ */
+const BAHARI = "Bahari";
+
+const lilithsBlessing: CardHandler = {
+  ...compileSpec(specByName("Lilith's Blessing")),
+  abilityOptions(entry, owner, ctx) {
+    // A MASTER PHASE ACTION (p. 10) of the controller, once, and only with the card
+    // unlocked — "lock this card" is the price.
+    if (ctx.window !== "turn.master" || ctx.seat !== owner.seat || ctx.turnSeat !== owner.seat) return [];
+    if (entry.locked) return [];
+    const tf = ctx.state.frames.find((f) => f.kind === "turn");
+    if (tf?.kind !== "turn" || tf.masterActionsLeft <= 0) return [];
+    return getSeat(ctx.state, owner.seat)
+      .minions.filter((m) => m.kind === "vampire" && isReady(m) && m.blood === 0 && m.clan !== BAHARI)
+      .map((m) => ({
+        id: `ability:Lilith's Blessing:${entry.card.id}:bless:${m.id}`,
+        kind: "useAbility" as const,
+        label: `Lilith's Blessing: ${m.name} gains a Discipline, 3 blood, and becomes Bahari`,
+        source: entry.card.id,
+        params: { do: "bless", target: m.id },
+      }));
+  },
+  useAbility(entry, owner, choice, ops) {
+    const target = choice.params["target"];
+    if (choice.params["do"] !== "bless" || !target) return;
+    ops.spendMasterAction();
+    ops.lockPermanent(entry.card.id);
+    ops.raiseChoice({
+      seat: owner.seat,
+      cardName: "Lilith's Blessing",
+      cardId: entry.card.id,
+      key: "blessing",
+      params: { minion: target },
+      optional: false,
+    });
+  },
+  choiceOptions(frame, state, registry) {
+    const out: LegalOption[] = [];
+    // "Search your library for a master: Discipline card" — the library only.
+    for (const c of getSeat(state, frame.seat).library) {
+      if (!(registry[c.name]?.permanentTags ?? []).includes("discipline")) continue;
+      out.push({
+        id: `choice:Lilith's Blessing:${frame.cardId}:blessing:${c.id}`,
+        kind: "answerChoice" as const,
+        label: `Put ${c.name} on the vampire`,
+        params: { card: c.id },
+      });
+    }
+    // "…(if any)": the vampire still gains blood and the clan with nothing found.
+    out.push({
+      id: `choice:Lilith's Blessing:${frame.cardId}:blessing:none`,
+      kind: "answerChoice" as const,
+      label: "Find nothing",
+      params: { card: "none" },
+    });
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    const minion = frame.params["minion"];
+    const vampire = minion ? findMinion(ops.state, minion) : null;
+    const card = choice.params["card"];
+    if (vampire) {
+      if (card && card !== "none") {
+        ops.attachFromZone({ seat: frame.seat, cardId: card, zone: "library", attachTo: vampire.id });
+      }
+      ops.emit({ type: "BloodGained", minion: vampire.id, amount: 3 });
+      ops.emit({ type: "ClanChanged", minion: vampire.id, clan: BAHARI });
+    }
+    // Searching the library shuffles it afterwards (p. 14), found or not.
+    ops.shuffleLibrary(frame.seat);
   },
 };
 
@@ -46269,6 +46823,318 @@ function archetypeGain(entry: PermanentInPlay, minion: MinionId, ops: EngineOps)
  * being ready, so it is paid then (owner ruling 2026-10-23,
  * docs/archetypes-design.md §7.5).
  */
+/**
+ * Loner (101121) — "During your influence phase, if this vampire successfully
+ * performed an action this turn and none of your other minions attempted any
+ * actions this turn, he or she gains 1 blood from the blood bank, if he or she
+ * is ready." The influence-phase hook fires for every card in play, so the
+ * bearer's controller must be the seat whose influence phase it is. Both
+ * conditions read the per-minion flags the engine keeps for the turn
+ * (`successfulActionThisTurn`, `attemptedActionThisTurn`).
+ */
+const loner: CardHandler = {
+  ...compileSpec(specByName("Loner")),
+  onInfluencePhase(entry, owner, turnSeat, ops) {
+    if (entry.usedThisTurn || owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || bearer.controller !== turnSeat) return;
+    if (!bearer.successfulActionThisTurn || !isReady(bearer)) return;
+    const othersActed = ops.state.seats
+      .flatMap((s) => s.minions)
+      .some((m) => m.controller === turnSeat && m.id !== bearer.id && m.attemptedActionThisTurn);
+    if (othersActed) return;
+    archetypeGain(entry, bearer.id, ops);
+  },
+};
+
+/**
+ * Conniver (100407) — "If your prey loses pool when it is neither your turn
+ * nor your prey's turn, you may lock this card to move 1 blood from the blood
+ * bank to this vampire."
+ *
+ * The lock is the price, so it cannot be used again until the card unlocks.
+ * The pool loss is read off the `PoolBurned` event after it is applied, and
+ * only a loss by the bearer's CURRENT prey counts.
+ *
+ * Deviation, recorded for the audit: the card says "may", and this takes the
+ * gain automatically rather than asking. A question for the controller would
+ * be the faithful version; it is not built here.
+ */
+const INCEPTOR_STORE = "inceptorStore";
+
+/**
+ * Inceptor (100969): on entering play the controller puts three cards from hand,
+ * ash heap or library on the card, face up and out of play (`storeCard`), one
+ * answer at a time. The choice is not optional: "put three cards" is a demand,
+ * and the question repeats until three are stored or no candidate is left.
+ *
+ * NOT BUILT: the bearer may play other copies of the stored cards as if at
+ * superior. That needs a store-play rule in the play-option enumeration, and
+ * the card stays PARTIAL until it exists.
+ */
+const inceptor: CardHandler = {
+  ...compileSpec(specByName("Inceptor")),
+  onEnterPlay(entry, owner, ops) {
+    if (owner.minion === null) return;
+    ops.raiseChoice({
+      seat: owner.seat,
+      cardName: "Inceptor",
+      cardId: entry.card.id,
+      key: INCEPTOR_STORE,
+      params: { remaining: "3", seat: owner.seat },
+      optional: false,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== INCEPTOR_STORE) return [];
+    const seat = state.seats.find((s) => s.id === frame.seat);
+    if (!seat) return [];
+    const out: Array<{ id: string; kind: "answerChoice"; label: string; params: Record<string, string> }> = [];
+    const piles: Array<["hand" | "ashHeap" | "library", typeof seat.hand]> = [
+      ["hand", seat.hand],
+      ["ashHeap", seat.ashHeap ?? []],
+      ["library", seat.library],
+    ];
+    for (const [zone, pile] of piles) {
+      for (const x of pile) {
+        out.push({
+          id: `choice:Inceptor:${frame.cardId}:${INCEPTOR_STORE}:${zone}:${x.id}`,
+          kind: "answerChoice" as const,
+          label: `Inceptor: put ${x.name} from your ${zone === "ashHeap" ? "ash heap" : zone} on Inceptor`,
+          params: {},
+        });
+      }
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key !== INCEPTOR_STORE) return;
+    const parts = choice.id.split(":");
+    const instanceId = parts[parts.length - 1]!;
+    const zone = parts[parts.length - 2] as "hand" | "ashHeap" | "library";
+    const remaining = Number(frame.params["remaining"] ?? "0");
+    ops.storeCard({ holder: frame.cardId, from: zone, cardId: instanceId, faceUp: true });
+    if (remaining > 1) {
+      ops.raiseChoice({
+        seat: frame.seat,
+        cardName: "Inceptor",
+        cardId: frame.cardId,
+        key: INCEPTOR_STORE,
+        params: { remaining: String(remaining - 1), seat: frame.seat },
+        optional: false,
+      });
+    }
+  },
+};
+
+const TROPHY_RETAINERS_PICK = "trophyRetainersPick";
+
+/** Names of the Retainer-type cards in the registry (types include "Retainer"). */
+const retainerCardNames: ReadonlySet<string> = new Set(
+  Object.values(cardRegistry.entries)
+    .filter((e) => ((e.card as { types?: string[] }).types ?? []).includes("Retainer"))
+    .map((e) => e.card.name),
+);
+
+/**
+ * Trophy: Retainers (102036): during the controller's unlock phase, if the card
+ * is on a vampire, the controller may pick a retainer from hand or library.
+ * The bearer employs it (`playCardFromHand`, not an action; cost paid as
+ * normal). A library search shuffles afterwards. Declining is the automatic
+ * "no" option of an optional choice.
+ *
+ * Not built: the requirement check of the retainer (the card says the bearer
+ * must meet it). `playCardFromHand` does not check requirements here.
+ */
+/** Retainers the bearer may employ from hand or library: a Retainer-type card
+ *  whose printed requirements the bearer meets (`meetsRequirements`, "he or she
+ *  must meet the requirements, if any"). */
+function trophyCandidates(
+  seat: GameState["seats"][number],
+  bearer: MinionState,
+): Array<{ zone: "hand" | "library"; card: { id: string; name: string } }> {
+  const out: Array<{ zone: "hand" | "library"; card: { id: string; name: string } }> = [];
+  for (const zone of ["hand", "library"] as const) {
+    for (const card of zone === "hand" ? seat.hand : seat.library) {
+      if (!retainerCardNames.has(card.name)) continue;
+      const spec = cardSpecs.find((s) => s.name === card.name);
+      if (spec && !meetsRequirements(bearer, spec)) continue;
+      out.push({ zone, card });
+    }
+  }
+  return out;
+}
+
+/** Trophy: Retainers handler (see above). */
+const trophyRetainers: CardHandler = {
+  ...compileSpec(specByName("Trophy: Retainers")),
+  onControllerUnlock(entry, owner, ops) {
+    if (owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    const seat = ops.state.seats.find((s) => s.id === owner.seat);
+    if (!seat) return;
+    if (trophyCandidates(seat, bearer).length === 0) return;
+    ops.raiseChoice({
+      seat: owner.seat,
+      cardName: "Trophy: Retainers",
+      cardId: entry.card.id,
+      key: TROPHY_RETAINERS_PICK,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== TROPHY_RETAINERS_PICK) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    const seat = state.seats.find((s) => s.id === bearer.controller);
+    if (!seat) return [];
+    return trophyCandidates(seat, bearer).map((x) => ({
+      id: `choice:Trophy: Retainers:${frame.cardId}:${TROPHY_RETAINERS_PICK}:${x.zone}:${x.card.id}`,
+      kind: "answerChoice" as const,
+      label: `Trophy: Retainers: employ ${x.card.name} from ${x.zone === "hand" ? "your hand" : "your library"}`,
+      params: {},
+    }));
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key !== TROPHY_RETAINERS_PICK) return;
+    // id tail: ...:<zone>:<instanceId>
+    const parts = choice.id.split(":");
+    const instanceId = parts[parts.length - 1]!;
+    const zone = parts[parts.length - 2] as "hand" | "library";
+    const bearerId = frame.params["minion"];
+    if (!bearerId) return;
+    const bearer = findMinion(ops.state, bearerId);
+    if (!bearer) return;
+    const seat = ops.state.seats.find((s) => s.id === bearer.controller);
+    if (!seat) return;
+    // Re-checked at the answer: the bearer or the pile may have changed.
+    const card = trophyCandidates(seat, bearer).find(
+      (x) => x.zone === zone && x.card.id === instanceId,
+    )?.card;
+    if (!card) return;
+    ops.playCardFromHand({
+      cardId: card.id,
+      seat: seat.id,
+      minion: bearer.id,
+      mode: null,
+      from: { zone },
+    });
+    if (zone === "library") ops.shuffleLibrary(seat.id);
+  },
+};
+
+const CURMUDGEON_LOCK = "curmudgeonLock";
+
+/**
+ * Curmudgeon (100482): during the PREY's unlock phase, if a minion the prey
+ * controls was blocked this turn, the controller may lock the card to move 1
+ * blood from the bank to the bearer.
+ *
+ * Read: "blocked this turn" = the minion's action was blocked since its
+ * controller's last unlock phase (`blockedSinceUnlock`, set at BlockSucceeded,
+ * cleared in the unlock sweep). The rulings snapshot has no entry for this
+ * card, so the reading is an interpretation (recorded in the audit).
+ */
+const curmudgeon: CardHandler = {
+  ...compileSpec(specByName("Curmudgeon")),
+  onAnyUnlock(entry, owner, unlockingSeat, ops) {
+    if (owner.minion === null || entry.locked) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || unlockingSeat !== preyOf(ops.state, bearer.controller)) return;
+    const blocked = ops.state.seats
+      .flatMap((s) => s.minions)
+      .find((m) => m.controller === unlockingSeat && m.blockedSinceUnlock);
+    if (!blocked) return;
+    ops.raiseChoice({
+      seat: bearer.controller,
+      cardName: "Curmudgeon",
+      cardId: entry.card.id,
+      key: CURMUDGEON_LOCK,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== CURMUDGEON_LOCK) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    return [
+      {
+        id: `choice:Curmudgeon:${frame.cardId}:${CURMUDGEON_LOCK}:yes`,
+        kind: "answerChoice" as const,
+        label: `Curmudgeon: lock this card to move 1 blood to ${bearer.name}`,
+        params: {},
+      },
+    ];
+  },
+  applyChoice(frame, _choice, ops) {
+    if (frame.key !== CURMUDGEON_LOCK) return;
+    const bearer = frame.params["minion"];
+    if (!bearer || !findMinion(ops.state, bearer)) return;
+    // Re-read at the answer: the card may have locked or left in between.
+    const card = ops.state.seats
+      .flatMap((s) => s.minions)
+      .flatMap((m) => m.attached)
+      .find((p) => p.card.id === frame.cardId);
+    if (!card || card.locked) return;
+    ops.lockPermanent(frame.cardId);
+    ops.emit({ type: "BloodGained", minion: bearer, amount: 1 });
+  },
+};
+
+const CONNIVER_LOCK = "conniverLock";
+
+const conniver: CardHandler = {
+  ...compileSpec(specByName("Conniver")),
+  onPoolLost(entry, owner, info, ops) {
+    if (entry.locked || owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer) return;
+    const controller = bearer.controller;
+    if (info.seat !== preyOf(ops.state, controller)) return;
+    const tf = ops.state.frames.find((f) => f.kind === "turn");
+    if (tf?.kind !== "turn") return;
+    if (tf.seat === controller || tf.seat === info.seat) return;
+    // "…you MAY lock this card…": the controller decides. Asked, not taken.
+    ops.raiseChoice({
+      seat: controller,
+      cardName: "Conniver",
+      cardId: entry.card.id,
+      key: CONNIVER_LOCK,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== CONNIVER_LOCK) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    return [
+      {
+        id: `choice:Conniver:${frame.cardId}:${CONNIVER_LOCK}:yes`,
+        kind: "answerChoice" as const,
+        label: `Conniver: lock this card to move 1 blood to ${bearer.name}`,
+        params: {},
+      },
+    ];
+  },
+  applyChoice(frame, _choice, ops) {
+    if (frame.key !== CONNIVER_LOCK) return;
+    const bearer = frame.params["minion"];
+    if (!bearer || !findMinion(ops.state, bearer)) return;
+    // Re-read at the answer: the card may have locked or left in between.
+    const card = ops.state.seats
+      .flatMap((s) => s.minions)
+      .flatMap((m) => m.attached)
+      .find((p) => p.card.id === frame.cardId);
+    if (!card || card.locked) return;
+    ops.lockPermanent(frame.cardId);
+    ops.emit({ type: "BloodGained", minion: bearer, amount: 1 });
+  },
+};
+
 const bravo: CardHandler = {
   ...compileSpec(specByName("Bravo")),
   onCombatEnded(entry, owner, info, ops) {
@@ -47622,10 +48488,21 @@ export function buildHandlerRegistry(): HandlerRegistry {
     shadowCast,
     shadowCloak,
     feverPitch,
+    lilithsBlessing,
     propagandaOfTheDeed,
     tabrizAssembly,
     theBarrens,
     bloodDoll,
+    memoriesOfMortality,
+    spontaneousPower,
+    agentOfPower,
+    anachronism,
+    toyChestTest,
+    chanjelinWard,
+    vampiricDisease,
+    curmudgeon,
+    trophyRetainers,
+    inceptor,
     vessel,
     magnum44,
     doubleDeuce,
@@ -47672,6 +48549,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     mobConnections,
     ashurTablets,
     hackerspace,
+    eyeOfHazimel,
+    cryWolf,
     anarchConvert,
     newBlood,
     powerbaseMunich,
@@ -47706,6 +48585,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     perfectionist,
     rebel,
     bravo,
+    loner,
+    conniver,
     capitalist,
     creepShow,
     guru,

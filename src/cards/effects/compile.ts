@@ -264,6 +264,29 @@ function rulesHold(
 /** "Requires a …" clauses: the playing vampire's title/sect/clan/capacity
  *  (docs/clan-sect-design.md §3). Allies (no clan/sect/title) fail any
  *  such requirement. */
+/** "This vampire cannot have or use any ranged weapons except the Ivory Bow"
+ *  (Anachronism): true when the bearer carries the restriction and this
+ *  weapon is a ranged one other than the Ivory Bow. */
+/** "…a successful action COSTING BLOOD" (Cavalier): the card played has a
+ *  printed blood cost. A built-in action (a plain bleed or hunt) has no card
+ *  and costs no blood, so it never qualifies. */
+export function playedCardCostsBlood(
+  card: { instance: { name: string } } | null | undefined,
+  registry: HandlerRegistry,
+): boolean {
+  if (!card) return false;
+  return (registry[card.instance.name]?.bloodCost ?? 0) > 0;
+}
+
+export function cannotHaveRangedWeapon(
+  bearer: MinionState,
+  name: string,
+  h: { weaponProfile?: { ranged: boolean } },
+): boolean {
+  const restricted = bearer.attached.find((p) => p.card.id === bearer.id)?.statics.cannotHaveRangedWeapons;
+  return !!restricted && h.weaponProfile?.ranged === true && name !== "Ivory Bow";
+}
+
 export function meetsRequirements(m: MinionState, spec: CardSpec): boolean {
   if (spec.requiresTitle && (m.title === null || !spec.requiresTitle.includes(m.title))) {
     return false;
@@ -557,7 +580,10 @@ export function paymentSplits(
 ): Array<{ params: Record<string, string>; blood: number; pool: number }> {
   const splits = [{ params: {} as Record<string, string>, ...cost }];
   if (cost.blood === 0 && cost.pool === 0) return splits;
-  for (const entry of getSeat(ctx.state, ctx.seat).permanents) {
+  // Sources are the seat's locations AND the cards attached to this minion:
+  // "The vampire with this card can use these counters" (Trophy: Wealth)
+  // names the bearer, so its own attachments are offered to it.
+  for (const entry of [...getSeat(ctx.state, ctx.seat).permanents, ...minion.attached]) {
     const src = entry.costSource;
     if (!src || src.for !== cardType) continue;
     if (src.clan !== undefined && minion.clan !== src.clan) continue;
@@ -656,6 +682,7 @@ export function playFromHandChoices(
       const types = h.costTypes?.(null, undefined) ?? [];
       if (!filter.types.some((t) => types.includes(t))) continue;
       if (h.isEquipment && cannotBeEquipped(bearer, "equipment")) continue;
+      if (h.isEquipment && cannotHaveRangedWeapon(bearer, card.name, h)) continue;
       if (h.isRetainer && cannotBeEquipped(bearer, "retainer")) continue;
       // "a melee weapon", "an animal retainer" — printed sub-types the
       // permanent already carries as tags.
@@ -1839,6 +1866,11 @@ function compileActionCard(spec: CardSpec): CardHandler {
             }
             continue;
           }
+          if (mode.effects.some((e) => e.kind === "variableBloodX")) {
+            // X is paid at play, so it cannot exceed the blood the vampire has.
+            for (let x = 0; x <= m.blood; x++) push(mode, { xBlood: String(x) });
+            continue;
+          }
           const chooseOwn = chooseOwnMinionsOf(mode);
           if (chooseOwn) {
             // "Cost: X blood. Choose X minions" (Bloodlust): one option per
@@ -2300,6 +2332,31 @@ function compileActionCard(spec: CardSpec): CardHandler {
             // fixed at announcement and rides in the action's params.
             applyPlayFromHand(ops, e, af.actingSeat, af.acting, af.card?.params ?? {});
             break;
+          case "searchCostXOnVampire": {
+            // Like searchEquip: raised at resolution, never announced. X is
+            // the one paid at play (variableBloodX), so it is read here.
+            ops.raiseChoice({
+              seat: af.actingSeat,
+              cardName: spec.name,
+              cardId: af.card?.instance.id ?? "",
+              key: "searchCostX",
+              params: { minion: af.acting, x: String(Number(af.card?.params["xBlood"] ?? "0")) },
+              // "Find nothing" is the decline, so the shuffle is never skipped.
+              optional: false,
+            });
+            break;
+          }
+          case "searchCryptForVampire": {
+            ops.raiseChoice({
+              seat: af.actingSeat,
+              cardName: spec.name,
+              cardId: af.card?.instance.id ?? "",
+              key: "summonCryptX",
+              params: { minion: af.acting, x: String(Number(af.card?.params["xBlood"] ?? "0")) },
+              optional: false,
+            });
+            break;
+          }
           case "searchEquip": {
             // p. 48: "You do NOT search your library until the action is
             // successful", and the card is never announced — so this is
@@ -2870,6 +2927,9 @@ function compileActionCard(spec: CardSpec): CardHandler {
         (level === null || m.level === level) &&
         m.effects.some((e) => e.kind === "actionEnterCombat"),
     );
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "variableBloodX"))) {
+    handler.xBloodAtPlay = true;
+  }
   if (spec.modes.some((m) => chooseOwnMinionsOf(m) !== null)) {
     handler.prePlayPicks = (option, state) => {
       const extra = chooseOwnMinionsOf(modeOf(spec, option.mode, option.params["variant"]))?.extra;
@@ -4771,7 +4831,10 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // "…: burn weapon" — the extra strike is specified, offered
             // in the chooseStrike step the way a granted combat-ends
             // strike is (§4).
-            if (e.burnEquipment) ops.grantBurnEquipmentStrike(play);
+            // "…burn WEAPON" (Voracious Vermin) is the forced strike, not a
+            // grant: while the foe has a weapon it is the only option.
+            if (e.burnEquipment && e.burnWeaponOnly === true) ops.forceAdditionalStrike(play, "burnEquipment");
+            else if (e.burnEquipment) ops.grantBurnEquipmentStrike(play, false);
             // "…: dodge" — the extra strike is not a free choice at all.
             if (e.forcedDodge) ops.forceAdditionalStrike(play, "dodge");
             break;
@@ -5827,8 +5890,14 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
         // "A vampire can have only one Fever Pitch" — the attach half of
         // an after-resolution modifier obeys the same exclusivity a
         // permanent does (docs/after-resolution-design.md §5).
+        // Gated only for a mode that PUTS the card on the vampire: a held
+        // Fever Pitch bleed is legal on a vampire that already has one — the
+        // second copy is then filed at resolution instead (§ heldAfterResolution).
         const exKey = spec.permanent?.exclusiveKey;
-        if (exKey !== undefined && m.attached.some((p) => p.tags.includes(exKey))) {
+        const attachesLater = spec.modes.some((md) =>
+          md.effects.some((e) => e.kind === "afterResolutionAttach" && e.held !== true),
+        );
+        if (exKey !== undefined && attachesLater && m.attached.some((p) => p.tags.includes(exKey))) {
           continue;
         }
         if (
@@ -6693,6 +6762,20 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
           case "afterResolutionAttach": {
             const af3 = ops.action();
             if (!af3 || !play.minion) break;
+            // Fever Pitch superior: the card played as the bleed modifier
+            // stays with the action until it resolves (§ heldAfterResolution).
+            if (e.held) {
+              ops.holdAfterResolution({
+                card: play.card,
+                minion: play.minion,
+                seat: play.seat,
+                tags: [spec.name, ...e.tags],
+                statics: e.statics ?? {},
+                ...(spec.permanent?.exclusiveKey ? { exclusiveKey: spec.permanent.exclusiveKey } : {}),
+                optional: true,
+              });
+              break;
+            }
             ops.putPermanentInPlay({
               card: play.card,
               seat: play.seat,
@@ -6856,7 +6939,9 @@ export function attachTargets(
       ? [getSeat(state, seatId)]
       : a.scope === "prey"
         ? [getSeat(state, preyOf(state, seatId))]
-        : state.seats.filter((s) => !s.ousted);
+        : a.scope === "other"
+          ? state.seats.filter((s) => !s.ousted && s.id !== seatId)
+          : state.seats.filter((s) => !s.ousted);
   const out: MinionState[] = [];
   for (const s of seats) {
     if (s.ousted) continue;
@@ -6876,6 +6961,8 @@ export function attachTargets(
       // Visage) — a printed crypt trait, like the two filters above it.
       if (a.path !== undefined && m.path !== a.path) continue;
       if (a.minCapacity !== undefined && capacityOf(m) < a.minCapacity) continue;
+      // "…a vampire with capacity below 5" (The Damned).
+      if (a.maxCapacity !== undefined && capacityOf(m) > a.maxCapacity) continue;
       // "Cannot be put on a vampire with superior Celerity [CEL]" — the
       // Discipline master cards, which raise a level and so have nothing
       // left to give once the vampire is already at superior.
@@ -9328,7 +9415,7 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
       // "After the bearer strikes with this gun, they get 1 optional
       // additional strike (limited), only usable to strike with this
       // gun, this round" (AK-47, §2).
-      if (w.additionalStrikeSelf && ops.grantAdditionalStrikeTo(owner.minion, 1, true)) {
+      if (w.additionalStrikeSelf && ops.grantOptionalAdditionalStrikeTo(owner.minion)) {
         ops.commitStrikeTo(owner.minion, entry.card.id);
       }
     };
@@ -12339,6 +12426,115 @@ export function compileSpec(spec: CardSpec): CardHandler {
       },
     };
   }
+  // Summon History (superior): a non-scarce crypt vampire of capacity X or
+  // less, put in play with no blood. The crypt is shuffled afterwards.
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "searchCryptForVampire"))) {
+    choiceByKey["summonCryptX"] = {
+      options: (frame, state) => {
+        const out: LegalOption[] = [];
+        const seat = getSeat(state, frame.seat);
+        const x = Number(frame.params["x"] ?? "0");
+        // Crypt and ash heap, both (the card says "and/or"). A burnt vampire
+        // is offered only if it kept its snapshot (`burntVampire`).
+        const candidates: Array<{ zone: "crypt" | "ashHeap"; m: MinionState }> = [
+          ...seat.crypt.map((m) => ({ zone: "crypt" as const, m })),
+          ...(seat.ashHeap ?? []).flatMap((c) =>
+            c.crypt === true && c.burntVampire !== undefined
+              ? [{ zone: "ashHeap" as const, m: c.burntVampire }]
+              : [],
+          ),
+        ];
+        for (const { zone, m: c } of candidates) {
+          if (c.kind !== "vampire" || c.scarce === true) continue;
+          if (capacityOf(c) > x) continue;
+          // A vampire has no handler to ask, so "controls a copy" is read off
+          // the minions in play by name (p. 17: crypt cards are unique).
+          if (c.nonUnique !== true && seat.minions.some((m) => m.name === c.name)) continue;
+          out.push({
+            id: `choice:${spec.name}:${frame.cardId}:summonCryptX:${zone}:${c.id}`,
+            kind: "answerChoice" as const,
+            label: `Put ${c.name} (${zone === "crypt" ? "crypt" : "ash heap"}) in play with no blood`,
+            params: { card: c.id, zone },
+          });
+        }
+        // "Find nothing" is always legal (p. 48).
+        out.push({
+          id: `choice:${spec.name}:${frame.cardId}:summonCryptX:none`,
+          kind: "answerChoice" as const,
+          label: "Find nothing",
+          params: { card: "none" },
+        });
+        return out;
+      },
+      apply: (frame, choice, ops) => {
+        const card = choice.params["card"];
+        const zone = choice.params["zone"];
+        if (card && card !== "none" && zone) {
+          if (zone === "ashHeap") {
+            ops.emit({ type: "AshVampireSummoned", seat: frame.seat, cardId: card });
+          } else {
+            ops.emit({ type: "CryptCardSummoned", seat: frame.seat, minion: card });
+          }
+          ops.emit({ type: "VampireEnteredPlay", seat: frame.seat, minion: card, blood: 0 });
+        }
+        ops.emit({ type: "CryptShuffled", seat: frame.seat });
+      },
+    };
+  }
+  // Summon History: retainers and equipment from the library or ash heap,
+  // costing X or fewer (blood or pool, printed cost, requirements ignored),
+  // put on this vampire. Allies are not offered (no ally-attach op yet).
+  const costXSearch = spec.modes.flatMap((m) => m.effects).find(
+    (e) => e.kind === "searchCostXOnVampire",
+  ) as Extract<EffectPrimitive, { kind: "searchCostXOnVampire" }> | undefined;
+  if (costXSearch) {
+    choiceByKey["searchCostX"] = {
+      options: (frame, state, registry) => {
+        const out: LegalOption[] = [];
+        const seat = getSeat(state, frame.seat);
+        const bearer = findMinion(state, frame.params["minion"] ?? "");
+        const x = Number(frame.params["x"] ?? "0");
+        if (bearer) {
+          for (const zone of ["library", "ashHeap"] as const) {
+            const pile = zone === "library" ? seat.library : (seat.ashHeap ?? []);
+            for (const c of pile) {
+              // A burnt vampire in the ash heap is not a retainer or equipment.
+              if (c.crypt) continue;
+              if (!searchMatches(c, registry, costXSearch.cardTypes, false)) continue;
+              const h = registry[c.name]!;
+              if ((h.bloodCost ?? 0) > x || (h.poolCost ?? 0) > x) continue;
+              if (h.isUnique && seatControlsCopy(state, frame.seat, c.name)) continue;
+              if (cannotBeEquipped(bearer, "equipment") && (h.costTypes?.(null, undefined) ?? []).includes("equipment")) continue;
+              out.push({
+                id: `choice:${spec.name}:${frame.cardId}:searchCostX:${zone}:${c.id}`,
+                kind: "answerChoice" as const,
+                label: `Put ${c.name} (${zone === "library" ? "library" : "ash heap"}) on this vampire`,
+                params: { card: c.id, zone },
+              });
+            }
+          }
+        }
+        // "Find nothing" is always legal (p. 48).
+        out.push({
+          id: `choice:${spec.name}:${frame.cardId}:searchCostX:none`,
+          kind: "answerChoice" as const,
+          label: "Find nothing",
+          params: { card: "none" },
+        });
+        return out;
+      },
+      apply: (frame, choice, ops) => {
+        const card = choice.params["card"];
+        const zone = choice.params["zone"] as "library" | "ashHeap" | undefined;
+        const minion = frame.params["minion"];
+        if (card && card !== "none" && zone && minion && findMinion(ops.state, minion)) {
+          ops.attachFromZone({ seat: frame.seat, cardId: card, zone, attachTo: minion });
+        }
+        // The library was searched, so it is shuffled either way (p. 14).
+        ops.shuffleLibrary(frame.seat);
+      },
+    };
+  }
   // "Search your library (shuffle afterward), hand, and/or ash heap for a
   // Discipline master card and put it on this new vampire" — three zones
   // at once, which no earlier search reads. The Discipline masters carry
@@ -12510,6 +12706,32 @@ export function compileSpec(spec: CardSpec): CardHandler {
         if (!payer || !target) return;
         ops.emit({ type: "BloodBurned", minion: payer, amount: unlockAfter.blood });
         ops.emit({ type: "MinionUnlocked", minion: target });
+      },
+    };
+  }
+  // "…you can put this card on this vampire after action resolution" —
+  // the held attach of a successful bleed (Fever Pitch superior). The card is
+  // already in the ash heap when this is asked; accepting takes it back out.
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "afterResolutionAttach" && e.held === true))) {
+    choiceByKey["attachHeldAfterResolution"] = {
+      options: (frame, state) => {
+        const m = findMinion(state, frame.params["minion"] ?? "");
+        if (!m || !spec.permanent?.exclusiveKey) return [];
+        if (m.attached.some((p) => p.tags.includes(spec.permanent!.exclusiveKey!))) return [];
+        if (!(getSeat(state, frame.seat).ashHeap ?? []).some((c) => c.id === frame.cardId)) return [];
+        return [
+          {
+            id: `choice:${spec.name}:${frame.cardId}:attachHeldAfterResolution:yes`,
+            kind: "answerChoice" as const,
+            label: `${spec.name}: put it on ${m.name}`,
+            params: {},
+          },
+        ];
+      },
+      apply: (frame, _choice, ops) => {
+        const minion = frame.params["minion"];
+        if (!minion) return;
+        ops.attachFromZone({ seat: frame.seat, cardId: frame.cardId, zone: "ashHeap", attachTo: minion as MinionId });
       },
     };
   }
@@ -13611,6 +13833,9 @@ function addCryptAbilities(
             (!card || !(ops.registry[card.instance.name]?.requiresPaths?.() ?? []).includes(ua.requiresPath))) return;
       }
 
+      // "…after performing a successful action COSTING BLOOD" (Cavalier): a
+      // property of the card played. A built-in action costs no blood.
+      if (ua.requiresBloodCost && !playedCardCostsBlood(card, ops.registry)) return;
       const target = ua.unlocks === "actor" ? actor : bearer;
       if (!target.locked) return;
       if (ua.bloodCost && bearer.blood < ua.bloodCost) return;

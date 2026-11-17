@@ -27,7 +27,7 @@ export type Range = "close" | "long";
 /** The built-in strike declarations. `hand` is always available;
  *  `combatEnds` and `burnEquipment` are GRANTED by a rider or a card and
  *  offered only while the frame says so. */
-export type StrikeKind = "hand" | "combatEnds" | "burnEquipment" | "dodge" | "stealBlood";
+export type StrikeKind = "hand" | "combatEnds" | "burnEquipment" | "dodge" | "stealBlood" | "decline";
 
 /** A specified strike a card has granted, with whatever number it
  *  carries ("strike, ranged: steal 2 blood", Hunger of Marduk superior).
@@ -48,6 +48,9 @@ export interface InterceptBurnGrant {
 export interface GrantedStrike {
   kind: StrikeKind;
   amount?: number;
+  /** "…burn WEAPON" (Voracious Vermin): a burn-equipment strike may only
+   *  name a weapon. Heroic Might's "burn equipment" leaves it unset. */
+  weaponOnly?: boolean;
   /** "THIS ROUND, this vampire can strike…" — cleared at the round
    *  boundary, unlike a once-per-combat grant. */
   roundOnly?: boolean;
@@ -278,6 +281,9 @@ export const TITLE_VOTES: Record<VampireTitle, number> = {
 export type Sect = "camarilla" | "anarch" | "sabbat" | "independent" | "laibon";
 
 export interface MinionState {
+  /** The event-log index at which this vampire entered play (Toy Chest Test:
+   *  "put into play since your last turn"). */
+  enteredPlayAt?: number;
   id: MinionId;
   name: string;
   kind: MinionKind;
@@ -322,6 +328,14 @@ export interface MinionState {
   disciplines: Record<string, DisciplineLevel>;
   /** One bleed action per minion per turn (p. 20). */
   bledThisTurn: boolean;
+  /** "None of your other minions attempted any actions this turn" (Loner).
+   *  Set when an action is announced by this minion; reset at its turn start. */
+  attemptedActionThisTurn?: boolean;
+  /** The minion's action was blocked since its controller's last unlock phase
+   *  (Curmudgeon's "blocked this turn"). */
+  blockedSinceUnlock?: boolean;
+  /** "…successfully performed an action this turn" (Loner). */
+  successfulActionThisTurn?: boolean;
   /** One political action per vampire per turn (p. 24). */
   calledPoliticalThisTurn: boolean;
   /** "…who did not hunt during that minion phase" (Thirst). Set when a
@@ -506,6 +520,10 @@ export interface CardInstance {
    *  vampire, which has no registry entry at all
    *  (docs/token-vampire-design.md). docs/ash-heap-resource-design.md §2 */
   capacity?: number;
+  /** The vampire as it was when it burned (its clan, sect, disciplines,
+   *  scarce and unique flags), kept so Summon History can put it back
+   *  into play from the ash heap. Attachments are not kept. */
+  burntVampire?: MinionState;
 }
 
 /** Static modifiers a permanent contributes while in play. */
@@ -792,6 +810,9 @@ export interface PermanentStatics {
   cannotBeEquipped?: { retainers?: boolean };
   /** May possess weapons but cannot activate or strike with them (Howler). */
   cannotUseWeapons?: boolean;
+  /** "This vampire cannot have or use any ranged weapons except the Ivory
+   *  Bow" (Anachronism). Read where a weapon is offered to the bearer. */
+  cannotHaveRangedWeapons?: boolean;
   /** The bearer cannot take any hunt action (Talbot's Chainsaw). */
   cannotHunt?: boolean;
   /** "This ally cannot gain life" (Rotting Behemoth) — read in the
@@ -968,6 +989,11 @@ export interface PermanentStatics {
    *  burn it" (FBI Special Affairs Division).
    *  docs/counter-clock-events-design.md §3 */
   allyBurnedInCombat?: { damage: number; burnAt: number };
+  /** "If an ally opposing this vampire in combat would be burned, instead
+   *  steal and lock the ally; if the ally has lost their last life, they
+   *  gain 1 life" (The Book of Going Forth by Night). Read off the bearer
+   *  while the ally's burn is decided, in `burnDepleted`. */
+  stealOpposingAllyInsteadOfBurn?: true;
   /** "Rescuing an OLDER vampire from torpor costs +N blood" (Torpid
    *  Blood). Older = greater capacity; the rescuer pays the extra. */
   olderRescueTax?: number;
@@ -1213,6 +1239,14 @@ export interface PermanentStatics {
    *  announcement beside the torpor tax, which is the one existing tax of
    *  this shape. §4 */
   directedActionBloodTax?: number;
+  /** "…he or she may hunt by stealing 1 blood from another vampire as a Ⓓ
+   *  action" (Legacy of Caine) — the bearer's steal hunt, without the
+   *  Restricted Vitae condition. Once per turn, by `stealHuntTargets`. */
+  legacyStealHunt?: boolean;
+  /** "Other Methuselahs\' actions targeting this vampire cost an additional
+   *  blood" (Chanjelin Ward). Carried by the TARGET and charged to the ACTOR
+   *  when an action names this minion and its controller is another seat. */
+  targetedActionBloodTax?: number;
   /** "This vampire must burn 2 blood to attempt any action EXCEPT HUNTS AND
    *  ACTIONS TO ENTER COMBAT" (Enrage superior). Charged at announcement by
    *  the one helper all three announce paths call, and gated where the
@@ -1224,6 +1258,13 @@ export interface PermanentStatics {
    *  superior) — the BEARER's next action, whatever its outcome, and never
    *  the action that put the card in play. */
   burnAfterBearerAction?: boolean;
+  /** "The vampire with this card burns 1 additional blood for each bleeding
+   *  action he or she successfully performs (after resolving the action)"
+   *  (The Damned). Read on the actor when the action resolves. */
+  bleedSuccessBloodBurn?: number;
+  /** "Any damage this vampire inflicts on allies is reduced to 0" (Memories
+   *  of Mortality). Read on the striking minion when a packet is queued. */
+  allyDamageZeroed?: boolean;
   /** "Burn this card at the end of this turn" (Enrage inferior, Bloodlust)
    *  — swept once as the turn ends. */
   burnAtEndOfTurn?: boolean;
@@ -1968,6 +2009,7 @@ export type GameEvent =
   | { type: "PoolGained"; seat: SeatId; amount: number }
   | { type: "EdgeTaken"; seat: SeatId }
   | { type: "ActionResolved"; actionId: ActionId; success: boolean }
+  | { type: "MinionActionSucceeded"; minion: MinionId }
   /** "Continue the action as if unblocked" (Go-getter superior). A
    *  DISTINCT event rather than a second `ActionResolved` for the same
    *  actionId: the log is the record, one resolution really did happen and
@@ -2091,6 +2133,17 @@ export type GameEvent =
   | { type: "PoolMovedToUncontrolled"; seat: SeatId; minion: MinionId }
   | { type: "CounterMovedToPool"; seat: SeatId; minion: MinionId }
   | { type: "CryptCardDrawn"; seat: SeatId; minion: MinionId }
+  /** A chosen crypt vampire leaves the crypt for the uncontrolled region
+   *  (not the top card, unlike `CryptCardDrawn`). Summon History's
+   *  "search your crypt … and put that vampire in play" goes through it,
+   *  then `VampireEnteredPlay` with no blood. */
+  | { type: "CryptCardSummoned"; seat: SeatId; minion: MinionId }
+  /** A burnt vampire (`CardInstance.burntVampire`) leaves its owner's ash
+   *  heap for the uncontrolled region — Summon History's ash-heap half. */
+  | { type: "AshVampireSummoned"; seat: SeatId; cardId: CardInstanceId }
+  /** "…you must shuffle it afterwards" (p. 14) — the crypt twin of
+   *  `LibraryShuffled`, through the seeded RNG. */
+  | { type: "CryptShuffled"; seat: SeatId }
   /** "…otherwise, move it to the BOTTOM of your crypt" (Family
    *  Gathering) — the crypt twin of `CardBuried`. The crypt is drawn from
    *  the FRONT (`shift`), so the bottom is `push`.
@@ -2202,7 +2255,9 @@ export type GameEvent =
   | { type: "DisciplineGained"; minion: MinionId; discipline: string }
   /** A permanent change to a vampire's clan and Sterile trait. */
   | { type: "VampireTransformed"; minion: MinionId; clan: string; sterile: boolean }
-  | { type: "ClanChanged"; minion: MinionId; clan: string; source: CardInstanceId }
+  /** `source` absent = a permanent change ("becomes Bahari", Lilith's Blessing);
+   *  present = a change that lasts while that card sits on the vampire. */
+  | { type: "ClanChanged"; minion: MinionId; clan: string; source?: CardInstanceId }
   // Allies and retainers (phase 3, allies gate).
   /** `disciplines`: "plays cards requiring \<X\> as a vampire" (p. 11) —
    *  optional, so every existing fixture and saved log is untouched.
@@ -2907,6 +2962,22 @@ export interface ActionFrame {
      *  `cardName`/`cardId` route that frame back to the card's handler. */
     optOut?: { blood: number; cardName: string; cardId: string };
   }>;
+  /** "…you can put this card on this vampire after action resolution, if
+   *  the bleed is successful" (Fever Pitch superior). The card was played
+   *  as the bleed modifier and is HELD here until the action resolves; it
+   *  is put on the vampire then, or filed in the ash heap otherwise. */
+  heldAfterResolution?: Array<{
+    card: CardInstance;
+    minion: MinionId;
+    seat: SeatId;
+    tags: string[];
+    statics: PermanentStatics;
+    /** Not attached if the vampire already holds one with this tag. */
+    exclusiveKey?: string;
+    /** "you CAN put it on" — when the bleed succeeds the player is asked;
+     *  declining leaves the card in the ash heap. */
+    optional?: boolean;
+  }>;
   /** "Queue a combat between them" (Hedonism) — a combat between two
    *  minions NEITHER of which is the acting minion, entered only once this
    *  action is off the stack. Same shape as `afterResolutionDamage`.
@@ -3483,6 +3554,10 @@ export interface CombatFrame {
   /** "A minion cannot use more than one card or effect to gain additional
    *  strikes per round" (p. 32) — the "(limited)" source is spent. */
   usedLimitedAddl: { acting: boolean; opposing: boolean };
+  /** The pending additional strike is OPTIONAL (AK-47, Caseless Rounds: "they
+   *  get an optional additional strike"). While set, the striker may decline
+   *  it, striking with no damage, in the additional sub-round. */
+  optionalAdditionalStrike?: { acting: boolean; opposing: boolean };
   /** Has the post-first-pair additional-strike grant window been completed
    *  for this round? Additional strikes may only be GAINED after the first
    *  pair resolves (p. 32), not before it. */
@@ -4574,6 +4649,11 @@ export interface GameState {
   edge: SeatId | null;
   frames: Frame[];
   eventLog: GameEvent[];
+  /** The seat whose turn is open now, and the event-log index at which each
+   *  seat's last turn ENDED (the next turn began). "Since your last turn"
+   *  (Toy Chest Test) reads these. */
+  openTurnSeat?: SeatId;
+  lastTurnEndedAt?: Partial<Record<SeatId, number>>;
   /** Clans for which the Blood Curse does not bar diablerie for this game.
    * The trait itself and any other diablerie restrictions are unaffected. */
   bloodCurseDiablerieExceptions?: string[];

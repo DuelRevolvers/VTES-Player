@@ -146,8 +146,8 @@
   {
     "id": 100025,
     "name": "Agent of Power",
-    "status": "PARTIAL_FIX",
-    "evidence": "Zamiast trifle, wyboru dyscypliny i dołączenia do wampira, spalania w discard, master daje gainPool. Tekst: src/cards/registry.json, ID 100025; implementacja: src/cards/effects/cards.ts. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: ręczny handler mistrza Discipline (unique, trifle), zagrywany tylko na własny vampire z wyborem dyscypliny w opcji zagrania; disciplineBoost daje +1 poziom; spalenie w abilityOptions w turn.discard kontrolera. Test: tests/cards/agent-of-power.test.ts (3/3)."
   },
   {
     "id": 100026,
@@ -188,8 +188,8 @@
   {
     "id": 100032,
     "name": "AK-47",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Znany błąd limitowanego dodatkowego strike: AK-47 otrzymuje opcjonalny strike automatycznie i może przez to zablokować inne limitowane źródło; także okno kolejnego źródła po oczekującym strike jest niekompletne. Szczegóły docs/additional-strike-followups.md. Tekst: src/cards/registry.json, ID 100032; implementacja: src/cards/effects/cards.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodatkowy strike jest nadal przyznawany po strike'u z broni, ale jest OPCJONALNY: w dodatkowej sub-rundzie strzelec może wybrać 'strike:decline' (bez obrażeń, zwalnia zobowiązanie do broni). Flaga CombatFrame.optionalAdditionalStrike jest ustawiana tylko dla opcjonalnych przyznań (AK-47, Caseless Rounds); zwykłe dodatkowe strike'i jej nie mają. Testy: tests/cards/weapon-riders.test.ts + last-equipment-modifiers.test.ts: 57 testów łącznie, w tym 'the optional extra strike can be DECLINED'. Pełne tests/cards+tests/engine: 398 plików, exit 0. NIEZROBIONE: wybór innego limitowanego źródła zamiast grantu AK-47 (kolejność przed grantem), docs/additional-strike-followups.md."
   },
   {
     "id": 100033,
@@ -296,8 +296,8 @@
   {
     "id": 100050,
     "name": "Anachronism",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast dołączenia do wampira o capacity powyżej 6 oraz zakazu i niszczenia ranged weapons. Tekst: src/cards/registry.json, ID 100050; implementacja: src/cards/effects/cards.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz na dowolnym vampire z kapitałem powyżej 6 (ręczny handler). Statyk cannotHaveRangedWeapons blokuje założenie broni dystansowej z wyjątkiem Ivory Bow (compile.ts cannotHaveRangedWeapon). Przy zagraniu spalana jest broń dystansowa już trzymana (oprócz Ivory Bow). Test: tests/cards/anachronism.test.ts (3/3). Nie objęte: kradzież/diablerie przenoszące broń omijają bramkę na razie."
   },
   {
     "id": 100051,
@@ -951,7 +951,7 @@
     "id": 100159,
     "name": "Big Game",
     "status": "PARTIAL_FIX",
-    "evidence": "Usunięto błędnie przyznawane każdemu celowi maneuver i press. tests/cards/rush-cards.test.ts potwierdza rush na zwykły cel bez obu bonusów i bez unlock. Red List nie jest jeszcze modelowana: prawidłowy opcjonalny maneuver albo press i unlock przy celu Red List pozostają do zrobienia; karta nie jest w pełni poprawna."
+    "evidence": "Usunięto błędnie przyznawane każdemu celowi maneuver i press. tests/cards/rush-cards.test.ts potwierdza rush na zwykły cel bez obu bonusów i bez unlock. Red List nie jest jeszcze modelowana: prawidłowy opcjonalny maneuver albo press i unlock przy celu Red List pozostają do zrobienia; karta nie jest w pełni poprawna. Paczka 2: tekst (Ⓓ, Red List: optional maneuver lub press i unlock przy końcu akcji) pozostaje częściowo niezaimplementowany wg ustaleń paczki 1; status bez zmian."
   },
   {
     "id": 100160,
@@ -1358,8 +1358,8 @@
   {
     "id": 100227,
     "name": "Blur",
-    "status": "UNRESOLVED",
-    "evidence": "Basic i superior zawierają ograniczone odpowiednio 1 i 2 additional strikes; combat-strikes.test.ts sprawdza superior po zwykłej parze strike. docs/additional-strike-followups.md wskazuje problem okna kolejnych źródeł przy pending strikes; brak odrębnego rozstrzygnięcia interakcji Blur z dalszymi źródłami."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zweryfikowano: basic daje 1 dodatkowy strike, superior 2 (limited), grant po pierwszej parze; tests/cards/combat-strikes.test.ts (Blur superior: 3 uderzenia M, 2 dodatkowe sub-rundy) i Quickness współistniejący z Blur (Quickness nieograniczony nie zużywa źródła limitowanego); limit egzekwowany przez usedLimitedAddl (tests/cards/weapon-riders.test.ts: AK-47 i limitowany Blur). NIEZROBIONE, WSPÓLNE Z SILNIKIEM: kolejność okna kolejnych źródeł przy oczekujących strike'ach (LSJ 20001206, docs/additional-strike-followups.md) nie jest jeszcze przebudowana; dotyczy źródeł nieograniczonych, nie zmienia liczby strike'ów Blur. Nie jest błędem specyficznym dla Blur."
   },
   {
     "id": 100228,
@@ -1430,8 +1430,8 @@
   {
     "id": 100239,
     "name": "The Book of Going Forth by Night",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Jest unique i superior Serpentis, ale brak zastąpienia spalenia ally przejęciem i lock. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Paczka 3: superior Serpentis oraz zamiana burn opozycyjnego allya w przejęcie i lock z 1 life, gdy ally miał 0 (engine.stealAllyInsteadOfBurn, static stealOpposingAllyInsteadOfBurn na karcie; walka kończy się). tests/cards/book-going-forth.test.ts z kontrolą bez Book. Nie modelowano Imbued (ANK 20220816), bo Imbued nie jest allyem w silniku."
   },
   {
     "id": 100240,
@@ -1856,8 +1856,8 @@
   {
     "id": 100310,
     "name": "Cavalier",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast archetype, dołączenia i opcjonalnego unlock za blood. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: archetyp na własnym vampire (spec). Po udanej akcji kosztującej krew (Magic of the Smith, blood 1) bearer dostaje opcjonalną ofertę unlock za 1 krew (wspólna klauzula unlockAfterAction: bloodCost 1, oncePerTurn, requiresBloodCost). Testy: tests/cards/cavalier.test.ts (2/2) oraz tests/cards/cavalier-e2e.test.ts (2/2): end to end z prawdziwą akcją kosztującą krew — 'tak' odblokowuje i spala 1 krew; bleed (bez kosztu krwi) nie dostaje oferty. Wcześniejsza sonda bez oferty dotyczyła bleedu i była zgodna z regułą."
   },
   {
     "id": 100311,
@@ -1952,8 +1952,8 @@
   {
     "id": 100326,
     "name": "Chanjelin Ward",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast dołączenia, podatku za akcję oraz spalenia karty dla niepowodzenia akcji (wcześniejszy wpis). Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: karta na własnym vampire (spec, archetyp mistrza). Dwie części: (1) podatek celu targetedActionBloodTax: +1 krew płaci aktor akcji innego Methuselaha celującej w ten vampire (chargeActionTolls dostaje targetMinion); (2) opcja spalenia karty, by akcja celująca w ten vampire się nie udała: handler chanjelinWard w onActionAnnounced pyta kontrolera bearera (opcjonalny wybór chanjelinBurn). 'Tak' spala kartę i kończy akcję nieudanie (endAction); 'nie' zostawia kartę. Opcja dotyczy każdej akcji celującej w bearera, zgodnie z tekstem karty. Test: tests/cards/chanjelin-ward.test.ts (7/7): surcharge, brak karty, oferta wyboru, 'tak' spala i kończy akcję, 'nie' zostawia kartę, akcja wobec innego vampire nie pyta."
   },
   {
     "id": 100327,
@@ -2438,8 +2438,8 @@
   {
     "id": 100407,
     "name": "Conniver",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Master daje gainPool zamiast archetype i lock za zysk blood po stracie pool przez prey. Tekst: src/cards/registry.json; kod: src/cards/effects/cards.ts i compile.ts."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: archetyp na własnym vampire (spec) + hook onPoolLost. Gdy prey traci pulę w turze innej niż jego i kontrolera, kontroler dostaje OPCJONALNY wybór (raiseChoice, klucz conniverLock): tak = blokada karty i +1 krew z banku, nie = nic. Zablokowana karta nie jest oferowana ponownie. Test: tests/cards/conniver.test.ts (6/6)."
   },
   {
     "id": 100408,
@@ -2846,8 +2846,8 @@
   {
     "id": 100475,
     "name": "Cry Wolf",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Spec ma rush i press, ale brak obowiązku rush, torpor aktora gdy rekrutacja jest blokowana, zakazu normalnego unlock i spalenia locked werewolfa w unlock. Brak osobnego handlera. Tekst registry.json; kod src/cards/effects/cards.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Paczka 4: zablokowana zagrywka (recruit) wysyła działającego anarcha do torporu (hook onActionBlockedAsPlayed); werewolf pozostaje locked (bearerDoesNotUnlock), a jeśli jest locked w unlock phase, zostaje spalony. tests/cards/cry-wolf.test.ts z kontrolą bez bloku. Nadal brak obowiązkowego Ⓓ rush na minion innego Methuselah i pressa przy walce (press jest statycznie). LSJ 20090226 i LSJ 20031014 nieprzetestowane osobno."
   },
   {
     "id": 100476,
@@ -2888,8 +2888,8 @@
   {
     "id": 100482,
     "name": "Curmudgeon",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Brak archetype/trifle, wyboru miniona i warunkowego lock dla blood; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zaimplementowano: archetyp na własnym vampire (spec, exclusiveKey archetype, tag trifle/archetype). W unlock phase PRZECIWNIKA-PREY (onAnyUnlock, unlockingSeat = prey kontrolera) kontroler dostaje opcjonalny wybór: tak = zablokowanie karty i +1 krew z banku dla bearer. Warunek 'zablokowany w tej turze': nowe pole blockedSinceUnlock na minionie, ustawiane gdy akcja minionu zostaje zablokowana (BlockSucceeded, engine.ts przy actor), czyszczone w sweepie unlock phase kontrolera minionu. Test: tests/cards/curmudgeon.test.ts (5/5): pyta przy zablokowanym minionie prey; brak pytania bez bloku; brak pytania w cudzym unlock; tak blokuje i daje krew; blok minionu innego seat nie liczy się. NIE ZROBIONO / DO POTWIERDZENIA: (1) 'this turn' odczytane jako 'od ostatniego unlock phase kontrolera minionu' — brak rulingu w migawce, interpretacja; (2) wybór konkretnego minionu prey nie jest pytaniem osobnym (pierwszy zablokowany); (3) blok nie przetestowany end-to-end przez grę."
   },
   {
     "id": 100483,
@@ -2936,8 +2936,8 @@
   {
     "id": 100490,
     "name": "The Damned",
-    "status": "PARTIAL_FIX",
-    "evidence": "Brak unique dołączanego do vampire capacity poniżej 5 i blood po successful bleed; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaimplementowano: unikatowy mistrz na vampire z pojemnością poniżej 5 (attach maxCapacity 4, scope any). Po udanej akcji bleed bearer burns 1 dodatkową krew (bleedSuccessBloodBurn; engine.ts po rozstrzygnięciu akcji, ograniczone do posiadanej krwi). Test: tests/cards/the-damned.test.ts (5/5): udany bleed daje dokładnie jedno dodatkowe spalenie względem kontroli bez karty; limit krwi; zablokowany bleed (nieudany) — ta sama walka z kartą i bez niej daje identyczne spalenia (walka sama spala krew przez mending, więc porównanie jest z kontrolą); bramka pojemności <5 przez attachTargets na prawdziwym specu."
   },
   {
     "id": 100491,
@@ -3507,7 +3507,7 @@
     "id": 100585,
     "name": "Drawing Out the Beast",
     "status": "PARTIAL_FIX",
-    "evidence": "Oba poziomy niedostępne przeciw ally [PIB 20121028]; superior zadaje unpreventable environmental damage w press step przed decyzjami o press, nie po wcześniejszym końcu walki. frenzy-direction-audit.test.ts: kolejność, torpor, dwie rundy, save/load na decyzji press, Flesh of Marble i Bloodform. Stare zapisy bez pochodzenia ograniczeń oraz inne interakcje nadal wymagają przeglądu."
+    "evidence": "Oba poziomy niedostępne przeciw ally [PIB 20121028]; superior zadaje unpreventable environmental damage w press step przed decyzjami o press, nie po wcześniejszym końcu walki. frenzy-direction-audit.test.ts: kolejność, torpor, dwie rundy, save/load na decyzji press, Flesh of Marble i Bloodform. Stare zapisy bez pochodzenia ograniczeń oraz inne interakcje nadal wymagają przeglądu. Paczka 1: ponownie sprawdzono rulings (PIB 20121028, RTR 19970630, LSJ 20010312); pokryte przez frenzy-direction-audit.test.ts (w tym przerwanie przez combat-ends). Status bez zmian: brak przeglądu starych zapisów."
   },
   {
     "id": 100586,
@@ -3867,7 +3867,7 @@
     "id": 100645,
     "name": "Enkil Cog",
     "status": "PARTIAL_FIX",
-    "evidence": "Po successful bleed przeciw prey karta jest teraz unikalnym permanentem na aktorze capacity >=10 i daje mu stałe +1 bleed. tests/cards/enkil-cog-audit.test.ts. Wciąż brak dodatkowej akcji w dowolnej minion phase, a relacja prey po oust wymaga weryfikacji."
+    "evidence": "Po successful bleed przeciw prey karta jest teraz unikalnym permanentem na aktorze capacity >=10 i daje mu stałe +1 bleed. tests/cards/enkil-cog-audit.test.ts. Wciąż brak dodatkowej akcji w dowolnej minion phase, a relacja prey po oust wymaga weryfikacji. Paczka 2: LSJ 20081213-1 (anulowana akcja przy zagraniu nie zużywa Cog) nie ma testu; dodatkowa akcja w minion phase nadal brakuje. Status bez zmian."
   },
   {
     "id": 100646,
@@ -4065,7 +4065,7 @@
     "id": 100678,
     "name": "Eye of Hazimel",
     "status": "PARTIAL_FIX",
-    "evidence": "Naprawiono jednoczesne nadawanie superior Potence i Chimerstry; tests/cards/eye-hazimel-audit.test.ts sprawdza oba poziomy oraz usunięcie bonusów po utracie karty. Nadal brak zakazu przenoszenia/kradzieży, upkeep 1 pool i 5 unpreventable damage przy spaleniu; te istotne błędy pozostają otwarte."
+    "evidence": "Naprawiono jednoczesne nadawanie superior Potence i Chimerstry; tests/cards/eye-hazimel-audit.test.ts sprawdza oba poziomy oraz usunięcie bonusów po utracie karty. Nadal brak zakazu przenoszenia/kradzieży, upkeep 1 pool i 5 unpreventable damage przy spaleniu; te istotne błędy pozostają otwarte. Paczka 2: dodano 5 unpreventable environmental damage na bearera przy spaleniu przez burnPermanent (onLeavePlay, eye-hazimel-audit.test.ts). Nadal brak: upkeep w unlock phase (1 pool albo spalenie karty), zakaz przenoszenia/kradzieży przy ready bearerze; spalenia poza burnPermanent nie wywołują hooka."
   },
   {
     "id": 100679,
@@ -4707,7 +4707,7 @@
     "id": 100785,
     "name": "Fragment of the Book of Nod",
     "status": "PARTIAL_FIX",
-    "evidence": "Fragment of the Book of Nod: osobny handler realizuje draw/discard i ogranicza ability do faz własnej tury; jego komentarz wskazuje możliwe szersze okno. Tekst nie określa timingu; potrzebne rozstrzygnięcie zasad oraz testy poza własną turą. Aktualizacja: Poszerzono dostępność o zwykłe impulsy w turze innych Methuselahów, akcjach i walce, z wyłączeniem as-played. Dwa dobierania są kontynuowane przed discard down także przy przekierowaniu i po save/load; tests/cards/fragment-impulse-audit.test.ts. Zakres innych specjalnych okien nadal wymaga sprawdzenia; ruling ANK 20200616 https://www.vekn.net/forum/rules-questions/78687-the-erciyes-fragments-fragment-of-the-book-of-nod-barrens-impulse#100110."
+    "evidence": "Fragment of the Book of Nod: osobny handler realizuje draw/discard i ogranicza ability do faz własnej tury; jego komentarz wskazuje możliwe szersze okno. Tekst nie określa timingu; potrzebne rozstrzygnięcie zasad oraz testy poza własną turą. Aktualizacja: Poszerzono dostępność o zwykłe impulsy w turze innych Methuselahów, akcjach i walce, z wyłączeniem as-played. Dwa dobierania są kontynuowane przed discard down także przy przekierowaniu i po save/load; tests/cards/fragment-impulse-audit.test.ts. Zakres innych specjalnych okien nadal wymaga sprawdzenia; ruling ANK 20200616 https://www.vekn.net/forum/rules-questions/78687-the-erciyes-fragments-fragment-of-the-book-of-nod-barrens-impulse#100110. Paczka 2: RTR 20040501 (nie można użyć, gdy karta jest zagrywana, by dobrać kartę anulującą 'as it is played') nieweryfikowane. Status bez zmian."
   },
   {
     "id": 100786,
@@ -5811,7 +5811,7 @@
     "id": 100969,
     "name": "Inceptor",
     "status": "PARTIAL_FIX",
-    "evidence": "Master daje gainPool zamiast unique karty na vampire capacity 1 i wyboru trzech kart zapewniających Disciplines. Porównano registry.json i bieżący effects/cards.ts, wyszukano nazwę w kodzie; bez nowego testu scenariuszowego. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte."
+    "evidence": "Zaimplementowano CZĘŚCIOWO: unikatowy mistrz (unique) przypinany do vampire o pojemności dokładnie 1 (attach min/max 1, scope any). Po wejściu do gry kontroler MUSI odłożyć trzy karty z ręki, ash heap albo biblioteki na kartę, odkryte, poza grą (ops.storeCard, faceUp, po jednej odpowiedzi; pytanie nieopcjonalne, powtarzane). Test: tests/cards/inceptor.test.ts (2/2): trzy wybrane karty trafiają na kartę (w kolejności), karta odkryta, ręka reszta; brak opcji rezygnacji. NIE ZBUDOWANO: prawo bearera do zagrywania innych kopii tych kart jak na poziomie superior (wymaga reguły store-play w enumeracji opcji gry); bramkę pojemności 1 przy przypinaniu sprawdza tests/cards/inceptor-attach-gate.test.ts (2/2) przez attachTargets na prawdziwym specu."
   },
   {
     "id": 100970,
@@ -6512,8 +6512,8 @@
   {
     "id": 101086,
     "name": "Legacy of Caine",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast dołączenia do capacity >6 przeciwnika i zastąpienia hunt kradzieżą blood. Porównano tekst i metadane registry z aktualnym kodem; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz na vampire z kapitałem powyżej 6 kontrolowanym przez innego Methuselaha (scope 'other', minCapacity 7). Bearer: cannotHunt (zwykłe polowanie zablokowane) i legacyStealHunt — kradzież 1 krwi z dowolnego innego vampire jako akcja Ⓓ (derived stealHuntTargets, pętla opcji w engine dla bearera niezobowiązanego do polowania). Test: tests/cards/legacy-of-caine.test.ts (3/3). Nie objęte: reguła 'nie łączy się z innymi niestandardowymi polowaniami' (LSJ 20090606) nie jest egzekwowana."
   },
   {
     "id": 101087,
@@ -6644,8 +6644,8 @@
   {
     "id": 101108,
     "name": "Lilith's Blessing",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast permanenta z lock/master phase action, wyszukiwaniem Discipline i przemianą vampire w Bahari. Porównano tekst i metadane registry z aktualnym kodem; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaimplementowano: mistrz w grze (permanent na stronie gracza). Akcja fazy mistrza (wymaga masterActionsLeft > 0 i odblokowanej karty): blokuje kartę, zużywa akcję mistrza, potem wybór: karta Dyscypliny z biblioteki (lub 'nic'), vampire gotowy, bez krwi i nie-Bahari. Efekt: karta Dyscypliny na vampirze (attachFromZone), +3 krwi (BloodGained), zmiana klanu na Bahari (trwała, ClanChanged bez source), tasowanie biblioteki. Zdarzenie ClanChanged może teraz nie mieć source (zmiana trwała). Testy: tests/cards/lilith-blessing.test.ts 6/6 (oferta, przypięcie + krew + Bahari + blokada, 'nic' nadal daje krew i klan, vampire z krwią / już Bahari / zablokowana karta nie są oferowane). Brak rulingu w rulings.yaml (sprawdzono). Uwaga: krew V1 sprawdzana w fazie mistrza."
   },
   {
     "id": 101109,
@@ -6722,8 +6722,8 @@
   {
     "id": 101121,
     "name": "Loner",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast dołączenia archetype i warunkowego blood w influence phase. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: archetyp (mistrz na własnym vampire, exclusiveKey archetype) z hookiem onInfluencePhase; warunki czytane z nowych znaczników minionu successfulActionThisTurn / attemptedActionThisTurn (ustawiane przez ActionAnnounced i MinionActionSucceeded, czyszczone w unlock phase). Zysk 1 krwi z banku tylko gdy bearer gotowy i nie ma innych aktywnych minionów kontrolera. Test: tests/cards/loner.test.ts (5/5)."
   },
   {
     "id": 101122,
@@ -6855,7 +6855,7 @@
     "id": 101143,
     "name": "Magic of the Smith",
     "status": "PARTIAL_FIX",
-    "evidence": "Wąski zakres: wyszukanie/equip po sukcesie, koszt i tasowanie; library-search.test.ts. Pozostałe interakcje nie są w pełni sprawdzone. Aktualizacja: koszt wyszukanego equipment uwzględnia wymagany klan, a własna kopia Unique nie jest oferowana; library-search.test.ts. Sprzęt z wyszukania nie generuje już CardPlayed, a koszty uwzględniają tagi, w tym podatek od broni; tests/cards/library-search.test.ts. Zgodność pozostałych skutków i anulowania nadal trzeba zweryfikować (https://www.vekn.net/forum/rules-questions/82962-meditative-grove-vs-rotschreck)."
+    "evidence": "Wąski zakres: wyszukanie/equip po sukcesie, koszt i tasowanie; library-search.test.ts. Pozostałe interakcje nie są w pełni sprawdzone. Aktualizacja: koszt wyszukanego equipment uwzględnia wymagany klan, a własna kopia Unique nie jest oferowana; library-search.test.ts. Sprzęt z wyszukania nie generuje już CardPlayed, a koszty uwzględniają tagi, w tym podatek od broni; tests/cards/library-search.test.ts. Zgodność pozostałych skutków i anulowania nadal trzeba zweryfikować (https://www.vekn.net/forum/rules-questions/82962-meditative-grove-vs-rotschreck). Paczka 1: ruling 'equipment can be a location in play' (LSJ 19971001-2) i zniżki Equip/Employ (ANK 20180817) nie mają osobnego testu; library-search.test.ts pokrywa wybór przy rozwiązaniu, koszt i tasowanie. Status bez zmian."
   },
   {
     "id": 101144,
@@ -7184,8 +7184,8 @@
   {
     "id": 101198,
     "name": "Memories of Mortality",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast dołączenia do vampire z zakazem bloku allies, redukcją damage i opcją spalenia/torpor. Porównano registry.json i effects/cards.ts oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: ręczny handler mistrza na własnym vampire (statyki cannotBlockKind: ally oraz allyDamageZeroed). Obrażenia bearera wobec allies są zerowane w pushPendingDamage (DamagePrevented). Ability w turn.influence: 1 blood z bearera, karta spalona, bearer w torpor. Test: tests/cards/memories-of-mortality.test.ts (4/4: zagranie i statyki, kontrola obrażeń 1 vs 0, bearer nie blokuje akcji allies (kontrola: może), ability w influence). Mistrz kładziony na DOWOLNYM vampire (także przeciwnika), jak mistrzowie dyscyplin i ruling o kosztach mistrzów na celu."
   },
   {
     "id": 101199,
@@ -7851,7 +7851,7 @@
     "id": 101309,
     "name": "Obedience",
     "status": "PARTIAL_FIX",
-    "evidence": "Dodano sprawdzanie młodszego działającego vampire z uwzględnieniem capacity, właściwego blockera i powodzenia próby bloku; dodano reakcję celu niezablokowanego rush w state C. tests/cards/end-action.test.ts. Reakcja na rush korzysta z istniejącego okna C, a nie odrębnego impulsu bezpośrednio przed rozpoczęciem combat po zakończeniu innych efektów resolution; pełny timing i pozostałe interakcje nadal wymagają pracy."
+    "evidence": "Dodano sprawdzanie młodszego działającego vampire z uwzględnieniem capacity, właściwego blockera i powodzenia próby bloku; dodano reakcję celu niezablokowanego rush w state C. tests/cards/end-action.test.ts. Reakcja na rush korzysta z istniejącego okna C, a nie odrębnego impulsu bezpośrednio przed rozpoczęciem combat po zakończeniu innych efektów resolution; pełny timing i pozostałe interakcje nadal wymagają pracy. Paczka 1: pokryte przez end-action.test.ts (tylko blocker, młodszy vampire, rush, basic/superior). Nieobjęte: ANK 20171212 (zastąpiony przez slave nie może grać), LSJ 19991025 (starszy unlocked vampire przed nową walką). Status bez zmian."
   },
   {
     "id": 101310,
@@ -9525,7 +9525,7 @@
     "id": 101588,
     "name": "Rego Motum",
     "status": "PARTIAL_FIX",
-    "evidence": "Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane."
+    "evidence": "Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Nie zweryfikowano RTR 20041202 (niewykorzystane punkty nie przechodzą dalej) dla obu trybów. Status bez zmian."
   },
   {
     "id": 101589,
@@ -9891,7 +9891,7 @@
     "id": 101649,
     "name": "Rolling with the Punches",
     "status": "PARTIAL_FIX",
-    "evidence": "Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane."
+    "evidence": "Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Nie zweryfikowano ANK 20210226 (burn blood nie zmniejszany przez redukcje kosztu) w kontekście kosztu karty. Status bez zmian."
   },
   {
     "id": 101650,
@@ -10827,7 +10827,7 @@
     "id": 101805,
     "name": "The Sleeping Mind",
     "status": "PARTIAL_FIX",
-    "evidence": "Superior nie wymaga już wyboru locked vampire ani nie zabrania mu bloku; test bez celu i test zakazu unlock w tests/cards/block-tax.test.ts. Poprawiono też zakaz po nieudanym bloku dla onlyAsAnnounced, ale inne przejścia okna ogłoszenia nie są w pełni zweryfikowane. Wcześniejsze ustalenie: Superior w spec nie tylko zabrania unlock, ale również nakazuje wybór locked vampire i zakazuje mu bloku, chociaż tekst superior nie zawiera basic. block-tax.test.ts oczekuje wyboru celu również w superior, więc nie bada wersji bez dodatkowego ograniczenia. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: po zagraniu zwykłego action modifier lub reaction w stanie A okno „as announced” zostaje zamknięte także po anulowaniu karty i po save/load; testy obejmują Seduction, The Sleeping Mind, Club Illusion oraz replacement karty akcji (tests/cards/audit-action-and-shadow.test.ts). Nie obejmuje jeszcze wszystkich zwykłych zdolności kart w grze ani starych zapisów bez flagi; kwestia innych krawędzi pozostaje otwarta. Źródła: https://www.vekn.net/rulebook oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zakaz unlock superior obejmuje teraz Freak Drive w oknie po rozstrzygnięciu, Change of Target przed rozstrzygnięciem bloku i objęte nim zdolności; zachowano efekty as if unlocked. Testy tests/cards/sleeping-mind-unlock-audit.test.ts obejmują także inferior oraz zapis/wznowienie. Inne ścieżki automatycznego unlock i wszystkie interakcje wymagają dalszego przeglądu. Źródła: https://www.vekn.net/forum/rules-questions/81780-the-sleeping-mind-and-change-of-target oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zablokowano także Revelation corruption unlock, Warsaw Station po sukcesie, Forward Momentum oraz wariant unlock Dabbler i Monster w trakcie akcji. Testy sleeping-mind-unlock-audit.test.ts i revelation-of-the-serpent.test.ts; pozostałe ścieżki wymagają kontroli. Aktualizacja: superior wyklucza zagranie wersji Majesty/Earth Meld, która nakazuje unlock w walce, oraz nie oferuje płatnego unlock Truth in Darkness; wersja strike combat ends bez unlock pozostaje legalna. Zabezpieczono też rozstrzygnięcie wcześniej wybranego strike w starszym stanie. Ruling: https://www.vekn.net/forum-es/rules-questions/68051-the-sleeping-mind-vs-as-though-untapped. tests/cards/sleeping-mind-unlock-audit.test.ts. Inne źródła unlock nadal wymagają przeglądu. Aktualizacja: Zablokowano Helicopter, Horrific Countenance oraz znane opcje basic Cats' Guidance i Forced Vigilance w aktualnym oknie blokady; podczas resolve pomijane są unlock Abbot/Khabar: Glory, Precognizant Mobility, Psychophagia oraz Eulogio. Sprawdzono superior/inferior i Abbot w tests/cards/sleeping-mind-unlock-audit.test.ts. Inne ścieżki pozostają otwarte; wcześniejszy osobny błąd czasu Cats' Guidance po wszystkich walkach naprawiono i przetestowano w post-block-unlock.test.ts oraz psyche-post-block-audit.test.ts. Aktualizacja: testy sleeping-mind-unlock-audit.test.ts i master-intercept.test.ts obejmują Special Report, Organized Resistance, Guard Duty, Under Siege i Eternal Vigilance; niepłatne próby bloku bez rzeczywistego unlock pozostają legalne. Eagle’s Sight zagrać można po realnym wake bez unlock. Inne nieprzejrzane ścieżki nadal są otwarte. Aktualizacja: basic może wybrać również samego działającego zablokowanego wampira (tekst nie wymaga „another”); tests/cards/block-restrictions.test.ts."
+    "evidence": "Superior nie wymaga już wyboru locked vampire ani nie zabrania mu bloku; test bez celu i test zakazu unlock w tests/cards/block-tax.test.ts. Poprawiono też zakaz po nieudanym bloku dla onlyAsAnnounced, ale inne przejścia okna ogłoszenia nie są w pełni zweryfikowane. Wcześniejsze ustalenie: Superior w spec nie tylko zabrania unlock, ale również nakazuje wybór locked vampire i zakazuje mu bloku, chociaż tekst superior nie zawiera basic. block-tax.test.ts oczekuje wyboru celu również w superior, więc nie bada wersji bez dodatkowego ograniczenia. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: po zagraniu zwykłego action modifier lub reaction w stanie A okno „as announced” zostaje zamknięte także po anulowaniu karty i po save/load; testy obejmują Seduction, The Sleeping Mind, Club Illusion oraz replacement karty akcji (tests/cards/audit-action-and-shadow.test.ts). Nie obejmuje jeszcze wszystkich zwykłych zdolności kart w grze ani starych zapisów bez flagi; kwestia innych krawędzi pozostaje otwarta. Źródła: https://www.vekn.net/rulebook oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zakaz unlock superior obejmuje teraz Freak Drive w oknie po rozstrzygnięciu, Change of Target przed rozstrzygnięciem bloku i objęte nim zdolności; zachowano efekty as if unlocked. Testy tests/cards/sleeping-mind-unlock-audit.test.ts obejmują także inferior oraz zapis/wznowienie. Inne ścieżki automatycznego unlock i wszystkie interakcje wymagają dalszego przeglądu. Źródła: https://www.vekn.net/forum/rules-questions/81780-the-sleeping-mind-and-change-of-target oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zablokowano także Revelation corruption unlock, Warsaw Station po sukcesie, Forward Momentum oraz wariant unlock Dabbler i Monster w trakcie akcji. Testy sleeping-mind-unlock-audit.test.ts i revelation-of-the-serpent.test.ts; pozostałe ścieżki wymagają kontroli. Aktualizacja: superior wyklucza zagranie wersji Majesty/Earth Meld, która nakazuje unlock w walce, oraz nie oferuje płatnego unlock Truth in Darkness; wersja strike combat ends bez unlock pozostaje legalna. Zabezpieczono też rozstrzygnięcie wcześniej wybranego strike w starszym stanie. Ruling: https://www.vekn.net/forum-es/rules-questions/68051-the-sleeping-mind-vs-as-though-untapped. tests/cards/sleeping-mind-unlock-audit.test.ts. Inne źródła unlock nadal wymagają przeglądu. Aktualizacja: Zablokowano Helicopter, Horrific Countenance oraz znane opcje basic Cats' Guidance i Forced Vigilance w aktualnym oknie blokady; podczas resolve pomijane są unlock Abbot/Khabar: Glory, Precognizant Mobility, Psychophagia oraz Eulogio. Sprawdzono superior/inferior i Abbot w tests/cards/sleeping-mind-unlock-audit.test.ts. Inne ścieżki pozostają otwarte; wcześniejszy osobny błąd czasu Cats' Guidance po wszystkich walkach naprawiono i przetestowano w post-block-unlock.test.ts oraz psyche-post-block-audit.test.ts. Aktualizacja: testy sleeping-mind-unlock-audit.test.ts i master-intercept.test.ts obejmują Special Report, Organized Resistance, Guard Duty, Under Siege i Eternal Vigilance; niepłatne próby bloku bez rzeczywistego unlock pozostają legalne. Eagle’s Sight zagrać można po realnym wake bez unlock. Inne nieprzejrzane ścieżki nadal są otwarte. Aktualizacja: basic może wybrać również samego działającego zablokowanego wampira (tekst nie wymaga „another”); tests/cards/block-restrictions.test.ts. Paczka 1: sleeping-mind-unlock-audit.test.ts pokrywa wake (Eagle's Sight) i zakaz unlock po resolution (PIB 20150703); block-tax.test.ts pokrywa superior bez celu. Status bez zmian; sprawdzenie innych przejść okna 'as announced' nadal otwarte."
   },
   {
     "id": 101806,
@@ -11126,8 +11126,8 @@
   {
     "id": 101855,
     "name": "Spontaneous Power",
-    "status": "PARTIAL_FIX",
-    "evidence": "Master daje gainPool zamiast unique dołączenia z wyborem i poziomem dyscypliny oraz traktowania jako discipline master. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: ręczny handler mistrza (unique), zagrywany na DOWOLNYM vampire z wyborem dyscypliny w opcji zagrania (play:...:vampire:karta:dyscyplina). Pary z dyscypliną już na superior nie są oferowane. Statyka disciplineBoost daje +1 poziom, tag discipline. Test: tests/cards/spontaneous-power.test.ts (4/4). Nie testowano kosztu w puli przy zagraniu na cudzym vampire."
   },
   {
     "id": 101856,
@@ -11379,7 +11379,7 @@
     "id": 101897,
     "name": "Summon History",
     "status": "CODE_DISCREPANCY",
-    "evidence": "Basic ma tylko stealth zamiast kosztu X i wyszukania ally/retainer/equipment; brak superior vampire z crypt/ash heap. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "evidence": "Stan: karta nadal jest atrapą (basic: tylko actionStealth; superior: brak). Tekst: [tem] szukanie ally/retainer/equipment z kosztem X lub mniej (krew albo pool) w bibliotece i/lub stosie odrzuconych, wejście na tego vampira z życiem równym startowemu; [TEM] szukanie non-scarce vampire z krypty/stosu z pojemnością X lub mniej, wejście bez krwi. Brakuje: (1) koszt X przy zagraniu (rulings: X ustalany przy zagraniu, może być 0; LSJ 20100314, LSJ 20030502); (2) wyszukiwanie w krypcie z wyborem vampira (attachFromZone obsługuje tylko library/hand/ashHeap); (3) wejście allies 'na tego vampira' z życiem startowym: ally jest osobnym minionem, sposób umieszczenia wymaga rozstrzygnięcia; (4) ignorowanie wymagań Dyscypliny: wejście w wersji inferior (rulings RBK equip/recruit, LSJ 20100204, PIB 20111101 dla X = 0 przy Reanimated Corpse). Nie zaimplementowano; brak testu. Summon Soul i Summon the Serpent to te same atrapy w tej samej fali. PLAN (sprawdzony w kodzie, nic nie zmieniono): (a) koszt X: costOf (compile.ts ~490) nie przyjmuje parametrów; X trzeba wybierać przy zagraniu (wzór: opcje z params.x) i liczyć w bramce i w płatności; (b) wprowadzenie vampira z krypty: nowy op wzorowany na VampireTokenEnteredPlay (engine.ts ~1457) plus zdjęcie karty z krypty i wpis własnej karty; brak takiego helpera; (c) allies/retainers/equipment z biblioteki i stosu: playCardFromHand (engine.ts ~7445) z from zone library, płaci koszt, obsługuje wersję (mode) i replacement; wymaga ograniczenia kosztu ≤ X i wyboru strefy (library/ash heap). KROK 1 ZROBIONY: X krwi wybierany przy zagraniu (prymityw variableBloodX, handler.xBloodAtPlay), płacony PRZY ZAGRANIU (nie na sukces jak Bloodlust); test tests/cards/summon-history.test.ts 3/3. KROK 2 ZROBIONY: po udanej akcji gracz wybiera (searchCostX, nieobowiązkowy wybór 'find nothing') kartę RETAINER lub EQUIPMENT z biblioteki lub stosu odrzuconych, o koszcie (blood lub pool, cena drukowana) <= X; ignoruje wymagania; karta trafia na tego vampira przez attachFromZone; biblioteka zawsze tasowana; zapłata 0. Test tests/cards/summon-history.test.ts 7/7. KROK 3 ZROBIONY (superior TEM): tryb superior z searchCryptForVampire; po udanej akcji wybór spośród NIE-scarce wampirów z krypty o capacity <= X (unikalny wampir już kontrolowany nazwą odrzucony), 'find nothing' zawsze; wybrany wchodzi przez CryptCardSummoned (nowe zdarzenie, z dowolnej pozycji krypty) + VampireEnteredPlay blood 0; krypta tasowana (nowe CryptShuffled, RNG). Test tests/cards/summon-history.test.ts 11/11. KROK 4 ZROBIONY: wampir spalony w MinionBurned zapisuje migawkę (CardInstance.burntVampire, bez przypięć); superior TEM może wybrać go ze stosu odrzuconych (capacity <= X, nie scarce, unikalny nie-duplikowany), wejście przez AshVampireSummoned + VampireEnteredPlay blood 0. Test tests/cards/summon-history.test.ts 15/15 (migawka z prawdziwego spalenia, wejście bez krwi, odrzucenie capacity>X i scarce). OTWARTE: ALLIES na vampira (brak operacji przypięcia sojusznika); wampiry spalone PRZED tą zmianą nie mają migawki i nie są oferowane; efekty beforeVampireEnteredPlay nie są wywoływane dla kart z krypty ani stosu; obecny actionStealth 1 w trybie podstawowym to stub, którego karta nie drukuje."
   },
   {
     "id": 101898,
@@ -11757,7 +11757,7 @@
     "id": 101960,
     "name": "Terror Frenzy",
     "status": "PARTIAL_FIX",
-    "evidence": "Basic działa przeciw minion, superior wyłącznie przeciw wampirowi; obsługiwane kierunki maneuver/press i zachowanie niezależnych ograniczeń po Tranquility Shield; tests/cards/frenzy-direction-audit.test.ts. Timing i inne źródła ograniczeń wymagają dalszej weryfikacji, jak również stare zapisy bez informacji o źródłach."
+    "evidence": "Basic działa przeciw minion, superior wyłącznie przeciw wampirowi; obsługiwane kierunki maneuver/press i zachowanie niezależnych ograniczeń po Tranquility Shield; tests/cards/frenzy-direction-audit.test.ts. Timing i inne źródła ograniczeń wymagają dalszej weryfikacji, jak również stare zapisy bez informacji o źródłach. Paczka 1: ANK 20180910-3 (koszt combat cards na końcu rundy) zweryfikowany testem batch1-frenzy-end-of-round.test.ts z kontrolą dodatnią (Telepathic Tracking superior, aus, bob z 1 blood nie płaci, z 5 płaci). Pozostaje: limit superior raz na walkę w starych zapisach i timing innych źródeł."
   },
   {
     "id": 101961,
@@ -12008,8 +12008,8 @@
   {
     "id": 102002,
     "name": "Toy Chest Test",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master ma wymóg Sabbat capacity >4, ale daje gainPool zamiast burn młodego świeżo wprowadzonego Sabbat z ograniczeniem contest; master-clan-requirements.test.ts bada wymóg, nie efekt. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz ręczny. Wymóg drukowany (JEDEN gotowy vampire, Sabbat i kapitał powyżej 4, kontrolowany przez zagrywającego) przez wspólną bramkę controllerMeetsRequirements. Cel: sabbicki vampire kapitału poniżej 4, który wszedł po końcu ostatniej tury zagrywającego (enteredPlayAt vs lastTurnEndedAt). Bez celu: zagranie dozwolone bez efektu. 'Contested' = niedostępne (kontestowana unikatowa karta leży zakryta poza grą). Testy: tests/cards/toy-chest-test.test.ts (5/5) i master-clan-requirements (wymóg). Ograniczenie: 'since last turn' testowane na ręcznie ustawionym lastTurnEndedAt."
   },
   {
     "id": 102003,
@@ -12212,8 +12212,8 @@
   {
     "id": 102036,
     "name": "Trophy: Retainers",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast Trophy z opcjonalnym employ retainera z library/hand w unlock; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zaimplementowano: mistrz Trophy na dowolnym vampire (scope any). W unlock phase kontrolera, gdy karta jest na vampire, kontroler może (opcjonalny wybór) zatrudnić retainera z ręki albo z biblioteki (typ 'Retainer' z rejestru). Wymagania sługi są sprawdzane (meetsRequirements na specu sługi względem bearer; Dog Pack wymaga Gangrel). Zatrudnienie przez playCardFromHand (nie akcja); wybór z biblioteki tasuje ją potem. Test: tests/cards/trophy-retainers.test.ts (6/6): sługa z ręki i z biblioteki, odmowa nic nie robi, brak sług = brak pytania, wymóg klanu (nie ta klan — brak oferty; Gangrel — oferta). NIE ZWERYFIKOWANO: koszt przy zatrudnieniu i tasowanie biblioteki nie są asercjami testu; brak testu end-to-end w fazie unlock."
   },
   {
     "id": 102037,
@@ -12230,8 +12230,8 @@
   {
     "id": 102039,
     "name": "Trophy: Wealth",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast Trophy z pięcioma counterami do zapłaty za equipment; Red List trophies nie są modelowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: mistrz dołączany do DOWOLNEGO vampire, startsWithCounters 5 i burnWhenCountersEmpty (spalenie po zużyciu ostatniego licznika); costSource for equipment, pays blood/pool. paymentSplits czyta też dołączone karty bearera (wcześniej tylko lokacje w seat.permanents). Test: tests/cards/trophy-wealth.test.ts (3/3: 5 liczników, płatność 2 pool z liczników i brak zmiany puli, spalenie po ostatnim liczniku)."
   },
   {
     "id": 102040,
@@ -12524,8 +12524,8 @@
   {
     "id": 102088,
     "name": "Vampiric Disease",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast disease counter z propagacją, zakazem gain blood z hunt i kosztem przy unlock. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaimplementowano: mistrz przypinany do dowolnego vampire (scope any); przy wejściu do gry kładzie jeden licznik choroby (jeden na vampire). Odblokowanie: licznik zabiera 1 krew przy faktycznym odblokowaniu w sweepie startu tury kontrolera (bez krwi spala licznik). Walka: w close range drugi vampire dostaje licznik przed strike'ami (spreadVampiricDisease przy starcie combat i przy każdej nowej rundzie close). Testy: tests/cards/vampiric-disease.test.ts (7/7: wejście, odblokowanie, hunt = 0, spread, non-close), tests/cards/vampiric-disease-unlock.test.ts (3/3, end to end przez start tury), tests/cards/vampiric-disease-combat.test.ts (2/2, end to end: blokada bleedu tworzy walkę, blocker dostaje licznik; bez choroby nie). Uwaga: reguła 'nie zdobywa krwi z hunt' sprawdzona jednostkowo (huntAmountFor), bez przebiegu polowania. Ruling: odblokowanie już odblokowanego vampire nie uruchamia efektu (ANK 20170227)."
   },
   {
     "id": 102089,
@@ -13395,7 +13395,7 @@
     "id": 102233,
     "name": "Revelation of the Serpent",
     "status": "PARTIAL_FIX",
-    "evidence": "Superior oferuje wybór corruption tylko po rozstrzygnięciu oust i okna Life Boon; po oust celu nie oferuje unlock [ANK 20220210], po uratowaniu celu umożliwia wybór również po save/load; Sleeping Mind blokuje unlock. Testy revelation-of-the-serpent.test.ts. Pozostałe efekty sukcesu, kolejność i interakcje wymagają weryfikacji."
+    "evidence": "Superior oferuje wybór corruption tylko po rozstrzygnięciu oust i okna Life Boon; po oust celu nie oferuje unlock [ANK 20220210], po uratowaniu celu umożliwia wybór również po save/load; Sleeping Mind blokuje unlock. Testy revelation-of-the-serpent.test.ts. Pozostałe efekty sukcesu, kolejność i interakcje wymagają weryfikacji. Paczka 1: ANK 20220210 (ousted przez bleed nie odblokowuje) pokryte przez revelation-of-the-serpent.test.ts; nie sprawdzono pozostałych efektów sukcesu i kolejności. Status bez zmian."
   },
   {
     "id": 102234,
@@ -13473,7 +13473,7 @@
     "id": 102246,
     "name": "Childe of the Revolution",
     "status": "PARTIAL_FIX",
-    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu."
+    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu. Paczka 1: pokryte przez token-vampire.test.ts (obowiązek hunt, uncontrolled, Anarch). Nie zweryfikowano LSJ 20041201-2 (wejście do crypt = spalenie) dla tokena. Status bez zmian."
   },
   {
     "id": 102247,
@@ -13569,7 +13569,7 @@
     "id": 102262,
     "name": "Touch of Valeren",
     "status": "PARTIAL_FIX",
-    "evidence": "Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte."
+    "evidence": "Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Nie zweryfikowano LSJ 20001114 dla tej ścieżki prevention oraz starych pakietów bez strikePhase. Status bez zmian."
   },
   {
     "id": 102263,
@@ -13592,8 +13592,8 @@
   {
     "id": 102266,
     "name": "Voracious Vermin",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior dodaje nieograniczoną dodatkową akcję strike i jedynie oferuje osobny burnEquipment: w engine.ts nadal dostępny jest hand strike oraz dowolny equipment zamiast obowiązkowego ranged strike: burn weapon. cheap-tail.test.ts bada tylko wybranie broni i brak celu, nie wyklucza innych strike/nie-broni. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaimplementowano zgodnie z tekstem: superior daje dodatkowy strike 'burn weapon'. Gdy u przeciwnika jest broń, dodatkowa sub-runda oferuje WYŁĄCZNIE spalenie broni (wymuszenie, forceAdditionalStrike 'burnEquipment', filtr weapon w gałęzi forced w chooseStrike); hand strike i dodge nie są dostępne. Bez broni wymuszony strike nie jest oferowany i sub-runda działa normalnie. Basic nie daje dodatkowego strike. Testy: tests/cards/cheap-tail.test.ts 27/27, w tym: wymuszenie (tylko strike:burnEquipment:gun), negatyw (equipment nie-broniowy nie jest celem), negatyw (brak broni: nie oferowane), negatyw (basic bez dodatkowego strike). Decyzja właściciela: wymuszony burn, zgodnie z tekstem karty. docs/cheap-tail-design.md §4 zaktualizowany."
   },
   {
     "id": 102267,
@@ -13922,8 +13922,8 @@
   {
     "id": 102321,
     "name": "Fever Pitch",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior rozdzielono na niezależne zagranie +1 bleed i zagranie attach po udanym bleed. after-resolution.test.ts gra tylko attach po zwykłym bleed, bez uprzedniego zagrania tej karty za +1 bleed; karta zagrana wcześniej nie otrzymuje opisanego warunkowego attach. Globalny exclusiveKey blokuje również zagranie za bleed gdy karta już leży na vampire. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Superior: jedno zagranie. Tryb bleed (+1 bleed) wstrzymuje kartę w akcji (heldAfterResolution, held w afterResolutionAttach). Po rozstrzygnięciu: przy udanym bleedzie na co najmniej 1 i bez drugiego egzemplarza karta trafia na stos odrzuconych, a gracz dostaje OPCJONALNE pytanie 'attachHeldAfterResolution' (you CAN). Tak: attachFromZone ze stosu odrzuconych na vampira (tagi z permanent.tags: Fever Pitch, feverPitch). Nie: pass, karta zostaje na stosie. Bez udanego bleedu lub przy drugim egzemplarzu: od razu na stos. Blokada exclusiveKey dotyczy tylko kart przypinających. Burn do nieudanego bloku: test przechodzi prawdziwą sekwencję bleed → blok → spalenie. Testy: tests/cards/after-resolution.test.ts 20/20 (przypięcie po akceptacji, odmowa, brak pytania bez udanego bleedu, drugi egzemplarz, burn do nieudanego bloku)."
   },
   {
     "id": 102322,
@@ -20493,7 +20493,7 @@
     "id": 201052,
     "name": "New Blood (ANY)",
     "status": "PARTIAL_FIX",
-    "evidence": "Dodano wybór dowolnego nazwanego circle albo circle jednego znanego wampira przed wejściem i contest, model identyfikacji circle oraz dobór crypt w swojej influence; wybór przeżywa save/load i jest usuwany po powrocie do uncontrolled. Wykorzystują go Unwholesome Bond i Camaraderie (także circle of one oraz save/load); pozostałe karty Sanguinus nie są jeszcze zintegrowane z modelem, a wszystkie sposoby wejścia i interakcje contest wymagają kontroli. tests/cards/new-blood-audit.test.ts, blood-brother-circle-audit.test.ts, unwholesome-bond-circle-audit.test.ts. Korekta poprzedniego ustalenia: późniejszy ruling Rules Director z 13.11.2021 pozwala New Blood dołączyć do circle of one innego wampira, wbrew starszej interpretacji z 2019: https://www.vekn.net/forum/rules-questions/79465-unwholesome-bond-angelo-circle-of-one-new-blood-and-circle."
+    "evidence": "Dodano wybór dowolnego nazwanego circle albo circle jednego znanego wampira przed wejściem i contest, model identyfikacji circle oraz dobór crypt w swojej influence; wybór przeżywa save/load i jest usuwany po powrocie do uncontrolled. Wykorzystują go Unwholesome Bond i Camaraderie (także circle of one oraz save/load); pozostałe karty Sanguinus nie są jeszcze zintegrowane z modelem, a wszystkie sposoby wejścia i interakcje contest wymagają kontroli. tests/cards/new-blood-audit.test.ts, blood-brother-circle-audit.test.ts, unwholesome-bond-circle-audit.test.ts. Korekta poprzedniego ustalenia: późniejszy ruling Rules Director z 13.11.2021 pozwala New Blood dołączyć do circle of one innego wampira, wbrew starszej interpretacji z 2019: https://www.vekn.net/forum/rules-questions/79465-unwholesome-bond-angelo-circle-of-one-new-blood-and-circle. Paczka 2: ANK 20211113 (dwa uncontrolled New Blood w różnych kręgach) nie ma osobnego testu w tej paczce. Status bez zmian."
   },
   {
     "id": 201053,
@@ -24261,7 +24261,7 @@
     "id": 201680,
     "name": "Opikun (G7)",
     "status": "PARTIAL_FIX",
-    "evidence": "Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; pozostałe interakcje nieweryfikowane. Aktualizacja: zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental; test z pakietami i starym zapisem w tests/cards/hecata-huldu-audit.test.ts. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń."
+    "evidence": "Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; pozostałe interakcje nieweryfikowane. Aktualizacja: zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental; test z pakietami i starym zapisem w tests/cards/hecata-huldu-audit.test.ts. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń. Paczka 2: ponownie sprawdzono tekst (independent, do 2 nieaggravated z jednego strike). Wciąż otwarte: okno kolejności obrażeń i stare zapisy bez pochodzenia; status bez zmian."
   },
   {
     "id": 201681,

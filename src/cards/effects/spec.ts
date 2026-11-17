@@ -1164,6 +1164,10 @@ export type EffectPrimitive =
       recordTarget?: boolean;
       /** "During your unlock phase, burn this card" (Shadow Cloak). */
       burnInUnlockPhase?: boolean;
+      /** Played as a bleed modifier and put on the vampire only after the
+       *  action resolves, if it succeeded (Fever Pitch superior). The card
+       *  is held on the action until then (`ActionFrame.heldAfterResolution`). */
+      held?: boolean;
     }
   /** "Search your library for an equipment card and equip this vampire
    *  with it (shuffle afterward)" (Magic of the Smith). Resolved at
@@ -1182,6 +1186,23 @@ export type EffectPrimitive =
    *  announcement (p. 25) and rides in the option id.
    *  docs/stun-design.md §6 */
   | { kind: "actionStun" }
+  /** "Cost: X blood", X chosen as the card is played (Summon History, LSJ
+   *  20100314). One play option per X the acting vampire can pay, and X is
+   *  paid AT PLAY — unlike Bloodlust's X, which is paid on success. The
+   *  value rides in the option as `xBlood`. */
+  | { kind: "variableBloodX" }
+  /** "Search your library (shuffle afterward) and/or ash heap for an ally,
+   *  retainer or equipment card costing X or fewer blood or pool and put
+   *  that card on this vampire" (Summon History). X is the card's own X,
+   *  read at resolution; the search is raised then, like searchEquip.
+   *  Put in play ignoring requirements (ruling, group G00110). Allies are
+   *  NOT built: there is no op that puts an ally on a vampire. */
+  | { kind: "searchCostXOnVampire"; cardTypes: PlayCostCardType[] }
+  /** "Search your crypt (shuffle afterward) … for a non-scarce vampire card
+   *  with capacity X or less and put that vampire in play (with no blood)"
+   *  (Summon History, superior). The ash heap half is NOT built: a burnt
+   *  vampire there keeps only its capacity, not its clan or disciplines. */
+  | { kind: "searchCryptForVampire" }
   /** "Equip this vampire with a melee weapon FROM YOUR HAND" and its
    *  siblings — bring a permanent card into play outside its own
    *  equip/employ/recruit action (docs/play-from-hand-design.md). */
@@ -1393,6 +1414,9 @@ export type EffectPrimitive =
        *  nothing else grants a burn-weapon strike, and the card's whole
        *  superior mode would be inert. docs/cheap-tail-design.md §4 */
       burnEquipment?: boolean;
+      /** With `burnEquipment`: the granted strike may only burn a WEAPON
+       *  ("…: burn weapon", Voracious Vermin superior). */
+      burnWeaponOnly?: boolean;
       /** "1 additional strike: DODGE" (Wind Dance superior) — the extra
        *  sub-round's strike is FORCED, not merely offered. Unlike
        *  `burnEquipment`, which adds an option nothing else would grant,
@@ -2971,7 +2995,8 @@ export interface CardSpec {
      *  player (p. 16). */
     attach?: {
       /** Whose minion: your own, your prey's, or any Methuselah's. */
-      scope: "own" | "prey" | "any";
+      /** "…controlled by another Methuselah" (Legacy of Caine): any seat but the playing one. */
+      scope: "own" | "prey" | "any" | "other";
       kind?: "vampire" | "ally";
       clan?: string;
       sect?: Sect;
@@ -2983,6 +3008,8 @@ export interface CardSpec {
       path?: string;
       /** "…with capacity 8 or more" (Regent). */
       minCapacity?: number;
+      /** "…a vampire with capacity below 5" (The Damned) is `maxCapacity: 4`. */
+      maxCapacity?: number;
       /** "Cannot be put on a vampire with superior Celerity [CEL]" — the
        *  Discipline master cards have nothing to give a vampire already at
        *  superior in that Discipline. */
@@ -4010,6 +4037,9 @@ export interface CardSpec {
       requiresDiscipline?: string[];
       /** "…requiring the Path of Death and the Soul" (Sakura). */
       requiresPath?: string;
+      /** "…a successful action costing blood" (Cavalier): the card played
+       *  has a printed blood cost. */
+      requiresBloodCost?: boolean;
     };
     /** "\<This vampire\> can search your library for a \<type\> card,
      *  reveal it and move it to your hand as a +N stealth action"

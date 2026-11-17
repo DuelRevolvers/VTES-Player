@@ -701,6 +701,9 @@ export function costSourceAvailable(entry: PermanentInPlay): number {
 }
 
 export function huntAmountFor(state: GameState, minion: MinionState): number {
+  // "A vampire with a disease counter cannot gain blood by hunting"
+  // (Vampiric Disease, 102088).
+  if ((minion.counters?.["disease"] ?? 0) > 0) return 0;
   // "…gain enough blood from the blood bank to reach FULL CAPACITY" (Festivo
   // dello Estinto). It answers the same question with a different shape, so
   // it is folded HERE rather than bolted onto the hunt payout: every reader
@@ -750,6 +753,15 @@ export function huntingRestricted(state: GameState): boolean {
  * turn, as an action granted by a card in play [RBK]. §5
  */
 export function stealHuntTargets(state: GameState, m: MinionState): MinionState[] {
+  // Legacy of Caine: the bearer's own steal hunt, at any other vampire, with
+  // no mandatory hunt and no Restricted Vitae needed (once per turn).
+  if (m.attached.some((p) => p.statics.legacyStealHunt === true)) {
+    if (!canRepeatAction(state, m, "stealHunt")) return [];
+    return state.seats
+      .filter((s) => s.id !== m.controller && !s.ousted)
+      .flatMap((s) => s.minions)
+      .filter((v) => v.kind === "vampire" && !untargetableBy(v, m.controller, m));
+  }
   if (!huntingRestricted(state) || !mustHunt(m)) return [];
   if (!canRepeatAction(state, m, "stealHunt")) return [];
   return state.seats

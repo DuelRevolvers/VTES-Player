@@ -73,8 +73,10 @@ describe("the effect summary", () => {
     const tags = Object.values(EFFECT_TAGS);
     expect(tags.length).toBeGreaterThan(120);
     // `null` is "carries nothing a policy can weigh", used deliberately
-    // and sparingly — not a backlog of unclassified primitives.
-    expect(tags.filter((t) => t === null).length).toBeLessThan(10);
+    // and sparingly — not a backlog of unclassified primitives. The eleventh
+    // is `variableBloodX` (Summon History): its blood is chosen per play
+    // option, and no tag means "blood spent"; `bloodGain` would invert it.
+    expect(tags.filter((t) => t === null).length).toBeLessThan(11);
   });
 });
 

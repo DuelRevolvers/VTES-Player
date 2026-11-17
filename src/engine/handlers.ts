@@ -352,7 +352,10 @@ export interface EngineOps {
    *  superior) — grants the SPECIFIED strike that the extra sub-round
    *  will offer, alongside the extra strike itself.
    *  docs/cheap-tail-design.md §4 */
-  grantBurnEquipmentStrike(play: CardPlayFrame): void;
+  grantBurnEquipmentStrike(play: CardPlayFrame, weaponOnly?: boolean): void;
+  /** "…they get an optional additional strike (limited)" — as
+   *  `grantAdditionalStrikeTo`, but the striker may decline it. */
+  grantOptionalAdditionalStrikeTo(minion: MinionId): boolean;
   /** "1 additional strike: DODGE" (Wind Dance superior) — the additional
    *  sub-round's strike is forced to this kind, not merely offered.
    *  docs/ledger-closeout.md §3 */
@@ -585,6 +588,9 @@ export interface EngineOps {
    *  mark the hunt successful and fire what keys to that
    *  [LSJ 20050720-2]. docs/hunt-success-design.md §1 */
   payHunt(af: ActionFrame, printed: number): void;
+  /** Hold a card played as a bleed modifier until the action resolves
+   *  (Fever Pitch superior). See `ActionFrame.heldAfterResolution`. */
+  holdAfterResolution(entry: NonNullable<ActionFrame["heldAfterResolution"]>[number]): void;
   /** Mark a card-in-play's "once each action" ability as used (Under
    *  Siege) — action-scoped. */
   markInPlayAbilityUsed(cardId: CardInstanceId): void;
@@ -1249,6 +1255,9 @@ export interface CardHandler {
    *  each answer into `params.chosen`, and plays the card once none
    *  remain. Null when this play needs no picks.
    *  docs/bearer-rush-grants-design.md §5 */
+  /** "Cost: X blood" paid as the card is played, not on success
+   *  (Summon History). Bloodlust's X is the success-paid kind. */
+  xBloodAtPlay?: boolean;
   prePlayPicks?(
     option: Extract<LegalOption, { kind: "playCard" }>,
     state: GameState,
@@ -1781,6 +1790,23 @@ export interface CardHandler {
        *  lookup (docs/path-cards-design.md §5). */
       actionKind: ActionKind;
     },
+    ops: EngineOps,
+  ): void;
+  /** The action that PLAYED this card was blocked, so the card never
+   *  entered play (Cry Wolf: "If the action to recruit this ally is
+   *  blocked, the acting anarch goes to torpor"). Fired on the handler of
+   *  the card being played, with the acting minion. */
+  /** A minion of some seat lost pool — a payment or a burn, both of which
+   *  are a `PoolBurned` (Conniver: "If your prey loses pool when it is
+   *  neither your turn nor your prey's turn …"). */
+  onPoolLost?(
+    entry: PermanentInPlay,
+    owner: { seat: SeatId; minion: MinionId | null },
+    info: { seat: SeatId; amount: number },
+    ops: EngineOps,
+  ): void;
+  onActionBlockedAsPlayed?(
+    info: { acting: MinionId; actingSeat: SeatId },
     ops: EngineOps,
   ): void;
   /** A combat has ended (Monster). The `CombatEnded` event carries only
