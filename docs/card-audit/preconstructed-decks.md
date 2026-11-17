@@ -7,7 +7,7 @@ To zestawienie aktualnych wpisów audytu, nie ponowna weryfikacja wszystkich kla
 ## Podsumowanie
 
 - Unikalne karty: **727**; z wpisem w audycie: **727**; bez wpisu: **0**. Brakujące ID w registry: **0**; karty bez flagi supported: **0**.
-- Otwarte ustalenia dotyczą **59 różnych kart**: CODE_DISCREPANCY 4, PARTIAL_FIX 53, CONFIRMED_BUG 1, UNRESOLVED 1. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
+- Otwarte ustalenia dotyczą **59 różnych kart**: CODE_DISCREPANCY 3, PARTIAL_FIX 54, CONFIRMED_BUG 1, UNRESOLVED 1. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
 - **29/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
 - REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **78**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
 
@@ -237,9 +237,9 @@ Występuje w **2** taliach. Osobny obowiązek hunt trwa do ogłoszenia hunt lub 
 Występuje w **2** taliach. Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Nie zweryfikowano LSJ 20001114 dla tej ścieżki prevention oraz starych pakietów bez strikePhase. Status bez zmian.
 
 <a id="karta-102266"></a>
-### Voracious Vermin (102266) — CODE_DISCREPANCY
+### Voracious Vermin (102266) — PARTIAL_FIX
 
-Występuje w **1** taliach. Superior dodaje nieograniczoną dodatkową akcję strike i jedynie oferuje osobny burnEquipment: w engine.ts nadal dostępny jest hand strike oraz dowolny equipment zamiast obowiązkowego ranged strike: burn weapon. cheap-tail.test.ts bada tylko wybranie broni i brak celu, nie wyklucza innych strike/nie-broni. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego.
+Występuje w **1** taliach. Naprawiono część: superior daje dodatkowy strike jako SPECYFIKOWANY 'burn weapon' (granted burnEquipment, grantBurnEquipmentStrike), a opcja burn celuje wyłącznie w broń (tag weapon, weaponOnly w grancie) — wcześniej każdy equipment wroga był celem. Test: tests/cards/cheap-tail.test.ts (26/26), w tym negatywne: sam nie-broniowy equipment nie daje opcji burn. NIE ZROBIONO: w sub-rundzie nadal jest dostępny hand strike i dodge; karta mówi 'additional ranged strike: burn weapon', więc to odstępstwo od tekstu, świadome według docs/cheap-tail-design.md §4 (granted, nie forced). Do decyzji: czy wymusić burn-weapon, gdy broń istnieje.
 
 <a id="karta-102283"></a>
 ### Touch of Oblivion (102283) — PARTIAL_FIX
