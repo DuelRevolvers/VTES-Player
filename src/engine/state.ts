@@ -328,6 +328,9 @@ export interface MinionState {
   /** "None of your other minions attempted any actions this turn" (Loner).
    *  Set when an action is announced by this minion; reset at its turn start. */
   attemptedActionThisTurn?: boolean;
+  /** The minion's action was blocked since its controller's last unlock phase
+   *  (Curmudgeon's "blocked this turn"). */
+  blockedSinceUnlock?: boolean;
   /** "…successfully performed an action this turn" (Loner). */
   successfulActionThisTurn?: boolean;
   /** One political action per vampire per turn (p. 24). */

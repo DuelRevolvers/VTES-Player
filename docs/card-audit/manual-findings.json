@@ -2888,8 +2888,8 @@
   {
     "id": 100482,
     "name": "Curmudgeon",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Brak archetype/trifle, wyboru miniona i warunkowego lock dla blood; zamiast tego gainPool. Porównano src/cards/registry.json, src/cards/effects/cards.ts i odnośne handlery. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zaimplementowano: archetyp na własnym vampire (spec, exclusiveKey archetype, tag trifle/archetype). W unlock phase PRZECIWNIKA-PREY (onAnyUnlock, unlockingSeat = prey kontrolera) kontroler dostaje opcjonalny wybór: tak = zablokowanie karty i +1 krew z banku dla bearer. Warunek 'zablokowany w tej turze': nowe pole blockedSinceUnlock na minionie, ustawiane gdy akcja minionu zostaje zablokowana (BlockSucceeded, engine.ts przy actor), czyszczone w sweepie unlock phase kontrolera minionu. Test: tests/cards/curmudgeon.test.ts (5/5): pyta przy zablokowanym minionie prey; brak pytania bez bloku; brak pytania w cudzym unlock; tak blokuje i daje krew; blok minionu innego seat nie liczy się. NIE ZROBIONO / DO POTWIERDZENIA: (1) 'this turn' odczytane jako 'od ostatniego unlock phase kontrolera minionu' — brak rulingu w migawce, interpretacja; (2) wybór konkretnego minionu prey nie jest pytaniem osobnym (pierwszy zablokowany); (3) blok nie przetestowany end-to-end przez grę."
   },
   {
     "id": 100483,

@@ -2781,6 +2781,7 @@ export class VtesEngine implements EngineOps {
           m.bledThisTurn = false;
           m.calledPoliticalThisTurn = false;
           m.attemptedActionThisTurn = false;
+          m.blockedSinceUnlock = false;
           m.successfulActionThisTurn = false;
           m.huntedThisPhase = false;
           m.usedHuntingGroundThisTurn = false;
@@ -5336,6 +5337,7 @@ export class VtesEngine implements EngineOps {
       // two consequences p. 25 names, which is exactly where the card
       // puts it (docs/action-attachments-design.md §6).
       const actor = findMinion(this.state, af.acting);
+      if (actor) actor.blockedSinceUnlock = true;
       if (actor) {
         for (const p of actor.attached) {
           const toll = p.statics.blockedToll;

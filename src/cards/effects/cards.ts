@@ -27557,15 +27557,25 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Curmudgeon [100482] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
+    // Curmudgeon [100482] — "Master: archetype. Trifle. Put this card on a
+    // vampire you control. During your prey's unlock phase, you may choose a
+    // minion controlled by your prey. If that minion is blocked this turn, you
+    // may lock this card to move 1 blood from the blood bank to this vampire.
+    // A vampire can have only one archetype." Handler: `curmudgeon`.
     krcgId: 100482,
     name: "Curmudgeon",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["archetype"],
+      attach: { scope: "own", kind: "vampire" },
+      exclusiveKey: "archetype",
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Daemonic Possession [100486] — fala 49 wierna (300) pełna zgodność bez wydmuszek
@@ -46753,6 +46763,65 @@ const loner: CardHandler = {
  * gain automatically rather than asking. A question for the controller would
  * be the faithful version; it is not built here.
  */
+const CURMUDGEON_LOCK = "curmudgeonLock";
+
+/**
+ * Curmudgeon (100482): during the PREY's unlock phase, if a minion the prey
+ * controls was blocked this turn, the controller may lock the card to move 1
+ * blood from the bank to the bearer.
+ *
+ * Read: "blocked this turn" = the minion's action was blocked since its
+ * controller's last unlock phase (`blockedSinceUnlock`, set at BlockSucceeded,
+ * cleared in the unlock sweep). The rulings snapshot has no entry for this
+ * card, so the reading is an interpretation (recorded in the audit).
+ */
+const curmudgeon: CardHandler = {
+  ...compileSpec(specByName("Curmudgeon")),
+  onAnyUnlock(entry, owner, unlockingSeat, ops) {
+    if (owner.minion === null || entry.locked) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    if (!bearer || unlockingSeat !== preyOf(ops.state, bearer.controller)) return;
+    const blocked = ops.state.seats
+      .flatMap((s) => s.minions)
+      .find((m) => m.controller === unlockingSeat && m.blockedSinceUnlock);
+    if (!blocked) return;
+    ops.raiseChoice({
+      seat: bearer.controller,
+      cardName: "Curmudgeon",
+      cardId: entry.card.id,
+      key: CURMUDGEON_LOCK,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== CURMUDGEON_LOCK) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    return [
+      {
+        id: `choice:Curmudgeon:${frame.cardId}:${CURMUDGEON_LOCK}:yes`,
+        kind: "answerChoice" as const,
+        label: `Curmudgeon: lock this card to move 1 blood to ${bearer.name}`,
+        params: {},
+      },
+    ];
+  },
+  applyChoice(frame, _choice, ops) {
+    if (frame.key !== CURMUDGEON_LOCK) return;
+    const bearer = frame.params["minion"];
+    if (!bearer || !findMinion(ops.state, bearer)) return;
+    // Re-read at the answer: the card may have locked or left in between.
+    const card = ops.state.seats
+      .flatMap((s) => s.minions)
+      .flatMap((m) => m.attached)
+      .find((p) => p.card.id === frame.cardId);
+    if (!card || card.locked) return;
+    ops.lockPermanent(frame.cardId);
+    ops.emit({ type: "BloodGained", minion: bearer, amount: 1 });
+  },
+};
+
 const CONNIVER_LOCK = "conniverLock";
 
 const conniver: CardHandler = {
@@ -48168,6 +48237,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     toyChestTest,
     chanjelinWard,
     vampiricDisease,
+    curmudgeon,
     vessel,
     magnum44,
     doubleDeuce,
