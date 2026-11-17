@@ -48,6 +48,9 @@ export interface InterceptBurnGrant {
 export interface GrantedStrike {
   kind: StrikeKind;
   amount?: number;
+  /** "…burn WEAPON" (Voracious Vermin): a burn-equipment strike may only
+   *  name a weapon. Heroic Might's "burn equipment" leaves it unset. */
+  weaponOnly?: boolean;
   /** "THIS ROUND, this vampire can strike…" — cleared at the round
    *  boundary, unlike a once-per-combat grant. */
   roundOnly?: boolean;

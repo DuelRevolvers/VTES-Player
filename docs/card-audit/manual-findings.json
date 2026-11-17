@@ -13592,8 +13592,8 @@
   {
     "id": 102266,
     "name": "Voracious Vermin",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior dodaje nieograniczoną dodatkową akcję strike i jedynie oferuje osobny burnEquipment: w engine.ts nadal dostępny jest hand strike oraz dowolny equipment zamiast obowiązkowego ranged strike: burn weapon. cheap-tail.test.ts bada tylko wybranie broni i brak celu, nie wyklucza innych strike/nie-broni. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono część: superior daje dodatkowy strike jako SPECYFIKOWANY 'burn weapon' (granted burnEquipment, grantBurnEquipmentStrike), a opcja burn celuje wyłącznie w broń (tag weapon, weaponOnly w grancie) — wcześniej każdy equipment wroga był celem. Test: tests/cards/cheap-tail.test.ts (26/26), w tym negatywne: sam nie-broniowy equipment nie daje opcji burn. NIE ZROBIONO: w sub-rundzie nadal jest dostępny hand strike i dodge; karta mówi 'additional ranged strike: burn weapon', więc to odstępstwo od tekstu, świadome według docs/cheap-tail-design.md §4 (granted, nie forced). Do decyzji: czy wymusić burn-weapon, gdy broń istnieje."
   },
   {
     "id": 102267,

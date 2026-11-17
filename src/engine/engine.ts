@@ -6614,8 +6614,11 @@ export class VtesEngine implements EngineOps {
 
   /** "…: burn weapon" — a SPECIFIED strike offered in `chooseStrike`,
    *  the `grantedCombatEnds` shape. docs/cheap-tail-design.md §4 */
-  grantBurnEquipmentStrike(play: CardPlayFrame): void {
-    this.grantStrikeTo(this.sideOf(this.requireCombat(), play.minion), { kind: "burnEquipment" });
+  grantBurnEquipmentStrike(play: CardPlayFrame, weaponOnly = false): void {
+    this.grantStrikeTo(this.sideOf(this.requireCombat(), play.minion), {
+      kind: "burnEquipment",
+      ...(weaponOnly ? { weaponOnly: true } : {}),
+    });
   }
 
   /** "1 additional strike: dodge" (Wind Dance superior) — the additional
@@ -12574,6 +12577,7 @@ export class VtesEngine implements EngineOps {
               const foe = findMinion(this.state, side === "acting" ? cf.opposing : cf.acting);
               for (const p of foe?.attached ?? []) {
                 if (!p.tags.includes("equipment")) continue;
+                if (g.weaponOnly && !p.tags.includes("weapon")) continue;
                 options.push({
                   id: `strike:burnEquipment:${p.card.id}`,
                   kind: "chooseStrike",

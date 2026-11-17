@@ -1393,6 +1393,9 @@ export type EffectPrimitive =
        *  nothing else grants a burn-weapon strike, and the card's whole
        *  superior mode would be inert. docs/cheap-tail-design.md §4 */
       burnEquipment?: boolean;
+      /** With `burnEquipment`: the granted strike may only burn a WEAPON
+       *  ("…: burn weapon", Voracious Vermin superior). */
+      burnWeaponOnly?: boolean;
       /** "1 additional strike: DODGE" (Wind Dance superior) — the extra
        *  sub-round's strike is FORCED, not merely offered. Unlike
        *  `burnEquipment`, which adds an option nothing else would grant,

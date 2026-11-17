@@ -352,7 +352,7 @@ export interface EngineOps {
    *  superior) — grants the SPECIFIED strike that the extra sub-round
    *  will offer, alongside the extra strike itself.
    *  docs/cheap-tail-design.md §4 */
-  grantBurnEquipmentStrike(play: CardPlayFrame): void;
+  grantBurnEquipmentStrike(play: CardPlayFrame, weaponOnly?: boolean): void;
   /** "1 additional strike: DODGE" (Wind Dance superior) — the additional
    *  sub-round's strike is forced to this kind, not merely offered.
    *  docs/ledger-closeout.md §3 */

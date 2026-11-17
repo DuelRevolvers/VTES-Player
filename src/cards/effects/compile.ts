@@ -4798,7 +4798,7 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // "…: burn weapon" — the extra strike is specified, offered
             // in the chooseStrike step the way a granted combat-ends
             // strike is (§4).
-            if (e.burnEquipment) ops.grantBurnEquipmentStrike(play);
+            if (e.burnEquipment) ops.grantBurnEquipmentStrike(play, e.burnWeaponOnly === true);
             // "…: dodge" — the extra strike is not a free choice at all.
             if (e.forcedDodge) ops.forceAdditionalStrike(play, "dodge");
             break;

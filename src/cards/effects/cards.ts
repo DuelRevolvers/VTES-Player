@@ -6796,7 +6796,7 @@ export const cardSpecs: CardSpec[] = [
         discipline: "ani",
         effects: [
           { kind: "strikeDodge" },
-          { kind: "additionalStrike", count: 1, limited: false, burnEquipment: true },
+          { kind: "additionalStrike", count: 1, limited: false, burnEquipment: true, burnWeaponOnly: true },
         ],
       },
     ],

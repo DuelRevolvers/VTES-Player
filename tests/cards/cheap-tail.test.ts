@@ -492,7 +492,7 @@ describe("Voracious Vermin (102266)", () => {
     seatOf(state, "Alice").hand.push({ id: "vv", name: "Voracious Vermin" });
     if (equipBob) {
       find(state, "M").attached.push(
-        entry("gun", ".44 Magnum", { tags: ["equipment"] }),
+        entry("gun", ".44 Magnum", { tags: ["equipment", "weapon"] }),
       );
     }
     const engine = new VtesEngine(state, testRegistry);
@@ -519,6 +519,32 @@ describe("Voracious Vermin (102266)", () => {
       runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
     }
     expect(find(state, "M").attached.map((p) => p.card.name)).not.toContain(".44 Magnum");
+  });
+
+  it("NEGATIVE SPACE: 'burn WEAPON' — non-weapon equipment is never a burn target", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { disciplines: { ani: "superior" }, blood: 4 });
+    seatOf(state, "Alice").hand.push({ id: "vv", name: "Voracious Vermin" });
+    // Bob's only equipment is NOT a weapon.
+    find(state, "M").attached.push(entry("armour", "Kevlar Vest", { tags: ["equipment"] }));
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", "bleed:V1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "block:M"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    expect(walkTo(engine, "play:Voracious Vermin:superior")).toBe(true);
+    const play = optionIds(engine).find((o) => o.startsWith("play:Voracious Vermin:superior"))!;
+    runTrace(engine, [["Alice", play]]);
+    let seen = false;
+    for (let i = 0; i < 30; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.options.some((o) => o.id.startsWith("strike:burnEquipment"))) seen = true;
+      runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
+    }
+    expect(seen).toBe(false);
   });
 
   it("NEGATIVE SPACE: with nothing to burn, the granted strike is not offered", () => {
