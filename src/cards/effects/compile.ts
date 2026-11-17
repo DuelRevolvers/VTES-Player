@@ -2346,6 +2346,17 @@ function compileActionCard(spec: CardSpec): CardHandler {
             });
             break;
           }
+          case "searchCryptForVampire": {
+            ops.raiseChoice({
+              seat: af.actingSeat,
+              cardName: spec.name,
+              cardId: af.card?.instance.id ?? "",
+              key: "summonCryptX",
+              params: { minion: af.acting, x: String(Number(af.card?.params["xBlood"] ?? "0")) },
+              optional: false,
+            });
+            break;
+          }
           case "searchEquip": {
             // p. 48: "You do NOT search your library until the action is
             // successful", and the card is never announced — so this is
@@ -12412,6 +12423,46 @@ export function compileSpec(spec: CardSpec): CardHandler {
         // to owe — the moment a zone here is a LIBRARY, one is owed once,
         // when the sequence ends, and owed even if nothing was found (p. 48).
         burnEmptyStore(st, frame.cardId, ops);
+      },
+    };
+  }
+  // Summon History (superior): a non-scarce crypt vampire of capacity X or
+  // less, put in play with no blood. The crypt is shuffled afterwards.
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "searchCryptForVampire"))) {
+    choiceByKey["summonCryptX"] = {
+      options: (frame, state) => {
+        const out: LegalOption[] = [];
+        const seat = getSeat(state, frame.seat);
+        const x = Number(frame.params["x"] ?? "0");
+        for (const c of seat.crypt) {
+          if (c.kind !== "vampire" || c.scarce === true) continue;
+          if (capacityOf(c) > x) continue;
+          // Crypt vampires have no handler, so "controls a copy" is read off
+          // the minions in play by name (p. 17: crypt cards are unique).
+          if (c.nonUnique !== true && seat.minions.some((m) => m.name === c.name)) continue;
+          out.push({
+            id: `choice:${spec.name}:${frame.cardId}:summonCryptX:${c.id}`,
+            kind: "answerChoice" as const,
+            label: `Put ${c.name} (crypt) in play with no blood`,
+            params: { card: c.id },
+          });
+        }
+        // "Find nothing" is always legal (p. 48).
+        out.push({
+          id: `choice:${spec.name}:${frame.cardId}:summonCryptX:none`,
+          kind: "answerChoice" as const,
+          label: "Find nothing",
+          params: { card: "none" },
+        });
+        return out;
+      },
+      apply: (frame, choice, ops) => {
+        const card = choice.params["card"];
+        if (card && card !== "none" && frame.seat) {
+          ops.emit({ type: "CryptCardSummoned", seat: frame.seat, minion: card });
+          ops.emit({ type: "VampireEnteredPlay", seat: frame.seat, minion: card, blood: 0 });
+        }
+        ops.emit({ type: "CryptShuffled", seat: frame.seat });
       },
     };
   }

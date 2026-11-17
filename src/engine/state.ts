@@ -2129,6 +2129,14 @@ export type GameEvent =
   | { type: "PoolMovedToUncontrolled"; seat: SeatId; minion: MinionId }
   | { type: "CounterMovedToPool"; seat: SeatId; minion: MinionId }
   | { type: "CryptCardDrawn"; seat: SeatId; minion: MinionId }
+  /** A chosen crypt vampire leaves the crypt for the uncontrolled region
+   *  (not the top card, unlike `CryptCardDrawn`). Summon History's
+   *  "search your crypt … and put that vampire in play" goes through it,
+   *  then `VampireEnteredPlay` with no blood. */
+  | { type: "CryptCardSummoned"; seat: SeatId; minion: MinionId }
+  /** "…you must shuffle it afterwards" (p. 14) — the crypt twin of
+   *  `LibraryShuffled`, through the seeded RNG. */
+  | { type: "CryptShuffled"; seat: SeatId }
   /** "…otherwise, move it to the BOTTOM of your crypt" (Family
    *  Gathering) — the crypt twin of `CardBuried`. The crypt is drawn from
    *  the FRONT (`shift`), so the bottom is `push`.

@@ -919,6 +919,24 @@ export class VtesEngine implements EngineOps {
         seat.uncontrolled.push({ card, counters: 0 });
         break;
       }
+      case "CryptCardSummoned": {
+        const seat = getSeat(this.state, ev.seat);
+        const i = seat.crypt.findIndex((c) => c.id === ev.minion);
+        if (i < 0) throw new Error(`no crypt vampire ${ev.minion}`);
+        const [card] = seat.crypt.splice(i, 1);
+        if (card) seat.uncontrolled.push({ card, counters: 0 });
+        break;
+      }
+      case "CryptShuffled": {
+        const cr = getSeat(this.state, ev.seat).crypt;
+        for (let i = cr.length - 1; i > 0; i--) {
+          const j = rngInt(this.state, i + 1);
+          const a = cr[i]!;
+          cr[i] = cr[j]!;
+          cr[j] = a;
+        }
+        break;
+      }
       case "UncontrolledRemovedFromGame": {
         const seat = getSeat(this.state, ev.seat);
         seat.uncontrolled = seat.uncontrolled.filter((u) => u.card.id !== ev.minion);

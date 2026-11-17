@@ -129,3 +129,75 @@ describe("Summon History (101897): search for retainers and equipment, cost X or
     expect(state.eventLog.some((e) => e.type === "LibraryShuffled" && e.seat === "Alice")).toBe(true);
   });
 });
+
+describe("Summon History (101897): superior, a crypt vampire of capacity X or less", () => {
+  function cryptGame(x: number) {
+    const state = threeSeatGame();
+    const alice = state.seats.find((s) => s.id === "Alice")!;
+    const v1 = makeMinion("V1", "Alice");
+    Object.assign(v1, { blood: x, disciplines: { tem: "superior" } });
+    alice.minions.push(v1);
+    alice.hand.push({ id: "sh", name: "Summon History" });
+    alice.library.push({ id: "filler", name: "Conditioning" });
+    const vamp = (id: string, name: string, extra: Partial<MinionState>) =>
+      makeMinion(id, "Alice", { name, kind: "vampire", blood: 0, ...extra });
+    alice.crypt.push(
+      vamp("C2", "Crypt Two", { capacity: 2 }),
+      vamp("C3", "Crypt Three", { capacity: 3 }),
+      vamp("CS", "Crypt Scarce", { capacity: 1, scarce: true }),
+    );
+    return { state, engine: new VtesEngine(state, testRegistry) };
+  }
+
+  function toCryptSearch(engine: VtesEngine, x: number): void {
+    const option = engine.decision()!.options.find(
+      (o) => o.kind === "playCard" && o.name === "Summon History" && o.mode === "superior" && o.params["xBlood"] === String(x),
+    )!;
+    engine.choose(option.id);
+    for (let i = 0; i < 60; i++) {
+      const dp = engine.decision();
+      if (!dp || dp.options.some((o) => o.id.includes(":summonCryptX:"))) return;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+  }
+
+  const cryptIds = (engine: VtesEngine): string[] =>
+    (engine.decision()?.options ?? []).map((o) => o.id).filter((id) => id.includes(":summonCryptX:"));
+
+  it("offers only non-scarce crypt vampires of capacity X or less, plus 'find nothing'", () => {
+    const { engine } = cryptGame(2);
+    toCryptSearch(engine, 2);
+    const ids = cryptIds(engine);
+    expect(ids).toContain("choice:Summon History:sh:summonCryptX:C2");
+    expect(ids).toContain("choice:Summon History:sh:summonCryptX:none");
+    expect(ids.some((i) => i.endsWith(":C3"))).toBe(false);
+    expect(ids.some((i) => i.endsWith(":CS"))).toBe(false);
+  });
+
+  it("puts the chosen vampire in play with NO blood and shuffles the crypt", () => {
+    const { state, engine } = cryptGame(2);
+    toCryptSearch(engine, 2);
+    runTrace(engine, [["Alice", "choice:Summon History:sh:summonCryptX:C2"]]);
+    const alice = state.seats[0]!;
+    expect(alice.crypt.some((c) => c.id === "C2")).toBe(false);
+    const summoned = alice.minions.find((m) => m.id === "C2");
+    expect(summoned).toBeDefined();
+    expect(summoned!.blood).toBe(0);
+    expect(state.eventLog.some((e) => e.type === "CryptShuffled" && e.seat === "Alice")).toBe(true);
+  });
+
+  it("'find nothing' leaves the crypt alone, but still shuffles it", () => {
+    const { state, engine } = cryptGame(2);
+    toCryptSearch(engine, 2);
+    runTrace(engine, [["Alice", "choice:Summon History:sh:summonCryptX:none"]]);
+    expect(state.seats[0]!.crypt.some((c) => c.id === "C2")).toBe(true);
+    expect(state.eventLog.some((e) => e.type === "CryptShuffled" && e.seat === "Alice")).toBe(true);
+  });
+
+  it("a unique vampire the searcher already controls is not offered", () => {
+    const { state, engine } = cryptGame(2);
+    state.seats[0]!.minions.push(makeMinion("twin", "Alice", { name: "Crypt Two", kind: "vampire" }));
+    toCryptSearch(engine, 2);
+    expect(cryptIds(engine).some((i) => i.endsWith(":C2"))).toBe(false);
+  });
+});

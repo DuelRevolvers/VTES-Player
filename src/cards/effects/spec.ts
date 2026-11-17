@@ -1198,6 +1198,11 @@ export type EffectPrimitive =
    *  Put in play ignoring requirements (ruling, group G00110). Allies are
    *  NOT built: there is no op that puts an ally on a vampire. */
   | { kind: "searchCostXOnVampire"; cardTypes: PlayCostCardType[] }
+  /** "Search your crypt (shuffle afterward) … for a non-scarce vampire card
+   *  with capacity X or less and put that vampire in play (with no blood)"
+   *  (Summon History, superior). The ash heap half is NOT built: a burnt
+   *  vampire there keeps only its capacity, not its clan or disciplines. */
+  | { kind: "searchCryptForVampire" }
   /** "Equip this vampire with a melee weapon FROM YOUR HAND" and its
    *  siblings — bring a permanent card into play outside its own
    *  equip/employ/recruit action (docs/play-from-hand-design.md). */
