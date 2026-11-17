@@ -1164,6 +1164,10 @@ export type EffectPrimitive =
       recordTarget?: boolean;
       /** "During your unlock phase, burn this card" (Shadow Cloak). */
       burnInUnlockPhase?: boolean;
+      /** Played as a bleed modifier and put on the vampire only after the
+       *  action resolves, if it succeeded (Fever Pitch superior). The card
+       *  is held on the action until then (`ActionFrame.heldAfterResolution`). */
+      held?: boolean;
     }
   /** "Search your library for an equipment card and equip this vampire
    *  with it (shuffle afterward)" (Magic of the Smith). Resolved at

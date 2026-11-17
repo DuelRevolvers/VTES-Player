@@ -13922,8 +13922,8 @@
   {
     "id": 102321,
     "name": "Fever Pitch",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Superior rozdzielono na niezależne zagranie +1 bleed i zagranie attach po udanym bleed. after-resolution.test.ts gra tylko attach po zwykłym bleed, bez uprzedniego zagrania tej karty za +1 bleed; karta zagrana wcześniej nie otrzymuje opisanego warunkowego attach. Globalny exclusiveKey blokuje również zagranie za bleed gdy karta już leży na vampire. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "status": "PARTIAL_FIX",
+    "evidence": "Przebudowano superior: jedno zagranie. Tryb bleed (+1 bleed) wstrzymuje kartę w akcji (heldAfterResolution, held w afterResolutionAttach); po rozstrzygnięciu akcji jest przypinana na aktywnym vampire tylko przy udanym bleedzie na co najmniej 1 i bez drugiego egzemplarza, w przeciwnym razie trafia na stos odrzuconych. Usunięto osobny tryb 'attach' z ręki, który pozwalał przypiąć kartę bez zagrania jej jako +1 bleed. Blokada exclusiveKey dotyczy teraz tylko trybów przypinających, więc zagranie drugiego egzemplarza za bleed na vampirze z jednym jest legalne (egzemplarz trafia na stos). Zdolność spalenia do nieudanego bloku była już zbudowana (feverPitch, abilityOptions) i jest sprawdzona testem. Testy: tests/cards/after-resolution.test.ts 19/19 (przypięcie po zagraniu, brak przypięcia bez zagrania, nieudany bleed odkłada kartę, drugi egzemplarz, burn do nieudanego bloku). ODSTĘPSTWO / NIEZROBIONE: tekst mówi 'you can', a przypięcie następuje automatycznie, gdy jest legalne; brak opcjonalnej rezygnacji."
   },
   {
     "id": 102322,

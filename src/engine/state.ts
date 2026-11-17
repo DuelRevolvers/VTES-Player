@@ -2945,6 +2945,19 @@ export interface ActionFrame {
      *  `cardName`/`cardId` route that frame back to the card's handler. */
     optOut?: { blood: number; cardName: string; cardId: string };
   }>;
+  /** "…you can put this card on this vampire after action resolution, if
+   *  the bleed is successful" (Fever Pitch superior). The card was played
+   *  as the bleed modifier and is HELD here until the action resolves; it
+   *  is put on the vampire then, or filed in the ash heap otherwise. */
+  heldAfterResolution?: Array<{
+    card: CardInstance;
+    minion: MinionId;
+    seat: SeatId;
+    tags: string[];
+    statics: PermanentStatics;
+    /** Not attached if the vampire already holds one with this tag. */
+    exclusiveKey?: string;
+  }>;
   /** "Queue a combat between them" (Hedonism) — a combat between two
    *  minions NEITHER of which is the acting minion, entered only once this
    *  action is off the stack. Same shape as `afterResolutionDamage`.

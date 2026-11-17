@@ -17115,21 +17115,17 @@ export const cardSpecs: CardSpec[] = [
         effects: [{ kind: "modifyBleed", amount: 1, limited: true }],
       },
       {
-        // The bleed bonus is applied when the card is played, in the
-        // ordinary window; the attach half is a SEPARATE mode played
-        // after resolution, because the two happen at different times.
-        level: "superior",
-        discipline: ["for", "pre"],
-        variant: "attach",
-        usable: ["afterResolutionByActor", "ifBleedSucceeded"],
-        effects: [{ kind: "afterResolutionAttach", tags: ["feverPitch"] }],
-      },
-      {
+        // ONE play: the +1 bleed is applied in the ordinary window, and the
+        // card is HELD on the action; if the bleed succeeds it is put on the
+        // vampire after resolution, otherwise filed (`held`).
         level: "superior",
         discipline: ["for", "pre"],
         variant: "bleed",
         usable: ["onlyDuringBleed"],
-        effects: [{ kind: "modifyBleed", amount: 1, limited: true }],
+        effects: [
+          { kind: "modifyBleed", amount: 1, limited: true },
+          { kind: "afterResolutionAttach", tags: ["feverPitch"], held: true },
+        ],
       },
     ],
   },

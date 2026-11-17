@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { GameState, MinionState, PermanentInPlay } from "../../src/engine/index.ts";
-import { VtesEngine, untargetableBy } from "../../src/engine/index.ts";
+import { VtesEngine, getSeat, untargetableBy } from "../../src/engine/index.ts";
 import { makeMinion, runTrace, testRegistry, threeSeatGame } from "../engine/fixtures.ts";
 
 function find(state: GameState, id: string): MinionState {
@@ -291,7 +291,20 @@ describe("Shadow Cloak (102281)", () => {
 });
 
 describe("Fever Pitch (102321)", () => {
-  it("gives +1 bleed when played during the bleed, and attaches after it lands", () => {
+  /** Pass through windows until `done` holds or the frame is over. */
+  function passUntil(
+    engine: VtesEngine,
+    done: (dp: NonNullable<ReturnType<VtesEngine["decision"]>>) => boolean,
+  ): ReturnType<VtesEngine["decision"]> {
+    for (let i = 0; i < 60; i++) {
+      const dp = engine.decision();
+      if (!dp || done(dp)) return dp;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    return engine.decision();
+  }
+
+  it("superior: played as the bleed modifier, it is put on the vampire when the bleed lands", () => {
     const state = threeSeatGame();
     Object.assign(find(state, "V1"), { blood: 3, disciplines: { pre: "superior" } });
     state.seats[0]!.hand.push({ id: "fp", name: "Fever Pitch" });
@@ -299,24 +312,70 @@ describe("Fever Pitch (102321)", () => {
     runTrace(engine, [
       ["Alice", "bleed:V1"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // announce
-      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // state A
-      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // state C → resolves
     ]);
-    // The bleed landed for 1 (no modifier played), so the attach half is
-    // on offer in the window.
-    const dp = engine.decision()!;
-    expect(dp.window).toBe("action.afterResolution");
-    const opt = dp.options.find((o) => o.id.includes("Fever Pitch") && o.id.includes("attach"));
-    expect(opt).toBeDefined();
-
-    runTrace(engine, [
-      ["Alice", opt!.id],
-      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
-      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
-    ]);
+    const dp = passUntil(engine, (d) => d.options.some((o) => o.id === "play:Fever Pitch:superior:V1:bleed:fp"));
+    runTrace(engine, [["Alice", "play:Fever Pitch:superior:V1:bleed:fp"]]);
+    expect(state.seats[0]!.hand.some((c) => c.id === "fp")).toBe(false);
+    for (let i = 0; i < 40 && !attached(state, "V1", "fp"); i++) {
+      const next = engine.decision();
+      if (!next) break;
+      runTrace(engine, [[next.seat, next.options.find((o) => o.id === "pass")?.id ?? next.options[0]!.id]]);
+    }
     const entry = attached(state, "V1", "fp");
     expect(entry).toBeDefined();
     expect(entry!.tags).toContain("feverPitch");
+  });
+
+  it("NEGATIVE SPACE: a card in hand is not put on the vampire after a bleed it did not modify", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { blood: 3, disciplines: { pre: "superior" } });
+    state.seats[0]!.hand.push({ id: "fp", name: "Fever Pitch" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", "bleed:V1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    let sawAfterWindowOffer = false;
+    for (let i = 0; i < 40; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.window === "action.afterResolution" && dp.options.some((o) => o.id.includes("Fever Pitch"))) {
+        sawAfterWindowOffer = true;
+      }
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    expect(sawAfterWindowOffer).toBe(false);
+    expect(attached(state, "V1", "fp")).toBeUndefined();
+  });
+
+  it("NEGATIVE SPACE: a held card is filed, not attached, when the bleed fails", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { blood: 3, disciplines: { pre: "superior" } });
+    state.seats[0]!.hand.push({ id: "fp", name: "Fever Pitch" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", "bleed:V1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    passUntil(engine, (d) => d.options.some((o) => o.id === "play:Fever Pitch:superior:V1:bleed:fp"));
+    runTrace(engine, [["Alice", "play:Fever Pitch:superior:V1:bleed:fp"]]);
+    // Bob blocks: the bleed does not land.
+    for (let i = 0; i < 40; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.options.some((o) => o.id === "block:M")) {
+        runTrace(engine, [["Bob", "block:M"]]);
+        break;
+      }
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    for (let i = 0; i < 40; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    expect(attached(state, "V1", "fp")).toBeUndefined();
+    expect((getSeat(state, "Alice").ashHeap ?? []).some((c) => c.name === "Fever Pitch")).toBe(true);
   });
 
   it("the attached copy burns to make a block attempt fail", () => {
@@ -350,7 +409,7 @@ describe("Fever Pitch (102321)", () => {
     expect(af.blockRestrictions.cannotBlock).toContain("M");
   });
 
-  it("a vampire can have only one Fever Pitch", () => {
+  it("a vampire can have only one Fever Pitch: a second copy is filed, the first stays", () => {
     const state = threeSeatGame();
     Object.assign(find(state, "V1"), { blood: 3, disciplines: { pre: "superior" } });
     find(state, "V1").attached.push({
@@ -361,17 +420,22 @@ describe("Fever Pitch (102321)", () => {
       tags: ["Fever Pitch", "feverPitch"],
     });
     state.seats[0]!.hand.push({ id: "fp", name: "Fever Pitch" });
-    state.seats[0]!.minions.push(makeMinion("A2", "Alice"));
     const engine = new VtesEngine(state, testRegistry);
     runTrace(engine, [
       ["Alice", "bleed:V1"],
       ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
-      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
-      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
     ]);
-    const dp = engine.decision();
-    // Either the window did not open, or the attach option is absent.
-    const ids = dp?.options.map((o) => o.id) ?? [];
-    expect(ids.some((i) => i.includes("Fever Pitch") && i.includes("attach"))).toBe(false);
+    // The second copy may still be PLAYED for the bleed (the restriction is on the attach).
+    passUntil(engine, (d) => d.options.some((o) => o.id === "play:Fever Pitch:superior:V1:bleed:fp"));
+    runTrace(engine, [["Alice", "play:Fever Pitch:superior:V1:bleed:fp"]]);
+    for (let i = 0; i < 40; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    const copies = find(state, "V1").attached.filter((p) => p.tags.includes("feverPitch"));
+    expect(copies).toHaveLength(1);
+    expect(copies[0]!.card.id).toBe("fp0");
+    expect((getSeat(state, "Alice").ashHeap ?? []).some((c) => c.name === "Fever Pitch")).toBe(true);
   });
 });

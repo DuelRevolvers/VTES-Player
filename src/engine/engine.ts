@@ -4261,7 +4261,10 @@ export class VtesEngine implements EngineOps {
       const removedDuringResolution = this.state.eventLog.slice(resolutionEventsStart).some(
         (e) => e.type === "PermanentBurned" && e.cardId === cp.card.id && e.removed === true,
       );
-      if (!cp.asAction && !removedDuringResolution && !this.allEntries().some((e) => e.entry.card.id === cp.card.id)) {
+      // A held Fever Pitch is not filed here: it is put on the vampire, or
+      // filed, when its action resolves (settleHeldAfterResolution).
+      const heldForAction = this.action()?.heldAfterResolution?.some((h) => h.card.id === cp.card.id) ?? false;
+      if (!cp.asAction && !removedDuringResolution && !heldForAction && !this.allEntries().some((e) => e.entry.card.id === cp.card.id)) {
         this.toAshHeap(cp.seat, cp.card);
       }
       // "Do not replace this card until AFTER you discard your hand" (Deal
@@ -10664,6 +10667,33 @@ export class VtesEngine implements EngineOps {
     af.afterResolutionUnlocks = [...(af.afterResolutionUnlocks ?? []), entry];
   }
 
+  /** Fever Pitch superior: the card played as the bleed modifier waits on
+   *  the action until it resolves (`ActionFrame.heldAfterResolution`). */
+  holdAfterResolution(entry: NonNullable<ActionFrame["heldAfterResolution"]>[number]): void {
+    const af = this.action();
+    if (!af) return;
+    af.heldAfterResolution = [...(af.heldAfterResolution ?? []), entry];
+  }
+
+  /** The held card goes onto the acting vampire once the action has
+   *  resolved, if the bleed succeeded for 1 or more and the vampire does not
+   *  already hold one with the same exclusive tag; otherwise it is filed in
+   *  the ash heap. docs/after-resolution-design.md §5 */
+  private settleHeldAfterResolution(af: ActionFrame, success: boolean): void {
+    const held = af.heldAfterResolution ?? [];
+    af.heldAfterResolution = [];
+    for (const h of held) {
+      const m = findMinion(this.state, h.minion);
+      const bled = success && af.actionKind === "bleed" && currentBleed(this.state, af) >= 1;
+      const blocked = h.exclusiveKey !== undefined && (m?.attached.some((p) => p.tags.includes(h.exclusiveKey!)) ?? false);
+      if (bled && m && !blocked) {
+        this.putPermanentInPlay({ card: h.card, seat: h.seat, attachTo: m.id, statics: h.statics, tags: h.tags });
+      } else {
+        this.toAshHeap(h.seat, h.card);
+      }
+    }
+  }
+
   /** "Cancel that blood hunt" (Absolution of the Diabolist).
    *  docs/blood-hunt-answers-design.md §2 */
   cancelBloodHunt(): void {
@@ -11104,6 +11134,7 @@ export class VtesEngine implements EngineOps {
     // can actually use it — a recorded deviation, the same one already
     // taken for combat.damageResolution (docs/after-resolution-design.md §3).
     af.resolvedSuccess = success;
+    this.settleHeldAfterResolution(af, success);
     this.openActionAfterResolution(af, success, resumeEntered !== undefined);
   }
 

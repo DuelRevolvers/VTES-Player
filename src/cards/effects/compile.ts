@@ -5857,8 +5857,14 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
         // "A vampire can have only one Fever Pitch" — the attach half of
         // an after-resolution modifier obeys the same exclusivity a
         // permanent does (docs/after-resolution-design.md §5).
+        // Gated only for a mode that PUTS the card on the vampire: a held
+        // Fever Pitch bleed is legal on a vampire that already has one — the
+        // second copy is then filed at resolution instead (§ heldAfterResolution).
         const exKey = spec.permanent?.exclusiveKey;
-        if (exKey !== undefined && m.attached.some((p) => p.tags.includes(exKey))) {
+        const attachesLater = spec.modes.some((md) =>
+          md.effects.some((e) => e.kind === "afterResolutionAttach" && e.held !== true),
+        );
+        if (exKey !== undefined && attachesLater && m.attached.some((p) => p.tags.includes(exKey))) {
           continue;
         }
         if (
@@ -6723,6 +6729,19 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
           case "afterResolutionAttach": {
             const af3 = ops.action();
             if (!af3 || !play.minion) break;
+            // Fever Pitch superior: the card played as the bleed modifier
+            // stays with the action until it resolves (§ heldAfterResolution).
+            if (e.held) {
+              ops.holdAfterResolution({
+                card: play.card,
+                minion: play.minion,
+                seat: play.seat,
+                tags: [spec.name, ...e.tags],
+                statics: e.statics ?? {},
+                ...(spec.permanent?.exclusiveKey ? { exclusiveKey: spec.permanent.exclusiveKey } : {}),
+              });
+              break;
+            }
             ops.putPermanentInPlay({
               card: play.card,
               seat: play.seat,

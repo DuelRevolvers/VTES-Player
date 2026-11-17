@@ -128,3 +128,26 @@ Two small pieces of state come with them:
 - p. 44 — wake effects last "for the duration of the action", which is why
   they are cleared as the frame finishes rather than at the window.
 - p. 48 — the Freak Drive ruling quoted in §4.
+
+## Fever Pitch superior: held, not re-played (2026-11)
+
+Fever Pitch's superior is ONE play: +1 bleed in the ordinary window, and "you
+can put this card on this vampire after action resolution" if the bleed
+succeeds for 1 or more. The old model split this into a bleed mode and a
+separate attach mode played from hand after resolution, so a card could be
+attached without ever having modified the bleed, and one card served two
+roles.
+
+Now the bleed mode uses `afterResolutionAttach` with `held: true`: the card is
+held on the action (`ActionFrame.heldAfterResolution`) and is NOT filed in the
+ash heap when it resolves. `resolveAction` settles it before the after-action
+window: attached to the acting vampire if the bleed succeeded for 1 or more and
+the vampire has no copy with the exclusive tag; otherwise filed.
+
+Recorded deviation: "you can" is a choice in the rules, but the attach happens
+automatically when it is legal. No optional decline is offered yet.
+
+The `exclusiveKey` gate applies only to a card with an attaching mode, so a
+second copy may still be played for the bleed on a vampire that has one (it is
+then filed).
+

@@ -585,6 +585,9 @@ export interface EngineOps {
    *  mark the hunt successful and fire what keys to that
    *  [LSJ 20050720-2]. docs/hunt-success-design.md §1 */
   payHunt(af: ActionFrame, printed: number): void;
+  /** Hold a card played as a bleed modifier until the action resolves
+   *  (Fever Pitch superior). See `ActionFrame.heldAfterResolution`. */
+  holdAfterResolution(entry: NonNullable<ActionFrame["heldAfterResolution"]>[number]): void;
   /** Mark a card-in-play's "once each action" ability as used (Under
    *  Siege) — action-scoped. */
   markInPlayAbilityUsed(cardId: CardInstanceId): void;
