@@ -46868,6 +46868,26 @@ const retainerCardNames: ReadonlySet<string> = new Set(
  * Not built: the requirement check of the retainer (the card says the bearer
  * must meet it). `playCardFromHand` does not check requirements here.
  */
+/** Retainers the bearer may employ from hand or library: a Retainer-type card
+ *  whose printed requirements the bearer meets (`meetsRequirements`, "he or she
+ *  must meet the requirements, if any"). */
+function trophyCandidates(
+  seat: GameState["seats"][number],
+  bearer: MinionState,
+): Array<{ zone: "hand" | "library"; card: { id: string; name: string } }> {
+  const out: Array<{ zone: "hand" | "library"; card: { id: string; name: string } }> = [];
+  for (const zone of ["hand", "library"] as const) {
+    for (const card of zone === "hand" ? seat.hand : seat.library) {
+      if (!retainerCardNames.has(card.name)) continue;
+      const spec = cardSpecs.find((s) => s.name === card.name);
+      if (spec && !meetsRequirements(bearer, spec)) continue;
+      out.push({ zone, card });
+    }
+  }
+  return out;
+}
+
+/** Trophy: Retainers handler (see above). */
 const trophyRetainers: CardHandler = {
   ...compileSpec(specByName("Trophy: Retainers")),
   onControllerUnlock(entry, owner, ops) {
@@ -46876,10 +46896,7 @@ const trophyRetainers: CardHandler = {
     if (!bearer) return;
     const seat = ops.state.seats.find((s) => s.id === owner.seat);
     if (!seat) return;
-    const hasCandidate =
-      seat.hand.some((x) => retainerCardNames.has(x.name)) ||
-      seat.library.some((x) => retainerCardNames.has(x.name));
-    if (!hasCandidate) return;
+    if (trophyCandidates(seat, bearer).length === 0) return;
     ops.raiseChoice({
       seat: owner.seat,
       cardName: "Trophy: Retainers",
@@ -46895,20 +46912,12 @@ const trophyRetainers: CardHandler = {
     if (!bearer) return [];
     const seat = state.seats.find((s) => s.id === bearer.controller);
     if (!seat) return [];
-    const out: Array<{ id: string; kind: "answerChoice"; label: string; params: Record<string, string> }> = [];
-    for (const zone of ["hand", "library"] as const) {
-      const pile = zone === "hand" ? seat.hand : seat.library;
-      for (const x of pile) {
-        if (!retainerCardNames.has(x.name)) continue;
-        out.push({
-          id: `choice:Trophy: Retainers:${frame.cardId}:${TROPHY_RETAINERS_PICK}:${zone}:${x.id}`,
-          kind: "answerChoice" as const,
-          label: `Trophy: Retainers: employ ${x.name} from ${zone === "hand" ? "your hand" : "your library"}`,
-          params: {},
-        });
-      }
-    }
-    return out;
+    return trophyCandidates(seat, bearer).map((x) => ({
+      id: `choice:Trophy: Retainers:${frame.cardId}:${TROPHY_RETAINERS_PICK}:${x.zone}:${x.card.id}`,
+      kind: "answerChoice" as const,
+      label: `Trophy: Retainers: employ ${x.card.name} from ${x.zone === "hand" ? "your hand" : "your library"}`,
+      params: {},
+    }));
   },
   applyChoice(frame, choice, ops) {
     if (frame.key !== TROPHY_RETAINERS_PICK) return;
@@ -46922,9 +46931,11 @@ const trophyRetainers: CardHandler = {
     if (!bearer) return;
     const seat = ops.state.seats.find((s) => s.id === bearer.controller);
     if (!seat) return;
-    const pile = zone === "hand" ? seat.hand : seat.library;
-    const card = pile.find((x) => x.id === instanceId);
-    if (!card || !retainerCardNames.has(card.name)) return;
+    // Re-checked at the answer: the bearer or the pile may have changed.
+    const card = trophyCandidates(seat, bearer).find(
+      (x) => x.zone === zone && x.card.id === instanceId,
+    )?.card;
+    if (!card) return;
     ops.playCardFromHand({
       cardId: card.id,
       seat: seat.id,

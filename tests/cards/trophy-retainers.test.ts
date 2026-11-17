@@ -84,4 +84,20 @@ describe("Trophy: Retainers (102036)", () => {
     fire(engine, state);
     expect(retainerOptions(engine)).toHaveLength(0);
   });
+
+  it("a retainer whose requirement the bearer does not meet is not offered (Dog Pack needs a Gangrel)", () => {
+    const { state, engine } = setup();
+    state.seats[0]!.hand = [{ id: "dp", name: "Dog Pack" } as any];
+    find(state, "V1").clan = "Ventrue";
+    fire(engine, state);
+    expect(retainerOptions(engine)).toHaveLength(0);
+  });
+
+  it("the same retainer IS offered once the bearer is a Gangrel", () => {
+    const { state, engine } = setup();
+    state.seats[0]!.hand = [{ id: "dp", name: "Dog Pack" } as any];
+    find(state, "V1").clan = "Gangrel";
+    fire(engine, state);
+    expect(retainerOptions(engine)).toHaveLength(1);
+  });
 });

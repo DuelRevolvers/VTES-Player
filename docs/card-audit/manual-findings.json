@@ -12213,7 +12213,7 @@
     "id": 102036,
     "name": "Trophy: Retainers",
     "status": "PARTIAL_FIX",
-    "evidence": "Zaimplementowano: mistrz Trophy na dowolnym vampire (scope any). W unlock phase kontrolera, gdy karta jest na vampire, kontroler może (opcjonalny wybór trophyRetainersPick) zatrudnić retainera z ręki albo z biblioteki (typ 'Retainer' z rejestru). Zatrudnienie przez playCardFromHand (nie akcja), na bearer; wybór z biblioteki tasuje ją potem. Test: tests/cards/trophy-retainers.test.ts (4/4): sługa z ręki zatrudniony i usunięty z ręki; sługa z biblioteki zatrudniony i usunięty z biblioteki; odmowa nic nie robi; brak sług = brak pytania. NIE ZROBIONO / NIE ZWERYFIKOWANO: wymóg sługi ('bearer must meet the requirements') nie jest sprawdzany; koszt i tasowanie nie są asercjami testu; brak testu end-to-end w fazie unlock."
+    "evidence": "Zaimplementowano: mistrz Trophy na dowolnym vampire (scope any). W unlock phase kontrolera, gdy karta jest na vampire, kontroler może (opcjonalny wybór) zatrudnić retainera z ręki albo z biblioteki (typ 'Retainer' z rejestru). Wymagania sługi są sprawdzane (meetsRequirements na specu sługi względem bearer; Dog Pack wymaga Gangrel). Zatrudnienie przez playCardFromHand (nie akcja); wybór z biblioteki tasuje ją potem. Test: tests/cards/trophy-retainers.test.ts (6/6): sługa z ręki i z biblioteki, odmowa nic nie robi, brak sług = brak pytania, wymóg klanu (nie ta klan — brak oferty; Gangrel — oferta). NIE ZWERYFIKOWANO: koszt przy zatrudnieniu i tasowanie biblioteki nie są asercjami testu; brak testu end-to-end w fazie unlock."
   },
   {
     "id": 102037,
