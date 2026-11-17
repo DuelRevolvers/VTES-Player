@@ -13592,8 +13592,8 @@
   {
     "id": 102266,
     "name": "Voracious Vermin",
-    "status": "PARTIAL_FIX",
-    "evidence": "Naprawiono część: superior daje dodatkowy strike jako SPECYFIKOWANY 'burn weapon' (granted burnEquipment, grantBurnEquipmentStrike), a opcja burn celuje wyłącznie w broń (tag weapon, weaponOnly w grancie) — wcześniej każdy equipment wroga był celem. Test: tests/cards/cheap-tail.test.ts (26/26), w tym negatywne: sam nie-broniowy equipment nie daje opcji burn. NIE ZROBIONO: w sub-rundzie nadal jest dostępny hand strike i dodge; karta mówi 'additional ranged strike: burn weapon', więc to odstępstwo od tekstu, świadome według docs/cheap-tail-design.md §4 (granted, nie forced). Do decyzji: czy wymusić burn-weapon, gdy broń istnieje."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaimplementowano zgodnie z tekstem: superior daje dodatkowy strike 'burn weapon'. Gdy u przeciwnika jest broń, dodatkowa sub-runda oferuje WYŁĄCZNIE spalenie broni (wymuszenie, forceAdditionalStrike 'burnEquipment', filtr weapon w gałęzi forced w chooseStrike); hand strike i dodge nie są dostępne. Bez broni wymuszony strike nie jest oferowany i sub-runda działa normalnie. Basic nie daje dodatkowego strike. Testy: tests/cards/cheap-tail.test.ts 27/27, w tym: wymuszenie (tylko strike:burnEquipment:gun), negatyw (equipment nie-broniowy nie jest celem), negatyw (brak broni: nie oferowane), negatyw (basic bez dodatkowego strike). Decyzja właściciela: wymuszony burn, zgodnie z tekstem karty. docs/cheap-tail-design.md §4 zaktualizowany."
   },
   {
     "id": 102267,

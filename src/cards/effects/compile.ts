@@ -4798,7 +4798,10 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             // "…: burn weapon" — the extra strike is specified, offered
             // in the chooseStrike step the way a granted combat-ends
             // strike is (§4).
-            if (e.burnEquipment) ops.grantBurnEquipmentStrike(play, e.burnWeaponOnly === true);
+            // "…burn WEAPON" (Voracious Vermin) is the forced strike, not a
+            // grant: while the foe has a weapon it is the only option.
+            if (e.burnEquipment && e.burnWeaponOnly === true) ops.forceAdditionalStrike(play, "burnEquipment");
+            else if (e.burnEquipment) ops.grantBurnEquipmentStrike(play, false);
             // "…: dodge" — the extra strike is not a free choice at all.
             if (e.forcedDodge) ops.forceAdditionalStrike(play, "dodge");
             break;

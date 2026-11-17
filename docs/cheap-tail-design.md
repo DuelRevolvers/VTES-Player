@@ -184,7 +184,13 @@ read by the `chooseStrike` enumeration beside `strike:combatEnds`, with
 one option per equipment card on the opposing minion (the choice rides in
 the option id, as Heroic Might's does). One use, cleared when taken.
 
-**Reading on record: with nothing to burn, the granted strike is not
+**Decision (2026-11): the extra strike is FORCED, per the card text.** With a
+weapon on the opposing minion, the additional sub-round offers only the
+burn of that weapon (`forceAdditionalStrike(play, "burnEquipment")`, weapon
+filter in the forced branch of `chooseStrike`). The grant shape above is kept
+only for the non-weapon-only variant.
+
+**Reading on record: with nothing to burn, the forced strike is not
 offered** — the same call Heroic Might's `Strike.burnEquipment` already
 takes. The additional sub-round still happens; the striker takes a hand
 strike or a dodge in it like anyone else.

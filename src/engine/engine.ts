@@ -12510,6 +12510,27 @@ export class VtesEngine implements EngineOps {
           options.push(...this.abilityOptionsFor(seat, "combat.chooseStrike"));
           return this.dp(seat, "combat.chooseStrike", options);
         }
+        // "…1 additional ranged strike: burn WEAPON" (Voracious Vermin
+        // superior) — forced to a burn of a weapon while the opposing
+        // minion has one. With no weapon the forced strike is not
+        // offered and the sub-round falls through to the normal list.
+        if (forced === "burnEquipment") {
+          const foe = findMinion(this.state, side === "acting" ? cf.opposing : cf.acting);
+          const weapons = (foe?.attached ?? []).filter((p) => p.tags.includes("equipment") && p.tags.includes("weapon"));
+          if (weapons.length > 0) {
+            for (const p of weapons) {
+              options.push({
+                id: `strike:burnEquipment:${p.card.id}`,
+                kind: "chooseStrike",
+                label: `Strike: burn ${p.card.name} (forced)`,
+                strike: "burnEquipment",
+                params: { equipment: p.card.id },
+              });
+            }
+            options.push(...this.abilityOptionsFor(seat, "combat.chooseStrike"));
+            return this.dp(seat, "combat.chooseStrike", options);
+          }
+        }
         // "This minion's INITIAL STRIKE this round WILL BE strike: hand
         // strike at +N damage" (Haymaker) — the normal round's twin of
         // the forced additional strike above: offered alone, so nothing

@@ -521,6 +521,17 @@ describe("Voracious Vermin (102266)", () => {
     expect(find(state, "M").attached.map((p) => p.card.name)).not.toContain(".44 Magnum");
   });
 
+  it("superior: with a weapon present the extra strike is FORCED to burn it (no hand strike or dodge)", () => {
+    const { engine } = intoCombat("superior", true);
+    expect(walkTo(engine, "play:Voracious Vermin:superior")).toBe(true);
+    const play = optionIds(engine).find((o) => o.startsWith("play:Voracious Vermin:superior"))!;
+    runTrace(engine, [["Alice", play]]);
+    expect(walkTo(engine, "strike:burnEquipment:gun")).toBe(true);
+    const dp = engine.decision()!;
+    const strikeIds = dp.options.map((o) => o.id).filter((id) => id.startsWith("strike:"));
+    expect(strikeIds).toEqual(["strike:burnEquipment:gun"]);
+  });
+
   it("NEGATIVE SPACE: 'burn WEAPON' — non-weapon equipment is never a burn target", () => {
     const state = threeSeatGame();
     Object.assign(find(state, "V1"), { disciplines: { ani: "superior" }, blood: 4 });
