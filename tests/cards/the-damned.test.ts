@@ -12,6 +12,8 @@ import { describe, expect, it } from "vitest";
 import type { GameState, MinionState } from "../../src/engine/index.ts";
 import { VtesEngine } from "../../src/engine/index.ts";
 import { testRegistry, threeSeatGame } from "../engine/fixtures.ts";
+import { cardSpecs } from "../../src/cards/effects/cards.ts";
+import { attachTargets } from "../../src/cards/effects/compile.ts";
 
 function find(state: GameState, id: string): MinionState {
   const m = state.seats.flatMap((s) => s.minions).find((x) => x.id === id);
@@ -78,6 +80,43 @@ describe("The Damned (100490)", () => {
     expect(extraBurn(bleedAndResolve(withCard.engine, withCard.state))).toBe(1);
   });
 
+  it("a blocked bleed (not successful) gets no extra burn: same combat burns with and without the card", () => {
+    // The combat itself burns blood (damage mending), so the test compares
+    // the same blocked combat with and without The Damned, not a raw count.
+    function blockedRun(withCard: boolean): number {
+      const { state, engine } = setup(withCard);
+      let blocked = false;
+      for (let i = 0; i < 40 && !blocked; i++) {
+        const dp = engine.decision();
+        if (!dp) break;
+        const ids = dp.options.map((o) => o.id);
+        if (ids.includes("block:M") && dp.seat === "Bob") {
+          engine.choose("block:M");
+          blocked = true;
+          break;
+        }
+        if (ids.includes("bleed:V1") && dp.seat === "Alice") {
+          engine.choose("bleed:V1");
+          continue;
+        }
+        engine.choose(ids.includes("pass") ? "pass" : ids[0]!);
+      }
+      expect(blocked).toBe(true);
+      const from = state.eventLog.length;
+      for (let i = 0; i < 80; i++) {
+        if (state.eventLog.slice(from).some((e) => e.type === "ActionResolved")) break;
+        const next = engine.decision();
+        if (!next) break;
+        const ids = next.options.map((o) => o.id);
+        engine.choose(ids.includes("pass") ? "pass" : ids.includes("end") ? "end" : ids[0]!);
+      }
+      const evs = state.eventLog.slice(from);
+      expect(evs.some((e) => e.type === "MinionActionSucceeded")).toBe(false);
+      return evs.reduce((n, e) => (e.type === "BloodBurned" && e.minion === "V1" ? n + e.amount : n), 0);
+    }
+    expect(blockedRun(true)).toBe(blockedRun(false));
+  });
+
   it("the extra burn is capped by the blood the vampire has", () => {
     const { state, engine } = setup(true);
     find(state, "V1").blood = 1;
@@ -89,5 +128,16 @@ describe("The Damned (100490)", () => {
     const { state } = setup(true);
     const card = find(state, "V1").attached.find((p) => p.card.name === "The Damned")!;
     expect(card.statics.bleedSuccessBloodBurn).toBe(1);
+  });
+
+  it("the card goes only on a vampire with capacity below 5 (attach gate on the real spec)", () => {
+    const spec = cardSpecs.find((s) => s.name === "The Damned")!;
+    const state = threeSeatGame();
+    for (const m of state.seats.flatMap((s) => s.minions)) m.capacity = 5;
+    find(state, "V1").capacity = 4;
+    const ids = attachTargets(state, "Alice", spec).map((m) => m.id);
+    expect(ids).toContain("V1");
+    expect(ids).not.toContain("M");
+    expect(ids).not.toContain("W");
   });
 });

@@ -2936,8 +2936,8 @@
   {
     "id": 100490,
     "name": "The Damned",
-    "status": "PARTIAL_FIX",
-    "evidence": "Zaimplementowano: unikatowy mistrz na vampire z pojemnością poniżej 5 (attach maxCapacity 4, scope any). Po udanej akcji bleed bearer burns 1 dodatkową krew (bleedSuccessBloodBurn; engine.ts po rozstrzygnięciu akcji, ograniczone do posiadanej krwi). Test: tests/cards/the-damned.test.ts (3/3): udany bleed daje dokładnie jedno dodatkowe spalenie w porównaniu z kontrolą bez karty; limit krwi; statyk na karcie. NIE PRZETESTOWANO: nieudanego bleed (nie spala nic dodatkowo) i odmowy przypięcia do vampire z pojemnością 5+ w ścieżce gry (tylko deklaracja maxCapacity)."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaimplementowano: unikatowy mistrz na vampire z pojemnością poniżej 5 (attach maxCapacity 4, scope any). Po udanej akcji bleed bearer burns 1 dodatkową krew (bleedSuccessBloodBurn; engine.ts po rozstrzygnięciu akcji, ograniczone do posiadanej krwi). Test: tests/cards/the-damned.test.ts (5/5): udany bleed daje dokładnie jedno dodatkowe spalenie względem kontroli bez karty; limit krwi; zablokowany bleed (nieudany) — ta sama walka z kartą i bez niej daje identyczne spalenia (walka sama spala krew przez mending, więc porównanie jest z kontrolą); bramka pojemności <5 przez attachTargets na prawdziwym specu."
   },
   {
     "id": 100491,
