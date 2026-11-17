@@ -5811,7 +5811,7 @@
     "id": 100969,
     "name": "Inceptor",
     "status": "PARTIAL_FIX",
-    "evidence": "Master daje gainPool zamiast unique karty na vampire capacity 1 i wyboru trzech kart zapewniających Disciplines. Porównano registry.json i bieżący effects/cards.ts, wyszukano nazwę w kodzie; bez nowego testu scenariuszowego. Aktualizacja: przekazano drukowaną cechę Unique do efektywnego handlera i wspólnej obsługi duplikatów/kontestowania (tests/cards/printed-unique-cards.test.ts). Wcześniejsze twierdzenie o braku tej cechy jest nieaktualne; test indywidualny sprawdza metadane, nie komplet efektów karty. Pozostałe wcześniej opisane problemy lub nierozstrzygnięcia nadal są otwarte. Sprawdzenie 60 kandydatów (mistrz 'on a vampire'): goły gainPool 1 bez permanentu/handlera/overlay; tekst karty (dołączenie do vampire i jego efekt) nie jest zaimplementowany. Komentarz 'pełna zgodność' poprawiony na PLACEHOLDER."
+    "evidence": "Zaimplementowano CZĘŚCIOWO: unikatowy mistrz (unique) przypinany do vampire o pojemności dokładnie 1 (attach min/max 1, scope any). Po wejściu do gry kontroler MUSI odłożyć trzy karty z ręki, ash heap albo biblioteki na kartę, zakryte? nie: odkryte, poza grą (ops.storeCard, faceUp, po jednej odpowiedzi; pytanie nieopcjonalne, powtarzane). Test: tests/cards/inceptor.test.ts (2/2): trzy wybrane karty trafiają na kartę (w kolejności), karta odkryta, ręka reszta; brak opcji rezygnacji. NIE ZBUDOWANO: prawo bearera do zagrywania innych kopii tych kart jak na poziomie superior (wymaga reguły store-play w enumeracji opcji gry); nie przetestowano też bramki pojemności 1 przy przypinaniu (putPermanentInPlay ją omija)."
   },
   {
     "id": 100970,

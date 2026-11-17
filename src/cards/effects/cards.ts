@@ -28856,15 +28856,25 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Inceptor [100969] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
+    // Inceptor [100969] — "Unique master. Put this card on a vampire of
+    // capacity 1, and put three cards from your hand, ash heap or library on
+    // this card, face up but out of play. This vampire may play other copies
+    // of these cards as if he or she had the Discipline required (if any) at
+    // superior." Handler: `inceptor` (placement only; see its comment).
     krcgId: 100969,
     name: "Inceptor",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    unique: true,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: ["Inceptor"],
+      attach: { scope: "any", kind: "vampire", minCapacity: 1, maxCapacity: 1 },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Infamous Warlock [100976] — fala 50 wierna (300) pełna zgodność bez wydmuszek
@@ -46772,6 +46782,73 @@ const loner: CardHandler = {
  * gain automatically rather than asking. A question for the controller would
  * be the faithful version; it is not built here.
  */
+const INCEPTOR_STORE = "inceptorStore";
+
+/**
+ * Inceptor (100969): on entering play the controller puts three cards from hand,
+ * ash heap or library on the card, face up and out of play (`storeCard`), one
+ * answer at a time. The choice is not optional: "put three cards" is a demand,
+ * and the question repeats until three are stored or no candidate is left.
+ *
+ * NOT BUILT: the bearer may play other copies of the stored cards as if at
+ * superior. That needs a store-play rule in the play-option enumeration, and
+ * the card stays PARTIAL until it exists.
+ */
+const inceptor: CardHandler = {
+  ...compileSpec(specByName("Inceptor")),
+  onEnterPlay(entry, owner, ops) {
+    if (owner.minion === null) return;
+    ops.raiseChoice({
+      seat: owner.seat,
+      cardName: "Inceptor",
+      cardId: entry.card.id,
+      key: INCEPTOR_STORE,
+      params: { remaining: "3", seat: owner.seat },
+      optional: false,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== INCEPTOR_STORE) return [];
+    const seat = state.seats.find((s) => s.id === frame.seat);
+    if (!seat) return [];
+    const out: Array<{ id: string; kind: "answerChoice"; label: string; params: Record<string, string> }> = [];
+    const piles: Array<["hand" | "ashHeap" | "library", typeof seat.hand]> = [
+      ["hand", seat.hand],
+      ["ashHeap", seat.ashHeap ?? []],
+      ["library", seat.library],
+    ];
+    for (const [zone, pile] of piles) {
+      for (const x of pile) {
+        out.push({
+          id: `choice:Inceptor:${frame.cardId}:${INCEPTOR_STORE}:${zone}:${x.id}`,
+          kind: "answerChoice" as const,
+          label: `Inceptor: put ${x.name} from your ${zone === "ashHeap" ? "ash heap" : zone} on Inceptor`,
+          params: {},
+        });
+      }
+    }
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    if (frame.key !== INCEPTOR_STORE) return;
+    const parts = choice.id.split(":");
+    const instanceId = parts[parts.length - 1]!;
+    const zone = parts[parts.length - 2] as "hand" | "ashHeap" | "library";
+    const remaining = Number(frame.params["remaining"] ?? "0");
+    ops.storeCard({ holder: frame.cardId, from: zone, cardId: instanceId, faceUp: true });
+    if (remaining > 1) {
+      ops.raiseChoice({
+        seat: frame.seat,
+        cardName: "Inceptor",
+        cardId: frame.cardId,
+        key: INCEPTOR_STORE,
+        params: { remaining: String(remaining - 1), seat: frame.seat },
+        optional: false,
+      });
+    }
+  },
+};
+
 const TROPHY_RETAINERS_PICK = "trophyRetainersPick";
 
 /** Names of the Retainer-type cards in the registry (types include "Retainer"). */
@@ -48335,6 +48412,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     vampiricDisease,
     curmudgeon,
     trophyRetainers,
+    inceptor,
     vessel,
     magnum44,
     doubleDeuce,
