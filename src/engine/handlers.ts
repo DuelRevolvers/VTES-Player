@@ -353,6 +353,9 @@ export interface EngineOps {
    *  will offer, alongside the extra strike itself.
    *  docs/cheap-tail-design.md §4 */
   grantBurnEquipmentStrike(play: CardPlayFrame, weaponOnly?: boolean): void;
+  /** "…they get an optional additional strike (limited)" — as
+   *  `grantAdditionalStrikeTo`, but the striker may decline it. */
+  grantOptionalAdditionalStrikeTo(minion: MinionId): boolean;
   /** "1 additional strike: DODGE" (Wind Dance superior) — the additional
    *  sub-round's strike is forced to this kind, not merely offered.
    *  docs/ledger-closeout.md §3 */

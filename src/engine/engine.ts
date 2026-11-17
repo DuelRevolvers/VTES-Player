@@ -6278,7 +6278,7 @@ export class VtesEngine implements EngineOps {
         load.additionalStrikeRound = cf.round;
         const bearer = from === "acting" ? cf.acting : cf.opposing;
         if (findMinion(this.state, bearer)) {
-          if (this.grantAdditionalStrikeTo(bearer, 1, true)) {
+          if (this.grantOptionalAdditionalStrikeTo(bearer)) {
             cf.committedStrike[from] = strike.weaponCard;
           }
         }
@@ -6411,6 +6411,10 @@ export class VtesEngine implements EngineOps {
       // source is a free choice again (Wind Dance superior).
       if (sa && cf.additionalStrikes.acting === 0) cf.forcedAdditionalStrike.acting = null;
       if (so && cf.additionalStrikes.opposing === 0) cf.forcedAdditionalStrike.opposing = null;
+      if (cf.optionalAdditionalStrike) {
+        if (sa && cf.additionalStrikes.acting === 0) cf.optionalAdditionalStrike.acting = false;
+        if (so && cf.additionalStrikes.opposing === 0) cf.optionalAdditionalStrike.opposing = false;
+      }
     }
     // Retainer combat output ("inflicts N damage on the opposing minion
     // each round during normal strike resolution") — environmental
@@ -6744,6 +6748,17 @@ export class VtesEngine implements EngineOps {
 
   /** The minion-addressed form of `grantAdditionalStrike`, for a card in
    *  play (which has no `CardPlayFrame`). */
+  /** "…they get an optional additional strike (limited)" (AK-47, Caseless
+   *  Rounds). The grant is the ordinary limited one; the flag lets the
+   *  striker decline it in the additional sub-round. */
+  grantOptionalAdditionalStrikeTo(minion: MinionId): boolean {
+    if (!this.grantAdditionalStrikeTo(minion, 1, true)) return false;
+    const cf = this.requireCombat();
+    const side = this.sideOf(cf, minion);
+    cf.optionalAdditionalStrike = { ...(cf.optionalAdditionalStrike ?? { acting: false, opposing: false }), [side]: true };
+    return true;
+  }
+
   grantAdditionalStrikeTo(minion: MinionId, count: number, limited: boolean): boolean {
     const cf = this.requireCombat();
     const side = this.sideOf(cf, minion);
@@ -12657,6 +12672,18 @@ export class VtesEngine implements EngineOps {
           }
         options.push(...this.handlerOptions(seat, "combat.chooseStrike"));
       }
+      // "…they get an optional additional strike" (AK-47, Caseless Rounds):
+      // the striker may decline it. Declining is a no-damage declaration
+      // (the same no-op a non-striker makes), so it is not a dodge. Offered
+      // outside the commitment branch, so a committed gun does not hide it.
+      if (cf.strikeRound === "additional" && cf.optionalAdditionalStrike?.[side]) {
+        options.push({
+          id: "strike:decline",
+          kind: "chooseStrike",
+          label: "Decline the optional additional strike",
+          strike: "decline",
+        });
+      }
       options.push(...this.abilityOptionsFor(seat, "combat.chooseStrike"));
         // WHICH OF THESE ACTUALLY REACHES. A weapon's strike arrives as an
         // ability, so without this an agent at long range could tell only
@@ -13158,6 +13185,19 @@ export class VtesEngine implements EngineOps {
             type: "StrikeChosen",
             minion: side === "acting" ? top.acting : top.opposing,
             strike: "steal blood",
+          });
+          return;
+        }
+        if (option.strike === "decline") {
+          // "…optional additional strike": no damage, and the committed gun
+          // is released so nothing else is barred this sub-round.
+          top.strikes[side] = { ...HAND_STRIKE, damage: 0 };
+          if (top.optionalAdditionalStrike) top.optionalAdditionalStrike[side] = false;
+          top.committedStrike[side] = null;
+          this.emit({
+            type: "StrikeChosen",
+            minion: side === "acting" ? top.acting : top.opposing,
+            strike: "declined",
           });
           return;
         }

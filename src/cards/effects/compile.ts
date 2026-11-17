@@ -9381,7 +9381,7 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
       // "After the bearer strikes with this gun, they get 1 optional
       // additional strike (limited), only usable to strike with this
       // gun, this round" (AK-47, §2).
-      if (w.additionalStrikeSelf && ops.grantAdditionalStrikeTo(owner.minion, 1, true)) {
+      if (w.additionalStrikeSelf && ops.grantOptionalAdditionalStrikeTo(owner.minion)) {
         ops.commitStrikeTo(owner.minion, entry.card.id);
       }
     };

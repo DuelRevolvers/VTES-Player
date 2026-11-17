@@ -146,6 +146,25 @@ describe("AK-47 (100032)", () => {
     }
     throw new Error("never reached the second strike choice");
   });
+
+  it("the optional extra strike can be DECLINED in the sub-round (no damage, commitment released)", () => {
+    const { state, engine } = intoCombat((s) => equip(s, "V1", "ak", "AK-47"));
+    expect(walkTo(engine, "ability:AK-47:ak:strike")).toBe(true);
+    runTrace(engine, [["Alice", "ability:AK-47:ak:strike"]]);
+    // Walk to Alice's choice in the extra sub-round.
+    let dp = engine.decision();
+    for (let i = 0; i < 60 && dp && !dp.options.some((o) => o.id === "strike:decline"); i++) {
+      runTrace(engine, [[dp.seat, (dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id]]);
+      dp = engine.decision();
+    }
+    expect(dp?.options.some((o) => o.id === "strike:decline")).toBe(true);
+    const seat = dp!.seat;
+    runTrace(engine, [[seat, "strike:decline"]]);
+    const cf = combat(state);
+    const side = cf?.acting === "V1" ? "acting" : "opposing";
+    expect(cf?.committedStrike[side]).toBeNull();
+    expect(cf?.additionalStrikes[side]).toBe(0);
+  });
 });
 
 describe("Sniper Rifle (101816)", () => {

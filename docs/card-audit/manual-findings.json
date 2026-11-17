@@ -188,8 +188,8 @@
   {
     "id": 100032,
     "name": "AK-47",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Znany błąd limitowanego dodatkowego strike: AK-47 otrzymuje opcjonalny strike automatycznie i może przez to zablokować inne limitowane źródło; także okno kolejnego źródła po oczekującym strike jest niekompletne. Szczegóły docs/additional-strike-followups.md. Tekst: src/cards/registry.json, ID 100032; implementacja: src/cards/effects/cards.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Dodatkowy strike jest nadal przyznawany po strike'u z broni, ale jest OPCJONALNY: w dodatkowej sub-rundzie strzelec może wybrać 'strike:decline' (bez obrażeń, zwalnia zobowiązanie do broni). Flaga CombatFrame.optionalAdditionalStrike jest ustawiana tylko dla opcjonalnych przyznań (AK-47, Caseless Rounds); zwykłe dodatkowe strike'i jej nie mają. Testy: tests/cards/weapon-riders.test.ts (57 testów z last-equipment-modifiers, w tym 'the optional extra strike can be DECLINED'). Pełne tests/cards+tests/engine: 398 plików, exit 0. NIEZROBIONE: wybór innego limitowanego źródła zamiast grantu AK-47 (kolejność przed grantem), docs/additional-strike-followups.md."
   },
   {
     "id": 100033,

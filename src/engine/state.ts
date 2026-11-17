@@ -27,7 +27,7 @@ export type Range = "close" | "long";
 /** The built-in strike declarations. `hand` is always available;
  *  `combatEnds` and `burnEquipment` are GRANTED by a rider or a card and
  *  offered only while the frame says so. */
-export type StrikeKind = "hand" | "combatEnds" | "burnEquipment" | "dodge" | "stealBlood";
+export type StrikeKind = "hand" | "combatEnds" | "burnEquipment" | "dodge" | "stealBlood" | "decline";
 
 /** A specified strike a card has granted, with whatever number it
  *  carries ("strike, ranged: steal 2 blood", Hunger of Marduk superior).
@@ -3534,6 +3534,10 @@ export interface CombatFrame {
   /** "A minion cannot use more than one card or effect to gain additional
    *  strikes per round" (p. 32) — the "(limited)" source is spent. */
   usedLimitedAddl: { acting: boolean; opposing: boolean };
+  /** The pending additional strike is OPTIONAL (AK-47, Caseless Rounds: "they
+   *  get an optional additional strike"). While set, the striker may decline
+   *  it, striking with no damage, in the additional sub-round. */
+  optionalAdditionalStrike?: { acting: boolean; opposing: boolean };
   /** Has the post-first-pair additional-strike grant window been completed
    *  for this round? Additional strikes may only be GAINED after the first
    *  pair resolves (p. 32), not before it. */
