@@ -12009,7 +12009,7 @@
     "id": 102002,
     "name": "Toy Chest Test",
     "status": "FIXED_TARGETED",
-    "evidence": "Naprawiono: mistrz ręczny (wymóg: gotowy sabbicki vampire kapitału >4 kontrolowany przez zagrywającego; cel: sabbicki vampire kapitału <4, w grze, który wszedł po końcu ostatniej tury zagrywającego). Śledzenie: state.lastTurnEndedAt (TurnBegan), minion.enteredPlayAt (VampireEnteredPlay). 'Contested' rozumiane jako niedostępne: kontestowana unikatowa karta leży zakryta poza grą. Test: tests/cards/toy-chest-test.test.ts (5/5). Ograniczenie: 'since your last turn' testowane na ręcznie ustawionym lastTurnEndedAt, nie przez przebieg tur."
+    "evidence": "Naprawiono: mistrz ręczny. Wymóg drukowany (JEDEN gotowy vampire, Sabbat i kapitał powyżej 4, kontrolowany przez zagrywającego) przez wspólną bramkę controllerMeetsRequirements. Cel: sabbicki vampire kapitału poniżej 4, który wszedł po końcu ostatniej tury zagrywającego (enteredPlayAt vs lastTurnEndedAt). Bez celu: zagranie dozwolone bez efektu. 'Contested' = niedostępne (kontestowana unikatowa karta leży zakryta poza grą). Testy: tests/cards/toy-chest-test.test.ts (5/5) i master-clan-requirements (wymóg). Ograniczenie: 'since last turn' testowane na ręcznie ustawionym lastTurnEndedAt."
   },
   {
     "id": 102003,

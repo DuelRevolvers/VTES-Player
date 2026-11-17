@@ -42223,11 +42223,9 @@ const toyChestTest: CardHandler = {
   isMasterCard: true,
   options(card, ctx) {
     if (ctx.window !== "turn.master") return [];
-    const playing = getSeat(ctx.state, ctx.seat);
-    const requirementMet = playing.minions.some(
-      (m) => m.kind === "vampire" && m.sect === "sabbat" && capacityOf(m) > 4 && isReady(m),
-    );
-    if (!requirementMet) return [];
+    // The printed requirement, through the shared gate: ONE ready vampire
+    // that is Sabbat AND of capacity above 4, controlled by the playing seat.
+    if (!controllerMeetsRequirements(ctx.state, ctx.seat, { requiresControlledSect: ["sabbat"], requiresControlledCapacity: 5 })) return [];
     const since = ctx.state.lastTurnEndedAt?.[ctx.seat] ?? -1;
     const out: LegalOption[] = [];
     for (const s of ctx.state.seats) {
@@ -42247,11 +42245,25 @@ const toyChestTest: CardHandler = {
         });
       }
     }
+    // With the requirement met but no Sabbat vampire to burn, the master can
+    // still be played: it simply has nothing to burn.
+    if (out.length === 0) {
+      out.push({
+        id: playOptionId(this.name, null, "no-target", card.id),
+        kind: "playCard",
+        label: "Toy Chest Test (no Sabbat vampire to burn)",
+        card: card.id,
+        name: this.name,
+        minion: null,
+        mode: null,
+        params: {},
+      });
+    }
     return out;
   },
   resolve(play, ops) {
     const target = play.params["target"];
-    if (!target) throw new Error("Toy Chest Test: no target");
+    if (!target) return;
     // TOTAL, as Vulnerability: the vampire chosen may have left play since.
     if (findMinion(ops.state, target)) ops.burnMinion(target);
   },

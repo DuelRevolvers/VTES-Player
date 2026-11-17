@@ -47,7 +47,7 @@ describe("Toy Chest Test (102002)", () => {
 
   it("does not offer a vampire that entered before the playing seat's last turn ended", () => {
     const { engine } = setup(5);
-    expect(playOptions(engine).length).toBe(0);
+    expect(playOptions(engine).some((o) => o.includes(":M:"))).toBe(false);
   });
 
   it("requires a ready Sabbat vampire of capacity above 4 the playing seat controls", () => {
@@ -57,7 +57,7 @@ describe("Toy Chest Test (102002)", () => {
 
   it("does not offer a non-Sabbat vampire", () => {
     const { engine } = setup(15, { mSect: "ani" });
-    expect(playOptions(engine).length).toBe(0);
+    expect(playOptions(engine).some((o) => o.includes(":M:"))).toBe(false);
   });
 
   it("burns the chosen vampire when played", () => {
