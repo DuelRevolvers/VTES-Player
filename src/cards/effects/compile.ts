@@ -12434,17 +12434,27 @@ export function compileSpec(spec: CardSpec): CardHandler {
         const out: LegalOption[] = [];
         const seat = getSeat(state, frame.seat);
         const x = Number(frame.params["x"] ?? "0");
-        for (const c of seat.crypt) {
+        // Crypt and ash heap, both (the card says "and/or"). A burnt vampire
+        // is offered only if it kept its snapshot (`burntVampire`).
+        const candidates: Array<{ zone: "crypt" | "ashHeap"; m: MinionState }> = [
+          ...seat.crypt.map((m) => ({ zone: "crypt" as const, m })),
+          ...(seat.ashHeap ?? []).flatMap((c) =>
+            c.crypt === true && c.burntVampire !== undefined
+              ? [{ zone: "ashHeap" as const, m: c.burntVampire }]
+              : [],
+          ),
+        ];
+        for (const { zone, m: c } of candidates) {
           if (c.kind !== "vampire" || c.scarce === true) continue;
           if (capacityOf(c) > x) continue;
-          // Crypt vampires have no handler, so "controls a copy" is read off
+          // A vampire has no handler to ask, so "controls a copy" is read off
           // the minions in play by name (p. 17: crypt cards are unique).
           if (c.nonUnique !== true && seat.minions.some((m) => m.name === c.name)) continue;
           out.push({
-            id: `choice:${spec.name}:${frame.cardId}:summonCryptX:${c.id}`,
+            id: `choice:${spec.name}:${frame.cardId}:summonCryptX:${zone}:${c.id}`,
             kind: "answerChoice" as const,
-            label: `Put ${c.name} (crypt) in play with no blood`,
-            params: { card: c.id },
+            label: `Put ${c.name} (${zone === "crypt" ? "crypt" : "ash heap"}) in play with no blood`,
+            params: { card: c.id, zone },
           });
         }
         // "Find nothing" is always legal (p. 48).
@@ -12458,8 +12468,13 @@ export function compileSpec(spec: CardSpec): CardHandler {
       },
       apply: (frame, choice, ops) => {
         const card = choice.params["card"];
-        if (card && card !== "none" && frame.seat) {
-          ops.emit({ type: "CryptCardSummoned", seat: frame.seat, minion: card });
+        const zone = choice.params["zone"];
+        if (card && card !== "none" && zone) {
+          if (zone === "ashHeap") {
+            ops.emit({ type: "AshVampireSummoned", seat: frame.seat, cardId: card });
+          } else {
+            ops.emit({ type: "CryptCardSummoned", seat: frame.seat, minion: card });
+          }
           ops.emit({ type: "VampireEnteredPlay", seat: frame.seat, minion: card, blood: 0 });
         }
         ops.emit({ type: "CryptShuffled", seat: frame.seat });

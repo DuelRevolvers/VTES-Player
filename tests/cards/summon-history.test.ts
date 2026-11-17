@@ -168,7 +168,7 @@ describe("Summon History (101897): superior, a crypt vampire of capacity X or le
     const { engine } = cryptGame(2);
     toCryptSearch(engine, 2);
     const ids = cryptIds(engine);
-    expect(ids).toContain("choice:Summon History:sh:summonCryptX:C2");
+    expect(ids).toContain("choice:Summon History:sh:summonCryptX:crypt:C2");
     expect(ids).toContain("choice:Summon History:sh:summonCryptX:none");
     expect(ids.some((i) => i.endsWith(":C3"))).toBe(false);
     expect(ids.some((i) => i.endsWith(":CS"))).toBe(false);
@@ -177,7 +177,7 @@ describe("Summon History (101897): superior, a crypt vampire of capacity X or le
   it("puts the chosen vampire in play with NO blood and shuffles the crypt", () => {
     const { state, engine } = cryptGame(2);
     toCryptSearch(engine, 2);
-    runTrace(engine, [["Alice", "choice:Summon History:sh:summonCryptX:C2"]]);
+    runTrace(engine, [["Alice", "choice:Summon History:sh:summonCryptX:crypt:C2"]]);
     const alice = state.seats[0]!;
     expect(alice.crypt.some((c) => c.id === "C2")).toBe(false);
     const summoned = alice.minions.find((m) => m.id === "C2");
@@ -199,5 +199,69 @@ describe("Summon History (101897): superior, a crypt vampire of capacity X or le
     state.seats[0]!.minions.push(makeMinion("twin", "Alice", { name: "Crypt Two", kind: "vampire" }));
     toCryptSearch(engine, 2);
     expect(cryptIds(engine).some((i) => i.endsWith(":C2"))).toBe(false);
+  });
+});
+
+describe("Summon History (101897): superior, a burnt vampire from the ash heap", () => {
+  /** A vampire of Alice's that was burnt, so it sits in her ash heap. */
+  function ashGame(x: number, burnt: Partial<MinionState> = {}) {
+    const state = threeSeatGame();
+    const alice = state.seats.find((s) => s.id === "Alice")!;
+    const v1 = makeMinion("V1", "Alice");
+    Object.assign(v1, { blood: x, disciplines: { tem: "superior" } });
+    alice.minions.push(v1);
+    alice.hand.push({ id: "sh", name: "Summon History" });
+    alice.library.push({ id: "filler", name: "Conditioning" });
+    const engine = new VtesEngine(state, testRegistry);
+    // Burn a vampire through the real path, so the snapshot is the engine's.
+    const victim = makeMinion("B1", "Alice", { name: "Burnt Brute", kind: "vampire", capacity: 2, blood: 1, ...burnt });
+    alice.minions.push(victim);
+    engine.burnMinion("B1");
+    return { state, engine };
+  }
+
+  function toAshSearch(engine: VtesEngine, x: number): void {
+    const option = engine.decision()!.options.find(
+      (o) => o.kind === "playCard" && o.name === "Summon History" && o.mode === "superior" && o.params["xBlood"] === String(x),
+    )!;
+    engine.choose(option.id);
+    for (let i = 0; i < 60; i++) {
+      const dp = engine.decision();
+      if (!dp || dp.options.some((o) => o.id.includes(":summonCryptX:"))) return;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+  }
+
+  it("a burnt vampire keeps a snapshot in the ash heap, and is offered when capacity fits", () => {
+    const { state, engine } = ashGame(2);
+    const filed = state.seats[0]!.ashHeap!.find((c) => c.id === "B1");
+    expect(filed?.burntVampire?.name).toBe("Burnt Brute");
+    expect(filed?.burntVampire?.capacity).toBe(2);
+    toAshSearch(engine, 2);
+    expect(engine.decision()!.options.map((o) => o.id)).toContain("choice:Summon History:sh:summonCryptX:ashHeap:B1");
+  });
+
+  it("puts it back in play with no blood, leaving the ash heap", () => {
+    const { state, engine } = ashGame(2);
+    toAshSearch(engine, 2);
+    runTrace(engine, [["Alice", "choice:Summon History:sh:summonCryptX:ashHeap:B1"]]);
+    const alice = state.seats[0]!;
+    expect(alice.ashHeap!.some((c) => c.id === "B1")).toBe(false);
+    const back = alice.minions.find((m) => m.id === "B1");
+    expect(back).toBeDefined();
+    expect(back!.blood).toBe(0);
+    expect(back!.controller).toBe("Alice");
+  });
+
+  it("a burnt vampire with capacity above X is not offered", () => {
+    const { engine } = ashGame(1);
+    toAshSearch(engine, 1);
+    expect((engine.decision()?.options ?? []).some((o) => o.id.includes(":ashHeap:B1"))).toBe(false);
+  });
+
+  it("a burnt scarce vampire is not offered", () => {
+    const { engine } = ashGame(2, { scarce: true });
+    toAshSearch(engine, 2);
+    expect((engine.decision()?.options ?? []).some((o) => o.id.includes(":ashHeap:B1"))).toBe(false);
   });
 });

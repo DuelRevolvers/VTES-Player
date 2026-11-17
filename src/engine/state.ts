@@ -520,6 +520,10 @@ export interface CardInstance {
    *  vampire, which has no registry entry at all
    *  (docs/token-vampire-design.md). docs/ash-heap-resource-design.md §2 */
   capacity?: number;
+  /** The vampire as it was when it burned (its clan, sect, disciplines,
+   *  scarce and unique flags), kept so Summon History can put it back
+   *  into play from the ash heap. Attachments are not kept. */
+  burntVampire?: MinionState;
 }
 
 /** Static modifiers a permanent contributes while in play. */
@@ -2134,6 +2138,9 @@ export type GameEvent =
    *  "search your crypt … and put that vampire in play" goes through it,
    *  then `VampireEnteredPlay` with no blood. */
   | { type: "CryptCardSummoned"; seat: SeatId; minion: MinionId }
+  /** A burnt vampire (`CardInstance.burntVampire`) leaves its owner's ash
+   *  heap for the uncontrolled region — Summon History's ash-heap half. */
+  | { type: "AshVampireSummoned"; seat: SeatId; cardId: CardInstanceId }
   /** "…you must shuffle it afterwards" (p. 14) — the crypt twin of
    *  `LibraryShuffled`, through the seeded RNG. */
   | { type: "CryptShuffled"; seat: SeatId }

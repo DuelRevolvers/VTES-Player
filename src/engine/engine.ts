@@ -927,6 +927,31 @@ export class VtesEngine implements EngineOps {
         if (card) seat.uncontrolled.push({ card, counters: 0 });
         break;
       }
+      case "AshVampireSummoned": {
+        const seat = getSeat(this.state, ev.seat);
+        const pile = seat.ashHeap ?? [];
+        const i = pile.findIndex((c) => c.id === ev.cardId);
+        const snap = pile[i]?.burntVampire;
+        if (i < 0 || !snap) throw new Error(`no burnt vampire ${ev.cardId}`);
+        pile.splice(i, 1);
+        // Back as a fresh vampire: no blood, no torpor, nothing attached,
+        // controlled by the seat that summons it (VampireEnteredPlay then
+        // sets the blood it arrives with).
+        const card: MinionState = {
+          ...snap,
+          controller: ev.seat,
+          blood: 0,
+          locked: false,
+          awake: false,
+          inTorpor: false,
+          bledThisTurn: false,
+          calledPoliticalThisTurn: false,
+          cannotActThisTurn: false,
+          attached: [],
+        };
+        seat.uncontrolled.push({ card, counters: 0 });
+        break;
+      }
       case "CryptShuffled": {
         const cr = getSeat(this.state, ev.seat).crypt;
         for (let i = cr.length - 1; i > 0; i--) {
@@ -1524,6 +1549,9 @@ export class VtesEngine implements EngineOps {
         const burnt = this.state.seats.flatMap((s) => s.minions).find((m) => m.id === ev.minion);
         if (burnt && burnt.kind === "vampire") {
           const owner = burnt.owner ?? burnt.controller;
+          // The vampire as it stood, for Summon History (a copy, without
+          // what was attached to it).
+          const { attached: _attached, ...snapshot } = burnt;
           (getSeat(this.state, owner).ashHeap ??= []).push({
             id: burnt.id,
             name: burnt.name,
@@ -1532,6 +1560,7 @@ export class VtesEngine implements EngineOps {
             // carrying a +1-capacity master when it burned was that big,
             // and a token vampire has no printed card to go back to.
             capacity: capacityOf(burnt),
+            burntVampire: JSON.parse(JSON.stringify({ ...snapshot, attached: [] })) as MinionState,
           });
         }
         for (const seat of this.state.seats) {
