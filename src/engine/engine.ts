@@ -10850,7 +10850,7 @@ export class VtesEngine implements EngineOps {
         // "Cost: X blood" on an ACTION card (Bloodlust) — X rides in the
         // option like Kindred Coercion's, but is paid here, on success,
         // rather than as the card is played.
-        const xBlood = Number(af.card.params["xBlood"] ?? "0");
+        const xBlood = handler.xBloodAtPlay ? 0 : Number(af.card.params["xBlood"] ?? "0");
         const paid = this.spendCostCounters(af, { blood: price.blood + xBlood, pool: price.pool });
         const blood = Math.max(0, price.blood + xBlood - paid.blood);
         const pool = Math.max(0, price.pool - paid.pool);
@@ -14752,7 +14752,7 @@ export class VtesEngine implements EngineOps {
     // canceled non-action card still pays its cost (p. 16), so X is paid
     // here with the printed cost, not at resolution.
     // docs/vote-changing-design.md §2
-    const xBlood = asAction ? 0 : Number(option.params["xBlood"] ?? "0");
+    const xBlood = asAction && !handler.xBloodAtPlay ? 0 : Number(option.params["xBlood"] ?? "0");
     if (price.blood + xBlood > 0 && option.minion) {
       this.emit({
         type: "BloodBurned",

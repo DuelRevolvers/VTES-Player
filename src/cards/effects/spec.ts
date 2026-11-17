@@ -1186,6 +1186,11 @@ export type EffectPrimitive =
    *  announcement (p. 25) and rides in the option id.
    *  docs/stun-design.md §6 */
   | { kind: "actionStun" }
+  /** "Cost: X blood", X chosen as the card is played (Summon History, LSJ
+   *  20100314). One play option per X the acting vampire can pay, and X is
+   *  paid AT PLAY — unlike Bloodlust's X, which is paid on success. The
+   *  value rides in the option as `xBlood`. */
+  | { kind: "variableBloodX" }
   /** "Equip this vampire with a melee weapon FROM YOUR HAND" and its
    *  siblings — bring a permanent card into play outside its own
    *  equip/employ/recruit action (docs/play-from-hand-design.md). */

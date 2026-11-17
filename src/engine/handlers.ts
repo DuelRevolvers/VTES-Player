@@ -1255,6 +1255,9 @@ export interface CardHandler {
    *  each answer into `params.chosen`, and plays the card once none
    *  remain. Null when this play needs no picks.
    *  docs/bearer-rush-grants-design.md §5 */
+  /** "Cost: X blood" paid as the card is played, not on success
+   *  (Summon History). Bloodlust's X is the success-paid kind. */
+  xBloodAtPlay?: boolean;
   prePlayPicks?(
     option: Extract<LegalOption, { kind: "playCard" }>,
     state: GameState,

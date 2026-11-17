@@ -1866,6 +1866,11 @@ function compileActionCard(spec: CardSpec): CardHandler {
             }
             continue;
           }
+          if (mode.effects.some((e) => e.kind === "variableBloodX")) {
+            // X is paid at play, so it cannot exceed the blood the vampire has.
+            for (let x = 0; x <= m.blood; x++) push(mode, { xBlood: String(x) });
+            continue;
+          }
           const chooseOwn = chooseOwnMinionsOf(mode);
           if (chooseOwn) {
             // "Cost: X blood. Choose X minions" (Bloodlust): one option per
@@ -2897,6 +2902,9 @@ function compileActionCard(spec: CardSpec): CardHandler {
         (level === null || m.level === level) &&
         m.effects.some((e) => e.kind === "actionEnterCombat"),
     );
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "variableBloodX"))) {
+    handler.xBloodAtPlay = true;
+  }
   if (spec.modes.some((m) => chooseOwnMinionsOf(m) !== null)) {
     handler.prePlayPicks = (option, state) => {
       const extra = chooseOwnMinionsOf(modeOf(spec, option.mode, option.params["variant"]))?.extra;
