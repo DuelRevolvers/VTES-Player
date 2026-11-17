@@ -2774,6 +2774,7 @@ export class VtesEngine implements EngineOps {
             if (surcharge > 0) {
               this.emit({ type: "BloodBurned", minion: m.id, amount: surcharge });
             }
+            this.diseaseOnUnlock(m.id);
             this.emit({ type: "MinionUnlocked", minion: m.id });
           }
           m.awake = false;
@@ -3333,6 +3334,7 @@ export class VtesEngine implements EngineOps {
             // would otherwise reopen (docs/round-end-design.md §2).
             cf.step = "beforeRange";
             cf.range = "close";
+            this.spreadVampiricDisease(cf);
             cf.strikes = { acting: null, opposing: null };
             cf.strikeRound = "normal";
             cf.additionalStrikes = { acting: 0, opposing: 0 };
@@ -5680,6 +5682,7 @@ export class VtesEngine implements EngineOps {
       endedPrematurely: false,
       cycle: newCycle(sequencingOrder(this.state, actingSeat, [opposingSeat])),
     });
+    this.spreadVampiricDisease(this.state.frames[this.state.frames.length - 1] as CombatFrame);
   }
 
   /** Does `side` strike this sub-round? Both minions in the normal pair;
@@ -8820,6 +8823,30 @@ export class VtesEngine implements EngineOps {
 
   /** Named counters on a minion that belong to no Methuselah (hostage,
    *  nightmare). Removal clamps at 0. */
+  /** Vampiric Disease (102088): "Each time a vampire with a disease counter
+   *  unlocks, they burn 1 blood or, if unable, burn the disease counter."
+   *  Called only where the vampire actually unlocks (not when it is already
+   *  unlocked), at the start of the unlock phase (ANK 20180702). */
+  private diseaseOnUnlock(minion: MinionId): void {
+    const m = findMinion(this.state, minion);
+    if (!m || (m.counters?.["disease"] ?? 0) <= 0) return;
+    if (m.blood >= 1) this.emit({ type: "BloodBurned", minion: m.id, amount: 1 });
+    else this.addMinionCounters(m.id, "disease", -1);
+  }
+
+  /** Vampiric Disease (102088): "If a vampire with a disease counter is in
+   *  combat at close range with another vampire, the second vampire gets a
+   *  disease counter before strikes are chosen." One counter per vampire. */
+  private spreadVampiricDisease(cf: CombatFrame): void {
+    if (cf.range !== "close") return;
+    const a = findMinion(this.state, cf.acting);
+    const o = findMinion(this.state, cf.opposing);
+    if (!a || !o || a.kind !== "vampire" || o.kind !== "vampire") return;
+    const has = (m: MinionState) => (m.counters?.["disease"] ?? 0) > 0;
+    if (has(a) && !has(o)) this.addMinionCounters(o.id, "disease", 1);
+    else if (has(o) && !has(a)) this.addMinionCounters(a.id, "disease", 1);
+  }
+
   addMinionCounters(minion: MinionId, kind: string, amount: number): void {
     this.emit({ type: "MinionCountersChanged", minion, kind, delta: amount });
   }

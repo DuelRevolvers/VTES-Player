@@ -12524,8 +12524,8 @@
   {
     "id": 102088,
     "name": "Vampiric Disease",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast disease counter z propagacją, zakazem gain blood z hunt i kosztem przy unlock. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Master 'Put this card on a vampire' jest w registry/cards.ts tylko jako goły gainPool 1 (bez permanentu, bez overlay). Komentarz wcześniej twierdził pełną zgodność; poprawiono komentarz. Wymaga mechaniki master dołączanego do vampire. Źródło tekstu: src/cards/registry.json."
+    "status": "PARTIAL_FIX",
+    "evidence": "Zaimplementowano: mistrz przypinany do dowolnego vampire (scope any); przy wejściu do gry kładzie jeden licznik choroby (counters.disease, jeden na vampire). Licznik zabiera 1 krew przy każdym odblokowaniu vampire (diseaseOnUnlock w sweepie unlock phase, tylko gdy vampire faktycznie się odblokowuje; bez krwi spala licznik). Vampire z licznikiem nie zdobywa krwi z hunt (huntAmountFor = 0). W walce na close range drugi vampire dostaje licznik (spreadVampiricDisease przy starcie combat i przy każdej nowej rundzie close). Test: tests/cards/vampiric-disease.test.ts (7/7). NIE ZWERYFIKOWANO end-to-end: odblokowanie w pełnej unlock phase oraz walka grana od deklaracji bloku; testy wywołują metody engine bezpośrednio. Ruling: odblokowanie już odblokowanego vampire nie uruchamia efektu (ANK 20170227)."
   },
   {
     "id": 102089,

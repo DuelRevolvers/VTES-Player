@@ -701,6 +701,9 @@ export function costSourceAvailable(entry: PermanentInPlay): number {
 }
 
 export function huntAmountFor(state: GameState, minion: MinionState): number {
+  // "A vampire with a disease counter cannot gain blood by hunting"
+  // (Vampiric Disease, 102088).
+  if ((minion.counters?.["disease"] ?? 0) > 0) return 0;
   // "…gain enough blood from the blood bank to reach FULL CAPACITY" (Festivo
   // dello Estinto). It answers the same question with a different shape, so
   // it is folded HERE rather than bolted onto the hunt payout: every reader

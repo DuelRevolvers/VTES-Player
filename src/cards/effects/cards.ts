@@ -35801,15 +35801,27 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Vampiric Disease [102088] — PLACEHOLDER: a bare gainPool stub; the card text (attach to a vampire) is NOT implemented (see docs/card-audit)
+    // Vampiric Disease [102088] — "Put 1 disease counter on a vampire. If a
+    // vampire with a disease counter is in combat at close range with another
+    // vampire, the second vampire gets a disease counter before strikes are
+    // chosen. A vampire with a disease counter cannot gain blood by hunting.
+    // Each time a vampire with a disease counter unlocks, they burn 1 blood
+    // or, if unable, burn the disease counter. A vampire can have only one
+    // disease counter." The counters are on the vampire (`counters.disease`);
+    // the card's attached copy places the first one (`vampiricDisease`).
     krcgId: 102088,
     name: "Vampiric Disease",
     cardType: "master",
     bloodCost: 0,
+    poolCost: 0,
+    permanent: {
+      where: "bearer",
+      statics: {},
+      tags: [],
+      attach: { scope: "any", kind: "vampire" },
+    },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Veles' Hunt [102099] — fala 45 wierna (300) pełna zgodność bez wydmuszek
@@ -42269,6 +42281,17 @@ const toyChestTest: CardHandler = {
   },
 };
 
+const vampiricDisease: CardHandler = {
+  ...compileSpec(specByName("Vampiric Disease")),
+  onEnterPlay(entry, owner, ops) {
+    if (owner.minion === null) return;
+    const bearer = findMinion(ops.state, owner.minion);
+    // One disease counter per vampire (the card's own rule).
+    if (!bearer || (bearer.counters?.["disease"] ?? 0) > 0) return;
+    ops.addMinionCounters(bearer.id, "disease", 1);
+  },
+};
+
 const CHANJELIN_BURN = "chanjelinBurn";
 
 /**
@@ -48144,6 +48167,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     anachronism,
     toyChestTest,
     chanjelinWard,
+    vampiricDisease,
     vessel,
     magnum44,
     doubleDeuce,
