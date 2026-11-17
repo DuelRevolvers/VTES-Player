@@ -35436,7 +35436,7 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     usable: [],
     modes: [
-      { level: "basic", discipline: "tem", effects: [{ kind: "variableBloodX" }, { kind: "actionStealth", amount: 1 }] }
+      { level: "basic", discipline: "tem", effects: [{ kind: "variableBloodX" }, { kind: "searchCostXOnVampire", cardTypes: ["retainer", "equipment"] }, { kind: "actionStealth", amount: 1 }] }
     ],
   },
   {

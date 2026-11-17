@@ -1191,6 +1191,13 @@ export type EffectPrimitive =
    *  paid AT PLAY — unlike Bloodlust's X, which is paid on success. The
    *  value rides in the option as `xBlood`. */
   | { kind: "variableBloodX" }
+  /** "Search your library (shuffle afterward) and/or ash heap for an ally,
+   *  retainer or equipment card costing X or fewer blood or pool and put
+   *  that card on this vampire" (Summon History). X is the card's own X,
+   *  read at resolution; the search is raised then, like searchEquip.
+   *  Put in play ignoring requirements (ruling, group G00110). Allies are
+   *  NOT built: there is no op that puts an ally on a vampire. */
+  | { kind: "searchCostXOnVampire"; cardTypes: PlayCostCardType[] }
   /** "Equip this vampire with a melee weapon FROM YOUR HAND" and its
    *  siblings — bring a permanent card into play outside its own
    *  equip/employ/recruit action (docs/play-from-hand-design.md). */

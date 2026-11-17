@@ -2332,6 +2332,20 @@ function compileActionCard(spec: CardSpec): CardHandler {
             // fixed at announcement and rides in the action's params.
             applyPlayFromHand(ops, e, af.actingSeat, af.acting, af.card?.params ?? {});
             break;
+          case "searchCostXOnVampire": {
+            // Like searchEquip: raised at resolution, never announced. X is
+            // the one paid at play (variableBloodX), so it is read here.
+            ops.raiseChoice({
+              seat: af.actingSeat,
+              cardName: spec.name,
+              cardId: af.card?.instance.id ?? "",
+              key: "searchCostX",
+              params: { minion: af.acting, x: String(Number(af.card?.params["xBlood"] ?? "0")) },
+              // "Find nothing" is the decline, so the shuffle is never skipped.
+              optional: false,
+            });
+            break;
+          }
           case "searchEquip": {
             // p. 48: "You do NOT search your library until the action is
             // successful", and the card is never announced — so this is
@@ -12398,6 +12412,60 @@ export function compileSpec(spec: CardSpec): CardHandler {
         // to owe — the moment a zone here is a LIBRARY, one is owed once,
         // when the sequence ends, and owed even if nothing was found (p. 48).
         burnEmptyStore(st, frame.cardId, ops);
+      },
+    };
+  }
+  // Summon History: retainers and equipment from the library or ash heap,
+  // costing X or fewer (blood or pool, printed cost, requirements ignored),
+  // put on this vampire. Allies are not offered (no ally-attach op yet).
+  const costXSearch = spec.modes.flatMap((m) => m.effects).find(
+    (e) => e.kind === "searchCostXOnVampire",
+  ) as Extract<EffectPrimitive, { kind: "searchCostXOnVampire" }> | undefined;
+  if (costXSearch) {
+    choiceByKey["searchCostX"] = {
+      options: (frame, state, registry) => {
+        const out: LegalOption[] = [];
+        const seat = getSeat(state, frame.seat);
+        const bearer = findMinion(state, frame.params["minion"] ?? "");
+        const x = Number(frame.params["x"] ?? "0");
+        if (bearer) {
+          for (const zone of ["library", "ashHeap"] as const) {
+            const pile = zone === "library" ? seat.library : (seat.ashHeap ?? []);
+            for (const c of pile) {
+              // A burnt vampire in the ash heap is not a retainer or equipment.
+              if (c.crypt) continue;
+              if (!searchMatches(c, registry, costXSearch.cardTypes, false)) continue;
+              const h = registry[c.name]!;
+              if ((h.bloodCost ?? 0) > x || (h.poolCost ?? 0) > x) continue;
+              if (h.isUnique && seatControlsCopy(state, frame.seat, c.name)) continue;
+              if (cannotBeEquipped(bearer, "equipment") && (h.costTypes?.(null, undefined) ?? []).includes("equipment")) continue;
+              out.push({
+                id: `choice:${spec.name}:${frame.cardId}:searchCostX:${zone}:${c.id}`,
+                kind: "answerChoice" as const,
+                label: `Put ${c.name} (${zone === "library" ? "library" : "ash heap"}) on this vampire`,
+                params: { card: c.id, zone },
+              });
+            }
+          }
+        }
+        // "Find nothing" is always legal (p. 48).
+        out.push({
+          id: `choice:${spec.name}:${frame.cardId}:searchCostX:none`,
+          kind: "answerChoice" as const,
+          label: "Find nothing",
+          params: { card: "none" },
+        });
+        return out;
+      },
+      apply: (frame, choice, ops) => {
+        const card = choice.params["card"];
+        const zone = choice.params["zone"] as "library" | "ashHeap" | undefined;
+        const minion = frame.params["minion"];
+        if (card && card !== "none" && zone && minion && findMinion(ops.state, minion)) {
+          ops.attachFromZone({ seat: frame.seat, cardId: card, zone, attachTo: minion });
+        }
+        // The library was searched, so it is shuffled either way (p. 14).
+        ops.shuffleLibrary(frame.seat);
       },
     };
   }

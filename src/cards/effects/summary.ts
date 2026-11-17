@@ -282,6 +282,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   actionRemoveFromAshHeap: "deny",
   actionStun: "deny",
   variableBloodX: null,
+  searchCostXOnVampire: "search",
   burnIfNotBlocking: "deny",
   cancelReferendum: "deny",
   cancelStrikeCard: "deny",
