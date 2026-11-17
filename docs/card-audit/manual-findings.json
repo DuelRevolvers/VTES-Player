@@ -11379,7 +11379,7 @@
     "id": 101897,
     "name": "Summon History",
     "status": "CODE_DISCREPANCY",
-    "evidence": "Basic ma tylko stealth zamiast kosztu X i wyszukania ally/retainer/equipment; brak superior vampire z crypt/ash heap. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego."
+    "evidence": "Stan: karta nadal jest atrapą (basic: tylko actionStealth; superior: brak). Tekst: [tem] szukanie ally/retainer/equipment z kosztem X lub mniej (krew albo pool) w bibliotece i/lub stosie odrzuconych, wejście na tego vampira z życiem równym startowemu; [TEM] szukanie non-scarce vampire z krypty/stosu z pojemnością X lub mniej, wejście bez krwi. Brakuje: (1) koszt X przy zagraniu (rulings: X ustalany przy zagraniu, może być 0; LSJ 20100314, LSJ 20030502); (2) wyszukiwanie w krypcie z wyborem vampira (attachFromZone obsługuje tylko library/hand/ashHeap); (3) wejście allies 'na tego vampira' z życiem startowym: ally jest osobnym minionem, sposób umieszczenia wymaga rozstrzygnięcia; (4) ignorowanie wymagań Dyscypliny: wejście w wersji inferior (rulings RBK equip/recruit, LSJ 20100204, PIB 20111101 dla X = 0 przy Reanimated Corpse). Nie zaimplementowano; brak testu. Summon Soul i Summon the Serpent to te same atrapy w tej samej fali."
   },
   {
     "id": 101898,

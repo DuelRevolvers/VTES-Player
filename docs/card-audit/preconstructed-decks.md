@@ -7,9 +7,9 @@ To zestawienie aktualnych wpisów audytu, nie ponowna weryfikacja wszystkich kla
 ## Podsumowanie
 
 - Unikalne karty: **727**; z wpisem w audycie: **727**; bez wpisu: **0**. Brakujące ID w registry: **0**; karty bez flagi supported: **0**.
-- Otwarte ustalenia dotyczą **58 różnych kart**: CODE_DISCREPANCY 2, PARTIAL_FIX 56, CONFIRMED_BUG 0, UNRESOLVED 0. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
+- Otwarte ustalenia dotyczą **57 różnych kart**: CODE_DISCREPANCY 1, PARTIAL_FIX 56, CONFIRMED_BUG 0, UNRESOLVED 0. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
 - **29/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
-- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **79**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
+- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **80**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
 
 ## Dodatkowe scenariusze odtworzone w silniku
 
@@ -63,7 +63,7 @@ Liczby to **różne ID kart**, a nie liczba kopii. Listy obejmują tylko otwarte
 | 🏆 Tournament Winners 2024 / 2024-02-10 — Malkavian 95 Bleed (Mexico NC — Melissa Avilés, 10p, Stealth & Bleed) | pełna | 28 | 3 | [Alabástrom (G6)](#karta-200039), [The Sleeping Mind](#karta-101805), [Spirit Marionette](#karta-101848) |
 | 🏆 Tournament Winners 2024 / 2024-07-21 — Usurper High Council (Helsinki, Martin Weinmayer, 22p, Vote) | pełna | 25 | 0 | — |
 | 🏆 Tournament Winners 2026 / 2026-06-27 — Lasombra Potato Groove (Spanish NC, Leganés — Miquel Jorge, 158p, Vote/Bleed) | pełna | 35 | 1 | [Obedience](#karta-101309) |
-| 🏆 Tournament Winners 2024 / 2024-06-21 — The Unnamed Six Demon Bag (Origins Friday 2, Columbus — Darby Keeney, 44p, Baali Bleed) | pełna | 31 | 4 | [Anarch Convert (ANY)](#karta-200076), [Zubeida (G5)](#karta-201510), [Heart of Nizchetus](#karta-100903), [Lilith's Blessing](#karta-101108) |
+| 🏆 Tournament Winners 2024 / 2024-06-21 — The Unnamed Six Demon Bag (Origins Friday 2, Columbus — Darby Keeney, 44p, Baali Bleed) | pełna | 31 | 3 | [Anarch Convert (ANY)](#karta-200076), [Zubeida (G5)](#karta-201510), [Heart of Nizchetus](#karta-100903) |
 | 🏆 Tournament Winners 2023 / 2023-10-15 — Tupdog Brick Wall (EC 2023 Finalist — Rush Wall) | pełna | 34 | 4 | [Anarch Convert (ANY)](#karta-200076), [Hrothulf (G3)](#karta-200608), [Cedric (G4)](#karta-200257), [Drawing Out the Beast](#karta-100585) |
 | 🏆 Tournament Winners 2024 / 2024-03-09 — Weenie Animalism (Oceania NC, Auckland — Rush/Bleed) | pełna | 27 | 4 | [Anarch Convert (ANY)](#karta-200076), [Cry Wolf](#karta-100475), [Drawing Out the Beast](#karta-100585), [Terror Frenzy](#karta-101960) |
 
@@ -131,11 +131,6 @@ Występuje w **1** taliach. Częściowo naprawiono: odrębne warianty [pot]/[tem
 
 Występuje w **1** taliach. Dodano kontrolę poprzednich non-mandatory actions i liczenie akcji wbudowanych, z kart i przyznanych; mandatory hunt jest wyjątkiem. tests/cards/action-attachments.test.ts. Inne rodzaje obowiązkowych akcji i anulowanie wymagają dalszej weryfikacji. Aktualizacja: Ten sam warunkowy unlock on attach nie działa przy superior Sleeping Mind; wspólny kod testowany przez Abbot, sam scenariusz Khabar niezweryfikowany.
 
-<a id="karta-101108"></a>
-### Lilith's Blessing (101108) — CODE_DISCREPANCY
-
-Występuje w **1** taliach. Master daje gainPool zamiast permanenta z lock/master phase action, wyszukiwaniem Discipline i przemianą vampire w Bahari. Porównano tekst i metadane registry z aktualnym kodem; bez nowego testu scenariuszowego.
-
 <a id="karta-101143"></a>
 ### Magic of the Smith (101143) — PARTIAL_FIX
 
@@ -184,7 +179,7 @@ Występuje w **1** taliach. Rozdzielono [dom] i [obe]; [obe] przy sukcesie pozwa
 <a id="karta-101897"></a>
 ### Summon History (101897) — CODE_DISCREPANCY
 
-Występuje w **1** taliach. Basic ma tylko stealth zamiast kosztu X i wyszukania ally/retainer/equipment; brak superior vampire z crypt/ash heap. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego.
+Występuje w **1** taliach. Stan: karta nadal jest atrapą (basic: tylko actionStealth; superior: brak). Tekst: [tem] szukanie ally/retainer/equipment z kosztem X lub mniej (krew albo pool) w bibliotece i/lub stosie odrzuconych, wejście na tego vampira z życiem równym startowemu; [TEM] szukanie non-scarce vampire z krypty/stosu z pojemnością X lub mniej, wejście bez krwi. Brakuje: (1) koszt X przy zagraniu (rulings: X ustalany przy zagraniu, może być 0; LSJ 20100314, LSJ 20030502); (2) wyszukiwanie w krypcie z wyborem vampira (attachFromZone obsługuje tylko library/hand/ashHeap); (3) wejście allies 'na tego vampira' z życiem startowym: ally jest osobnym minionem, sposób umieszczenia wymaga rozstrzygnięcia; (4) ignorowanie wymagań Dyscypliny: wejście w wersji inferior (rulings RBK equip/recruit, LSJ 20100204, PIB 20111101 dla X = 0 przy Reanimated Corpse). Nie zaimplementowano; brak testu. Summon Soul i Summon the Serpent to te same atrapy w tej samej fali.
 
 <a id="karta-101931"></a>
 ### Talbot's Chainsaw (101931) — PARTIAL_FIX
