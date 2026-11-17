@@ -34348,16 +34348,19 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Lilith's Blessing [101108] — fala 45 wierna (300) pełna zgodność bez wydmuszek
+    // "Master. Put this card in play. As a master phase action, you may lock
+    //  this card to search your library for a master: Discipline card and
+    //  choose a ready non-Bahari vampire you control who has no blood. That
+    //  vampire gains the Discipline card (if any) and 3 blood and becomes
+    //  Bahari." The bespoke `lilithsBlessing` handler below.
     krcgId: 101108,
     name: "Lilith's Blessing",
     cardType: "master",
     bloodCost: 0,
     poolCost: 1,
+    permanent: { where: "seat", statics: {}, tags: [] },
     usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
   },
   {
     // Liquidation [101112]
@@ -42790,6 +42793,82 @@ const shadowCloak: CardHandler = {
 };
 
 /**
+ * Lilith's Blessing (101108). The clan it gives is "Bahari" (the card text's
+ * own word: "non-Bahari", "becomes Bahari").
+ */
+const BAHARI = "Bahari";
+
+const lilithsBlessing: CardHandler = {
+  ...compileSpec(specByName("Lilith's Blessing")),
+  abilityOptions(entry, owner, ctx) {
+    // A MASTER PHASE ACTION (p. 10) of the controller, once, and only with the card
+    // unlocked — "lock this card" is the price.
+    if (ctx.window !== "turn.master" || ctx.seat !== owner.seat || ctx.turnSeat !== owner.seat) return [];
+    if (entry.locked) return [];
+    const tf = ctx.state.frames.find((f) => f.kind === "turn");
+    if (tf?.kind !== "turn" || tf.masterActionsLeft <= 0) return [];
+    return getSeat(ctx.state, owner.seat)
+      .minions.filter((m) => m.kind === "vampire" && isReady(m) && m.blood === 0 && m.clan !== BAHARI)
+      .map((m) => ({
+        id: `ability:Lilith's Blessing:${entry.card.id}:bless:${m.id}`,
+        kind: "useAbility" as const,
+        label: `Lilith's Blessing: ${m.name} gains a Discipline, 3 blood, and becomes Bahari`,
+        source: entry.card.id,
+        params: { do: "bless", target: m.id },
+      }));
+  },
+  useAbility(entry, owner, choice, ops) {
+    const target = choice.params["target"];
+    if (choice.params["do"] !== "bless" || !target) return;
+    ops.spendMasterAction();
+    ops.lockPermanent(entry.card.id);
+    ops.raiseChoice({
+      seat: owner.seat,
+      cardName: "Lilith's Blessing",
+      cardId: entry.card.id,
+      key: "blessing",
+      params: { minion: target },
+      optional: false,
+    });
+  },
+  choiceOptions(frame, state, registry) {
+    const out: LegalOption[] = [];
+    // "Search your library for a master: Discipline card" — the library only.
+    for (const c of getSeat(state, frame.seat).library) {
+      if (!(registry[c.name]?.permanentTags ?? []).includes("discipline")) continue;
+      out.push({
+        id: `choice:Lilith's Blessing:${frame.cardId}:blessing:${c.id}`,
+        kind: "answerChoice" as const,
+        label: `Put ${c.name} on the vampire`,
+        params: { card: c.id },
+      });
+    }
+    // "…(if any)": the vampire still gains blood and the clan with nothing found.
+    out.push({
+      id: `choice:Lilith's Blessing:${frame.cardId}:blessing:none`,
+      kind: "answerChoice" as const,
+      label: "Find nothing",
+      params: { card: "none" },
+    });
+    return out;
+  },
+  applyChoice(frame, choice, ops) {
+    const minion = frame.params["minion"];
+    const vampire = minion ? findMinion(ops.state, minion) : null;
+    const card = choice.params["card"];
+    if (vampire) {
+      if (card && card !== "none") {
+        ops.attachFromZone({ seat: frame.seat, cardId: card, zone: "library", attachTo: vampire.id });
+      }
+      ops.emit({ type: "BloodGained", minion: vampire.id, amount: 3 });
+      ops.emit({ type: "ClanChanged", minion: vampire.id, clan: BAHARI });
+    }
+    // Searching the library shuffles it afterwards (p. 14), found or not.
+    ops.shuffleLibrary(frame.seat);
+  },
+};
+
+/**
  * Fever Pitch (102321) — the copy it leaves on the vampire:
  *
  *   "This vampire can burn this card during a bleed action they perform
@@ -48406,6 +48485,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     shadowCast,
     shadowCloak,
     feverPitch,
+    lilithsBlessing,
     propagandaOfTheDeed,
     tabrizAssembly,
     theBarrens,

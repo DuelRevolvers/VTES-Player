@@ -6644,8 +6644,8 @@
   {
     "id": 101108,
     "name": "Lilith's Blessing",
-    "status": "CODE_DISCREPANCY",
-    "evidence": "Master daje gainPool zamiast permanenta z lock/master phase action, wyszukiwaniem Discipline i przemianą vampire w Bahari. Porównano tekst i metadane registry z aktualnym kodem; bez nowego testu scenariuszowego."
+    "status": "FIXED_TARGETED",
+    "evidence": "Zaimplementowano: mistrz w grze (permanent na stronie gracza). Akcja fazy mistrza (wymaga masterActionsLeft > 0 i odblokowanej karty): blokuje kartę, zużywa akcję mistrza, potem wybór: karta Dyscypliny z biblioteki (lub 'nic'), vampire gotowy, bez krwi i nie-Bahari. Efekt: karta Dyscypliny na vampirze (attachFromZone), +3 krwi (BloodGained), zmiana klanu na Bahari (trwała, ClanChanged bez source), tasowanie biblioteki. Zdarzenie ClanChanged może teraz nie mieć source (zmiana trwała). Testy: tests/cards/lilith-blessing.test.ts 6/6 (oferta, przypięcie + krew + Bahari + blokada, 'nic' nadal daje krew i klan, vampire z krwią / już Bahari / zablokowana karta nie są oferowane). Brak rulingu w rulings.yaml (sprawdzono). Uwaga: krew V1 sprawdzana w fazie mistrza."
   },
   {
     "id": 101109,

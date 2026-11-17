@@ -2240,7 +2240,9 @@ export type GameEvent =
   | { type: "DisciplineGained"; minion: MinionId; discipline: string }
   /** A permanent change to a vampire's clan and Sterile trait. */
   | { type: "VampireTransformed"; minion: MinionId; clan: string; sterile: boolean }
-  | { type: "ClanChanged"; minion: MinionId; clan: string; source: CardInstanceId }
+  /** `source` absent = a permanent change ("becomes Bahari", Lilith's Blessing);
+   *  present = a change that lasts while that card sits on the vampire. */
+  | { type: "ClanChanged"; minion: MinionId; clan: string; source?: CardInstanceId }
   // Allies and retainers (phase 3, allies gate).
   /** `disciplines`: "plays cards requiring \<X\> as a vampire" (p. 11) —
    *  optional, so every existing fixture and saved log is untouched.

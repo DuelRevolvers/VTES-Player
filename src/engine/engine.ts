@@ -841,7 +841,10 @@ export class VtesEngine implements EngineOps {
       case "ClanChanged": {
         const vampire = findMinion(this.state, ev.minion);
         if (vampire?.kind === "vampire") {
-          (vampire.clanChanges ??= [{ clan: vampire.clan }]).push({ clan: ev.clan, source: ev.source });
+          (vampire.clanChanges ??= [{ clan: vampire.clan }]).push({
+            clan: ev.clan,
+            ...(ev.source !== undefined ? { source: ev.source } : {}),
+          });
           vampire.clan = ev.clan;
           const entry = vampire.attached.find((p) => p.card.id === ev.source);
           if (entry) entry.chosen = ev.clan;
