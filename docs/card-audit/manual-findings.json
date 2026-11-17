@@ -1856,8 +1856,8 @@
   {
     "id": 100310,
     "name": "Cavalier",
-    "status": "PARTIAL_FIX",
-    "evidence": "Naprawiono część: archetyp na własnym vampire (spec) oraz odblokowanie po udanej akcji kosztującej krew z jednorazowym spaleniem 1 krwi: wspólna klauzula unlockAfterAction (bloodCost 1, oncePerTurn) z warunkiem requiresBloodCost (playedCardCostsBlood w compile.ts). Test: tests/cards/cavalier.test.ts (2/2): oferta tylko na własnym vampire i reguła 'kosztujące krew' na prawdziwym rejestrze. NIE ZWERYFIKOWANO: pełnego przebiegu udanej akcji z kartą kosztującą krew (opcja play: nie jest oferowana w probie master phase); bez tego nie oznaczam jako w pełni naprawionej."
+    "status": "FIXED_TARGETED",
+    "evidence": "Naprawiono: archetyp na własnym vampire (spec). Po udanej akcji kosztującej krew (Magic of the Smith, blood 1) bearer dostaje opcjonalną ofertę unlock za 1 krew (wspólna klauzula unlockAfterAction: bloodCost 1, oncePerTurn, requiresBloodCost). Testy: tests/cards/cavalier.test.ts (2/2) oraz tests/cards/cavalier-e2e.test.ts (2/2): end to end z prawdziwą akcją kosztującą krew — 'tak' odblokowuje i spala 1 krew; bleed (bez kosztu krwi) nie dostaje oferty. Wcześniejsza sonda bez oferty dotyczyła bleedu i była zgodna z regułą."
   },
   {
     "id": 100311,
