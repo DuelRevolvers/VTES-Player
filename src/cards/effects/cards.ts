@@ -35629,20 +35629,6 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Toy Chest Test [102002] — PLACEHOLDER: a bare gainPool stub; the card text is NOT implemented (see docs/card-audit)
-    krcgId: 102002,
-    name: "Toy Chest Test",
-    cardType: "master",
-    requiresControlledSect: ["sabbat"],
-    requiresControlledCapacity: 5,
-    bloodCost: 0,
-    poolCost: 1,
-    usable: [],
-    modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "gainPool", amount: 1 }] }
-    ],
-  },
-  {
     // Tragic Love Affair [102006] — fala 45 wierna (300) pełna zgodność bez wydmuszek
     krcgId: 102006,
     name: "Tragic Love Affair",
@@ -42219,6 +42205,58 @@ const anachronism: CardHandler = {
   },
 };
 
+/** Toy Chest Test (102002) — "Master. Requires a ready Sabbat vampire with a
+ *  capacity above 4. Burn a Sabbat vampire with a capacity below 4 that has
+ *  been put into play since your last turn (not usable on a vampire that has
+ *  been contested)."
+ *
+ *  Hand-rolled: the requirement is a ready Sabbat vampire of capacity above 4
+ *  that the playing seat controls. The target is ANY Sabbat vampire of
+ *  capacity below 4 that entered play after the playing seat's last turn
+ *  ended (`enteredPlayAt` against `lastTurnEndedAt`). A vampire in play is not
+ *  a contested one (a contested unique is face down and out of play), so the
+ *  parenthesis is met by the target being in play. */
+const toyChestTest: CardHandler = {
+  name: "Toy Chest Test",
+  bloodCost: 0,
+  poolCost: 1,
+  isMasterCard: true,
+  options(card, ctx) {
+    if (ctx.window !== "turn.master") return [];
+    const playing = getSeat(ctx.state, ctx.seat);
+    const requirementMet = playing.minions.some(
+      (m) => m.kind === "vampire" && m.sect === "sabbat" && capacityOf(m) > 4 && isReady(m),
+    );
+    if (!requirementMet) return [];
+    const since = ctx.state.lastTurnEndedAt?.[ctx.seat] ?? -1;
+    const out: LegalOption[] = [];
+    for (const s of ctx.state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        if (m.kind !== "vampire" || m.sect !== "sabbat" || capacityOf(m) >= 4) continue;
+        if ((m.enteredPlayAt ?? -1) <= since) continue;
+        out.push({
+          id: playOptionId(this.name, null, m.id, card.id),
+          kind: "playCard",
+          label: `Toy Chest Test: burn ${m.name}`,
+          card: card.id,
+          name: this.name,
+          minion: null,
+          mode: null,
+          params: { target: m.id },
+        });
+      }
+    }
+    return out;
+  },
+  resolve(play, ops) {
+    const target = play.params["target"];
+    if (!target) throw new Error("Toy Chest Test: no target");
+    // TOTAL, as Vulnerability: the vampire chosen may have left play since.
+    if (findMinion(ops.state, target)) ops.burnMinion(target);
+  },
+};
+
 /** Agent of Power (100025) — "Master: Discipline. Trifle. Unique. Put this
  *  card on a vampire you control and choose a Discipline. This vampire gains
  *  1 level of that Discipline. Burn this card during your discard phase."
@@ -48008,6 +48046,7 @@ export function buildHandlerRegistry(): HandlerRegistry {
     spontaneousPower,
     agentOfPower,
     anachronism,
+    toyChestTest,
     vessel,
     magnum44,
     doubleDeuce,

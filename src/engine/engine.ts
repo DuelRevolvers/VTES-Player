@@ -645,6 +645,15 @@ export class VtesEngine implements EngineOps {
   private applyToEntities(ev: GameEvent): void {
     switch (ev.type) {
       case "TurnBegan": {
+        // The turn that was open ends now: record where, in the log, so
+        // "since your last turn" can read it (Toy Chest Test).
+        if (this.state.openTurnSeat !== undefined) {
+          this.state.lastTurnEndedAt = {
+            ...(this.state.lastTurnEndedAt ?? {}),
+            [this.state.openTurnSeat]: this.state.eventLog.length,
+          };
+        }
+        this.state.openTurnSeat = ev.seat;
         // "…more than once each turn" (p. 20): entry-granted action uses
         // reset when a new game turn begins, for every seat.
         for (const seat of this.state.seats) {
@@ -938,6 +947,7 @@ export class VtesEngine implements EngineOps {
         entry.card.owner ??= ev.seat; // p. 16: ownership, fixed for the game
         entry.card.clan = clanWhenControlled(entry.card);
         seat.minions.push(entry.card);
+        entry.card.enteredPlayAt = this.state.eventLog.length;
         break;
       }
       case "MinionSectChanged": {

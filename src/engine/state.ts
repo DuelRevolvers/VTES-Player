@@ -278,6 +278,9 @@ export const TITLE_VOTES: Record<VampireTitle, number> = {
 export type Sect = "camarilla" | "anarch" | "sabbat" | "independent" | "laibon";
 
 export interface MinionState {
+  /** The event-log index at which this vampire entered play (Toy Chest Test:
+   *  "put into play since your last turn"). */
+  enteredPlayAt?: number;
   id: MinionId;
   name: string;
   kind: MinionKind;
@@ -4603,6 +4606,11 @@ export interface GameState {
   edge: SeatId | null;
   frames: Frame[];
   eventLog: GameEvent[];
+  /** The seat whose turn is open now, and the event-log index at which each
+   *  seat's last turn ENDED (the next turn began). "Since your last turn"
+   *  (Toy Chest Test) reads these. */
+  openTurnSeat?: SeatId;
+  lastTurnEndedAt?: Partial<Record<SeatId, number>>;
   /** Clans for which the Blood Curse does not bar diablerie for this game.
    * The trait itself and any other diablerie restrictions are unaffected. */
   bloodCurseDiablerieExceptions?: string[];
