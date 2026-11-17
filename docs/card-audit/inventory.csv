@@ -2000,7 +2000,7 @@
 "101999","Touch of Pain","library","true","REVIEWED_NO_ISSUE_FOUND",""
 "102000","Tourette's Voice","library","true","CODE_DISCREPANCY",""
 "102001","Tower of London","library","true","PARTIAL_FIX",""
-"102002","Toy Chest Test","library","true","CODE_DISCREPANCY","simple_gain_pool_text_mismatch_review"
+"102002","Toy Chest Test","library","true","FIXED_TARGETED",""
 "102003","Tracker's Mark","library","true","PARTIAL_FIX",""
 "102004","Tradition Upheld","library","true","CODE_DISCREPANCY",""
 "102005","Traditionalist","library","true","REVIEWED_NO_ISSUE_FOUND",""
