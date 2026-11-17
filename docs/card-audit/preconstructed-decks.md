@@ -7,9 +7,9 @@ To zestawienie aktualnych wpisów audytu, nie ponowna weryfikacja wszystkich kla
 ## Podsumowanie
 
 - Unikalne karty: **727**; z wpisem w audycie: **727**; bez wpisu: **0**. Brakujące ID w registry: **0**; karty bez flagi supported: **0**.
-- Otwarte ustalenia dotyczą **59 różnych kart**: CODE_DISCREPANCY 3, PARTIAL_FIX 54, CONFIRMED_BUG 1, UNRESOLVED 1. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
+- Otwarte ustalenia dotyczą **58 różnych kart**: CODE_DISCREPANCY 2, PARTIAL_FIX 56, CONFIRMED_BUG 0, UNRESOLVED 0. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
 - **29/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
-- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **78**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
+- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **79**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
 
 ## Dodatkowe scenariusze odtworzone w silniku
 
@@ -35,7 +35,7 @@ Liczby to **różne ID kart**, a nie liczba kopii. Listy obejmują tylko otwarte
 | Fifth Edition (Anarch) / Brujah | pełna | 37 | 0 | — |
 | Fifth Edition (Anarch) / Gangrel | pełna | 38 | 0 | — |
 | Fifth Edition (Anarch) / Ministry | pełna | 36 | 3 | [Heart of Nizchetus](#karta-100903), [Revelation of the Serpent](#karta-102233), [Nonu Dis (G6)](#karta-201608) |
-| Fifth Edition (Companion) / Ravnos | pełna | 39 | 2 | [Shilmulo Tarot](#karta-101767), [Voracious Vermin](#karta-102266) |
+| Fifth Edition (Companion) / Ravnos | pełna | 39 | 1 | [Shilmulo Tarot](#karta-101767) |
 | Fifth Edition (Companion) / Salubri | pełna | 43 | 4 | [Anarch Troublemaker](#karta-100058), [Rolling with the Punches](#karta-101649), [Touch of Valeren](#karta-102262), [Opikun (G7)](#karta-201680) |
 | Fifth Edition (Companion) / Tzimisce | pełna | 40 | 2 | [War Ghoul](#karta-102144), [Childe of the Revolution](#karta-102246) |
 | New Blood / Malkavian | half-deck | 30 | 0 | — |
@@ -72,9 +72,9 @@ Liczby to **różne ID kart**, a nie liczba kopii. Listy obejmują tylko otwarte
 Poniższe opisy przytoczono z audytu. CODE_DISCREPANCY bywa oparte wyłącznie na analizie statycznej; CONFIRMED_BUG jest statusem historycznym i nie zawsze oznacza odtworzenie nowym testem. Nie wolno traktować UNRESOLVED jako potwierdzonego błędu.
 
 <a id="karta-100032"></a>
-### AK-47 (100032) — CONFIRMED_BUG
+### AK-47 (100032) — PARTIAL_FIX
 
-Występuje w **1** taliach. Znany błąd limitowanego dodatkowego strike: AK-47 otrzymuje opcjonalny strike automatycznie i może przez to zablokować inne limitowane źródło; także okno kolejnego źródła po oczekującym strike jest niekompletne. Szczegóły docs/additional-strike-followups.md. Tekst: src/cards/registry.json, ID 100032; implementacja: src/cards/effects/cards.ts.
+Występuje w **1** taliach. Dodatkowy strike jest nadal przyznawany po strike'u z broni, ale jest OPCJONALNY: w dodatkowej sub-rundzie strzelec może wybrać 'strike:decline' (bez obrażeń, zwalnia zobowiązanie do broni). Flaga CombatFrame.optionalAdditionalStrike jest ustawiana tylko dla opcjonalnych przyznań (AK-47, Caseless Rounds); zwykłe dodatkowe strike'i jej nie mają. Testy: tests/cards/weapon-riders.test.ts + last-equipment-modifiers.test.ts: 57 testów łącznie, w tym 'the optional extra strike can be DECLINED'. Pełne tests/cards+tests/engine: 398 plików, exit 0. NIEZROBIONE: wybór innego limitowanego źródła zamiast grantu AK-47 (kolejność przed grantem), docs/additional-strike-followups.md.
 
 <a id="karta-100058"></a>
 ### Anarch Troublemaker (100058) — PARTIAL_FIX
@@ -87,9 +87,9 @@ Występuje w **3** taliach. Naprawiono wybór vampire przeciwnika: karta nie wym
 Występuje w **1** taliach. Usunięto błędnie przyznawane każdemu celowi maneuver i press. tests/cards/rush-cards.test.ts potwierdza rush na zwykły cel bez obu bonusów i bez unlock. Red List nie jest jeszcze modelowana: prawidłowy opcjonalny maneuver albo press i unlock przy celu Red List pozostają do zrobienia; karta nie jest w pełni poprawna. Paczka 2: tekst (Ⓓ, Red List: optional maneuver lub press i unlock przy końcu akcji) pozostaje częściowo niezaimplementowany wg ustaleń paczki 1; status bez zmian.
 
 <a id="karta-100227"></a>
-### Blur (100227) — UNRESOLVED
+### Blur (100227) — PARTIAL_FIX
 
-Występuje w **1** taliach. Basic i superior zawierają ograniczone odpowiednio 1 i 2 additional strikes; combat-strikes.test.ts sprawdza superior po zwykłej parze strike. docs/additional-strike-followups.md wskazuje problem okna kolejnych źródeł przy pending strikes; brak odrębnego rozstrzygnięcia interakcji Blur z dalszymi źródłami. Paczka 3: bez zmian; wymaga decyzji o oknie kolejnych źródeł additional strikes (docs/additional-strike-followups.md).
+Występuje w **1** taliach. Zweryfikowano: basic daje 1 dodatkowy strike, superior 2 (limited), grant po pierwszej parze; tests/cards/combat-strikes.test.ts (Blur superior: 3 uderzenia M, 2 dodatkowe sub-rundy) i Quickness współistniejący z Blur (Quickness nieograniczony nie zużywa źródła limitowanego); limit egzekwowany przez usedLimitedAddl (tests/cards/weapon-riders.test.ts: AK-47 i limitowany Blur). NIEZROBIONE, WSPÓLNE Z SILNIKIEM: kolejność okna kolejnych źródeł przy oczekujących strike'ach (LSJ 20001206, docs/additional-strike-followups.md) nie jest jeszcze przebudowana; dotyczy źródeł nieograniczonych, nie zmienia liczby strike'ów Blur. Nie jest błędem specyficznym dla Blur.
 
 <a id="karta-100475"></a>
 ### Cry Wolf (100475) — PARTIAL_FIX
@@ -236,11 +236,6 @@ Występuje w **2** taliach. Osobny obowiązek hunt trwa do ogłoszenia hunt lub 
 
 Występuje w **2** taliach. Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Nie zweryfikowano LSJ 20001114 dla tej ścieżki prevention oraz starych pakietów bez strikePhase. Status bez zmian.
 
-<a id="karta-102266"></a>
-### Voracious Vermin (102266) — PARTIAL_FIX
-
-Występuje w **1** taliach. Naprawiono część: superior daje dodatkowy strike jako SPECYFIKOWANY 'burn weapon' (granted burnEquipment, grantBurnEquipmentStrike), a opcja burn celuje wyłącznie w broń (tag weapon, weaponOnly w grancie) — wcześniej każdy equipment wroga był celem. Test: tests/cards/cheap-tail.test.ts (26/26), w tym negatywne: sam nie-broniowy equipment nie daje opcji burn. NIE ZROBIONO: w sub-rundzie nadal jest dostępny hand strike i dodge; karta mówi 'additional ranged strike: burn weapon', więc to odstępstwo od tekstu, świadome według docs/cheap-tail-design.md §4 (granted, nie forced). Do decyzji: czy wymusić burn-weapon, gdy broń istnieje.
-
 <a id="karta-102283"></a>
 ### Touch of Oblivion (102283) — PARTIAL_FIX
 
@@ -272,9 +267,9 @@ Występuje w **1** taliach. Zdolność można teraz aktywować w dalszych oknach
 Występuje w **1** taliach. Superior nie pobiera blood automatycznie; w kroku range można opcjonalnie zapłacić za dodatkowy close maneuver, a bez blood nadal zagrać kartę. round-end.test.ts. Zakup jest obecnie dostępny tylko w range przy long, nie dowolnie w rundzie; wymagane są dalsze prace nad timingiem i ograniczeniami dyscyplin.
 
 <a id="karta-102321"></a>
-### Fever Pitch (102321) — CODE_DISCREPANCY
+### Fever Pitch (102321) — PARTIAL_FIX
 
-Występuje w **1** taliach. Superior rozdzielono na niezależne zagranie +1 bleed i zagranie attach po udanym bleed. after-resolution.test.ts gra tylko attach po zwykłym bleed, bez uprzedniego zagrania tej karty za +1 bleed; karta zagrana wcześniej nie otrzymuje opisanego warunkowego attach. Globalny exclusiveKey blokuje również zagranie za bleed gdy karta już leży na vampire. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego.
+Występuje w **1** taliach. Przebudowano superior: jedno zagranie. Tryb bleed (+1 bleed) wstrzymuje kartę w akcji (heldAfterResolution, held w afterResolutionAttach); po rozstrzygnięciu akcji jest przypinana na aktywnym vampire tylko przy udanym bleedzie na co najmniej 1 i bez drugiego egzemplarza, w przeciwnym razie trafia na stos odrzuconych. Usunięto osobny tryb 'attach' z ręki, który pozwalał przypiąć kartę bez zagrania jej jako +1 bleed. Blokada exclusiveKey dotyczy teraz tylko trybów przypinających, więc zagranie drugiego egzemplarza za bleed na vampirze z jednym jest legalne (egzemplarz trafia na stos). Zdolność spalenia do nieudanego bloku była już zbudowana (feverPitch, abilityOptions) i jest sprawdzona testem. Testy: tests/cards/after-resolution.test.ts 19/19 (przypięcie po zagraniu, brak przypięcia bez zagrania, nieudany bleed odkłada kartę, drugi egzemplarz, burn do nieudanego bloku). ODSTĘPSTWO / NIEZROBIONE: tekst mówi 'you can', a przypięcie następuje automatycznie, gdy jest legalne; brak opcjonalnej rezygnacji.
 
 <a id="karta-102336"></a>
 ### Rage of Apedemak (102336) — PARTIAL_FIX
