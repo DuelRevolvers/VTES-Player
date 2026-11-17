@@ -17103,7 +17103,9 @@ export const cardSpecs: CardSpec[] = [
     permanent: {
       where: "bearer",
       statics: {},
-      tags: ["Fever Pitch"],
+      // "feverPitch" too: `attachFromZone` takes the tags from here when it
+      // puts the card on the vampire after the choice (see held attach).
+      tags: ["Fever Pitch", "feverPitch"],
       exclusiveKey: "Fever Pitch",
     },
     usable: [],

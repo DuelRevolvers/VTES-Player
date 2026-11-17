@@ -2959,6 +2959,9 @@ export interface ActionFrame {
     statics: PermanentStatics;
     /** Not attached if the vampire already holds one with this tag. */
     exclusiveKey?: string;
+    /** "you CAN put it on" — when the bleed succeeds the player is asked;
+     *  declining leaves the card in the ash heap. */
+    optional?: boolean;
   }>;
   /** "Queue a combat between them" (Hedonism) — a combat between two
    *  minions NEITHER of which is the acting minion, entered only once this

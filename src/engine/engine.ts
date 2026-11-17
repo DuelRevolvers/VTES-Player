@@ -10704,7 +10704,19 @@ export class VtesEngine implements EngineOps {
       const m = findMinion(this.state, h.minion);
       const bled = success && af.actionKind === "bleed" && currentBleed(this.state, af) >= 1;
       const blocked = h.exclusiveKey !== undefined && (m?.attached.some((p) => p.tags.includes(h.exclusiveKey!)) ?? false);
-      if (bled && m && !blocked) {
+      if (bled && m && !blocked && h.optional) {
+        // "you can put it on": filed first, so declining leaves it in the
+        // ash heap; accepting takes it out again (`attachFromZone`).
+        this.toAshHeap(h.seat, h.card);
+        this.raiseChoice({
+          seat: h.seat,
+          cardName: h.card.name,
+          cardId: h.card.id,
+          key: "attachHeldAfterResolution",
+          params: { minion: m.id },
+          optional: true,
+        });
+      } else if (bled && m && !blocked) {
         this.putPermanentInPlay({ card: h.card, seat: h.seat, attachTo: m.id, statics: h.statics, tags: h.tags });
       } else {
         this.toAshHeap(h.seat, h.card);

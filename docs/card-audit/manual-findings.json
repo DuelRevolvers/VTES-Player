@@ -13922,8 +13922,8 @@
   {
     "id": 102321,
     "name": "Fever Pitch",
-    "status": "PARTIAL_FIX",
-    "evidence": "Przebudowano superior: jedno zagranie. Tryb bleed (+1 bleed) wstrzymuje kartę w akcji (heldAfterResolution, held w afterResolutionAttach); po rozstrzygnięciu akcji jest przypinana na aktywnym vampire tylko przy udanym bleedzie na co najmniej 1 i bez drugiego egzemplarza, w przeciwnym razie trafia na stos odrzuconych. Usunięto osobny tryb 'attach' z ręki, który pozwalał przypiąć kartę bez zagrania jej jako +1 bleed. Blokada exclusiveKey dotyczy teraz tylko trybów przypinających, więc zagranie drugiego egzemplarza za bleed na vampirze z jednym jest legalne (egzemplarz trafia na stos). Zdolność spalenia do nieudanego bloku była już zbudowana (feverPitch, abilityOptions) i jest sprawdzona testem. Testy: tests/cards/after-resolution.test.ts 19/19 (przypięcie po zagraniu, brak przypięcia bez zagrania, nieudany bleed odkłada kartę, drugi egzemplarz, burn do nieudanego bloku). ODSTĘPSTWO / NIEZROBIONE: tekst mówi 'you can', a przypięcie następuje automatycznie, gdy jest legalne; brak opcjonalnej rezygnacji."
+    "status": "FIXED_TARGETED",
+    "evidence": "Superior: jedno zagranie. Tryb bleed (+1 bleed) wstrzymuje kartę w akcji (heldAfterResolution, held w afterResolutionAttach). Po rozstrzygnięciu: przy udanym bleedzie na co najmniej 1 i bez drugiego egzemplarza karta trafia na stos odrzuconych, a gracz dostaje OPCJONALNE pytanie 'attachHeldAfterResolution' (you CAN). Tak: attachFromZone ze stosu odrzuconych na vampira (tagi z permanent.tags: Fever Pitch, feverPitch). Nie: pass, karta zostaje na stosie. Bez udanego bleedu lub przy drugim egzemplarzu: od razu na stos. Blokada exclusiveKey dotyczy tylko kart przypinających. Burn do nieudanego bloku: test przechodzi prawdziwą sekwencję bleed → blok → spalenie. Testy: tests/cards/after-resolution.test.ts 20/20 (przypięcie po akceptacji, odmowa, brak pytania bez udanego bleedu, drugi egzemplarz, burn do nieudanego bloku)."
   },
   {
     "id": 102322,

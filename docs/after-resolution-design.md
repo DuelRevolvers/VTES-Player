@@ -141,13 +141,14 @@ roles.
 Now the bleed mode uses `afterResolutionAttach` with `held: true`: the card is
 held on the action (`ActionFrame.heldAfterResolution`) and is NOT filed in the
 ash heap when it resolves. `resolveAction` settles it before the after-action
-window: attached to the acting vampire if the bleed succeeded for 1 or more and
-the vampire has no copy with the exclusive tag; otherwise filed.
+window. If the bleed succeeded for 1 or more and the vampire has no copy with
+the exclusive tag, the card is filed in the ash heap and the acting Methuselah
+is asked, as an OPTIONAL question (`attachHeldAfterResolution`), whether to put
+it on the vampire. Accepting takes it back out of the ash heap (`attachFromZone`,
+which takes its tags from the spec); declining (a plain pass) leaves it there.
+Otherwise it is filed straight away.
 
-Recorded deviation: "you can" is a choice in the rules, but the attach happens
-automatically when it is legal. No optional decline is offered yet.
-
-The `exclusiveKey` gate applies only to a card with an attaching mode, so a
-second copy may still be played for the bleed on a vampire that has one (it is
-then filed).
-
+This closes the "you can" deviation: the attach is a choice, not automatic.
+The exclusive-tag gate applies only to a card with an attaching mode, so a
+second copy played as a bleed modifier on a vampire that already has one is
+filed, and the first copy stays.

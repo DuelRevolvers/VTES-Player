@@ -316,14 +316,47 @@ describe("Fever Pitch (102321)", () => {
     const dp = passUntil(engine, (d) => d.options.some((o) => o.id === "play:Fever Pitch:superior:V1:bleed:fp"));
     runTrace(engine, [["Alice", "play:Fever Pitch:superior:V1:bleed:fp"]]);
     expect(state.seats[0]!.hand.some((c) => c.id === "fp")).toBe(false);
+    // The bleed landed: the player is asked whether to put it on the vampire.
+    let asked = false;
     for (let i = 0; i < 40 && !attached(state, "V1", "fp"); i++) {
       const next = engine.decision();
       if (!next) break;
+      const yes = next.options.find((o) => o.id.endsWith(":attachHeldAfterResolution:yes"));
+      if (yes) {
+        asked = true;
+        runTrace(engine, [[next.seat, yes.id]]);
+        continue;
+      }
       runTrace(engine, [[next.seat, next.options.find((o) => o.id === "pass")?.id ?? next.options[0]!.id]]);
     }
+    expect(asked).toBe(true);
     const entry = attached(state, "V1", "fp");
     expect(entry).toBeDefined();
     expect(entry!.tags).toContain("feverPitch");
+    expect((getSeat(state, "Alice").ashHeap ?? []).some((c) => c.id === "fp")).toBe(false);
+  });
+
+  it("you CAN: declining leaves the successful bleed's card in the ash heap", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { blood: 3, disciplines: { pre: "superior" } });
+    state.seats[0]!.hand.push({ id: "fp", name: "Fever Pitch" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", "bleed:V1"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+    passUntil(engine, (d) => d.options.some((o) => o.id === "play:Fever Pitch:superior:V1:bleed:fp"));
+    runTrace(engine, [["Alice", "play:Fever Pitch:superior:V1:bleed:fp"]]);
+    let asked = false;
+    for (let i = 0; i < 40; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.options.some((o) => o.id.endsWith(":attachHeldAfterResolution:yes"))) asked = true;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    expect(asked).toBe(true);
+    expect(attached(state, "V1", "fp")).toBeUndefined();
+    expect((getSeat(state, "Alice").ashHeap ?? []).some((c) => c.id === "fp")).toBe(true);
   });
 
   it("NEGATIVE SPACE: a card in hand is not put on the vampire after a bleed it did not modify", () => {

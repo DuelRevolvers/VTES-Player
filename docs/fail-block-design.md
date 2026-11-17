@@ -18,9 +18,12 @@ minion gets −1 intercept". Five are now in:
 | 102282 | Stygian Shroud | blocker −1 intercept | burn 1 blood: attempt fails |
 | 102316 | Dominant Personality | blocker −1 intercept | name a vampire that cannot block |
 
+Fever Pitch (102321) is built: the copy attached by a successful bleed is
+burned to fail the block attempt, and the test runs the real bleed → block →
+burn sequence (`tests/cards/after-resolution.test.ts`).
+
 Still out: Hedonism (fails a block *and queues a combat between two other
-minions*), Fever Pitch (attaches, and the fail comes later from the card
-in play), Faceless Night (failed blockers become locked), Mirror Walk
+minions*), Faceless Night (failed blockers become locked), Mirror Walk
 (lock the blocker and end the action).
 
 ## 2. What was already there

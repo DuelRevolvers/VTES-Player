@@ -7,9 +7,9 @@ To zestawienie aktualnych wpisów audytu, nie ponowna weryfikacja wszystkich kla
 ## Podsumowanie
 
 - Unikalne karty: **727**; z wpisem w audycie: **727**; bez wpisu: **0**. Brakujące ID w registry: **0**; karty bez flagi supported: **0**.
-- Otwarte ustalenia dotyczą **57 różnych kart**: CODE_DISCREPANCY 1, PARTIAL_FIX 56, CONFIRMED_BUG 0, UNRESOLVED 0. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
+- Otwarte ustalenia dotyczą **56 różnych kart**: CODE_DISCREPANCY 1, PARTIAL_FIX 55, CONFIRMED_BUG 0, UNRESOLVED 0. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
 - **29/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
-- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **80**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
+- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **81**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
 
 ## Dodatkowe scenariusze odtworzone w silniku
 
@@ -53,7 +53,7 @@ Liczby to **różne ID kart**, a nie liczba kopii. Listy obejmują tylko otwarte
 | New Blood III / Salubri | half-deck | 27 | 4 | [Vast Wealth](#karta-102092), [Touch of Valeren](#karta-102262), [Tranquility Shield](#karta-102362), [Opikun (G7)](#karta-201680) |
 | New Blood III / Tzimisce | half-deck | 34 | 0 | — |
 | Sabbat V5 / Path of Caine | pełna | 36 | 4 | [Yawp Court](#karta-102199), [Augury of Doom](#karta-102310), [Dance with the Devil](#karta-102315), [Rage of Apedemak](#karta-102336) |
-| Sabbat V5 / Path of Cathari | pełna | 35 | 3 | [Anarch Troublemaker](#karta-100058), [Fever Pitch](#karta-102321), [Gostoso (G6)](#karta-201754) |
+| Sabbat V5 / Path of Cathari | pełna | 35 | 2 | [Anarch Troublemaker](#karta-100058), [Gostoso (G6)](#karta-201754) |
 | Sabbat V5 / Path of Death | pełna | 41 | 3 | [Obedience](#karta-101309), [Dance of the Dead](#karta-102314), [Eulogio Sánchez de los Reyes (G6)](#karta-201750) |
 | Sabbat V5 / Path of Power and the Inner Voice | pełna | 42 | 1 | [Věnceslava, The Implacable (G6)](#karta-201776) |
 | 🏆 Tournament Winners 2025 / 2025-10-19 — Shalmath Toolbox (EC Day 2, Aarhus — Nerijus Mikalajūnas, 50p) | pełna | 36 | 16 | [Big Game](#karta-100159), [Enkil Cog](#karta-100645), [Eye of Hazimel](#karta-100678), [Heart of Nizchetus](#karta-100903), [Hourglass of the Mind](#karta-100941), [Nephandus](#karta-101272), [Outside the Hourglass](#karta-101338), [Summon History](#karta-101897), [Talbot's Chainsaw](#karta-101931), [Tye Cooper](#karta-102053), [Alex Wilkins (G5)](#karta-200048), [Anarch Convert (ANY)](#karta-200076), [Donald Cargill (G5)](#karta-200365), [New Blood (ANY)](#karta-201052), [Shalmath (G6)](#karta-201274), [Walker Grimes (G5)](#karta-201462) |
@@ -179,7 +179,7 @@ Występuje w **1** taliach. Rozdzielono [dom] i [obe]; [obe] przy sukcesie pozwa
 <a id="karta-101897"></a>
 ### Summon History (101897) — CODE_DISCREPANCY
 
-Występuje w **1** taliach. Stan: karta nadal jest atrapą (basic: tylko actionStealth; superior: brak). Tekst: [tem] szukanie ally/retainer/equipment z kosztem X lub mniej (krew albo pool) w bibliotece i/lub stosie odrzuconych, wejście na tego vampira z życiem równym startowemu; [TEM] szukanie non-scarce vampire z krypty/stosu z pojemnością X lub mniej, wejście bez krwi. Brakuje: (1) koszt X przy zagraniu (rulings: X ustalany przy zagraniu, może być 0; LSJ 20100314, LSJ 20030502); (2) wyszukiwanie w krypcie z wyborem vampira (attachFromZone obsługuje tylko library/hand/ashHeap); (3) wejście allies 'na tego vampira' z życiem startowym: ally jest osobnym minionem, sposób umieszczenia wymaga rozstrzygnięcia; (4) ignorowanie wymagań Dyscypliny: wejście w wersji inferior (rulings RBK equip/recruit, LSJ 20100204, PIB 20111101 dla X = 0 przy Reanimated Corpse). Nie zaimplementowano; brak testu. Summon Soul i Summon the Serpent to te same atrapy w tej samej fali.
+Występuje w **1** taliach. Stan: karta nadal jest atrapą (basic: tylko actionStealth; superior: brak). Tekst: [tem] szukanie ally/retainer/equipment z kosztem X lub mniej (krew albo pool) w bibliotece i/lub stosie odrzuconych, wejście na tego vampira z życiem równym startowemu; [TEM] szukanie non-scarce vampire z krypty/stosu z pojemnością X lub mniej, wejście bez krwi. Brakuje: (1) koszt X przy zagraniu (rulings: X ustalany przy zagraniu, może być 0; LSJ 20100314, LSJ 20030502); (2) wyszukiwanie w krypcie z wyborem vampira (attachFromZone obsługuje tylko library/hand/ashHeap); (3) wejście allies 'na tego vampira' z życiem startowym: ally jest osobnym minionem, sposób umieszczenia wymaga rozstrzygnięcia; (4) ignorowanie wymagań Dyscypliny: wejście w wersji inferior (rulings RBK equip/recruit, LSJ 20100204, PIB 20111101 dla X = 0 przy Reanimated Corpse). Nie zaimplementowano; brak testu. Summon Soul i Summon the Serpent to te same atrapy w tej samej fali. PLAN (sprawdzony w kodzie, nic nie zmieniono): (a) koszt X: costOf (compile.ts ~490) nie przyjmuje parametrów; X trzeba wybierać przy zagraniu (wzór: opcje z params.x) i liczyć w bramce i w płatności; (b) wprowadzenie vampira z krypty: nowy op wzorowany na VampireTokenEnteredPlay (engine.ts ~1457) plus zdjęcie karty z krypty i wpis własnej karty; brak takiego helpera; (c) allies/retainers/equipment z biblioteki i stosu: playCardFromHand (engine.ts ~7445) z from zone library, płaci koszt, obsługuje wersję (mode) i replacement; wymaga ograniczenia kosztu ≤ X i wyboru strefy (library/ash heap).
 
 <a id="karta-101931"></a>
 ### Talbot's Chainsaw (101931) — PARTIAL_FIX
@@ -260,11 +260,6 @@ Występuje w **1** taliach. Zdolność można teraz aktywować w dalszych oknach
 ### Dance with the Devil (102315) — PARTIAL_FIX
 
 Występuje w **1** taliach. Superior nie pobiera blood automatycznie; w kroku range można opcjonalnie zapłacić za dodatkowy close maneuver, a bez blood nadal zagrać kartę. round-end.test.ts. Zakup jest obecnie dostępny tylko w range przy long, nie dowolnie w rundzie; wymagane są dalsze prace nad timingiem i ograniczeniami dyscyplin.
-
-<a id="karta-102321"></a>
-### Fever Pitch (102321) — PARTIAL_FIX
-
-Występuje w **1** taliach. Przebudowano superior: jedno zagranie. Tryb bleed (+1 bleed) wstrzymuje kartę w akcji (heldAfterResolution, held w afterResolutionAttach); po rozstrzygnięciu akcji jest przypinana na aktywnym vampire tylko przy udanym bleedzie na co najmniej 1 i bez drugiego egzemplarza, w przeciwnym razie trafia na stos odrzuconych. Usunięto osobny tryb 'attach' z ręki, który pozwalał przypiąć kartę bez zagrania jej jako +1 bleed. Blokada exclusiveKey dotyczy teraz tylko trybów przypinających, więc zagranie drugiego egzemplarza za bleed na vampirze z jednym jest legalne (egzemplarz trafia na stos). Zdolność spalenia do nieudanego bloku była już zbudowana (feverPitch, abilityOptions) i jest sprawdzona testem. Testy: tests/cards/after-resolution.test.ts 19/19 (przypięcie po zagraniu, brak przypięcia bez zagrania, nieudany bleed odkłada kartę, drugi egzemplarz, burn do nieudanego bloku). ODSTĘPSTWO / NIEZROBIONE: tekst mówi 'you can', a przypięcie następuje automatycznie, gdy jest legalne; brak opcjonalnej rezygnacji.
 
 <a id="karta-102336"></a>
 ### Rage of Apedemak (102336) — PARTIAL_FIX

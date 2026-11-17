@@ -6739,6 +6739,7 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
                 tags: [spec.name, ...e.tags],
                 statics: e.statics ?? {},
                 ...(spec.permanent?.exclusiveKey ? { exclusiveKey: spec.permanent.exclusiveKey } : {}),
+                optional: true,
               });
               break;
             }
@@ -12563,6 +12564,32 @@ export function compileSpec(spec: CardSpec): CardHandler {
         if (!payer || !target) return;
         ops.emit({ type: "BloodBurned", minion: payer, amount: unlockAfter.blood });
         ops.emit({ type: "MinionUnlocked", minion: target });
+      },
+    };
+  }
+  // "…you can put this card on this vampire after action resolution" —
+  // the held attach of a successful bleed (Fever Pitch superior). The card is
+  // already in the ash heap when this is asked; accepting takes it back out.
+  if (spec.modes.some((m) => m.effects.some((e) => e.kind === "afterResolutionAttach" && e.held === true))) {
+    choiceByKey["attachHeldAfterResolution"] = {
+      options: (frame, state) => {
+        const m = findMinion(state, frame.params["minion"] ?? "");
+        if (!m || !spec.permanent?.exclusiveKey) return [];
+        if (m.attached.some((p) => p.tags.includes(spec.permanent!.exclusiveKey!))) return [];
+        if (!(getSeat(state, frame.seat).ashHeap ?? []).some((c) => c.id === frame.cardId)) return [];
+        return [
+          {
+            id: `choice:${spec.name}:${frame.cardId}:attachHeldAfterResolution:yes`,
+            kind: "answerChoice" as const,
+            label: `${spec.name}: put it on ${m.name}`,
+            params: {},
+          },
+        ];
+      },
+      apply: (frame, _choice, ops) => {
+        const minion = frame.params["minion"];
+        if (!minion) return;
+        ops.attachFromZone({ seat: frame.seat, cardId: frame.cardId, zone: "ashHeap", attachTo: minion as MinionId });
       },
     };
   }
