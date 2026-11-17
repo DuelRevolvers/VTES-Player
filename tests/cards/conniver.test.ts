@@ -30,12 +30,26 @@ function cardOf(state: GameState) {
 }
 
 describe("Conniver (100407)", () => {
-  it("prey loses pool on a third seat's turn: lock the card and gain 1 blood", () => {
+  it("prey loses pool on a third seat's turn: the controller is asked, and 'yes' locks the card and gains 1 blood", () => {
     const { state, engine } = setup("Carol");
-    const prey = "Bob"; // Alice's prey in the fixture
-    engine.emit({ type: "PoolBurned", seat: prey, amount: 1 });
+    engine.emit({ type: "PoolBurned", seat: "Bob", amount: 1 }); // Bob is Alice's prey
+    const dp = engine.decision()!;
+    expect(dp.seat).toBe("Alice");
+    const yes = dp.options.find((o) => o.id.includes(":yes"))!;
+    expect(yes).toBeDefined();
+    engine.choose(yes.id);
     expect(minion(state, "V1").blood).toBe(2);
     expect(cardOf(state).locked).toBe(true);
+  });
+
+  it("'no' (declining) changes nothing", () => {
+    const { state, engine } = setup("Carol");
+    engine.emit({ type: "PoolBurned", seat: "Bob", amount: 1 });
+    const dp = engine.decision()!;
+    const decline = dp.options.find((o) => !o.id.includes(":yes"))!;
+    engine.choose(decline.id);
+    expect(minion(state, "V1").blood).toBe(1);
+    expect(cardOf(state).locked).toBe(false);
   });
 
   it("does nothing when the loss is by a seat that is not the prey", () => {
@@ -57,10 +71,12 @@ describe("Conniver (100407)", () => {
     expect(minion(state, "V1").blood).toBe(1);
   });
 
-  it("a locked card cannot be used again", () => {
+  it("a locked card is not offered again", () => {
     const { state, engine } = setup("Carol");
     engine.emit({ type: "PoolBurned", seat: "Bob", amount: 1 });
+    engine.choose(engine.decision()!.options.find((o) => o.id.includes(":yes"))!.id);
     engine.emit({ type: "PoolBurned", seat: "Bob", amount: 1 });
+    expect(engine.decision()?.options.some((o) => o.id.includes(":yes")) ?? false).toBe(false);
     expect(minion(state, "V1").blood).toBe(2);
   });
 });

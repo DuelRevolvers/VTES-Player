@@ -2439,7 +2439,7 @@
     "id": 100407,
     "name": "Conniver",
     "status": "FIXED_TARGETED",
-    "evidence": "Naprawiono: archetyp na własnym vampire (spec) + hook onPoolLost (nowy, wywoływany z emit dla PoolBurned po zastosowaniu zdarzenia). Gdy prey traci pulę w turze innej niż jego i kontrolera: blokada karty (ops.lockPermanent) i +1 krew z banku. Test: tests/cards/conniver.test.ts (5/5). ODSTĘPSTWO: karta mówi 'may' — zysk jest automatyczny, bez pytania o wybór; to jawne uproszczenie."
+    "evidence": "Naprawiono: archetyp na własnym vampire (spec) + hook onPoolLost. Gdy prey traci pulę w turze innej niż jego i kontrolera, kontroler dostaje OPCJONALNY wybór (raiseChoice, klucz conniverLock): tak = blokada karty i +1 krew z banku, nie = nic. Zablokowana karta nie jest oferowana ponownie. Test: tests/cards/conniver.test.ts (6/6)."
   },
   {
     "id": 100408,

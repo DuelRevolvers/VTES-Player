@@ -46681,6 +46681,8 @@ const loner: CardHandler = {
  * gain automatically rather than asking. A question for the controller would
  * be the faithful version; it is not built here.
  */
+const CONNIVER_LOCK = "conniverLock";
+
 const conniver: CardHandler = {
   ...compileSpec(specByName("Conniver")),
   onPoolLost(entry, owner, info, ops) {
@@ -46692,8 +46694,41 @@ const conniver: CardHandler = {
     const tf = ops.state.frames.find((f) => f.kind === "turn");
     if (tf?.kind !== "turn") return;
     if (tf.seat === controller || tf.seat === info.seat) return;
-    ops.lockPermanent(entry.card.id);
-    ops.emit({ type: "BloodGained", minion: bearer.id, amount: 1 });
+    // "…you MAY lock this card…": the controller decides. Asked, not taken.
+    ops.raiseChoice({
+      seat: controller,
+      cardName: "Conniver",
+      cardId: entry.card.id,
+      key: CONNIVER_LOCK,
+      params: { minion: bearer.id },
+      optional: true,
+    });
+  },
+  choiceOptions(frame, state) {
+    if (frame.key !== CONNIVER_LOCK) return [];
+    const bearer = frame.params["minion"] ? findMinion(state, frame.params["minion"]) : undefined;
+    if (!bearer) return [];
+    return [
+      {
+        id: `choice:Conniver:${frame.cardId}:${CONNIVER_LOCK}:yes`,
+        kind: "answerChoice" as const,
+        label: `Conniver: lock this card to move 1 blood to ${bearer.name}`,
+        params: {},
+      },
+    ];
+  },
+  applyChoice(frame, _choice, ops) {
+    if (frame.key !== CONNIVER_LOCK) return;
+    const bearer = frame.params["minion"];
+    if (!bearer || !findMinion(ops.state, bearer)) return;
+    // Re-read at the answer: the card may have locked or left in between.
+    const card = ops.state.seats
+      .flatMap((s) => s.minions)
+      .flatMap((m) => m.attached)
+      .find((p) => p.card.id === frame.cardId);
+    if (!card || card.locked) return;
+    ops.lockPermanent(frame.cardId);
+    ops.emit({ type: "BloodGained", minion: bearer, amount: 1 });
   },
 };
 
