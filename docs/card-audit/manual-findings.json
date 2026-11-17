@@ -5811,7 +5811,7 @@
     "id": 100969,
     "name": "Inceptor",
     "status": "PARTIAL_FIX",
-    "evidence": "Zaimplementowano CZĘŚCIOWO: unikatowy mistrz (unique) przypinany do vampire o pojemności dokładnie 1 (attach min/max 1, scope any). Po wejściu do gry kontroler MUSI odłożyć trzy karty z ręki, ash heap albo biblioteki na kartę, zakryte? nie: odkryte, poza grą (ops.storeCard, faceUp, po jednej odpowiedzi; pytanie nieopcjonalne, powtarzane). Test: tests/cards/inceptor.test.ts (2/2): trzy wybrane karty trafiają na kartę (w kolejności), karta odkryta, ręka reszta; brak opcji rezygnacji. NIE ZBUDOWANO: prawo bearera do zagrywania innych kopii tych kart jak na poziomie superior (wymaga reguły store-play w enumeracji opcji gry); nie przetestowano też bramki pojemności 1 przy przypinaniu (putPermanentInPlay ją omija)."
+    "evidence": "Zaimplementowano CZĘŚCIOWO: unikatowy mistrz (unique) przypinany do vampire o pojemności dokładnie 1 (attach min/max 1, scope any). Po wejściu do gry kontroler MUSI odłożyć trzy karty z ręki, ash heap albo biblioteki na kartę, odkryte, poza grą (ops.storeCard, faceUp, po jednej odpowiedzi; pytanie nieopcjonalne, powtarzane). Test: tests/cards/inceptor.test.ts (2/2): trzy wybrane karty trafiają na kartę (w kolejności), karta odkryta, ręka reszta; brak opcji rezygnacji. NIE ZBUDOWANO: prawo bearera do zagrywania innych kopii tych kart jak na poziomie superior (wymaga reguły store-play w enumeracji opcji gry); nie przetestowano też bramki pojemności 1 przy przypinaniu (putPermanentInPlay ją omija)."
   },
   {
     "id": 100970,
