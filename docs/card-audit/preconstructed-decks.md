@@ -264,5 +264,5 @@ Występuje w **1** taliach. Po successful bleed prey gracz wybiera gain blood lu
 <a id="karta-201776"></a>
 ### Věnceslava, The Implacable (G6) (201776) — PARTIAL_FIX
 
-Występuje w **1** taliach. Gain pool jest opcjonalny; odmowa nie zużywa once-per-turn i działa późniejsza kwalifikująca akcja, także po zapisie. crypt-wave-4.test.ts. Identyfikacja prey i kolejność przy zmianie/oust oraz wszystkich zagnieżdżonych zdarzeniach wymagają weryfikacji.
+Występuje w **1** taliach. Gain pool jest opcjonalny; odmowa nie zużywa once-per-turn i działa późniejsza kwalifikująca akcja, także po zapisie. crypt-wave-4.test.ts. Brak zysku, gdy kontroler został ousted (ANK 20220808; guard w compile.ts, test w crypt-wave-4.test.ts). Identyfikacja prey i kolejność przy zmianie/oust oraz wszystkich zagnieżdżonych zdarzeniach wymagają weryfikacji.
 

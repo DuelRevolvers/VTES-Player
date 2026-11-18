@@ -778,6 +778,24 @@ describe("Abderrahim", () => {
 });
 
 describe("Věnceslava", () => {
+  it("offers no gain once her controller is ousted before the action resolves (ANK 20220808)", () => {
+    const state = threeSeatGame();
+    asVampire(find(state, "V1"), "Věnceslava, The Implacable (G6)");
+    const engine = new VtesEngine(state, testRegistry);
+    walkTo(engine, "bleed:V1");
+    runTrace(engine, [["Alice", "bleed:V1"]]);
+    // Ousted by a referendum effect during the action: the ability is not applied.
+    state.seats[0]!.ousted = true;
+    for (let i = 0; i < 40; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (state.eventLog.some((e) => e.type === "ActionResolved")) break;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    const dp = engine.decision();
+    expect(dp?.window === "choice" && dp.options.some((o) => o.id.includes("actionPoolGain"))).toBe(false);
+  });
+
   it("gains a pool after an action during which the prey burned some", () => {
     const state = threeSeatGame();
     asVampire(find(state, "V1"), "Věnceslava, The Implacable (G6)");
