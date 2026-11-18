@@ -750,4 +750,21 @@ describe("Donald Cargill", () => {
     expect(resolved(state).passed).toBe(passed);
     expect(bearer.blood).toBe(expected);
   });
+
+  it("still burns when the predator is ousted by the referendum itself [LSJ 20090115-2]", () => {
+    // Alice (the caller, Bob's predator) has 1 pool: the Uprising burn takes
+    // it to 0, then Treachery's caller burn ousts her. Donald still applies.
+    const state = votingGame();
+    const bearer = minion(state, "W");
+    bearer.blood = 4;
+    Object.assign(bearer, { disciplines: { pre: "basic" } });
+    bearer.attached.push({ card: { id: bearer.id, name: "Donald Cargill (G5)" }, locked: false, usedThisPhase: false, statics: testRegistry["Donald Cargill (G5)"]!.cryptEntry!().statics, tags: [] });
+    state.seats[0]!.pool = 1;
+    state.seats[1]!.hand.push({ id: "tr", name: "Treachery" });
+    const engine = new VtesEngine(state, testRegistry);
+    drive(engine, state, [CALL, ["Bob", "play:Treachery"], ["Alice", "vote:V1:for"]]);
+    expect(state.seats[0]!.ousted).toBe(true);
+    expect(resolved(state).passed).toBe(true);
+    expect(bearer.blood).toBe(3);
+  });
 });

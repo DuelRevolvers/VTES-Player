@@ -3847,6 +3847,7 @@ export class VtesEngine implements EngineOps {
       depth: this.state.frames.length,
       lost: {},
       riders: [...(rf.afterEffects ?? [])],
+      predatorAtCall: Object.fromEntries(this.state.seats.map((s) => [s.id, predatorOf(this.state, s.id)])),
     };
     this.handler(rf.cardName).applyReferendum?.(rf, this);
   }
@@ -3877,7 +3878,12 @@ export class VtesEngine implements EngineOps {
       return true;
     }
     delete this.state.referendumAftermath;
-    const info = { actionId: am.actionId, callingMinion: am.callingMinion, caller: am.caller };
+    const info = {
+      actionId: am.actionId,
+      callingMinion: am.callingMinion,
+      caller: am.caller,
+      ...(am.predatorAtCall ? { predatorAtCall: am.predatorAtCall } : {}),
+    };
     for (const { entry, owner } of this.allEntries()) {
       this.registry[entry.card.name]?.onReferendumPassed?.(entry, owner, info, this);
     }

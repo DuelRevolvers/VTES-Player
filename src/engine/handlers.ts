@@ -2105,7 +2105,7 @@ export interface CardHandler {
   onReferendumPassed?(
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },
-    info: { actionId: ActionId; callingMinion: MinionId | null; caller: SeatId },
+    info: { actionId: ActionId; callingMinion: MinionId | null; caller: SeatId; predatorAtCall?: Record<SeatId, SeatId> },
     ops: EngineOps,
   ): void;
   /** A master play has finished its as-played and resolution choices during its controller's master phase. */

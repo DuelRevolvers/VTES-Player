@@ -214,7 +214,7 @@ Występuje w **1** taliach. Dodano możliwość zapłacenia 1 blood za unlock po
 <a id="karta-200365"></a>
 ### Donald Cargill (G5) (200365) — PARTIAL_FIX
 
-Występuje w **1** taliach. Po passed referendum wywołanym przez predatora spala 1 blood; test pass/fail i innego kontrolera w referendum-outcomes.test.ts. Zmiana relacji predator po oust oraz przypadki torpor i niestandardowych referendum wymagają weryfikacji.
+Występuje w **1** taliach. Po passed referendum wywołanym przez predatora spala 1 blood; test pass/fail i innego kontrolera w referendum-outcomes.test.ts. Predator odczytywany z chwili wezwania referendum (predatorAtCall): spalenie działa także, gdy predator zostaje usunięty przez to referendum [LSJ 20090115-2]; test w referendum-outcomes.test.ts (Treachery). Pozostają przypadki torpor i niestandardowych referendum do weryfikacji.
 
 <a id="karta-200608"></a>
 ### Hrothulf (G3) (200608) — PARTIAL_FIX
