@@ -15338,6 +15338,9 @@ function addCryptAbilities(
       const bearer = findMinion(ops.state, owner.minion);
       if (!bearer) return;
       const controller = bearer.controller;
+      // "Not applied if his controller is ousted" (ANK 20220808, referendum
+      // effects): an ousted controller no longer gains from the action.
+      if (ops.state.seats.find((s) => s.id === controller)?.ousted) return;
       if (apg.preyBurnedPool) {
         // "DURING WHICH your prey burned pool" — read off the event log
         // for this action id. The record already exists, so there is

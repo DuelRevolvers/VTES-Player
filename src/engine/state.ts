@@ -4706,6 +4706,10 @@ export interface GameState {
     depth: number;
     lost: Record<SeatId, number>;
     riders: ReferendumAfterEffect[];
+    /** Each seat's predator when the referendum was called, read before
+     *  any oust rewires the table (Donald Cargill still applies if the
+     *  predator is ousted by the referendum, LSJ 20090115-2). */
+    predatorAtCall?: Record<SeatId, SeatId>;
   };
   /** Event card NAMES put into play this game. *"Each event card may only
    *  be played once each game"* (p. 37) — a bar that outlives the card
