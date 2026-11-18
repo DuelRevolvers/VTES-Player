@@ -17449,7 +17449,7 @@ export const cardSpecs: CardSpec[] = [
       tags: ["Shilmulo Tarot"],
       store: {
         faceUp: false,
-        fillOnEntry: { from: "libraryTop", count: 2 },
+        fillOnEntry: { from: "libraryTop", count: 2, onlyWhenEquipped: true },
         redirectsDraw: true,
         requiresReadyBearer: true,
         addTopInUnlockPhase: true,
@@ -22442,9 +22442,11 @@ export const cardSpecs: CardSpec[] = [
           { discipline: "chi", level: "superior" },
         ],
         playCostMod: { amount: -1, pays: "blood", cardTypes: ["combat"], minions: "bearer" },
+        untouchableWhileBearerReady: true,
       },
       rushGrant: { who: { scope: "bearer" }, target: { scope: "any" } },
       tags: ["equipment"],
+      unlockPoolOrBurn: { pool: 1 },
     },
     usable: [],
     modes: [
@@ -24077,7 +24079,7 @@ export const cardSpecs: CardSpec[] = [
     krcgId: 101272,
     name: "Nephandus",
     cardType: "ally",
-    ally: { life: 2, strength: 0, bleed: 1 },
+    ally: { life: 2, strength: 0, bleed: 1, strike: { damage: 1, ranged: true } },
     permanent: {
       where: "bearer",
       statics: { pressPerCombat: 1 },
@@ -25612,9 +25614,13 @@ export const cardSpecs: CardSpec[] = [
     weapon: { damage: 3, ranged: false, aggravated: false },
     permanent: {
       where: "bearer",
-      statics: { pressPerCombat: 1, cannotHunt: true },
+      statics: { mandatoryFirstRoundContinuePress: 1, cannotHunt: true },
       rushGrant: { who: { scope: "bearer" }, target: { scope: "any" }, stealth: 1 },
       retainerAbilities: { preventPerCombat: 1 },
+      // "If the bearer is ready during your unlock phase, this weapon inflicts
+      // 3 unpreventable damage on a ready minion you control." The controller
+      // picks, not the prey.
+      unlockPhaseDamage: { amount: 3, chooser: "controller" },
       tags: ["weapon", "melee"],
     },
     usable: [],
@@ -25865,7 +25871,7 @@ export const cardSpecs: CardSpec[] = [
     permanent: {
       where: "bearer",
       statics: {},
-      grantedAction: { do: "burnTorporVampire", directed: true },
+      grantedAction: { do: "burnTorporVampire", directed: true, ashHeapToHand: true },
       tags: ["wraith"],
     },
     bloodCost: 0,
@@ -26590,9 +26596,16 @@ export const cardSpecs: CardSpec[] = [
       {
         level: "basic",
         discipline: null,
-        // Red List is not yet modelled: do not grant its conditional rider to
-        // every target. The Red List maneuver-or-press and unlock remain open.
-        effects: [{ kind: "actionEnterCombat", targets: "minion" }],
+        // "Enter combat with a ready minion controlled by another Methuselah."
+        // The Red List rider is conditional on the target, not the card.
+        effects: [
+          {
+            kind: "actionEnterCombat",
+            targets: "minion",
+            othersOnly: true,
+            redListRider: { maneuverOrPress: true, unlockActor: true },
+          },
+        ],
       }
     ],
   },
@@ -27498,10 +27511,13 @@ export const cardSpecs: CardSpec[] = [
     unique: true,
     requiresSect: ["anarch"],
     ally: { life: 3, strength: 2, bleed: 0 },
+    // "This werewolf MUST enter combat with any minion controlled by another
+    // Methuselah as a Ⓓ action" — the werewolf's own, compelled rush. It was
+    // a rushGrant to the bearer, which gave the anarch an optional rush.
+    rush: { targets: "minion", othersOnly: true, mandatory: true },
     permanent: {
       where: "bearer",
       statics: { pressPerCombat: 1, bearerDoesNotUnlock: true },
-      rushGrant: { who: { scope: "bearer" }, target: { scope: "any", othersOnly: true } },
       tags: ["werewolf"],
     },
     bloodCost: 0,
@@ -30807,14 +30823,26 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Red List [101574] — fala 51 wierna (300) pełna zgodność bez wydmuszek
+    // "Requires a ready, titled, non-Red List vampire. Ⓓ Choose a ready ally
+    //  or a ready younger vampire. The chosen minion becomes Red List. That
+    //  minion may not attempt to block this action."
     krcgId: 101574,
     name: "Red List",
     cardType: "action",
     bloodCost: 0,
+    requiresReady: true,
+    requiresTitled: true,
+    requiresNotRedList: true,
     usable: [],
     modes: [
-      { level: "basic", discipline: null, effects: [{ kind: "actionStealth", amount: 1 }] }
+      {
+        level: "basic",
+        discipline: null,
+        effects: [
+          { kind: "blockRestriction", who: "chosen", chosenScope: "readyAllyOrYounger" },
+          { kind: "actionMarkRedList" },
+        ],
+      },
     ],
   },
   {
@@ -31724,9 +31752,20 @@ export const cardSpecs: CardSpec[] = [
         effects: [{ kind: "actionBleed", bonus: 1 }, { kind: "lockPreyMinion" }],
       },
       {
+        // "[OBE] +1 stealth action. Ⓓ Take control of a ready unlocked minion
+        //  until the end of the next action. That minion must bleed your prey
+        //  unless they must hunt."
         level: "superior",
         discipline: "obe",
-        effects: [{ kind: "actionStealth", amount: 1 }, { kind: "actionBleed", bonus: 2 }],
+        effects: [
+          { kind: "actionStealth", amount: 1 },
+          {
+            kind: "takeControlOfMinion",
+            who: { ready: true, unlocked: true },
+            until: "endOfNextAction",
+            mustBleedPrey: true,
+          },
+        ],
       },
     ],
   },
@@ -35436,7 +35475,7 @@ export const cardSpecs: CardSpec[] = [
     bloodCost: 0,
     usable: [],
     modes: [
-      { level: "basic", discipline: "tem", effects: [{ kind: "variableBloodX" }, { kind: "searchCostXOnVampire", cardTypes: ["retainer", "equipment"] }, { kind: "actionStealth", amount: 1 }] },
+      { level: "basic", discipline: "tem", effects: [{ kind: "variableBloodX" }, { kind: "searchCostXOnVampire", cardTypes: ["ally", "retainer", "equipment"] }] },
       { level: "superior", discipline: "tem", effects: [{ kind: "variableBloodX" }, { kind: "searchCryptForVampire" }] },
     ],
   },
@@ -39278,6 +39317,17 @@ const anarchTroublemaker: CardHandler = {
     // controlled and eligible, and locking a locked vampire is a legal
     // no-op. Contested vampires are stored separately and are out of play.
     const lockable = prey.minions.filter((m) => m.kind === "vampire");
+    // "…up to two" can be ZERO: the rulebook (Fifth Edition, Anarch
+    // Troublemaker) allows giving control of the card with no vampire
+    // locked, "if you have for instance an agreement with your prey". The
+    // zero option is offered with or without a target.
+    out.push({
+      id: `ability:${this.name}:${entry.card.id}:lock:none`,
+      kind: "useAbility",
+      label: `${this.name}: give it to ${prey.id} and lock no vampire`,
+      source: entry.card.id,
+      params: { act: "lock", targets: "" },
+    });
     for (const m of lockable) {
       out.push({
         id: `ability:${this.name}:${entry.card.id}:lock:${m.id}`,
@@ -48430,6 +48480,27 @@ export function buildHandlerRegistry(): HandlerRegistry {
   // (docs/crypt-plan.md §3), so this needs no namespacing.
   for (const spec of cryptSpecs) {
     registry[spec.name] = compileSpec(spec);
+  }
+  // Damage-taking abilities of minion cards. Added to the COMPILED handlers,
+  // not as bespoke overlays: an overlay rebuilt from the raw spec would drop
+  // the printed clan requirement (Nephandus, caught by library-clan-icons).
+  const incomingDamage: Record<string, NonNullable<CardHandler["incomingDamageReduction"]>> = {
+    // "Each strike or damaging effect made by the opposing minion against
+    // Nephandus in combat inflicts 1 less damage." Only the combat's OPPOSING
+    // minion counts; damage from anywhere else is not reduced.
+    Nephandus: (victim, pd, state) => {
+      const cf = state.frames.find((f) => f.kind === "combat");
+      if (cf?.kind !== "combat" || pd.source === null || pd.amount <= 0) return 0;
+      const opposingId =
+        cf.acting === victim.id ? cf.opposing : cf.opposing === victim.id ? cf.acting : null;
+      return opposingId !== null && pd.source === opposingId ? 1 : 0;
+    },
+    // "Tye Cooper is immune to non-aggravated damage." Aggravated damage
+    // still lands, so the whole non-aggravated packet is taken off.
+    "Tye Cooper": (_victim, pd) => (pd.aggravated || pd.amount <= 0 ? 0 : pd.amount),
+  };
+  for (const [name, reduce] of Object.entries(incomingDamage)) {
+    registry[name]!.incomingDamageReduction = reduce;
   }
   // Bespoke handlers and spec-plus-bespoke overlays override compiled specs.
   for (const bespoke of [

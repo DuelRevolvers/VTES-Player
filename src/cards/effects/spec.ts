@@ -414,7 +414,9 @@ export type EffectPrimitive =
       /** "all" is "this action is UNBLOCKABLE" (Mantle of the Moon) — the
        *  union of the allies and vampires bars, not a new kind of state. */
       who: "allies" | "vampires" | "titled" | "chosen" | "all";
-      chosenScope?: "younger" | "locked" | "any";
+      /** Red List's pick: "a ready ally or a ready younger vampire" — any
+       *  seat, ready only. */
+      chosenScope?: "younger" | "locked" | "any" | "readyAllyOrYounger";
     }
   /** "Minions [without Oblivion] must burn 1 blood [or life] to attempt to
    *  block this action" (docs/block-tax-design.md) — a toll on the attempt
@@ -670,6 +672,15 @@ export type EffectPrimitive =
       targets: "minion" | "vampire";
       /** Fleetness superior: "a locked minion". */
       lockedOnly?: boolean;
+      /** "Ⓓ Enter combat with a ready minion controlled by another
+       *  Methuselah" (Big Game). */
+      othersOnly?: boolean;
+      /** Big Game: "If that minion is a Red List minion, this minion gets an
+       *  optional maneuver or press in that combat and unlocks at the end of
+       *  the action if he or she is still ready." Only a Red List target
+       *  grants the rider; the choice of maneuver or press is made at
+       *  announcement, one option each. */
+      redListRider?: { maneuverOrPress: true; unlockActor: true };
       /** "Ⓓ Enter combat with AND LOCK a vampire" (Deep Song superior). */
       lockTarget?: boolean;
       /** "The target vampire is considered the ACTING MINION during that
@@ -2030,14 +2041,20 @@ export type EffectPrimitive =
         kind?: "vampire" | "ally";
         clan?: string;
         ready?: boolean;
+        /** "…a ready UNLOCKED minion" (Spirit Marionette). */
+        unlocked?: boolean;
         /** "Not usable to take control of a vampire with capacity 7 or more". */
         maxCapacity?: number;
         /** "…controlled by a Methuselah with 3 or fewer pool". */
         controllerMaxPool?: number;
       };
       /** `"permanent"` is a theft; the other two are loans, and the moment
-       *  they end is the borrower's, never the owner's. */
-      until: "endOfTurn" | "borrowerUnlock" | "permanent";
+       *  they end is the borrower's, never the owner's. `"endOfNextAction"`
+       *  ends with the next action (Spirit Marionette superior). */
+      until: "endOfTurn" | "borrowerUnlock" | "endOfNextAction" | "permanent";
+      /** "That minion must bleed your prey unless they must hunt" (Spirit
+       *  Marionette superior) — a mandatory bleed on the loan. */
+      mustBleedPrey?: boolean;
     }
   /** "Choose a Methuselah OR a location — or BOTH if the acting vampire
    *  is one of \<titles\>" (Cold War). §2 */
@@ -2366,6 +2383,10 @@ export type EffectPrimitive =
   /** "Ⓓ Lock a minion controlled by your predator or prey" (Distraction
    *  superior) — the mirror, with a RELATION filter rather than an age one. §3 */
   | { kind: "actionLockMinion"; scope: "predatorOrPrey"; directed: boolean }
+  /** Red List's Ⓓ payoff: "The chosen minion becomes Red List." The minion
+   *  is chosen at announcement by the paired `blockRestriction` (who
+   *  "chosen", chosenScope "readyAllyOrYounger"); this marks it on success. */
+  | { kind: "actionMarkRedList" }
   /** "Ⓓ Inflict N unpreventable damage on a READY minion" (Horseshoes) —
    *  environmental damage, so there is no prevention window to open and no
    *  combat. §4 */
@@ -2828,6 +2849,10 @@ export interface CardSpec {
   permanent?: {
     where: "seat" | "bearer";
     requiresReady?: boolean;
+    /** "During your unlock phase, burn N pool or burn this card" (Eye of
+     *  Hazimel). A real choice only while the pool can pay N; otherwise the
+     *  card burns. */
+    unlockPoolOrBurn?: { pool: number };
     statics: PermanentStatics;
     tags?: string[];
     /** Clan/sect-locked location: "Lock to give a [clan/sect] minion you
@@ -3041,6 +3066,10 @@ export interface CardSpec {
          *  CARD AT A TIME rather than as a subset: a subset choice over a
          *  hand is a power set of it (docs/store-plays-design.md §4). */
         from: "search" | "libraryTop" | "hand";
+        /** Filled only when the card enters play EQUIPPED (on a minion). A
+         *  card merely put into play, not equipped, takes nothing — Shilmulo
+         *  Tarot: LSJ 20090506 (the Alastor example). */
+        onlyWhenEquipped?: boolean;
         /** "Up to four"; `"all"` is "any number" (Gift of Proteus). */
         count: number | "all";
         cardTypes?: PlayCostCardType[];
@@ -4177,6 +4206,10 @@ export interface CardSpec {
       steal?: boolean;
       /** `burnTorporVampire`: life the actor gains on success. */
       gainLife?: number;
+      /** `burnTorporVampire`: "if that action is successful, you can move a
+       *  library card from your ash heap to your hand (discard down
+       *  afterward)" (Tye Cooper). Offered only after a burn that landed. */
+      ashHeapToHand?: boolean;
       /** `stealEquipment`: "…from a vampire IN TORPOR" (Tutu). Gates the
        *  option. docs/mummies-design.md §5 */
       fromTorporOnly?: boolean;
@@ -4280,7 +4313,15 @@ export interface CardSpec {
      *  which is what makes it a `ChoiceFrame` rather than an automatic
      *  effect — and it is MANDATORY, since the card says "chooses".
      *  docs/crypt-wave-5.md §5 */
-    unlockPhaseDamage?: { amount: number; aggravated?: boolean };
+    unlockPhaseDamage?: {
+      amount: number;
+      aggravated?: boolean;
+      /** Who chooses the minion. Default `prey` (Aemilius: "your prey
+       *  chooses"). `controller` is for a card whose own controller picks
+       *  (Talbot's Chainsaw: "inflicts 3 unpreventable damage on a ready
+       *  minion YOU control"). */
+      chooser?: "prey" | "controller";
+    };
     /** "If \<this vampire\> is ready at the start of your discard phase,
      *  you get +N discard phase actions" (Sreelekha). p. 37 grants one by
      *  default, and the hook fires after that default is set.
@@ -4661,6 +4702,13 @@ export interface CardSpec {
      *  rush is unqualified and reaches its own controller's vampires;
      *  this one may not. docs/plain-allies-design.md §2 */
     othersOnly?: boolean;
+    /** "This werewolf MUST enter combat … as a Ⓓ action" (Cry Wolf). The
+     *  rush is compelled: in the minion phase it is offered before any
+     *  non-mandatory action, once per turn, while a target exists. Read as
+     *  a per-turn obligation (the same shape as the mandatory hunt), with
+     *  LSJ 20090226 as the anchor: the mandatory action is performed, and
+     *  only then is the werewolf free. docs/card-audit/manual-findings.json (100475) */
+    mandatory?: boolean;
   };
   /** "Requires a prince or justicar" — the acting vampire's title must be
    *  one of these (p. 28 titles). */
@@ -4693,6 +4741,8 @@ export interface CardSpec {
    *  a different question from the named list above.
    *  docs/referendum-terms-design.md */
   requiresTitled?: boolean;
+  /** "Requires a ready, titled, non-Red List vampire" (Red List). */
+  requiresNotRedList?: boolean;
   /** "Requires a NON-STERILE \<x\>" (Waters of Duat, Childe of the
    *  Revolution). "Sterile vampires cannot perform actions to put new
    *  vampires in play" (glossary, p. 42) — a real rulebook trait that no

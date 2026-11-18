@@ -434,6 +434,27 @@ describe("Shilmulo Tarot (101767)", () => {
 
   const ADD_TOP = "ability:Shilmulo Tarot:tarot:addTop";
 
+  it("takes nothing when merely put into play, not equipped (LSJ 20090506)", () => {
+    const state = threeSeatGame();
+    Object.assign(find(state, "V1"), { clan: "Ravnos" });
+    alice(state).library.push(
+      { id: "l1", name: ".44 Magnum" },
+      { id: "l2", name: "Conditioning" },
+    );
+    const engine = new VtesEngine(state, testRegistry);
+    engine.putPermanentInPlay({
+      card: { id: "tarot", name: "Shilmulo Tarot" },
+      seat: "Alice",
+      attachTo: null,
+      statics: {},
+      tags: ["Shilmulo Tarot"],
+    });
+    const entry = state.seats[0]!.permanents.find((p) => p.card.id === "tarot");
+    expect(entry).toBeDefined();
+    expect(entry?.stored ?? []).toEqual([]);
+    expect(alice(state).library.map((c) => c.id)).toEqual(["l1", "l2"]);
+  });
+
   it("takes the top 2 cards face down when it enters play", () => {
     const state = threeSeatGame();
     Object.assign(find(state, "V1"), { clan: "Ravnos" });

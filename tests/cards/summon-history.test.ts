@@ -265,3 +265,63 @@ describe("Summon History (101897): superior, a burnt vampire from the ash heap",
     expect((engine.decision()?.options ?? []).some((o) => o.id.includes(":ashHeap:B1"))).toBe(false);
   });
 });
+
+describe("Summon History (101897): allies from the library or ash heap", () => {
+  /** X blood on V1; the library holds an ally within X and one beyond it. */
+  function allyGame(x: number) {
+    const state = threeSeatGame();
+    const alice = state.seats.find((s) => s.id === "Alice")!;
+    const v1 = makeMinion("V1", "Alice");
+    Object.assign(v1, { blood: x, disciplines: { tem: "basic" } });
+    alice.minions.push(v1);
+    alice.hand.push({ id: "sh", name: "Summon History" });
+    alice.library.push(
+      { id: "filler", name: "Conditioning" },
+      { id: "cai", name: "Caiaphas Smith" }, // 1 pool: within X=1
+      { id: "cour", name: "Courier" }, // 2 blood: beyond X=1
+    );
+    return { state, engine: new VtesEngine(state, testRegistry) };
+  }
+  const searchIds = (engine: VtesEngine): string[] =>
+    (engine.decision()?.options ?? []).map((o) => o.id).filter((id) => id.includes(":searchCostX:"));
+
+  it("offers an ally costing X or fewer, and not one that costs more", () => {
+    const { engine } = allyGame(1);
+    const option = engine.decision()!.options.find(
+      (o) => o.kind === "playCard" && o.name === "Summon History" && o.params["xBlood"] === "1",
+    )!;
+    engine.choose(option.id);
+    for (let i = 0; i < 60 && !searchIds(engine).length; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    const ids = searchIds(engine);
+    expect(ids).toContain("choice:Summon History:sh:searchCostX:library:cai");
+    expect(ids.some((i) => i.endsWith(":cour"))).toBe(false);
+  });
+
+  it("puts the ally in play as its own minion at its starting life, not on the vampire, for no cost", () => {
+    const { state, engine } = allyGame(1);
+    const pool = state.seats[0]!.pool;
+    const option = engine.decision()!.options.find(
+      (o) => o.kind === "playCard" && o.name === "Summon History" && o.params["xBlood"] === "1",
+    )!;
+    engine.choose(option.id);
+    for (let i = 0; i < 60 && !searchIds(engine).length; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      runTrace(engine, [[dp.seat, dp.options.find((o) => o.id === "pass")?.id ?? dp.options[0]!.id]]);
+    }
+    const start = testRegistry["Caiaphas Smith"]!.allyEntry!("basic")!.life;
+    runTrace(engine, [["Alice", "choice:Summon History:sh:searchCostX:library:cai"]]);
+    const ally = state.seats[0]!.minions.find((m) => m.id === "cai");
+    expect(ally).toBeDefined();
+    expect(ally!.kind).toBe("ally");
+    expect(ally!.controller).toBe("Alice");
+    expect(ally!.blood).toBe(start);
+    expect(find(state, "V1").attached.some((p) => p.card.id === "cai")).toBe(false);
+    expect(state.seats[0]!.library.some((c) => c.id === "cai")).toBe(false);
+    expect(state.seats[0]!.pool).toBe(pool);
+  });
+});

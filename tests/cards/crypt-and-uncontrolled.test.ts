@@ -311,6 +311,34 @@ describe("Yawp Court (102199)", () => {
     expect(state.frames.some((f) => f.kind === "referendum")).toBe(false);
   });
 
+  it("the ambush damage is ENVIRONMENTAL: taken after combat ends, not a strike", () => {
+    // RTR 19970630: "Damage inflicted at the end of combat is environmental."
+    const { state, engine } = courtGame();
+    runTrace(engine, [
+      ["Alice", "play:Kine Resources Contested"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // as played
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // announce
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], // A
+    ]);
+    const id = "ability:Yawp Court:yc:ambush:W";
+    expect(walkTo(engine, id)).toBe(true);
+    runTrace(engine, [["Bob", id]]);
+    // Run until the queued combat has been fought and has ended.
+    const combatDone = () => state.eventLog.some((e) => e.type === "CombatEnded") && !state.frames.some((f) => f.kind === "combat");
+    for (let i = 0; i < 120 && !combatDone(); i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      engine.choose((dp.options.find((o) => o.id === "pass") ?? dp.options[0]!).id);
+    }
+    expect(combatDone()).toBe(true);
+    // Environmental damage goes straight through the shared resolution path:
+    // no strike-damage event, and the 2 points are taken after the combat ends.
+    expect(state.eventLog.some((e) => e.type === "DamageInflicted" && e.minion === "W" && e.amount === 2)).toBe(false);
+    const ended = state.eventLog.findIndex((e) => e.type === "CombatEnded");
+    const afterEnd = state.eventLog.slice(ended + 1);
+    expect(afterEnd.some((e) => e.type === "BloodBurned" && e.minion === "W" && e.amount === 2)).toBe(true);
+  });
+
   it("…and the referendum is conducted afterwards, as normal", () => {
     const { state, engine } = courtGame();
     runTrace(engine, [

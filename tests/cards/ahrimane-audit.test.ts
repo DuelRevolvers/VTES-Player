@@ -372,7 +372,10 @@ describe("Helen and Howler equipment restrictions", () => {
     ]);
     const cf = s.frames.find((f) => f.kind === "combat");
     if (!cf || cf.kind !== "combat") throw new Error("no combat");
-    expect(cf.pressesCombat.acting).toBe(presses);
+    // The chainsaw's mandatory first-round press sits in its own pool; the
+    // retainer's optional press is in pressesCombat. Howler stops both weapon
+    // presses, so the usable total is the same as before the mandatory pool.
+    expect(cf.pressesCombat.acting + (cf.mandatoryFirstRoundPresses?.acting ?? 0)).toBe(presses);
   });
   it.each([["Helen Fairchild (G6)", false], ["Howler (G2)", false], ["", true]] as const)("%s: gun strike available=%s", (name, allowed) => {
     const { s, m, e } = board(name);

@@ -328,6 +328,9 @@ export interface MinionState {
   disciplines: Record<string, DisciplineLevel>;
   /** One bleed action per minion per turn (p. 20). */
   bledThisTurn: boolean;
+  /** "Red List minion" — the Red List action's chosen minion (Big Game's
+   *  rider). Set by the Red List payoff; absent otherwise. */
+  redList?: boolean;
   /** "None of your other minions attempted any actions this turn" (Loner).
    *  Set when an action is announced by this minion; reset at its turn start. */
   attemptedActionThisTurn?: boolean;
@@ -451,7 +454,14 @@ export interface MinionState {
    *  the minion first and gives it back on the way into their following turn.
    *  A second field rather than a second mechanism: one return address, one
    *  sweep per moment. docs/borrowed-minions-design.md §2 */
-  controlRevertsAt?: "endOfTurn" | "borrowerUnlock";
+  controlRevertsAt?: "endOfTurn" | "borrowerUnlock" | "endOfNextAction";
+  /** For `endOfNextAction`: the action the loan was made in. Only a LATER
+   *  action ends it — the Marionette's own action does not (Spirit Marionette). */
+  controlRevertsAfterAction?: ActionId;
+  /** Spirit Marionette: the borrowed minion must bleed its controller's prey
+   *  (unless it must hunt) before any non-mandatory action. Cleared when the
+   *  loan ends. */
+  mustBleedOnLoan?: boolean;
   /** "The chosen minions cannot play reaction cards, block or cast votes
    *  or ballots this turn" (Expulsion). It does NOT stop them acting —
    *  `canAct` is a separate predicate and the card does not say so.
@@ -1134,6 +1144,10 @@ export interface PermanentStatics {
   continuePressPerCombat?: number;
   /** Mandatory combat-long press, only to continue (Adrino). */
   mandatoryContinuePressPerCombat?: number;
+  /** "The bearer gets 1 press (mandatory), only usable to continue combat
+   *  during the first round" (Talbot's Chainsaw). Like the combat-long
+   *  mandatory press, but the credit expires when the first round ends. */
+  mandatoryFirstRoundContinuePress?: number;
   /** "1 optional press each combat, ONLY USABLE TO END COMBAT" (Qetu the
    *  Evil Doer) — the other restricted sibling. p. 32 gives a press two
    *  uses, continue or cancel a press to continue, so "to end" is exactly
@@ -1243,6 +1257,10 @@ export interface PermanentStatics {
    *  action" (Legacy of Caine) — the bearer's steal hunt, without the
    *  Restricted Vitae condition. Once per turn, by `stealHuntTargets`. */
   legacyStealHunt?: boolean;
+  /** "While the bearer is ready, this equipment cannot be moved or stolen"
+   *  (Eye of Hazimel). Enforced where control changes and where the steal
+   *  targets are listed. */
+  untouchableWhileBearerReady?: boolean;
   /** "Other Methuselahs\' actions targeting this vampire cost an additional
    *  blood" (Chanjelin Ward). Carried by the TARGET and charged to the ACTOR
    *  when an action names this minion and its controller is another seat. */
@@ -1986,6 +2004,8 @@ export type GameEvent =
    *  attempt again (Dawn Operation; p. 25 — only declining is final). */
   | { type: "BlockAttemptCancelled"; actionId: ActionId; blocker: MinionId }
   | { type: "MinionLocked"; minion: MinionId }
+  /** Red List action: the chosen minion becomes a Red List minion. */
+  | { type: "MinionRedListed"; minion: MinionId }
   | { type: "MinionUnlocked"; minion: MinionId }
   | { type: "MinionWoke"; minion: MinionId }
   /** `city` is the CITY THE TITLE IS TO ("Prince of Chicago"), and it is
@@ -2779,6 +2799,10 @@ export interface ActionFrame {
    *  acting minion" (Warsaw Station) — conditional on SUCCESS, unlike
    *  `notBlockPenalties`, which runs either way. */
   unlockOnSuccess: MinionId[];
+  /** Big Game: "unlocks at the end of the action if he or she is still
+   *  ready" — on ANY end of the action (successful or blocked), but only if
+   *  the acting minion is still ready. Unlike `unlockOnSuccess`. */
+  unlockActorIfReady?: boolean;
   /** "\<This vampire\> can burn N blood to unlock \<self | the acting
    *  ally\> after action resolution" (Paths in Two Worlds superior, Gifts
    *  From Hereafter superior) — unlike `unlockOnSuccess`, it is an OFFER
@@ -3747,6 +3771,9 @@ export interface CombatFrame {
   pressesContinueOnly?: { acting: number; opposing: number };
   /** Unspent mandatory continue-only presses across this combat. */
   mandatoryContinuePresses?: { acting: number; opposing: number };
+  /** Unspent first-round-only mandatory continue presses. Zeroed when the
+   *  round ends (Talbot's Chainsaw). Absent in saves made before this. */
+  mandatoryFirstRoundPresses?: { acting: number; opposing: number };
   /** The mirror: "1 optional press each combat, ONLY USABLE TO END
    *  COMBAT" (Qetu) — offered only for `press:end` and spent first there,
    *  by the same "most restricted credit first" rule.
@@ -4109,6 +4136,8 @@ export interface CombatFrame {
   /** Damage awaiting prevention + mend, acting minion's first (p. 29). */
   pendingDamage: PendingDamage[];
   willContinue: boolean;
+  /** The most recent press played this round ended the combat (a cancel of a standing continue). Psyche! superior is offered then, while the other side still answers. */
+  endPressPlayed?: boolean;
   endedPrematurely: boolean;
   cycle: ImpulseCycle;
 }

@@ -38,3 +38,17 @@ describe("Anarch Troublemaker targets", () => {
     expect(state.seats[1]!.permanents.some(p => p.card.id === "trouble")).toBe(true);
   });
 });
+
+describe("Anarch Troublemaker: \"up to two\" can be zero", () => {
+  // The Fifth Edition rulebook: "lock no vampires at all ('up to two' can be
+  // zero), in order to give control of the Anarch Troublemaker".
+  it("offers giving control with no vampire locked, and it hands the card over", () => {
+    const { state, engine } = setup();
+    expect(engine.decision()!.options.map(o => o.id)).toContain("ability:Anarch Troublemaker:trouble:lock:none");
+    engine.choose("ability:Anarch Troublemaker:trouble:lock:none");
+    expect(state.seats[1]!.permanents.some(p => p.card.id === "trouble")).toBe(true);
+    // No lock, so no MinionLocked event: the zero choice locks nobody.
+    expect(state.eventLog.some(e => e.type === "MinionLocked")).toBe(false);
+    expect(state.seats[1]!.minions.find(m => m.id === "torpor")!.locked).toBe(false);
+  });
+});

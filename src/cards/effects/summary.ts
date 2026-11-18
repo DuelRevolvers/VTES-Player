@@ -59,6 +59,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   unlockOnBleedSuccess: "unlock",
   actionUnlockMinion: "unlock",
   actionLockMinion: "deny",
+  actionMarkRedList: "deny",
   actionDamageMinion: "damage",
   actionDrawThenDiscard: "board",
   eachUnlockedVampireGainsBlood: "bloodGain",

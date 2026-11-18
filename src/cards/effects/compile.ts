@@ -296,6 +296,7 @@ export function meetsRequirements(m: MinionState, spec: CardSpec): boolean {
   // eleven printed titles instead would be the Priority Contract trap in
   // reverse: a filter that silently narrows.
   if (spec.requiresTitled && m.title === null) return false;
+  if (spec.requiresNotRedList && m.redList === true) return false;
   // "Requires a NON-STERILE …" (p. 42): printed Sterile is imported
   // into the minion state. Cards without this requirement still need their
   // own implementation of the general vampire-creation restriction.
@@ -1305,6 +1306,8 @@ function targetRider(mode: CardMode): EffectPrimitive | null {
       e.kind === "actionUnlockMinion" ||
       e.kind === "actionLockMinion" ||
       e.kind === "actionDamageMinion" ||
+      e.kind === "actionMarkRedList" ||
+      e.kind === "takeControlOfMinion" ||
       e.kind === "attachToOpponent" ||
       // "Ⓓ Choose a vampire and put this card in play" (Distant Friend).
       (e.kind === "putInPlayOnSuccess" && e.chooseVampire === true)
@@ -1488,6 +1491,38 @@ function enumerateActionTargets(
       if (s.ousted) continue;
       for (const m of s.minions) {
         if (m.kind !== "vampire") continue;
+        if (untargetableBy(m, seatId, actor)) continue;
+        targets.push(m.id);
+      }
+    }
+    return targets;
+  }
+  if (e.kind === "takeControlOfMinion") {
+    // Spirit Marionette superior: "Ⓓ Take control of a ready unlocked minion"
+    // — another Methuselah's, the same filters the master family applies.
+    for (const s of state.seats) {
+      if (s.ousted || s.id === seatId) continue;
+      for (const m of s.minions) {
+        if (e.who.kind !== undefined && m.kind !== e.who.kind) continue;
+        if (e.who.clan !== undefined && m.clan !== e.who.clan) continue;
+        if (e.who.ready === true && !isReady(m)) continue;
+        if (e.who.unlocked === true && m.locked) continue;
+        if (untargetableBy(m, seatId, actor)) continue;
+        targets.push(m.id);
+      }
+    }
+    return targets;
+  }
+  if (e.kind === "actionMarkRedList") {
+    // "Choose a ready ally or a ready younger vampire" (Red List) — any
+    // seat's, ready only. A torpid minion is not ready, and the acting
+    // vampire is never younger than itself.
+    for (const s of state.seats) {
+      if (s.ousted) continue;
+      for (const m of s.minions) {
+        if (m.id === actor.id || !isReady(m)) continue;
+        if (m.kind === "vampire" && capacityOf(m) >= capacityOf(actor)) continue;
+        if (m.kind !== "vampire" && m.kind !== "ally") continue;
         if (untargetableBy(m, seatId, actor)) continue;
         targets.push(m.id);
       }
@@ -1721,6 +1756,8 @@ function enumeratePermanentTargets(
     } else {
       for (const m of s.minions) {
         for (const p of m.attached) {
+          // "While the bearer is ready, this equipment cannot be moved or stolen."
+          if (p.statics.untouchableWhileBearerReady === true && !m.locked) continue;
           if (p.tags.includes("equipment")) out.push(p.card.id);
         }
       }
@@ -1889,7 +1926,15 @@ function compileActionCard(spec: CardSpec): CardHandler {
           if (rider && rider.kind === "actionEnterCombat") {
             // Rush target fixed at announcement (p. 25).
             for (const t of enumerateRushTargets(ctx.state, m, rider)) {
-              push(mode, { target: t });
+              // Big Game: a Red List target carries the optional maneuver OR
+              // press, one option each, chosen now (p. 25). Any other target
+              // gets the plain rush.
+              if (rider.redListRider && getMinion(ctx.state, t).redList) {
+                push(mode, { target: t, rider: "maneuver" });
+                push(mode, { target: t, rider: "press" });
+              } else {
+                push(mode, { target: t });
+              }
             }
           } else if (mode.effects.some((e) => e.kind === "actionOnPermanent")) {
             // "Ⓓ Burn a location" — one option per legal card in play,
@@ -2006,6 +2051,14 @@ function compileActionCard(spec: CardSpec): CardHandler {
           if (!target) throw new Error(`${spec.name}: no rush target`);
           params.targetMinion = target;
           if (e.riders) addRiders(e.riders);
+          // Big Game: the Red List rider, chosen at announcement — only a Red
+          // List target offers a pick, so its absence means no rider at all.
+          if (e.redListRider) {
+            const pick = play.params["rider"];
+            if (pick === "maneuver") addRiders({ maneuver: 1 });
+            else if (pick === "press") addRiders({ press: 1 });
+            if (pick) params.unlockActorIfReady = true;
+          }
           // "…with a LOCKED minion" is a gate at announcement AND at
           // resolution; the target can unlock in between.
           if (e.lockedOnly) params.requiresLockedTarget = true;
@@ -2067,6 +2120,16 @@ function compileActionCard(spec: CardSpec): CardHandler {
           // Named for directedness (p. 25), NOT to fight: without
           // `noCombat` a successful action with a targetMinion rushes it.
           params.targetMinion = target;
+          params.noCombat = true;
+        }
+        if (e.kind === "takeControlOfMinion") {
+          // Ⓓ take control: named for directedness; no combat (it is a loan).
+          params.targetMinion = play.params["target"] ?? "";
+          params.noCombat = true;
+        }
+        if (e.kind === "actionMarkRedList") {
+          // Named for directedness and the block restriction, not a combat.
+          params.targetMinion = play.params["target"] ?? "";
           params.noCombat = true;
         }
         if (
@@ -2462,6 +2525,28 @@ function compileActionCard(spec: CardSpec): CardHandler {
             const who = af.targetMinion;
             const m2 = who ? findMinion(ops.state, who) : null;
             if (m2?.locked && !af.noUnlock) ops.emit({ type: "MinionUnlocked", minion: m2.id });
+            break;
+          }
+          case "takeControlOfMinion": {
+            // "…until the end of the next action" — a loan, and the minion
+            // is locked against it: a locked minion fizzles the action
+            // (G00081, LSJ 20090514).
+            const who = af.targetMinion;
+            const m2 = who ? findMinion(ops.state, who) : null;
+            if (!m2 || m2.locked || m2.controller === af.actingSeat) break;
+            if (e.until === "endOfNextAction") {
+              ops.borrowMinion(m2.id, af.actingSeat, "endOfNextAction", {
+                mustBleedOnLoan: e.mustBleedPrey === true,
+              });
+            }
+            break;
+          }
+          case "actionMarkRedList": {
+            // "The chosen minion becomes Red List" — the pick rode on the
+            // frame; a minion that has left play since is simply not marked.
+            const who = af.targetMinion;
+            const m2 = who ? findMinion(ops.state, who) : null;
+            if (m2 && !m2.redList) ops.emit({ type: "MinionRedListed", minion: m2.id });
             break;
           }
           case "actionLockMinion": {
@@ -3567,7 +3652,10 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           // but does not require it: the strike can also be chosen normally
           // after both combatants decline to maneuver.
           const strikeWithoutManeuver = ctx.window === "combat.chooseStrike" && strikeManeuverRider(mode) !== null;
-          if (window !== ctx.window && !strikeWithoutManeuver) continue;
+          // Psyche! superior (queued combat, only if combat would end) is
+          // offered in the press window once an end-of-combat press stands.
+          const queuedEndMode = ctx.window === "combat.press" && mode.effects.some((e) => e.kind === "queueCombat") && mode.usable?.includes("onlyIfCombatWouldEnd");
+          if (window !== ctx.window && !strikeWithoutManeuver && !queuedEndMode) continue;
         }
         // A before-range credit can also carry a limited additional strike
         // (Shadow of the Wolf). The limit belongs to the minion and round,
@@ -3946,9 +4034,25 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           }
           case "combat.press": {
             if (cf.awaiting !== side) continue;
-            if (!canUseCombatPress(cf, side, !cf.willContinue)) continue;
             // "…or presses only if they require …" (Target Leg). §5
             if (!modeRequiresOneOf(mode, cf.moveDisciplines?.[side])) continue;
+            // Psyche! superior is a card play, not a press: the once-per-round
+            // press limit does not apply. It is queued-combat only (see below):
+            // after an end-of-combat press is played, the other side answers
+            // in this window, so the queued-combat mode is offered here too,
+            // not only in End of Round when nobody presses.
+            if (!modeRequiresOneOf(mode, cf.moveDisciplines?.[side])) continue;
+            if (mode.effects.some((e) => e.kind === "queueCombat") && mode.usable?.includes("onlyIfCombatWouldEnd")) {
+              const a = findMinion(ctx.state, cf.acting);
+              const o = findMinion(ctx.state, cf.opposing);
+              const queued = cf.queuedFollowupCombat || (ctx.action?.queuedCombats.length ?? 0) > 0;
+              if (cf.endPressPlayed && !cf.willContinue && a && o && isReady(a) && isReady(o) && !queued) {
+                options.push(makeOption(spec, card, m, mode, {}));
+                break;
+              }
+              continue;
+            }
+            if (!canUseCombatPress(cf, side, !cf.willContinue)) continue;
             const press = mode.effects.find((e) => e.kind === "press");
             if (!press || press.kind !== "press") continue;
             if (!cf.willContinue) {
@@ -7606,6 +7710,7 @@ function compileMasterCard(spec: CardSpec): CardHandler {
                 if (e.who.kind !== undefined && m.kind !== e.who.kind) continue;
                 if (e.who.clan !== undefined && m.clan !== e.who.clan) continue;
                 if (e.who.ready === true && !isReady(m)) continue;
+                if (e.who.unlocked === true && m.locked) continue;
                 // "Not usable to take control of a VAMPIRE with capacity 7 or
                 // more" — the cap is about vampires, and an ally's `capacity`
                 // is its life, so reading it for an ally would be a different
@@ -11059,6 +11164,7 @@ export function compileSpec(spec: CardSpec): CardHandler {
   if (spec.delayedReplaceUntil) handler.delayedReplaceUntil = spec.delayedReplaceUntil;
   if (spec.successUnlocksActor) handler.successUnlocksActor = spec.successUnlocksActor;
   if (spec.huntAction) handler.huntAction = true;
+  if (spec.rush?.mandatory) handler.mandatoryRush = true;
   if (spec.bloodHuntAfterSuccess) handler.bloodHuntAfterSuccess = true;
   // The printed type line, for cancel-as-played effects that name a type.
   // A dual-typed Action Modifier/Reaction really is a reaction card, so it
@@ -12037,6 +12143,9 @@ export function compileSpec(spec: CardSpec): CardHandler {
       const fill = st.fillOnEntry;
       handler.onEnterPlay = (entry, owner, ops) => {
         if (fill.from === "libraryTop") {
+          // "Not equipped but merely put into play … does not get 2 cards"
+          // (LSJ 20090506). `owner.minion` is null off a minion.
+          if (fill.onlyWhenEquipped && owner.minion === null) return;
           for (let i = 0; i < (fill.count === "all" ? 0 : fill.count); i++) {
             ops.storeCard({ holder: entry.card.id, from: "library", faceUp: st.faceUp });
           }
@@ -12481,9 +12590,10 @@ export function compileSpec(spec: CardSpec): CardHandler {
       },
     };
   }
-  // Summon History: retainers and equipment from the library or ash heap,
-  // costing X or fewer (blood or pool, printed cost, requirements ignored),
-  // put on this vampire. Allies are not offered (no ally-attach op yet).
+  // Summon History: allies, retainers and equipment from the library or ash
+  // heap, costing X or fewer (blood or pool, printed cost, requirements
+  // ignored). Retainers and equipment go on this vampire; an ally comes into
+  // play as a minion of its own with its starting life (no attachment).
   const costXSearch = spec.modes.flatMap((m) => m.effects).find(
     (e) => e.kind === "searchCostXOnVampire",
   ) as Extract<EffectPrimitive, { kind: "searchCostXOnVampire" }> | undefined;
@@ -12508,8 +12618,8 @@ export function compileSpec(spec: CardSpec): CardHandler {
               out.push({
                 id: `choice:${spec.name}:${frame.cardId}:searchCostX:${zone}:${c.id}`,
                 kind: "answerChoice" as const,
-                label: `Put ${c.name} (${zone === "library" ? "library" : "ash heap"}) on this vampire`,
-                params: { card: c.id, zone },
+                label: `Put ${c.name} (${zone === "library" ? "library" : "ash heap"}) ${h.isAlly === true ? "in play" : "on this vampire"}`,
+                params: { card: c.id, zone, ally: h.isAlly === true ? "1" : "0" },
               });
             }
           }
@@ -12528,7 +12638,8 @@ export function compileSpec(spec: CardSpec): CardHandler {
         const zone = choice.params["zone"] as "library" | "ashHeap" | undefined;
         const minion = frame.params["minion"];
         if (card && card !== "none" && zone && minion && findMinion(ops.state, minion)) {
-          ops.attachFromZone({ seat: frame.seat, cardId: card, zone, attachTo: minion });
+          if (choice.params["ally"] === "1") ops.putAllyFromZone({ seat: frame.seat, cardId: card, zone });
+          else ops.attachFromZone({ seat: frame.seat, cardId: card, zone, attachTo: minion });
         }
         // The library was searched, so it is shuffled either way (p. 14).
         ops.shuffleLibrary(frame.seat);
@@ -13145,6 +13256,50 @@ export function compileSpec(spec: CardSpec): CardHandler {
       },
     };
   }
+  // Eye of Hazimel: "During your unlock phase, burn 1 pool or burn this
+  // equipment." A choice only while the pool can pay; otherwise it burns.
+  const poolOrBurn = spec.permanent?.unlockPoolOrBurn;
+  if (poolOrBurn) {
+    const priorUnlock = handler.onControllerUnlock?.bind(handler);
+    handler.onControllerUnlock = (entry, owner, ops) => {
+      priorUnlock?.(entry, owner, ops);
+      if (getSeat(ops.state, owner.seat).pool >= poolOrBurn.pool) {
+        ops.raiseChoice({
+          seat: owner.seat,
+          cardName: spec.name,
+          cardId: entry.card.id,
+          key: "permanentPoolOrBurn",
+          params: {},
+          optional: false,
+        });
+        return;
+      }
+      ops.burnPermanent(entry.card.id);
+    };
+    choiceByKey["permanentPoolOrBurn"] = {
+      options: (frame) => [
+        {
+          id: `choice:${spec.name}:${frame.cardId}:permanentPoolOrBurn:pool`,
+          kind: "answerChoice" as const,
+          label: `Burn ${poolOrBurn.pool} pool to keep ${spec.name}`,
+          params: { pay: "pool" },
+        },
+        {
+          id: `choice:${spec.name}:${frame.cardId}:permanentPoolOrBurn:burn`,
+          kind: "answerChoice" as const,
+          label: `Burn ${spec.name}`,
+          params: { pay: "burn" },
+        },
+      ],
+      apply: (frame, choice, ops) => {
+        if (choice.params["pay"] === "pool") {
+          ops.emit({ type: "PoolBurned", seat: frame.seat, amount: poolOrBurn.pool });
+          return;
+        }
+        ops.burnPermanent(frame.cardId);
+      },
+    };
+  }
   // "After this ally enters play, burn it unless you remove an ally or
   // vampire in your ash heap from the game" (Rotting Behemoth).
   const ashCost = spec.ally?.enterPlayAshCost;
@@ -13302,7 +13457,7 @@ export function compileSpec(spec: CardSpec): CardHandler {
 
       // "Once each combat, burn 1 counter to give a wraith or zombie ally
       // you control 1 maneuver or press."
-      if (cgc && ctx.combat && ["combat.beforeRange", "combat.range", "combat.beforeStrikes", "combat.chooseStrike", "combat.beforeResolution", "combat.endOfRound", "combat.press"].includes(ctx.window)) {
+      if (cgc && ctx.combat && ["combat.beforeRange", "combat.range", "combat.beforeStrikes", "combat.chooseStrike", "combat.beforeResolution", "combat.damageResolution", "combat.endOfRound", "combat.press"].includes(ctx.window)) {
         const cf = ctx.combat;
         if (!cf.usedThisCombat.includes(entry.card.id)) {
           for (const id of [cf.acting, cf.opposing]) {
@@ -14343,6 +14498,36 @@ function addCryptAbilities(
       });
     };
 
+    // Tye Cooper's rider: a library card from the ash heap to hand, after a
+    // successful burn, then discard down. An optional choice, so declining
+    // is a real option. Keyed by grant index so two grants never collide.
+    if (ga.ashHeapToHand) {
+      const key = `grantedAshHeap:${gaIndex}`;
+      const priorOpts = handler.choiceOptions?.bind(handler);
+      handler.choiceOptions = (frame, state, registry) => {
+        if (frame.key !== key) return priorOpts ? priorOpts(frame, state, registry) : [];
+        return (getSeat(state, frame.seat).ashHeap ?? [])
+          .filter((c) => !c.crypt)
+          .map((c) => ({
+            id: `choice:${spec.name}:${frame.cardId}:${key}:${c.id}`,
+            kind: "answerChoice" as const,
+            label: `Take ${c.name} from your ash heap`,
+            params: { take: c.id },
+          }));
+      };
+      const priorApply = handler.applyChoice?.bind(handler);
+      handler.applyChoice = (frame, choice, ops) => {
+        if (frame.key !== key) {
+          priorApply?.(frame, choice, ops);
+          return;
+        }
+        const take = choice.params["take"];
+        if (!take) return;
+        ops.takeFromAshHeap(frame.seat, take);
+        ops.discardDownToHandSize(frame.seat, spec.name, frame.cardId);
+      };
+    }
+
     const priorGaResolve = handler.resolveGrantedAction?.bind(handler);
     handler.resolveGrantedAction = (entry, af, ops) => {
       priorGaResolve?.(entry, af, ops);
@@ -14422,6 +14607,17 @@ function addCryptAbilities(
           if (ga.gainLife) {
             const actor = findMinion(ops.state, af.acting);
             if (actor) ops.emit({ type: "BloodGained", minion: actor.id, amount: ga.gainLife });
+          }
+          // "If that action is successful, you can move a library card from
+          // your ash heap to your hand" (Tye Cooper). Only after the burn.
+          if (ga.ashHeapToHand && (getSeat(ops.state, seat).ashHeap ?? []).some((c) => !c.crypt)) {
+            ops.raiseChoice({
+              seat,
+              cardName: spec.name,
+              cardId: entry.card.id,
+              key: `grantedAshHeap:${gaIndex}`,
+              optional: true,
+            });
           }
           return;
         }
@@ -15079,10 +15275,10 @@ function addCryptAbilities(
       if (unlockingSeat !== controller) return;
       const bearer = owner.minion === null ? null : findMinion(ops.state, owner.minion);
       if (!bearer || !isReady(bearer)) return;
-      const prey = preyOf(ops.state, controller);
-      if (!getSeat(ops.state, prey).minions.some((m) => isReady(m))) return;
+      const chooser = upd.chooser === "controller" ? controller : preyOf(ops.state, controller);
+      if (!getSeat(ops.state, chooser).minions.some((m) => isReady(m))) return;
       ops.raiseChoice({
-        seat: prey,
+        seat: chooser,
         cardName: spec.name,
         cardId: entry.card.id,
         key: "unlockPhaseDamage",

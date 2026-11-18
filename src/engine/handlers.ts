@@ -11,6 +11,7 @@ import type {
   ActionId,
   ActionKind,
   AfterCombatRider,
+  PendingDamage,
   AimRider,
   AmmoLoad,
   BlockAttemptFrame,
@@ -610,7 +611,12 @@ export interface EngineOps {
   /** `until` defaults to `"endOfTurn"`, which is what every borrow in the pool
    *  meant before "…until your next unlock phase" arrived (Malkavian Dementia).
    *  docs/borrowed-minions-design.md §2 */
-  borrowMinion(minion: MinionId, to: SeatId, until?: "endOfTurn" | "borrowerUnlock"): void;
+  borrowMinion(
+    minion: MinionId,
+    to: SeatId,
+    until?: "endOfTurn" | "borrowerUnlock" | "endOfNextAction",
+    opts?: { mustBleedOnLoan?: boolean },
+  ): void;
   changePermanentControl(cardId: CardInstanceId, to: SeatId): void;
   /** The Methuselah controlling a card in play, or null if it has left. */
   controllerOfEntry(cardId: CardInstanceId): SeatId | null;
@@ -993,6 +999,11 @@ export interface EngineOps {
    *  recruit, so the ally can act at once.
    *  docs/wraith-zombie-design.md §5 */
   returnAllyFromAshHeap(seat: SeatId, cardId: CardInstanceId): void;
+  /** "Search your library (shuffle afterward) and/or ash heap for an ally …
+   *  and put that card in play … with life equal to its starting life"
+   *  (Summon History, 101897). Not recruited, so it may act this turn
+   *  (LSJ 20100302-1). The ally is a minion of its own, not an attachment. */
+  putAllyFromZone(args: { seat: SeatId; cardId: CardInstanceId; zone: "library" | "ashHeap" }): void;
   /** Move a card OUT of an ash heap and into a hand (Garibaldi-Meucci
    *  Museum's exchange). */
   takeFromAshHeap(seat: SeatId, cardId: CardInstanceId): void;
@@ -1219,6 +1230,8 @@ export interface CardActionParams {
   lockTarget?: boolean;
   /** "…with a LOCKED minion" — re-checked at resolution (Ambush). */
   requiresLockedTarget?: boolean;
+  /** Big Game: unlock the acting minion at the end of the action if still ready. */
+  unlockActorIfReady?: boolean;
   /** "Unlock a vampire" (Precognizant Mobility) — this action names a minion
    *  but prints NO Ⓓ, so naming another Methuselah's vampire must not make it
    *  directed at them (p. 25: the Ⓓ is what directs an action, not the
@@ -1242,6 +1255,9 @@ export interface CardHandler {
    *  a vampire who must hunt may play it and Restricted Vitae's bar reaches
    *  it. docs/hunt-success-design.md §1 */
   huntAction?: boolean;
+  /** An ally whose own rush is compelled (Cry Wolf): offered first in the
+   *  minion phase, before non-mandatory actions. */
+  mandatoryRush?: boolean;
   /** A successful action calls a blood hunt before after-resolution effects. */
   bloodHuntAfterSuccess?: boolean;
   /** Whether this mode is an ACTION TO ENTER COMBAT — what Enrage
@@ -2146,6 +2162,15 @@ export interface CardHandler {
     owner: { seat: SeatId; minion: MinionId | null },
     ops: EngineOps,
   ): void;
+  /** "Each strike or damaging effect made by the opposing minion against this
+   *  minion in combat inflicts N less damage" (Nephandus). Returns how much
+   *  of an incoming damage packet this card takes off; 0 when it does not
+   *  apply. Asked once, in `applyResolvedDamage`, before the damage lands. */
+  incomingDamageReduction?(
+    victim: MinionState,
+    pd: PendingDamage,
+    state: GameState,
+  ): number;
   onLeavePlay?(
     entry: PermanentInPlay,
     owner: { seat: SeatId; minion: MinionId | null },

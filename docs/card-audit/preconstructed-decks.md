@@ -7,9 +7,9 @@ To zestawienie aktualnych wpisów audytu, nie ponowna weryfikacja wszystkich kla
 ## Podsumowanie
 
 - Unikalne karty: **727**; z wpisem w audycie: **727**; bez wpisu: **0**. Brakujące ID w registry: **0**; karty bez flagi supported: **0**.
-- Otwarte ustalenia dotyczą **56 różnych kart**: CODE_DISCREPANCY 1, PARTIAL_FIX 55, CONFIRMED_BUG 0, UNRESOLVED 0. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
-- **29/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
-- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **81**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
+- Otwarte ustalenia dotyczą **39 różnych kart**: CODE_DISCREPANCY 0, PARTIAL_FIX 39, CONFIRMED_BUG 0, UNRESOLVED 0. UNRESOLVED oznacza kwestię nierozstrzygniętą, nie potwierdzony błąd.
+- **24/42 talii** zawiera co najmniej jeden otwarty lub niezweryfikowany wpis. Pozostałe talie nie mają takich wpisów, ale to nadal nie dowód kompletnej poprawności.
+- REVIEWED_NO_ISSUE_FOUND: **590** kart; FIXED_TARGETED: **98**. Obie klasy oznaczają ograniczony zakres sprawdzenia/naprawy, a nie certyfikat wszystkich interakcji.
 
 ## Dodatkowe scenariusze odtworzone w silniku
 
@@ -25,47 +25,47 @@ Liczby to **różne ID kart**, a nie liczba kopii. Listy obejmują tylko otwarte
 | Zestaw / talia | Typ | Różnych kart | Otwarte / bez wpisu | Karty z otwartym ustaleniem |
 |---|---|---:|---:|---|
 | Fifth Edition / Hecata | pełna | 39 | 1 | [Rolling with the Punches](#karta-101649) |
-| Fifth Edition / Lasombra | pełna | 36 | 2 | [The Sleeping Mind](#karta-101805), [Touch of Oblivion](#karta-102283) |
+| Fifth Edition / Lasombra | pełna | 36 | 0 | — |
 | Fifth Edition / Malkavian | pełna | 30 | 0 | — |
 | Fifth Edition / Nosferatu | pełna | 35 | 0 | — |
 | Fifth Edition / Toreador | pełna | 29 | 0 | — |
-| Fifth Edition / Tremere | pełna | 33 | 1 | [Magic of the Smith](#karta-101143) |
-| Fifth Edition / Ventrue | pełna | 32 | 1 | [Anarch Troublemaker](#karta-100058) |
+| Fifth Edition / Tremere | pełna | 33 | 0 | — |
+| Fifth Edition / Ventrue | pełna | 32 | 0 | — |
 | Fifth Edition (Anarch) / Banu Haqim | pełna | 34 | 1 | [Rego Motum](#karta-101588) |
 | Fifth Edition (Anarch) / Brujah | pełna | 37 | 0 | — |
 | Fifth Edition (Anarch) / Gangrel | pełna | 38 | 0 | — |
 | Fifth Edition (Anarch) / Ministry | pełna | 36 | 3 | [Heart of Nizchetus](#karta-100903), [Revelation of the Serpent](#karta-102233), [Nonu Dis (G6)](#karta-201608) |
 | Fifth Edition (Companion) / Ravnos | pełna | 39 | 1 | [Shilmulo Tarot](#karta-101767) |
-| Fifth Edition (Companion) / Salubri | pełna | 43 | 4 | [Anarch Troublemaker](#karta-100058), [Rolling with the Punches](#karta-101649), [Touch of Valeren](#karta-102262), [Opikun (G7)](#karta-201680) |
+| Fifth Edition (Companion) / Salubri | pełna | 43 | 3 | [Rolling with the Punches](#karta-101649), [Touch of Valeren](#karta-102262), [Opikun (G7)](#karta-201680) |
 | Fifth Edition (Companion) / Tzimisce | pełna | 40 | 2 | [War Ghoul](#karta-102144), [Childe of the Revolution](#karta-102246) |
 | New Blood / Malkavian | half-deck | 30 | 0 | — |
 | New Blood / Nosferatu | half-deck | 32 | 0 | — |
 | New Blood / Toreador | half-deck | 27 | 0 | — |
-| New Blood / Tremere | half-deck | 30 | 3 | [Fragment of the Book of Nod](#karta-100785), [Magic of the Smith](#karta-101143), [Rego Motum](#karta-101588) |
+| New Blood / Tremere | half-deck | 30 | 1 | [Rego Motum](#karta-101588) |
 | New Blood / Ventrue | half-deck | 28 | 0 | — |
-| New Blood II / Banu Haqim | half-deck | 32 | 2 | [Blur](#karta-100227), [Khabar: Glory](#karta-101043) |
+| New Blood II / Banu Haqim | half-deck | 32 | 1 | [Blur](#karta-100227) |
 | New Blood II / Brujah | half-deck | 30 | 1 | [Childe of the Revolution](#karta-102246) |
 | New Blood II / Gangrel | half-deck | 31 | 0 | — |
-| New Blood II / Ministry | half-deck | 33 | 2 | [Waters of Duat](#karta-102159), [Revelation of the Serpent](#karta-102233) |
-| New Blood III / Hecata | half-deck | 25 | 1 | [Psychophagia](#karta-102302) |
-| New Blood III / Lasombra | half-deck | 24 | 1 | [Raising the Portcullis](#karta-102303) |
-| New Blood III / Ravnos | half-deck | 31 | 2 | [AK-47](#karta-100032), [Terror Frenzy](#karta-101960) |
-| New Blood III / Salubri | half-deck | 27 | 4 | [Vast Wealth](#karta-102092), [Touch of Valeren](#karta-102262), [Tranquility Shield](#karta-102362), [Opikun (G7)](#karta-201680) |
+| New Blood II / Ministry | half-deck | 33 | 1 | [Revelation of the Serpent](#karta-102233) |
+| New Blood III / Hecata | half-deck | 25 | 0 | — |
+| New Blood III / Lasombra | half-deck | 24 | 0 | — |
+| New Blood III / Ravnos | half-deck | 31 | 1 | [AK-47](#karta-100032) |
+| New Blood III / Salubri | half-deck | 27 | 3 | [Touch of Valeren](#karta-102262), [Tranquility Shield](#karta-102362), [Opikun (G7)](#karta-201680) |
 | New Blood III / Tzimisce | half-deck | 34 | 0 | — |
-| Sabbat V5 / Path of Caine | pełna | 36 | 4 | [Yawp Court](#karta-102199), [Augury of Doom](#karta-102310), [Dance with the Devil](#karta-102315), [Rage of Apedemak](#karta-102336) |
-| Sabbat V5 / Path of Cathari | pełna | 35 | 2 | [Anarch Troublemaker](#karta-100058), [Gostoso (G6)](#karta-201754) |
+| Sabbat V5 / Path of Caine | pełna | 36 | 3 | [Yawp Court](#karta-102199), [Dance with the Devil](#karta-102315), [Rage of Apedemak](#karta-102336) |
+| Sabbat V5 / Path of Cathari | pełna | 35 | 1 | [Gostoso (G6)](#karta-201754) |
 | Sabbat V5 / Path of Death | pełna | 41 | 3 | [Obedience](#karta-101309), [Dance of the Dead](#karta-102314), [Eulogio Sánchez de los Reyes (G6)](#karta-201750) |
 | Sabbat V5 / Path of Power and the Inner Voice | pełna | 42 | 1 | [Věnceslava, The Implacable (G6)](#karta-201776) |
-| 🏆 Tournament Winners 2025 / 2025-10-19 — Shalmath Toolbox (EC Day 2, Aarhus — Nerijus Mikalajūnas, 50p) | pełna | 36 | 16 | [Big Game](#karta-100159), [Enkil Cog](#karta-100645), [Eye of Hazimel](#karta-100678), [Heart of Nizchetus](#karta-100903), [Hourglass of the Mind](#karta-100941), [Nephandus](#karta-101272), [Outside the Hourglass](#karta-101338), [Summon History](#karta-101897), [Talbot's Chainsaw](#karta-101931), [Tye Cooper](#karta-102053), [Alex Wilkins (G5)](#karta-200048), [Anarch Convert (ANY)](#karta-200076), [Donald Cargill (G5)](#karta-200365), [New Blood (ANY)](#karta-201052), [Shalmath (G6)](#karta-201274), [Walker Grimes (G5)](#karta-201462) |
+| 🏆 Tournament Winners 2025 / 2025-10-19 — Shalmath Toolbox (EC Day 2, Aarhus — Nerijus Mikalajūnas, 50p) | pełna | 36 | 14 | [Enkil Cog](#karta-100645), [Eye of Hazimel](#karta-100678), [Heart of Nizchetus](#karta-100903), [Hourglass of the Mind](#karta-100941), [Nephandus](#karta-101272), [Outside the Hourglass](#karta-101338), [Summon History](#karta-101897), [Talbot's Chainsaw](#karta-101931), [Alex Wilkins (G5)](#karta-200048), [Anarch Convert (ANY)](#karta-200076), [Donald Cargill (G5)](#karta-200365), [New Blood (ANY)](#karta-201052), [Shalmath (G6)](#karta-201274), [Walker Grimes (G5)](#karta-201462) |
 | 🏆 Tournament Winners 2025 / 2025-06-21 — Gangrel Death Star (NAC 2025, Columbus — Martin Weinmayer, 62p, Wall) | pełna | 41 | 2 | [Heart of Nizchetus](#karta-100903), [André the Manipulator (G5)](#karta-200081) |
 | 🏆 Tournament Winners 2024 / 2024-06-22 — Govern Resistance (NAC 2024, Columbus — Bill Troxel, 54p, Tzimisce Toolbox) | pełna | 35 | 1 | [New Blood (ANY)](#karta-201052) |
 | 🏆 Tournament Winners 2024 / 2024-11-16 — Gangrel Swarm v3 (Slovak NC, Bratislava — Jakub Rypar, 22p, Wall/Swarm) | pełna | 38 | 0 | — |
-| 🏆 Tournament Winners 2024 / 2024-02-10 — Malkavian 95 Bleed (Mexico NC — Melissa Avilés, 10p, Stealth & Bleed) | pełna | 28 | 3 | [Alabástrom (G6)](#karta-200039), [The Sleeping Mind](#karta-101805), [Spirit Marionette](#karta-101848) |
+| 🏆 Tournament Winners 2024 / 2024-02-10 — Malkavian 95 Bleed (Mexico NC — Melissa Avilés, 10p, Stealth & Bleed) | pełna | 28 | 1 | [Alabástrom (G6)](#karta-200039) |
 | 🏆 Tournament Winners 2024 / 2024-07-21 — Usurper High Council (Helsinki, Martin Weinmayer, 22p, Vote) | pełna | 25 | 0 | — |
 | 🏆 Tournament Winners 2026 / 2026-06-27 — Lasombra Potato Groove (Spanish NC, Leganés — Miquel Jorge, 158p, Vote/Bleed) | pełna | 35 | 1 | [Obedience](#karta-101309) |
 | 🏆 Tournament Winners 2024 / 2024-06-21 — The Unnamed Six Demon Bag (Origins Friday 2, Columbus — Darby Keeney, 44p, Baali Bleed) | pełna | 31 | 3 | [Anarch Convert (ANY)](#karta-200076), [Zubeida (G5)](#karta-201510), [Heart of Nizchetus](#karta-100903) |
-| 🏆 Tournament Winners 2023 / 2023-10-15 — Tupdog Brick Wall (EC 2023 Finalist — Rush Wall) | pełna | 34 | 4 | [Anarch Convert (ANY)](#karta-200076), [Hrothulf (G3)](#karta-200608), [Cedric (G4)](#karta-200257), [Drawing Out the Beast](#karta-100585) |
-| 🏆 Tournament Winners 2024 / 2024-03-09 — Weenie Animalism (Oceania NC, Auckland — Rush/Bleed) | pełna | 27 | 4 | [Anarch Convert (ANY)](#karta-200076), [Cry Wolf](#karta-100475), [Drawing Out the Beast](#karta-100585), [Terror Frenzy](#karta-101960) |
+| 🏆 Tournament Winners 2023 / 2023-10-15 — Tupdog Brick Wall (EC 2023 Finalist — Rush Wall) | pełna | 34 | 3 | [Anarch Convert (ANY)](#karta-200076), [Hrothulf (G3)](#karta-200608), [Cedric (G4)](#karta-200257) |
+| 🏆 Tournament Winners 2024 / 2024-03-09 — Weenie Animalism (Oceania NC, Auckland — Rush/Bleed) | pełna | 27 | 1 | [Anarch Convert (ANY)](#karta-200076) |
 
 ## Otwarte ustalenia — karty
 
@@ -76,30 +76,10 @@ Poniższe opisy przytoczono z audytu. CODE_DISCREPANCY bywa oparte wyłącznie n
 
 Występuje w **1** taliach. Dodatkowy strike jest nadal przyznawany po strike'u z broni, ale jest OPCJONALNY: w dodatkowej sub-rundzie strzelec może wybrać 'strike:decline' (bez obrażeń, zwalnia zobowiązanie do broni). Flaga CombatFrame.optionalAdditionalStrike jest ustawiana tylko dla opcjonalnych przyznań (AK-47, Caseless Rounds); zwykłe dodatkowe strike'i jej nie mają. Testy: tests/cards/weapon-riders.test.ts + last-equipment-modifiers.test.ts: 57 testów łącznie, w tym 'the optional extra strike can be DECLINED'. Pełne tests/cards+tests/engine: 398 plików, exit 0. NIEZROBIONE: wybór innego limitowanego źródła zamiast grantu AK-47 (kolejność przed grantem), docs/additional-strike-followups.md.
 
-<a id="karta-100058"></a>
-### Anarch Troublemaker (100058) — PARTIAL_FIX
-
-Występuje w **3** taliach. Naprawiono wybór vampire przeciwnika: karta nie wymaga ani ready, ani unlocked, więc uwzględnia vampire w torpor i już locked (bez fałszywego zdarzenia zmiany stanu). Wyklucza uncontrolled i allies. tests/cards/anarch-troublemaker-audit.test.ts; zasada celu w torpor: https://www.vekn.net/forum/rules-questions/81293-touch-of-valeren; wybór locked: https://www.vekn.net/forum/rules-questions/39816-ec-2012-can-you-answer-these?start=12. Nadal nierozstrzygnięte, czy aktualne „up to two” pozwala przekazać kartę bez żadnego celu; historyczny RTR 19950413 mówi o jednym lub dwóch.
-
-<a id="karta-100159"></a>
-### Big Game (100159) — PARTIAL_FIX
-
-Występuje w **1** taliach. Usunięto błędnie przyznawane każdemu celowi maneuver i press. tests/cards/rush-cards.test.ts potwierdza rush na zwykły cel bez obu bonusów i bez unlock. Red List nie jest jeszcze modelowana: prawidłowy opcjonalny maneuver albo press i unlock przy celu Red List pozostają do zrobienia; karta nie jest w pełni poprawna. Paczka 2: tekst (Ⓓ, Red List: optional maneuver lub press i unlock przy końcu akcji) pozostaje częściowo niezaimplementowany wg ustaleń paczki 1; status bez zmian.
-
 <a id="karta-100227"></a>
 ### Blur (100227) — PARTIAL_FIX
 
 Występuje w **1** taliach. Zweryfikowano: basic daje 1 dodatkowy strike, superior 2 (limited), grant po pierwszej parze; tests/cards/combat-strikes.test.ts (Blur superior: 3 uderzenia M, 2 dodatkowe sub-rundy) i Quickness współistniejący z Blur (Quickness nieograniczony nie zużywa źródła limitowanego); limit egzekwowany przez usedLimitedAddl (tests/cards/weapon-riders.test.ts: AK-47 i limitowany Blur). NIEZROBIONE, WSPÓLNE Z SILNIKIEM: kolejność okna kolejnych źródeł przy oczekujących strike'ach (LSJ 20001206, docs/additional-strike-followups.md) nie jest jeszcze przebudowana; dotyczy źródeł nieograniczonych, nie zmienia liczby strike'ów Blur. Nie jest błędem specyficznym dla Blur.
-
-<a id="karta-100475"></a>
-### Cry Wolf (100475) — PARTIAL_FIX
-
-Występuje w **1** taliach. Paczka 4: zablokowana zagrywka (recruit) wysyła działającego anarcha do torporu (hook onActionBlockedAsPlayed); werewolf pozostaje locked (bearerDoesNotUnlock), a jeśli jest locked w unlock phase, zostaje spalony. tests/cards/cry-wolf.test.ts z kontrolą bez bloku. Nadal brak obowiązkowego Ⓓ rush na minion innego Methuselah i pressa przy walce (press jest statycznie). LSJ 20090226 i LSJ 20031014 nieprzetestowane osobno.
-
-<a id="karta-100585"></a>
-### Drawing Out the Beast (100585) — PARTIAL_FIX
-
-Występuje w **2** taliach. Oba poziomy niedostępne przeciw ally [PIB 20121028]; superior zadaje unpreventable environmental damage w press step przed decyzjami o press, nie po wcześniejszym końcu walki. frenzy-direction-audit.test.ts: kolejność, torpor, dwie rundy, save/load na decyzji press, Flesh of Marble i Bloodform. Stare zapisy bez pochodzenia ograniczeń oraz inne interakcje nadal wymagają przeglądu. Paczka 1: ponownie sprawdzono rulings (PIB 20121028, RTR 19970630, LSJ 20010312); pokryte przez frenzy-direction-audit.test.ts (w tym przerwanie przez combat-ends). Status bez zmian: brak przeglądu starych zapisów.
 
 <a id="karta-100645"></a>
 ### Enkil Cog (100645) — PARTIAL_FIX
@@ -109,12 +89,7 @@ Występuje w **1** taliach. Po successful bleed przeciw prey karta jest teraz un
 <a id="karta-100678"></a>
 ### Eye of Hazimel (100678) — PARTIAL_FIX
 
-Występuje w **1** taliach. Naprawiono jednoczesne nadawanie superior Potence i Chimerstry; tests/cards/eye-hazimel-audit.test.ts sprawdza oba poziomy oraz usunięcie bonusów po utracie karty. Nadal brak zakazu przenoszenia/kradzieży, upkeep 1 pool i 5 unpreventable damage przy spaleniu; te istotne błędy pozostają otwarte. Paczka 2: dodano 5 unpreventable environmental damage na bearera przy spaleniu przez burnPermanent (onLeavePlay, eye-hazimel-audit.test.ts). Nadal brak: upkeep w unlock phase (1 pool albo spalenie karty), zakaz przenoszenia/kradzieży przy ready bearerze; spalenia poza burnPermanent nie wywołują hooka.
-
-<a id="karta-100785"></a>
-### Fragment of the Book of Nod (100785) — PARTIAL_FIX
-
-Występuje w **1** taliach. Fragment of the Book of Nod: osobny handler realizuje draw/discard i ogranicza ability do faz własnej tury; jego komentarz wskazuje możliwe szersze okno. Tekst nie określa timingu; potrzebne rozstrzygnięcie zasad oraz testy poza własną turą. Aktualizacja: Poszerzono dostępność o zwykłe impulsy w turze innych Methuselahów, akcjach i walce, z wyłączeniem as-played. Dwa dobierania są kontynuowane przed discard down także przy przekierowaniu i po save/load; tests/cards/fragment-impulse-audit.test.ts. Zakres innych specjalnych okien nadal wymaga sprawdzenia; ruling ANK 20200616 https://www.vekn.net/forum/rules-questions/78687-the-erciyes-fragments-fragment-of-the-book-of-nod-barrens-impulse#100110. Paczka 2: RTR 20040501 (nie można użyć, gdy karta jest zagrywana, by dobrać kartę anulującą 'as it is played') nieweryfikowane. Status bez zmian.
+Występuje w **1** taliach. Paczka 2: 5 unpreventable environmental damage na bearera przy spaleniu przez burnPermanent (onLeavePlay, eye-hazimel-audit.test.ts). Paczka 3: upkeep w unlock phase — "burn 1 pool or burn this equipment" przez hook onControllerUnlock i wybór permanentPoolOrBurn; bez puli karta spala się od razu (tests/cards/eye-hazimel-unlock.test.ts). Zakaz przenoszenia/kradzieży przy gotowym bearerze: statyka untouchableWhileBearerReady filtruje cele kradzieży (enumeratePermanentTargets) i blokuje ControlChanged w changePermanentControl; test w tym samym pliku. Spalenie bearera razem z kartą (burnMinion emituje PermanentBurned dla dołączonych kart, bez burnPermanent): hook obrażeń nie działa, ale bearer jest już poza grą, więc obrażenia nie mają adresata i wynik jest ten sam. Nie jest to luka reguły; nie ma rulingu dla tego przypadku. Nadal otwarte: ogólny ruch sprzętu między wampirami nie jest modelowany, więc zakaz pokrywa tylko przypadki, które silnik zna.
 
 <a id="karta-100903"></a>
 ### Heart of Nizchetus (100903) — PARTIAL_FIX
@@ -124,97 +99,57 @@ Występuje w **4** taliach. Celowana naprawa: liczony draw Heart jest wznawiany 
 <a id="karta-100941"></a>
 ### Hourglass of the Mind (100941) — PARTIAL_FIX
 
-Występuje w **1** taliach. Częściowo naprawiono: odrębne warianty [pot]/[tem]; [tem] dobiera cztery karty bez discard, następnie wybiera do czterech kart z ręki na wierzch w zadanej kolejności i unlockuje przed zakończeniem akcji. Uwzględniono przekierowanie draw, zapis/wznowienie oraz pustą bibliotekę (tests/cards/hourglass-audit.test.ts). Przy niepełnej ręce przyjęto wykonanie możliwej części efektu; interpretacja wymaga potwierdzenia. Usunięto nieuprawnione +1 hand size superior bez counterów, lecz [TEM] nadal nie obsługuje opłacania counterów ani ich wpływu na hand size. Logi wyboru są maskowane, ale identyfikatory zakrytych kart w projekcji stanu nadal mogą umożliwiać ich śledzenie (istniejący szerszy problem prywatności). Pozostaje PARTIAL_FIX.
-
-<a id="karta-101043"></a>
-### Khabar: Glory (101043) — PARTIAL_FIX
-
-Występuje w **1** taliach. Dodano kontrolę poprzednich non-mandatory actions i liczenie akcji wbudowanych, z kart i przyznanych; mandatory hunt jest wyjątkiem. tests/cards/action-attachments.test.ts. Inne rodzaje obowiązkowych akcji i anulowanie wymagają dalszej weryfikacji. Aktualizacja: Ten sam warunkowy unlock on attach nie działa przy superior Sleeping Mind; wspólny kod testowany przez Abbot, sam scenariusz Khabar niezweryfikowany.
-
-<a id="karta-101143"></a>
-### Magic of the Smith (101143) — PARTIAL_FIX
-
-Występuje w **2** taliach. Wąski zakres: wyszukanie/equip po sukcesie, koszt i tasowanie; library-search.test.ts. Pozostałe interakcje nie są w pełni sprawdzone. Aktualizacja: koszt wyszukanego equipment uwzględnia wymagany klan, a własna kopia Unique nie jest oferowana; library-search.test.ts. Sprzęt z wyszukania nie generuje już CardPlayed, a koszty uwzględniają tagi, w tym podatek od broni; tests/cards/library-search.test.ts. Zgodność pozostałych skutków i anulowania nadal trzeba zweryfikować (https://www.vekn.net/forum/rules-questions/82962-meditative-grove-vs-rotschreck). Paczka 1: ruling 'equipment can be a location in play' (LSJ 19971001-2) i zniżki Equip/Employ (ANK 20180817) nie mają osobnego testu; library-search.test.ts pokrywa wybór przy rozwiązaniu, koszt i tasowanie. Status bez zmian.
+Występuje w **1** taliach. Częściowo naprawiono: odrębne warianty [pot]/[tem]; [tem] dobiera cztery karty bez discard, następnie wybiera do czterech kart z ręki na wierzch w zadanej kolejności i unlockuje przed zakończeniem akcji. Uwzględniono przekierowanie draw, zapis/wznowienie oraz pustą bibliotekę (tests/cards/hourglass-audit.test.ts). Przy niepełnej ręce przyjęto wykonanie możliwej części efektu (testy 'moves available cards even if fewer than four can be drawn' i 'unlocks even with an empty hand'); najbliższy analog to G00160 (LSJ 20060620: 'draw as much as you can'), ale brak rulingu dla przeniesienia, więc interpretacja wymaga potwierdzenia. Usunięto nieuprawnione +1 hand size superior bez counterów, lecz [TEM] nadal nie obsługuje opłacania counterów ani ich wpływu na hand size. Logi wyboru są maskowane, ale identyfikatory zakrytych kart w projekcji stanu nadal mogą umożliwiać ich śledzenie (istniejący szerszy problem prywatności). Pozostaje PARTIAL_FIX.
 
 <a id="karta-101272"></a>
 ### Nephandus (101272) — PARTIAL_FIX
 
-Występuje w **1** taliach. Spec ma statystyki, press i akcję burn vampire, ale brak ranged strike 1R i redukcji damage ze strike i damaging effects; nie znaleziono osobnego handlera tej nazwy. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: naprawiono wymaganie nadrukowanej ikony klanu dla wampira zagrywającego kartę (tests/cards/library-clan-icons.test.ts); wcześniejsze wzmianki o jego braku są już nieaktualne. Inne ustalenia powyżej i nieweryfikowane interakcje pozostają otwarte.
+Występuje w **1** taliach. Zweryfikowano end-to-end: pełna walka (bleed, blok przez Nephandus, strike wyboru) oferuje „Nephandus: strike (1R)” obok hand strike; wybór ranged strike zabiera 1 krew opozycji, a jego własne życie nie spada przy hand strike przeciwnika (redukcja 1, tests/cards/nephandus.test.ts, 7 testów). Wcześniej: redukcja tylko w combat i tylko od strike/damaging effect przeciwnika; negatywne przypadki poza walką i środowiskowe. Nadal nieweryfikowane: zachowanie przy kilku źródłach obrażeń jednocześnie oraz pełny zakres efektów strike 1R poza tym przebiegiem.
 
 <a id="karta-101309"></a>
 ### Obedience (101309) — PARTIAL_FIX
 
-Występuje w **2** taliach. Dodano sprawdzanie młodszego działającego vampire z uwzględnieniem capacity, właściwego blockera i powodzenia próby bloku; dodano reakcję celu niezablokowanego rush w state C. tests/cards/end-action.test.ts. Reakcja na rush korzysta z istniejącego okna C, a nie odrębnego impulsu bezpośrednio przed rozpoczęciem combat po zakończeniu innych efektów resolution; pełny timing i pozostałe interakcje nadal wymagają pracy. Paczka 1: pokryte przez end-action.test.ts (tylko blocker, młodszy vampire, rush, basic/superior). Nieobjęte: ANK 20171212 (zastąpiony przez slave nie może grać), LSJ 19991025 (starszy unlocked vampire przed nową walką). Status bez zmian.
+Występuje w **2** taliach. Dodano sprawdzanie młodszego działającego vampire z uwzględnieniem capacity, właściwego blockera i powodzenia próby bloku; dodano reakcję celu niezablokowanego rush w state C. tests/cards/end-action.test.ts. Reakcja na rush korzysta z istniejącego okna C, a nie odrębnego impulsu bezpośrednio przed rozpoczęciem combat po zakończeniu innych efektów resolution; pełny timing i pozostałe interakcje nadal wymagają pracy. Paczka 1: pokryte przez end-action.test.ts (tylko blocker, młodszy vampire, rush, basic/superior). Nieobjęte: ANK 20171212 (zastąpiony przez slave nie może grać) — w modelu nieosiągalne: silnik nigdy nie przypisuje ponownie af.acting, więc zastąpienie wampira nie zmienia przeciwnika w akcji. LSJ 19991025 (starszy unlocked vampire przed nową walką) — otwarte. Sonda: Psyche! superior jest oferowana w combat.endOfRound (gdy Bob nie kontynuuje) i tworzy drugą walkę; Obedience nie ma okna przed startem tej walki. Bramka beforeCombatWithYoungerActor (compile.ts ~5435) obejmuje tylko walkę z akcji (stan C, blok, rush), nie walkę kolejkowaną. Domknięcie wymaga nowego okna 'przed startem kolejkowanej walki' w silniku — zmiana w przepływie walki, do akceptacji. Status bez zmian.
 
 <a id="karta-101338"></a>
 ### Outside the Hourglass (101338) — PARTIAL_FIX
 
-Występuje w **1** taliach. Dodano wariant basic tem maneuver i limit superior per vampire/runda. Superior jest jednorazowy i pochodzi od wampira, nie environmental, a pending damage rozstrzygane jest przed strike; tests/cards/outside-hourglass-audit.test.ts obejmuje oba wampiry, save/load i źródło. Otwarte: prevention ma być dostępny w tym samym oknie przed range co inne efekty, a także zachowanie gdy walka kończy się przedwcześnie [ANK 20180104].
+Występuje w **1** taliach. Dodano wariant basic tem maneuver i limit superior per vampire/runda. Superior jest jednorazowy i pochodzi od wampira, nie environmental, a pending damage rozstrzygane jest przed strike; tests/cards/outside-hourglass-audit.test.ts obejmuje oba wampiry, save/load i źródło. Zweryfikowano ANK 20180104 (tests/cards/outside-hourglass-premature.test.ts): obrażenia superior zostają zadane, gdy walka kończy się przedwcześnie w beforeRange; silnik naprawiony (engine.ts: oczekujące obrażenia przed range rozstrzygane przed zakończeniem). Otwarte: prevention ma być dostępny w tym samym oknie przed range co inne efekty.
 
 <a id="karta-101588"></a>
 ### Rego Motum (101588) — PARTIAL_FIX
 
-Występuje w **2** taliach. Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Nie zweryfikowano RTR 20041202 (niewykorzystane punkty nie przechodzą dalej) dla obu trybów. Status bez zmian.
+Występuje w **2** taliach. Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Zweryfikowano RTR 20041202 dla obu trybów (tests/cards/rego-motum-ruling.test.ts, 3 testy: 1 punkt przy basic zapobiega 1 i nic nie przechodzi dalej; superior zapobiega 3 z 3; basic przy 3 zapobiega 2 i zostawia 1; mutacja nieograniczonego zapobiegania wykrywana). Status bez zmian.
 
 <a id="karta-101649"></a>
 ### Rolling with the Punches (101649) — PARTIAL_FIX
 
-Występuje w **2** taliach. Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Nie zweryfikowano ANK 20210226 (burn blood nie zmniejszany przez redukcje kosztu) w kontekście kosztu karty. Status bez zmian.
+Występuje w **2** taliach. Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Zweryfikowano ANK 20210226 dla superior (tests/cards/rolling-punches-burn.test.ts: bramka wymaga 1 krwi na spalenie, a redukcja kosztu nie zmniejsza spalenia; mutacja bramki wykryta). Status bez zmian.
 
 <a id="karta-101767"></a>
 ### Shilmulo Tarot (101767) — PARTIAL_FIX
 
-Występuje w **1** taliach. Aktualizacja: Heart może rozstrzygnąć każdy przekierowany draw przed wyborem kart do przesunięcia; heart-draw-redirect.test.ts. Celowana poprawka wspólnego refill: po wybraniu karty z Tarot dalsze dobieranie do rozmiaru ręki jest wznawiane, także po save/load; draw-up-redirect.test.ts i nehemiah.test.ts. Nadal brak stale dostępnej możliwości dobrania z Tarot przy pustej bibliotece i niepełnej ręce, potwierdzonej w rulingu LSJ; w odtworzonym oknie unlock oferowane są wycofanie, Edge i pass, nie dobór z Tarot. Aktualizacja: wybór pomiędzy Tarot i Black Market Cache przy pojedynczym draw oraz refill przetestowany w multiple-draw-redirects.test.ts; kolejki wielokrotnego dobierania nadal otwarte. Dodatkowo onEnterPlay napełnia Tarot również przy samym put into play, nie tylko przy zagraniu/wyposażeniu; ruling LSJ https://groups.google.com/g/rec.games.trading-cards.jyhad/c/887DQTpntKI/m/uTcPGmJbHRYJ wyklucza Alastor. Istniejący test library-search.test.ts używa putPermanentInPlay i oczekuje napełnienia, więc nie jest dowodem poprawnego rozróżnienia wejścia w grę. Poprzednia ocena: Wąski zakres: unique equipment Ravnos odkłada dwie karty, umożliwia redirect draw z ready bearer i dodawanie karty w unlock; library-search.test.ts.
-
-<a id="karta-101805"></a>
-### The Sleeping Mind (101805) — PARTIAL_FIX
-
-Występuje w **2** taliach. Superior nie wymaga już wyboru locked vampire ani nie zabrania mu bloku; test bez celu i test zakazu unlock w tests/cards/block-tax.test.ts. Poprawiono też zakaz po nieudanym bloku dla onlyAsAnnounced, ale inne przejścia okna ogłoszenia nie są w pełni zweryfikowane. Wcześniejsze ustalenie: Superior w spec nie tylko zabrania unlock, ale również nakazuje wybór locked vampire i zakazuje mu bloku, chociaż tekst superior nie zawiera basic. block-tax.test.ts oczekuje wyboru celu również w superior, więc nie bada wersji bez dodatkowego ograniczenia. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: po zagraniu zwykłego action modifier lub reaction w stanie A okno „as announced” zostaje zamknięte także po anulowaniu karty i po save/load; testy obejmują Seduction, The Sleeping Mind, Club Illusion oraz replacement karty akcji (tests/cards/audit-action-and-shadow.test.ts). Nie obejmuje jeszcze wszystkich zwykłych zdolności kart w grze ani starych zapisów bez flagi; kwestia innych krawędzi pozostaje otwarta. Źródła: https://www.vekn.net/rulebook oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zakaz unlock superior obejmuje teraz Freak Drive w oknie po rozstrzygnięciu, Change of Target przed rozstrzygnięciem bloku i objęte nim zdolności; zachowano efekty as if unlocked. Testy tests/cards/sleeping-mind-unlock-audit.test.ts obejmują także inferior oraz zapis/wznowienie. Inne ścieżki automatycznego unlock i wszystkie interakcje wymagają dalszego przeglądu. Źródła: https://www.vekn.net/forum/rules-questions/81780-the-sleeping-mind-and-change-of-target oraz https://vtesone.wordpress.com/category/rules/did-you-know/. Aktualizacja: zablokowano także Revelation corruption unlock, Warsaw Station po sukcesie, Forward Momentum oraz wariant unlock Dabbler i Monster w trakcie akcji. Testy sleeping-mind-unlock-audit.test.ts i revelation-of-the-serpent.test.ts; pozostałe ścieżki wymagają kontroli. Aktualizacja: superior wyklucza zagranie wersji Majesty/Earth Meld, która nakazuje unlock w walce, oraz nie oferuje płatnego unlock Truth in Darkness; wersja strike combat ends bez unlock pozostaje legalna. Zabezpieczono też rozstrzygnięcie wcześniej wybranego strike w starszym stanie. Ruling: https://www.vekn.net/forum-es/rules-questions/68051-the-sleeping-mind-vs-as-though-untapped. tests/cards/sleeping-mind-unlock-audit.test.ts. Inne źródła unlock nadal wymagają przeglądu. Aktualizacja: Zablokowano Helicopter, Horrific Countenance oraz znane opcje basic Cats' Guidance i Forced Vigilance w aktualnym oknie blokady; podczas resolve pomijane są unlock Abbot/Khabar: Glory, Precognizant Mobility, Psychophagia oraz Eulogio. Sprawdzono superior/inferior i Abbot w tests/cards/sleeping-mind-unlock-audit.test.ts. Inne ścieżki pozostają otwarte; wcześniejszy osobny błąd czasu Cats' Guidance po wszystkich walkach naprawiono i przetestowano w post-block-unlock.test.ts oraz psyche-post-block-audit.test.ts. Aktualizacja: testy sleeping-mind-unlock-audit.test.ts i master-intercept.test.ts obejmują Special Report, Organized Resistance, Guard Duty, Under Siege i Eternal Vigilance; niepłatne próby bloku bez rzeczywistego unlock pozostają legalne. Eagle’s Sight zagrać można po realnym wake bez unlock. Inne nieprzejrzane ścieżki nadal są otwarte. Aktualizacja: basic może wybrać również samego działającego zablokowanego wampira (tekst nie wymaga „another”); tests/cards/block-restrictions.test.ts. Paczka 1: sleeping-mind-unlock-audit.test.ts pokrywa wake (Eagle's Sight) i zakaz unlock po resolution (PIB 20150703); block-tax.test.ts pokrywa superior bez celu. Status bez zmian; sprawdzenie innych przejść okna 'as announced' nadal otwarte.
-
-<a id="karta-101848"></a>
-### Spirit Marionette (101848) — PARTIAL_FIX
-
-Występuje w **1** taliach. Rozdzielono [dom] i [obe]; [obe] przy sukcesie pozwala aktorowi wybrać miniona pierwotnego prey nawet po redirect, z kontrolą dostępności przy announcement. tests/cards/spirit-marionette-audit.test.ts. Moment wyboru wymaga weryfikacji; [OBE] nadal błędny: brak czasowego przejęcia i wymuszonego bleed/hunt.
+Występuje w **1** taliach. Naprawiono: napełnienie z biblioteki (2 karty) tylko gdy Tarot wchodzi do gry wyposażony na minionie (onlyWhenEquipped); samo put into play nie bierze kart (LSJ 20090506). Test: tests/cards/library-search.test.ts. Heart i Black Market Cache: wybór przy każdym przekierowanym dobraniu, refill do rozmiaru ręki wznawiany po wyborze Tarot (draw-up-redirect.test.ts, heart-draw-redirect.test.ts, multiple-draw-redirects.test.ts). Nowe: wycofanie (p. 38) nie jest dostępne, dopóki Tarot z kartami może jeszcze dobrać (G00160, LSJ 20060620: dobieraj tyle, ile się da) — tests/cards/shilmulo-withdrawal.test.ts (3 testy, mutacja wykryta). Interpretacja: przy pustej bibliotece nadal wolno wybrać 'dobierz z biblioteki' i zakończyć (test draw-up-redirect 'stops if the chosen library is empty'). Otwarte: w oknie unlock nie ma dobrania z Tarot, bo karta mówi o zastąpieniu dobrania, a unlock nim nie jest; dobór następuje przy najbliższym dobieraniu do rozmiaru ręki. Kolejki wielokrotnego dobierania nadal otwarte.
 
 <a id="karta-101897"></a>
-### Summon History (101897) — CODE_DISCREPANCY
+### Summon History (101897) — PARTIAL_FIX
 
-Występuje w **1** taliach. Stan: karta nadal jest atrapą (basic: tylko actionStealth; superior: brak). Tekst: [tem] szukanie ally/retainer/equipment z kosztem X lub mniej (krew albo pool) w bibliotece i/lub stosie odrzuconych, wejście na tego vampira z życiem równym startowemu; [TEM] szukanie non-scarce vampire z krypty/stosu z pojemnością X lub mniej, wejście bez krwi. Brakuje: (1) koszt X przy zagraniu (rulings: X ustalany przy zagraniu, może być 0; LSJ 20100314, LSJ 20030502); (2) wyszukiwanie w krypcie z wyborem vampira (attachFromZone obsługuje tylko library/hand/ashHeap); (3) wejście allies 'na tego vampira' z życiem startowym: ally jest osobnym minionem, sposób umieszczenia wymaga rozstrzygnięcia; (4) ignorowanie wymagań Dyscypliny: wejście w wersji inferior (rulings RBK equip/recruit, LSJ 20100204, PIB 20111101 dla X = 0 przy Reanimated Corpse). Nie zaimplementowano; brak testu. Summon Soul i Summon the Serpent to te same atrapy w tej samej fali. PLAN (sprawdzony w kodzie, nic nie zmieniono): (a) koszt X: costOf (compile.ts ~490) nie przyjmuje parametrów; X trzeba wybierać przy zagraniu (wzór: opcje z params.x) i liczyć w bramce i w płatności; (b) wprowadzenie vampira z krypty: nowy op wzorowany na VampireTokenEnteredPlay (engine.ts ~1457) plus zdjęcie karty z krypty i wpis własnej karty; brak takiego helpera; (c) allies/retainers/equipment z biblioteki i stosu: playCardFromHand (engine.ts ~7445) z from zone library, płaci koszt, obsługuje wersję (mode) i replacement; wymaga ograniczenia kosztu ≤ X i wyboru strefy (library/ash heap). KROK 1 ZROBIONY: X krwi wybierany przy zagraniu (prymityw variableBloodX, handler.xBloodAtPlay), płacony PRZY ZAGRANIU (nie na sukces jak Bloodlust); test tests/cards/summon-history.test.ts 3/3. KROK 2 ZROBIONY: po udanej akcji gracz wybiera (searchCostX, nieobowiązkowy wybór 'find nothing') kartę RETAINER lub EQUIPMENT z biblioteki lub stosu odrzuconych, o koszcie (blood lub pool, cena drukowana) <= X; ignoruje wymagania; karta trafia na tego vampira przez attachFromZone; biblioteka zawsze tasowana; zapłata 0. Test tests/cards/summon-history.test.ts 7/7. KROK 3 ZROBIONY (superior TEM): tryb superior z searchCryptForVampire; po udanej akcji wybór spośród NIE-scarce wampirów z krypty o capacity <= X (unikalny wampir już kontrolowany nazwą odrzucony), 'find nothing' zawsze; wybrany wchodzi przez CryptCardSummoned (nowe zdarzenie, z dowolnej pozycji krypty) + VampireEnteredPlay blood 0; krypta tasowana (nowe CryptShuffled, RNG). Test tests/cards/summon-history.test.ts 11/11. KROK 4 ZROBIONY: wampir spalony w MinionBurned zapisuje migawkę (CardInstance.burntVampire, bez przypięć); superior TEM może wybrać go ze stosu odrzuconych (capacity <= X, nie scarce, unikalny nie-duplikowany), wejście przez AshVampireSummoned + VampireEnteredPlay blood 0. Test tests/cards/summon-history.test.ts 15/15 (migawka z prawdziwego spalenia, wejście bez krwi, odrzucenie capacity>X i scarce). OTWARTE: ALLIES na vampira (brak operacji przypięcia sojusznika); wampiry spalone PRZED tą zmianą nie mają migawki i nie są oferowane; efekty beforeVampireEnteredPlay nie są wywoływane dla kart z krypty ani stosu; obecny actionStealth 1 w trybie podstawowym to stub, którego karta nie drukuje.
+Występuje w **1** taliach. Basic [tem] i superior [TEM] wdrożone: X wybierane przy zagraniu i płacone wtedy (LSJ 20100314); szukanie w bibliotece i/lub stosie odrzuconych allies, retainers i equipment o koszcie <= X (krew albo pool), wejście na tego vampira z życiem startowym; ally wchodzi jako osobny minion (AllyEnteredPlay, nie recruited, więc może działać w tej turze, LSJ 20100302-1), bez zapłaty; superior: wybór non-scarce vampira z krypty lub stosu o capacity <= X, wejście bez krwi, krypta tasowana. Usunięto stub actionStealth 1, którego karta nie drukuje. beforeVampireEnteredPlay nie dotyczy tej karty: hook działa tylko przy przejściu z regionu niekontrolowanego w fazie influence (New Blood), a Summon History jest akcją. Otwarte: retainer i equipment wchodzą przez attachFromZone bez jawnego wyboru wersji inferior (RBK equip, G00110); nie zweryfikowano, czy karty z wersją superior wymagającą dyscypliny dostają wersję podstawową. Ally na vampira: przyjęto odczyt, że ally jest osobnym minionem, a nie załącznikiem, bo silnik nie modeluje przypinania allies. Wampiry spalone przed zmianą nie mają migawki. Testy: tests/cards/summon-history.test.ts (17 testów).
 
 <a id="karta-101931"></a>
 ### Talbot's Chainsaw (101931) — PARTIAL_FIX
 
-Występuje w **1** taliach. Dodano zakaz wszystkich akcji hunt dla nosiciela, w tym hunt z karty i granted hunt; wyjątek dla Howler, która nie może używać broni. Tests/cards/talbots-hunt.test.ts sprawdza m.in. stuck przy 0 blood. Nadal brak upkeep 3 unpreventable damage; jego źródłem jest broń, a nie environmental damage, i trzeba uwzględnić immunity. pressPerCombat nie deklaruje mandatory i ograniczenia do kontynuacji w pierwszej rundzie. Rush/prevent oraz inne interakcje wymagają dalszej weryfikacji.
-
-<a id="karta-101960"></a>
-### Terror Frenzy (101960) — PARTIAL_FIX
-
-Występuje w **2** taliach. Basic działa przeciw minion, superior wyłącznie przeciw wampirowi; obsługiwane kierunki maneuver/press i zachowanie niezależnych ograniczeń po Tranquility Shield; tests/cards/frenzy-direction-audit.test.ts. Timing i inne źródła ograniczeń wymagają dalszej weryfikacji, jak również stare zapisy bez informacji o źródłach. Paczka 1: ANK 20180910-3 (koszt combat cards na końcu rundy) zweryfikowany testem batch1-frenzy-end-of-round.test.ts z kontrolą dodatnią (Telepathic Tracking superior, aus, bob z 1 blood nie płaci, z 5 płaci). Pozostaje: limit superior raz na walkę w starych zapisach i timing innych źródeł.
-
-<a id="karta-102053"></a>
-### Tye Cooper (102053) — PARTIAL_FIX
-
-Występuje w **1** taliach. Spec ma unique wraith i podstawowe statystyki, ale grantedAction ogranicza burn do vampire w torpor zamiast dowolnego non-ready miniona; brak odzyskania library card i odporności na non-aggravated. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu odtwarzającego. Aktualizacja: naprawiono wymaganie nadrukowanej ikony klanu dla wampira zagrywającego kartę (tests/cards/library-clan-icons.test.ts); wcześniejsze wzmianki o jego braku są już nieaktualne. Inne ustalenia powyżej i nieweryfikowane interakcje pozostają otwarte.
-
-<a id="karta-102092"></a>
-### Vast Wealth (102092) — PARTIAL_FIX
-
-Występuje w **1** taliach. Wąski zakres: master na własnego ready miniona nadaje akcję equip pierwszego equipment z library; library-search.test.ts. Aktualizacja: sprawdzany jest pierwszy sprzęt, a przy niespełnionym wymogu klanu lub wymuszonym konflikcie Unique jest spalany bez kosztu zamiast przeszukania dalszych kart (library-search.test.ts; https://www.vekn.net/forum/rules-questions/79883-enkidu-vast-wealth). Wyposażenie z library nie emituje już błędnego CardPlayed, a koszt uwzględnia tagi broni; pozostaje brak wyboru nic nie znaleźć oraz niepełna obsługa innych ograniczeń i ceny. Zgodnie z https://www.vekn.net/forum/rules-questions/79511-vidal-jarbeaux ten sprzęt nie jest zagrywany.
+Występuje w **1** taliach. Paczka 4: upkeep z karty — "If the bearer is ready during your unlock phase, this weapon inflicts 3 unpreventable damage on a ready minion you control". Wybiera KONTROLER (nie prey): unlockPhaseDamage.chooser = "controller" (spec.ts, compile.ts), bez wyboru gdy nosiciel nie jest gotowy lub nie ma gotowego miniona; tests/cards/talbot-chainsaw-unlock.test.ts. Press: "1 press (mandatory), only usable to continue combat during the first round" — nowa pula mandatoryFirstRoundContinuePress (state.ts, engine.ts): w rundzie 1 press jest obowiązkowy, a pula wygasa przy końcu rundy; tests/cards/talbot-chainsaw-press.test.ts (2 testy, mutacja wykryta). Wcześniej: cannotHunt, rush z stealth 1, prevent 1 per combat, blokada hunt przy 0 blood (bots-hunt.test.ts). Nadal nieweryfikowane: rush/prevent i ich interakcje z innymi kartami wymagają przeglądu.
 
 <a id="karta-102144"></a>
 ### War Ghoul (102144) — PARTIAL_FIX
 
-Występuje w **1** taliach. Overlay wymaga rekrutującego Tzimisce i uwzględnia modyfikatory kosztu; testy rush-cards.test.ts i retainer-wave.test.ts. Pozostałe interakcje alternatywnych kosztów i rekrutacji wymagają dalszej weryfikacji.
-
-<a id="karta-102159"></a>
-### Waters of Duat (102159) — PARTIAL_FIX
-
-Występuje w **1** taliach. Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji.
+Występuje w **1** taliach. Overlay wymaga rekrutującego Tzimisce i uwzględnia modyfikatory kosztu; testy rush-cards.test.ts i retainer-wave.test.ts. Zweryfikowano RTR 19961113 (Ghoul jako jedyny sojusznik musi spalić się sam) i ANK 20170309-2 (wejście każdą drogą): tests/cards/war-ghoul-burn-rule.test.ts, 3 testy; mutacja usuwająca opcję 'self' wykryta. Pozostałe interakcje alternatywnych kosztów i rekrutacji wymagają dalszej weryfikacji.
 
 <a id="karta-102199"></a>
 ### Yawp Court (102199) — PARTIAL_FIX
 
-Występuje w **1** taliach. Naprawiono kolejkę walk przed referendum i jego anulowanie po opuszczeniu ready przez działającego wampira. tests/cards/crypt-and-uncontrolled.test.ts: rzeczywisty torpor (także w drugiej walce Psyche!), torpor samego przeciwnika, symulowany powrót i save/load, damage między walkami. Faktyczne użycie Warsaw Station w środku akcji nie jest zaimplementowane; Rötschreck i pozostałe interakcje timingów/prevention niezweryfikowane. Rulings LSJ 20060902, LSJ 20090325-1, ANK 20180910-1.
+Występuje w **1** taliach. Naprawiono kolejkę walk przed referendum i jego anulowanie po opuszczeniu ready przez działającego wampira. tests/cards/crypt-and-uncontrolled.test.ts: rzeczywisty torpor (także w drugiej walce Psyche!), torpor samego przeciwnika, symulowany powrót i save/load, damage między walkami. Zweryfikowano RTR 19970630 (crypt-and-uncontrolled.test.ts: obrażenia ambush są zadawane po CombatEnded jako środowiskowe, bez DamageInflicted). Faktyczne użycie Warsaw Station w środku akcji nie jest zaimplementowane; Rötschreck i pozostałe interakcje timingów/prevention niezweryfikowane. Rulings LSJ 20060902, LSJ 20090325-1, ANK 20180910-1.
 
 <a id="karta-102233"></a>
 ### Revelation of the Serpent (102233) — PARTIAL_FIX
@@ -224,37 +159,17 @@ Występuje w **2** taliach. Superior oferuje wybór corruption tylko po rozstrzy
 <a id="karta-102246"></a>
 ### Childe of the Revolution (102246) — PARTIAL_FIX
 
-Występuje w **2** taliach. Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu. Paczka 1: pokryte przez token-vampire.test.ts (obowiązek hunt, uncontrolled, Anarch). Nie zweryfikowano LSJ 20041201-2 (wejście do crypt = spalenie) dla tokena. Status bez zmian.
+Występuje w **2** taliach. Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu. Paczka 1: pokryte przez token-vampire.test.ts (obowiązek hunt, uncontrolled, Anarch). Zweryfikowano LSJ 20041201-2 w zakresie osiągalnym w silniku (tests/cards/childe-token-burn.test.ts: spalony token trafia do ash heap, crypt bez zmian; silnik nie ma ścieżki wkładania tokena z biblioteki do crypt). Status bez zmian.
 
 <a id="karta-102262"></a>
 ### Touch of Valeren (102262) — PARTIAL_FIX
 
-Występuje w **2** taliach. Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Nie zweryfikowano LSJ 20001114 dla tej ścieżki prevention oraz starych pakietów bez strikePhase. Status bez zmian.
-
-<a id="karta-102283"></a>
-### Touch of Oblivion (102283) — PARTIAL_FIX
-
-Występuje w **1** taliach. Basic dołącza counters, superior wysyła wampira do torpor lub spala ally. Naprawiono równoczesny strike oraz okno odroczenia bezpośredniego strike: torpor; tests/cards/entombment-audit.test.ts i touch-of-oblivion.test.ts. Pozostałe interakcje wymagają weryfikacji.
-
-<a id="karta-102302"></a>
-### Psychophagia (102302) — PARTIAL_FIX
-
-Występuje w **1** taliach. Wąski zakres: Hecata hunt usuwa ally z ash heap za blood albo mniej blood i unlock; ash-heap-cards.test.ts. Aktualizacja: Unlock przy wariancie 2 blood jest pomijany przy superior Sleeping Mind, blood gain pozostaje; brak osobnego testu end-to-end tego połączenia.
-
-<a id="karta-102303"></a>
-### Raising the Portcullis (102303) — PARTIAL_FIX
-
-Występuje w **1** taliach. Limit jednej kopii na kontrolera zamiast unique; test per-methuselah-audit.test.ts sprawdza dostępność i blokadę drugiej kopii. Pełna rezolucja dwóch kopii i interakcje contest wymagają dalszej weryfikacji.
-
-<a id="karta-102310"></a>
-### Augury of Doom (102310) — PARTIAL_FIX
-
-Występuje w **1** taliach. Limit jednej kopii na kontrolera zamiast unique; test per-methuselah-audit.test.ts sprawdza dostępność i blokadę drugiej kopii. Pełna rezolucja dwóch kopii i interakcje contest wymagają dalszej weryfikacji.
+Występuje w **2** taliach. Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Zweryfikowano LSJ 20001114 dla basic combat (tests/cards/touch-valeren-ruling.test.ts: opcja jest oferowana tylko przy obrażeniach do zapobieżenia, nie bez nich). Nadal nie zweryfikowano starych pakietów bez strikePhase. Status bez zmian.
 
 <a id="karta-102314"></a>
 ### Dance of the Dead (102314) — PARTIAL_FIX
 
-Występuje w **1** taliach. Zdolność można teraz aktywować w dalszych oknach walki, w tym w kroku press. wraith-zombie.test.ts sprawdza press, zużycie ostatniego countera i spalenie karty, limit na combat, kontrolę celu oraz maneuver zachowany do następnej rundy po save/restore. Pozostają do zbadania pozostałe okna (m.in. damage resolution) oraz interakcje z ograniczeniami ruchu i timingiem. Uwaga: ogólna legalność kart library wymagających Path nadal wymaga egzekwowania; samo pole Path przywrócono do registry.
+Występuje w **1** taliach. Zdolność można teraz aktywować w dalszych oknach walki, w tym w kroku press. wraith-zombie.test.ts sprawdza press, zużycie ostatniego countera i spalenie karty, limit na combat, kontrolę celu oraz maneuver zachowany do następnej rundy po save/restore. Dodano okno damage resolution (wraith-zombie.test.ts: opcja jest oferowana i zdejmuje licznik). Pozostają do zbadania pozostałe okna oraz interakcje z ograniczeniami ruchu i timingiem. Uwaga: ogólna legalność kart library wymagających Path nadal wymaga egzekwowania; samo pole Path przywrócono do registry.
 
 <a id="karta-102315"></a>
 ### Dance with the Devil (102315) — PARTIAL_FIX

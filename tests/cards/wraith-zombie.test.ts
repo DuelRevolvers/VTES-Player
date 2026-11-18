@@ -966,4 +966,21 @@ describe("Dance of the Dead — later combat windows", () => {
     atPress(engine);
     expect(optionIds(engine).some(id => id.includes("Dance of the Dead:dance:combatgrant"))).toBe(false);
   });
+  // "Once each combat, you can burn 1 counter…" has no window limit, so the
+  // damage-resolution window is one of the windows where it can be used.
+  it("can be used in the damage resolution window", () => {
+    const { state, engine } = inCombat(2);
+    for (let i = 0; i < 80; i++) {
+      const dp = engine.decision();
+      if (!dp) break;
+      if (dp.window === "combat.damageResolution" && dp.seat === "Alice") break;
+      engine.choose(dp.options.find(o => o.id === "pass")?.id ?? dp.options[0]!.id);
+    }
+    expect(engine.decision()?.window).toBe("combat.damageResolution");
+    const grant = optionIds(engine).find(id => id.includes("Dance of the Dead:dance:combatgrant:"))!;
+    expect(grant).toBeDefined();
+    engine.choose(grant);
+    const dance = state.seats[0]!.permanents.find(p => p.card.id === "dance")!;
+    expect(dance.counters).toBe(1);
+  });
 });

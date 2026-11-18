@@ -496,7 +496,12 @@ export class VtesEngine implements EngineOps {
    * is recorded on the minion and honoured in `endTurn`, beside where
    * "cannot act this turn" expires. docs/taking-actions-design.md §3
    */
-  borrowMinion(minionId: MinionId, to: SeatId, until: "endOfTurn" | "borrowerUnlock" = "endOfTurn"): void {
+  borrowMinion(
+    minionId: MinionId,
+    to: SeatId,
+    until: "endOfTurn" | "borrowerUnlock" | "endOfNextAction" = "endOfTurn",
+    opts: { mustBleedOnLoan?: boolean } = {},
+  ): void {
     const m = getMinion(this.state, minionId);
     if (m.controller === to) return;
     // Set BEFORE the move: `changeMinionControl` relocates the object
@@ -505,8 +510,45 @@ export class VtesEngine implements EngineOps {
     // Default `endOfTurn` so Puppet Master, which was here first and says
     // nothing about a duration, means exactly what it always meant.
     if (until === "borrowerUnlock") m.controlRevertsAt = "borrowerUnlock";
-    else delete m.controlRevertsAt;
+    else if (until === "endOfNextAction") {
+      m.controlRevertsAt = "endOfNextAction";
+      const act = this.action()?.actionId;
+      if (act !== undefined) m.controlRevertsAfterAction = act;
+    } else delete m.controlRevertsAt;
+    if (opts.mustBleedOnLoan) m.mustBleedOnLoan = true;
     this.changeMinionControl(minionId, to);
+  }
+
+  /** "Until the end of the next action" (Spirit Marionette): every loan made
+   *  in an EARLIER action than `actionId` ends now. A loan made in this very
+   *  action is not yet due. The ruling order holds: after-resolution effects
+   *  have run, and a cancelled bleed still returns the minion (RTR 20020501). */
+  private returnNextActionLoans(actionId: string): void {
+    for (const seat of [...this.state.seats]) {
+      for (const m of [...seat.minions]) {
+        if (m.controlRevertsTo === undefined) continue;
+        if (m.controlRevertsAt !== "endOfNextAction") continue;
+        if (m.controlRevertsAfterAction === actionId) continue;
+        this.endBorrow(m);
+      }
+    }
+  }
+
+  /** Hand a borrowed minion back to its owner's Methuselah and clear the loan. */
+  private endBorrow(m: MinionState): void {
+    const back = m.controlRevertsTo;
+    delete m.controlRevertsTo;
+    delete m.controlRevertsAt;
+    delete m.controlRevertsAfterAction;
+    delete m.mustBleedOnLoan;
+    if (back === undefined) return;
+    // Owner ousted during the loan: the minion is removed from the game
+    // (ANK 20181110, group G00001), not left with the borrower.
+    if (getSeat(this.state, back).ousted) {
+      this.removeMinionFromGame(m.id);
+      return;
+    }
+    if (back !== m.controller) this.changeMinionControl(m.id, back);
   }
 
   /**
@@ -529,12 +571,17 @@ export class VtesEngine implements EngineOps {
       for (const m of [...seat.minions]) {
         const back = m.controlRevertsTo;
         if (back === undefined) continue;
-        if ((m.controlRevertsAt ?? "endOfTurn") !== when) continue;
+        // A next-action loan still open at the turn boundary ends there too:
+        // no later action can be the "next" one of a turn that is over.
+        const due = m.controlRevertsAt ?? "endOfTurn";
+        if (due !== when && !(when === "endOfTurn" && due === "endOfNextAction")) continue;
         delete m.controlRevertsTo;
         delete m.controlRevertsAt;
-        // Their Methuselah may have been ousted while the loan ran; there
-        // is then nobody to give them back to and they stay put.
-        if (back !== seat.id && !getSeat(this.state, back).ousted) {
+        // Their Methuselah may have been ousted while the loan ran: the
+        // minion is then removed from the game (ANK 20181110, G00001).
+        if (getSeat(this.state, back).ousted) {
+          this.removeMinionFromGame(m.id);
+        } else if (back !== seat.id) {
           this.changeMinionControl(m.id, back);
         }
       }
@@ -544,6 +591,10 @@ export class VtesEngine implements EngineOps {
   changePermanentControl(cardId: CardInstanceId, to: SeatId): void {
     const from = this.controllerOfEntry(cardId);
     if (from === null || from === to) return;
+    // "While the bearer is ready, this equipment cannot be moved or stolen"
+    // (Eye of Hazimel): nothing changes its control while its bearer is ready.
+    const bearer = this.state.seats.flatMap((s) => s.minions).find((m) => m.attached.some((p) => p.card.id === cardId));
+    if (bearer && !bearer.locked && bearer.attached.some((p) => p.card.id === cardId && p.statics.untouchableWhileBearerReady === true)) return;
     // The same p. 17 rule as for a stolen minion: a forced self-contest
     // burns the incoming copy rather than starting one.
     const moving = this.findEntry(cardId);
@@ -698,6 +749,9 @@ export class VtesEngine implements EngineOps {
         break;
       case "MinionLocked":
         getMinion(this.state, ev.minion).locked = true;
+        break;
+      case "MinionRedListed":
+        getMinion(this.state, ev.minion).redList = true;
         break;
       case "ActionAnnounced": {
         // "None of your other minions attempted any actions this turn" (Loner).
@@ -2393,6 +2447,10 @@ export class VtesEngine implements EngineOps {
   private canAnnounceWithdrawal(seatId: SeatId): boolean {
     const seat = getSeat(this.state, seatId);
     if (seat.ousted || seat.withdrawing) return false;
+    // "Draw as much as you can" (G00160, LSJ 20060620): a store that can still
+    // supply a draw (Shilmulo Tarot holding cards) means the hand is not yet
+    // as full as it can be, so the library being empty is not the end.
+    if (this.drawRedirectSources(seatId).length > 0) return false;
     return seat.library.length === 0 && seat.hand.length < handSizeOf(this.state, seatId);
   }
 
@@ -3153,6 +3211,15 @@ export class VtesEngine implements EngineOps {
       cf.step !== "endOfRound" &&
       (!this.combatantReady(cf.acting) || !this.combatantReady(cf.opposing))
     ) {
+      // Pre-range damage that is already pending is still inflicted when
+      // the combat ends prematurely (ANK 20180104, Outside the Hourglass):
+      // resolve it in damage resolution first, then end the round.
+      if (cf.pendingDamage.length > 0 && cf.step === "beforeRange") {
+        cf.endedPrematurely = true;
+        cf.step = "damageResolution";
+        cf.cycle = newCycle(cf.cycle.order);
+        return true;
+      }
       cf.endedPrematurely = true;
       cf.step = "endOfRound";
       cf.cycle = newCycle(cf.cycle.order);
@@ -3379,6 +3446,8 @@ export class VtesEngine implements EngineOps {
           }
           if (cf.willContinue && !cf.endedPrematurely) {
             cf.round += 1;
+            // First-round-only mandatory presses expire with the round.
+            cf.mandatoryFirstRoundPresses = { acting: 0, opposing: 0 };
             // "…that round is at close range (SKIP the determine range
             // step)" (Immortal Grapple superior). The boundary already
             // forces close range; the flag skips the step a maneuver
@@ -3490,6 +3559,7 @@ export class VtesEngine implements EngineOps {
             // and strength overrides last the whole combat.
             cf.committedStrike = { acting: null, opposing: null };
             cf.willContinue = false;
+            cf.endPressPlayed = false;
             cf.cycle = newCycle(cf.cycle.order);
             // "…before range is determined EACH ROUND this combat"
             // (Weather Control) — the new round has just reached that
@@ -4534,6 +4604,7 @@ export class VtesEngine implements EngineOps {
       ...(params.invertCombatRoles ? { invertCombatRoles: true } : {}),
       ...(params.lockTarget ? { lockTargetOnSuccess: true } : {}),
       ...(params.requiresLockedTarget ? { rushRequiresLockedTarget: true } : {}),
+      ...(params.unlockActorIfReady ? { unlockActorIfReady: true } : {}),
       grantedEffect: null,
       grantedCost: null,
       // "…can use those counters to pay some or all of the cost" — the
@@ -5586,6 +5657,13 @@ export class VtesEngine implements EngineOps {
     rushBy: MinionId | null = null,
   ): void {
     this.emit({ type: "CombatBegan", acting, opposing });
+    const firstRoundMandatory = (minionId: MinionId): number => {
+      const bearer = getMinion(this.state, minionId);
+      return bearer.attached.reduce((n, p) => {
+        if (cannotUseEquipmentEntry(bearer, p, this.registry[p.card.name]?.isEquipment === true)) return n;
+        return n + (p.statics.mandatoryFirstRoundContinuePress ?? 0);
+      }, 0);
+    };
     // "1 optional press each combat" statics (Dread Mastiff superior):
     // granted once, persisting across rounds until spent.
     const combatPresses = (minionId: MinionId): number => {
@@ -5684,6 +5762,12 @@ export class VtesEngine implements EngineOps {
       mandatoryContinuePresses: {
         acting: getMinion(this.state, acting).attached.reduce((n, p) => n + (p.statics.mandatoryContinuePressPerCombat ?? 0), 0),
         opposing: getMinion(this.state, opposing).attached.reduce((n, p) => n + (p.statics.mandatoryContinuePressPerCombat ?? 0), 0),
+      },
+      // Same equipment filter as `combatPresses`: a weapon that its bearer
+      // cannot use (Howler) grants no press.
+      mandatoryFirstRoundPresses: {
+        acting: firstRoundMandatory(acting),
+        opposing: firstRoundMandatory(opposing),
       },
       pressesEndOnly: {
         acting: endPresses(acting),
@@ -6982,6 +7066,7 @@ export class VtesEngine implements EngineOps {
     const cf = this.requireCombat();
     const side = this.sideOf(cf, play.minion);
     cf.willContinue = toContinue;
+    cf.endPressPlayed = !toContinue;
     cf.awaiting = side === "acting" ? "opposing" : "acting";
     cf.declines = 0;
     this.emit({
@@ -11173,6 +11258,15 @@ export class VtesEngine implements EngineOps {
         if (m?.locked) this.emit({ type: "MinionUnlocked", minion: id });
       }
     }
+    // Big Game: "unlocks at the end of the action if he or she is still
+    // ready" — any end of the action, blocked or not, and only if the
+    // acting minion is still ready (a torpid vampire stays locked).
+    if (af.unlockActorIfReady && !af.noUnlock) {
+      const actor = findMinion(this.state, af.acting);
+      if (actor?.locked && isReady(actor)) {
+        this.emit({ type: "MinionUnlocked", minion: af.acting });
+      }
+    }
     // "This vampire takes N unpreventable environmental aggravated damage
     // after action resolution" (Daring the Dawn) — no combat, so no
     // prevention window: it resolves straight away.
@@ -11452,6 +11546,8 @@ export class VtesEngine implements EngineOps {
         });
       }
     }
+    // "Until the end of the next action" loans end with this action.
+    this.returnNextActionLoans(af.actionId);
   }
 
   // -- decision building ----------------------------------------------------
@@ -12069,6 +12165,21 @@ export class VtesEngine implements EngineOps {
       }
       if (options.length > 0) return options;
     }
+    // "This werewolf MUST enter combat with any minion controlled by another
+    // Methuselah as a Ⓓ action" (Cry Wolf). A compelled rush of an ally: it
+    // is mandatory, so it comes before every non-mandatory action, and the
+    // only options offered are the compelled ones. Once per turn (the rush
+    // is recorded in the copy's per-turn uses), and only while a target
+    // exists, so a werewolf with nobody to rush is simply not compelled.
+    // docs/card-audit/manual-findings.json (100475)
+    const compelledRush = this.entryActionOptionsFor(tf.seat).filter((o) => {
+      if (o.kind !== "useEntryAction" || o.entersCombat !== true || o.minion === undefined) return false;
+      const holder = findMinion(this.state, o.minion);
+      // Read, not `handler()`: a minion whose card has no handler is not compelled.
+      return holder != null && this.registry[holder.name]?.mandatoryRush === true;
+    });
+    if (compelledRush.length > 0) return compelledRush;
+
     // "If you control a LOCKED MINION, <this vampire> MUST bleed as a Ⓓ
     // action unless she must hunt" (Elen Kamjian) — the second instance of
     // p. 19's mandatory-action rule, and it sits below the hunt because
@@ -12091,8 +12202,14 @@ export class VtesEngine implements EngineOps {
         m.blood >= bleedAnnounceTax(m, preySeat) &&
         // …and a toll she cannot pay on top of it (Enrage superior).
         this.tollAffordable(m, "other", bleedAnnounceTax(m, preySeat)) &&
-        m.attached.some(
-          (p) => p.statics.mustBleed && (!p.statics.mustBleed.whileControlsLocked || controlsLocked),
+        // A borrowed minion on a Spirit Marionette loan must bleed its
+        // controller's prey — unless it must hunt, which is the mandatory
+        // action instead (Spirit Marionette ruling).
+        (
+          (m.mustBleedOnLoan === true && !mustHunt(m)) ||
+          m.attached.some(
+            (p) => p.statics.mustBleed && (!p.statics.mustBleed.whileControlsLocked || controlsLocked),
+          )
         ),
     );
     const bleedValue = (m: MinionState): number =>
@@ -12552,7 +12669,7 @@ export class VtesEngine implements EngineOps {
         // "1 optional press, only usable to CONTINUE combat" (Righteous
         // Blade) — a restricted pool that can only ever buy the first of
         // the two options below (docs/weapon-riders-design.md §4).
-        const mandatory = cf.mandatoryContinuePresses?.[cf.awaiting] ?? 0;
+        const mandatory = (cf.mandatoryContinuePresses?.[cf.awaiting] ?? 0) + (cf.mandatoryFirstRoundPresses?.[cf.awaiting] ?? 0);
         const continueOnly = cf.pressesContinueOnly?.[cf.awaiting] ?? 0;
         // "…only usable to END combat" (Qetu): the mirror pool, which can
         // only ever buy the `press:end` option below.
@@ -13440,12 +13557,14 @@ export class VtesEngine implements EngineOps {
         // then per-combat ones (retainer statics).
         const restricted = top.pressesContinueOnly;
         const endOnly = top.pressesEndOnly;
-        if (option.toContinue && top.mandatoryContinuePresses && top.mandatoryContinuePresses[side] > 0) top.mandatoryContinuePresses[side] -= 1;
+        if (option.toContinue && top.mandatoryFirstRoundPresses && top.mandatoryFirstRoundPresses[side] > 0) top.mandatoryFirstRoundPresses[side] -= 1;
+        else if (option.toContinue && top.mandatoryContinuePresses && top.mandatoryContinuePresses[side] > 0) top.mandatoryContinuePresses[side] -= 1;
         else if (option.toContinue && restricted && restricted[side] > 0) restricted[side] -= 1;
         else if (!option.toContinue && endOnly && endOnly[side] > 0) endOnly[side] -= 1;
         else if (top.presses[side] > 0) top.presses[side] -= 1;
         else top.pressesCombat[side] -= 1;
         top.willContinue = option.toContinue;
+        top.endPressPlayed = !option.toContinue;
         top.awaiting = side === "acting" ? "opposing" : "acting";
         top.declines = 0;
         this.emit({
@@ -14053,10 +14172,14 @@ export class VtesEngine implements EngineOps {
     }
   }
 
-  private applyResolvedDamage(pd: PendingDamage): void {
+  private applyResolvedDamage(pdIn: PendingDamage): void {
     // A minion can leave play before its damage resolves.
-    const m = findMinion(this.state, pd.minion);
+    const m = findMinion(this.state, pdIn.minion);
     if (!m) return;
+    // A card on the victim may take some of each packet off (Nephandus).
+    const reduce = this.registry[m.name]?.incomingDamageReduction?.(m, pdIn, this.state) ?? 0;
+    const pd: PendingDamage = reduce > 0 ? { ...pdIn, amount: Math.max(0, pdIn.amount - reduce) } : pdIn;
+    if (pd.amount <= 0) return;
     if (m.kind === "ally") {
       // Allies treat aggravated as normal damage (p. 32).
       const burn = Math.min(m.blood, pd.amount);
@@ -14385,6 +14508,43 @@ export class VtesEngine implements EngineOps {
    * minion, which is the same wording the rulebook uses for diablerie's
    * Discipline gain (p. 34). docs/token-vampire-design.md §6
    */
+  /** Summon History: put an ally from the library or ash heap into play for
+   *  its searcher, with life equal to its starting life. Uses the basic
+   *  version: a card that requires a Discipline comes into play at the
+   *  inferior version (RBK recruit-ally; ruling G00110). */
+  putAllyFromZone(args: { seat: SeatId; cardId: CardInstanceId; zone: "library" | "ashHeap" }): void {
+    const seat = getSeat(this.state, args.seat);
+    const pile = args.zone === "library" ? seat.library : (seat.ashHeap ?? []);
+    const card = pile.find((c) => c.id === args.cardId);
+    if (!card) return;
+    const handler = this.registry[card.name];
+    const ally = handler?.allyEntry?.("basic");
+    if (!ally) return;
+    this.emit({ type: "CardLeftZone", seat: args.seat, cardId: card.id, name: card.name, zone: args.zone });
+    this.emit({
+      type: "AllyEnteredPlay",
+      seat: args.seat,
+      minion: card.id,
+      cardId: card.id,
+      name: card.name,
+      life: ally.life,
+      strength: ally.strength,
+      bleed: ally.bleed,
+      recruited: false,
+      cost: handler?.poolCost ?? 0,
+      ...(ally.disciplines ? { disciplines: ally.disciplines } : {}),
+    });
+    this.emit({
+      type: "PermanentEnteredPlay",
+      seat: args.seat,
+      cardId: card.id,
+      name: card.name,
+      attachedTo: card.id,
+      statics: ally.statics,
+      tags: ally.tags,
+    });
+  }
+
   attachFromZone(args: {
     seat: SeatId;
     cardId: CardInstanceId;
