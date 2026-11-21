@@ -71,3 +71,58 @@ describe("Psyche! superior after an end-of-combat press (user rule: offered when
     expect(offered).toBe("[]");
   });
 });
+
+describe("Psyche! superior after strike: combat ends (endedPrematurely)", () => {
+  // Psyche! superior (queueCombat, onlyIfCombatWouldEnd) may be played in
+  // combat.endOfRound when a strike ended combat prematurely and both
+  // combatants remain ready; it queues a new combat after the current one.
+  it("is offered in combat.endOfRound when a strike ended combat prematurely", () => {
+    const state = threeSeatGame();
+    const alice = state.seats.find((s: any) => s.id === "Alice")!;
+    Object.assign(state.seats[0]!.minions[0]!, { blood: 6, capacity: 8, clan: "Salubri", disciplines: { cel: "superior" } });
+    Object.assign(state.seats[1]!.minions.find((m: any) => m.id === "M")!, { blood: 6, strength: 3, disciplines: { cel: "superior" } });
+    alice.hand.push({ id: "rip", name: "Riposte" }, { id: "psy", name: "Psyche!" });
+    const engine = new VtesEngine(state, testRegistry);
+    runTrace(engine, [
+      ["Alice", "bleed:V1"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "block:M"], ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"], ["Alice", "pass"], ["Bob", "pass"],
+      ["Alice", "pass"], ["Bob", "pass"], ["Carol", "pass"],
+    ]);
+
+    let offeredPsyche = false;
+    for (let i = 0; i < 300; i++) {
+      const dp: any = engine.decision();
+      if (!dp) break;
+      const ids: string[] = dp.options.map((o: any) => o.id);
+
+      // Alice plays Riposte (combat ends) in the strike window
+      if (dp.window === "combat.chooseStrike" && dp.seat === "Alice" && !offeredPsyche) {
+        const riposte = ids.find((x) => x.startsWith("play:Riposte:basic:"));
+        if (riposte) { engine.choose(riposte); continue; }
+      }
+
+      // Bob chooses hand strike
+      if (dp.window === "combat.chooseStrike" && dp.seat === "Bob") {
+        const hs = ids.find((x) => x === "strike:hand");
+        if (hs) { engine.choose(hs); continue; }
+      }
+
+      // After Riposte resolves, combat ends prematurely; endOfRound opens
+      if (dp.window === "combat.endOfRound" && !offeredPsyche) {
+        const psyche = ids.find((x) => x.startsWith("play:Psyche!:superior:"));
+        if (psyche) { offeredPsyche = true; engine.choose(psyche); continue; }
+        const pass = ids.find((x) => x === "pass");
+        if (pass) { engine.choose(pass); continue; }
+      }
+
+      const pick = ids.find((x) => x === "pass") ?? ids.find((x) => x.startsWith("strike:")) ?? ids[0];
+      if (!pick) break;
+      engine.choose(pick);
+    }
+
+    expect(offeredPsyche).toBe(true);
+    const began = state.eventLog.filter((e: any) => e.type === "CombatBegan").length;
+    expect(began).toBeGreaterThanOrEqual(2);
+  });
+});

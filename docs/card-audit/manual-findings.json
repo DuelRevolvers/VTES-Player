@@ -9039,7 +9039,7 @@
     "id": 101507,
     "name": "Psyche!",
     "status": "PARTIAL_FIX",
-    "evidence": "Psyche! superior (queueCombat, onlyIfCombatWouldEnd) jest oferowany także w combat.press, gdy zagrano press kończący walkę (anulowanie kontynuacji) i druga strona odpowiada; wcześniej tylko w combat.endOfRound, gdy nikt nie presuje. Działa limit: bez drugiej kolejki, przy obu gotowych wampirach. Test: tests/cards/psyche-end-press.test.ts (2 testy; mutacja wyłączająca gałąź press wykryta). Pełny zestaw 503 plików / 6120 testów zielony. Nie objęte testem: przerwanie walki strike'iem (endedPrematurely), choć ścieżka endOfRound jest dozwolona dla queueCombat."
+    "evidence": "Psyche! superior (queueCombat, onlyIfCombatWouldEnd) jest oferowany także w combat.press, gdy zagrano press kończący walkę (anulowanie kontynuacji) i druga strona odpowiada; wcześniej tylko w combat.endOfRound, gdy nikt nie presuje. Działa limit: bez drugiej kolejki, przy obu gotowych wampirach. Test: tests/cards/psyche-end-press.test.ts (3 testy; mutacja wyłączająca gałąź press i ścieżkę endedPrematurely wykrywa). Przerwanie walki strike'iem (endedPrematurely) pokryte testem w combat.endOfRound (LSJ 20001114). Pełny zestaw 503 plików / 6122 testów zielony."
   },
   {
     "id": 101508,
