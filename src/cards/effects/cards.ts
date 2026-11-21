@@ -44672,7 +44672,7 @@ const cedric: CardHandler = {
         af.blockedBy !== owner.minion || !owner.minion ||
         (af.usedInPlayAbilities ?? []).includes(entry.card.id)) return [];
     const m = findMinion(ctx.state, owner.minion);
-    if (!m || m.controller !== ctx.seat || !m.locked || m.blood < 1) return [];
+    if (!m || m.controller !== ctx.seat || !m.locked) return [];
     return [{ id: `ability:Cedric (G4):${entry.card.id}:unlock`, kind: "useAbility",
       label: "Cedric: burn 1 blood to unlock", source: entry.card.id, params: {} }];
   },
@@ -44696,7 +44696,7 @@ const alexWilkins: CardHandler = {
     if (!af || af.actionId !== info.actionId || !af.target ||
         Math.min(currentBleed(ops.state, af), af.bleedPoolCap ?? Infinity) < 1) return;
     const target = getSeat(ops.state, af.target);
-    if (target.ousted || target.pool < 1 || !findMinion(ops.state, info.acting)) return;
+    if (target.ousted || !findMinion(ops.state, info.acting)) return;
     ops.raiseChoice({ seat: af.target, cardName: "Alex Wilkins (G5)", cardId: entry.card.id,
       key: "stealAlex", params: { minion: info.acting }, optional: true });
   },

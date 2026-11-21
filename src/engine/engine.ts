@@ -11035,9 +11035,7 @@ export class VtesEngine implements EngineOps {
           // minion of the final bleed target pays the two counters. The
           // serializable choice is deferred through the action resolver.
           for (const cu of af.corruptionUnlocks) {
-            // The Sleeping Mind prohibits the unlock, including during the
-            // bleed resolution; do not offer to burn counters for it.
-            if (af.noUnlock || af.target === null || !findMinion(this.state, cu.minion)?.locked) continue;
+            if (af.target === null || !findMinion(this.state, cu.minion)?.locked) continue;
             if (!getSeat(this.state, af.target).minions.some((m) => (m.corruption?.[cu.seat] ?? 0) >= 2)) continue;
             this.raiseChoice({ seat: cu.seat, cardName: "Revelation of the Serpent",
               cardId: cu.cardId ?? "legacy-revelation", key: "corruptionUnlock",

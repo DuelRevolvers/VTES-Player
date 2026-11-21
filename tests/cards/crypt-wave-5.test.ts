@@ -398,6 +398,37 @@ describe("Eulogio", () => {
     // And it is not a search, so nothing is shuffled.
     expect(state.eventLog.some((e) => e.type === "LibraryShuffled")).toBe(false);
   });
+
+  // The Sleeping Mind blocks unlock during the action; Eulogio's granted
+  // reorderTop unlock must be skipped when noUnlock is set.
+  it("does not unlock when unlock is prevented during the action (Sleeping Mind)", () => {
+    const { state, engine } = stacked();
+    const v1 = find(state, "V1");
+    v1.locked = true;
+    v1.blood = 2;
+
+    // Start the action: announce the granted action
+    expect(walkTo(engine, "act:Eulogio")).toBe(true);
+    runTrace(engine, [
+      ["Alice", optionIds(engine).find((o) => o.includes(":granted:"))!],
+    ]);
+
+    // Now the action frame exists — simulate The Sleeping Mind blocking unlock
+    const actionFrame = state.frames.find((f) => f.kind === "action");
+    if (!actionFrame || actionFrame.kind !== "action")
+      throw new Error("no action frame");
+    (actionFrame as any).noUnlock = true;
+
+    if (!walkTo(engine, "choice:Eulogio")) throw new Error("no reorder choice");
+    const pickC = optionIds(engine).find((o) => o.endsWith(":c"))!;
+    expect(pickC).toBeDefined();
+    runTrace(engine, [["Alice", pickC]]);
+
+    resolve(engine, state);
+
+    // Eulogio should STILL be locked because unlock was prevented
+    expect(find(state, "V1").locked).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
