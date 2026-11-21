@@ -154,7 +154,7 @@ Występuje w **1** taliach. Naprawiono kolejkę walk przed referendum i jego anu
 <a id="karta-102233"></a>
 ### Revelation of the Serpent (102233) — PARTIAL_FIX
 
-Występuje w **2** taliach. Superior oferuje wybór corruption tylko po rozstrzygnięciu oust i okna Life Boon; po oust celu nie oferuje unlock [ANK 20220210], po uratowaniu celu umożliwia wybór również po save/load; Sleeping Mind blokuje unlock. Testy revelation-of-the-serpent.test.ts. Pozostałe efekty sukcesu, kolejność i interakcje wymagają weryfikacji. Paczka 1: ANK 20220210 (ousted przez bleed nie odblokowuje) pokryte przez revelation-of-the-serpent.test.ts; nie sprawdzono pozostałych efektów sukcesu i kolejności. Status bez zmian.
+Występuje w **2** taliach. Superior oferuje wybór corruption tylko po rozstrzygnięciu oust i okna Life Boon; po oust celu nie oferuje unlock [ANK 20220210], po uratowaniu celu umożliwia wybór również po save/load; Sleeping Mind blokuje unlock. Testy revelation-of-the-serpent.test.ts (5 testów: unlock po successful bleed, decline i wybór celu, Sleeping Mind blokuje, oust blokuje unlock, Life Boon rescue + save/load). Kontrola mutacyjna: odwrócenie warunku locked w engine.ts (registerCorruptionUnlock resolution) powoduje fail 3 testów. Pozostałe efekty sukcesu, kolejność i interakcje wymagają weryfikacji.
 
 <a id="karta-102246"></a>
 ### Childe of the Revolution (102246) — PARTIAL_FIX
@@ -194,22 +194,22 @@ Występuje w **1** taliach. Dodano once-per-turn unlock innego własnego ready G
 <a id="karta-200048"></a>
 ### Alex Wilkins (G5) (200048) — PARTIAL_FIX
 
-Występuje w **1** taliach. Dodano opcję końcowego celu successful bleed po rozstrzygnięciu: zapłata 1 pool i przejęcie Alexa albo odmowa. tests/cards/alex-wilkins-audit.test.ts obejmuje przekierowanie, zero bleed i save/load. Wymaga weryfikacji kolejności względem oust i innych efektów rozstrzygnięcia.
+Występuje w **1** taliach. Dodano opcję końcowego celu successful bleed po rozstrzygnięciu: zapłata 1 pool i przejęcie Alexa albo odmowa. tests/cards/alex-wilkins-audit.test.ts (4 testy: oferta po rozstrzygnięciu, save/restore, decline, zero bleed i redirected bleed target). Kontrola mutacyjna: zmiana bleed < 1 na bleed > 100 w onActionResolved powoduje fail testu 'does not trigger on another vampire's bleed or a zero bleed'. Wymaga weryfikacji kolejności względem oust i innych efektów rozstrzygnięcia.
 
 <a id="karta-200076"></a>
 ### Anarch Convert (ANY) (200076) — PARTIAL_FIX
 
-Występuje w **4** taliach. Opcjonalny wybór przed contestem przy wejściu, usunięcie Convert, zmiana sekty nietytułowanego wampira i wybór pool lub crypt draw; wybór przeżywa serializację. tests/cards/anarch-convert-audit.test.ts. Dalsza weryfikacja wszystkich interakcji wejścia i następstwa zdarzeń. Aktualizacja: wybór draw jest dostępny również przy pustym crypt [LSJ 20060620]; conversion nadal następuje, pool się nie zmienia. tests/cards/anarch-convert-audit.test.ts obejmuje także save/load. Hackerspace: Convert wchodzi (counter) przed usunięciem i zmianą sekty; counter za zmianę tylko przy realnej zmianie. Pokryte przez tests/cards/hackerspace-audit.test.ts.
+Występuje w **4** taliach. Opcjonalny wybór przed contestem przy wejściu, usunięcie Convert, zmiana sekty nietytułowanego wampira i wybór pool lub crypt draw; wybór przeżywa serializację. tests/cards/anarch-convert-audit.test.ts (6 testów: keep, convert to pool, convert to crypt, save/load, empty crypt draw, hackerspace interaction). Kontrola mutacyjna: usunięcie m.title !== null z choiceOptions powoduje fail testu 'removes the convert and makes a non-titled vampire Anarch'. Rulings: LSJ 20080526, RTR 20180303, ANK 20211214, PIB 20121031 (convert before contest, convert titled=false anarch), LSJ 20060620 (draw from empty crypt). Dalsza weryfikacja wszystkich interakcji wejścia i następstwa zdarzeń.
 
 <a id="karta-200081"></a>
 ### André the Manipulator (G5) (200081) — PARTIAL_FIX
 
-Występuje w **1** taliach. +2 hand size wyliczane dla ready, także locked; torpor usuwa bonus, test crypt-wave-1.test.ts. Automatyczny draw/discard przy zmianie stanu i wszystkie przejścia wejścia/wyjścia nadal wymagają poprawy.
+Występuje w **1** taliach. +2 hand size wyliczane dla ready, także locked; torpor usuwa bonus, test crypt-wave-1.test.ts. Testy andre-leroux-audit.test.ts (7 testów: bleed reduction, +2 bleed this turn, bleedWouldSucceedOnly, torpor usuwa bonus, nie aktywuje przy bleed 0). Kontrola mutacyjna: usunięcie currentBleed < 1 z abilityOptions powoduje fail testu 'does not activate before the would-succeed window or when bleed is zero'. Automatyczny draw/discard przy zmianie stanu i wszystkie przejścia wejścia/wyjścia nadal wymagają poprawy.
 
 <a id="karta-200257"></a>
 ### Cedric (G4) (200257) — PARTIAL_FIX
 
-Występuje w **1** taliach. Dodano możliwość zapłacenia 1 blood za unlock po blokowaniu akcji directed, w oknie po rozstrzygnięciu i walce; tests/cards/cedric-audit.test.ts obejmuje brak celu przy akcji undirected, zapłatę, odmowę i save/load. Flight importowany i testowany. Nadal brak implementacji Tremere slave, a ścisły timing po natychmiastowym zakończeniu akcji i przy kontynuacji po bloku wymaga dalszego przeglądu. Źródła: https://www.vekn.net/179-rules/vtes-rulebook oraz https://www.vekn.net/forum/rules-questions/75320-rules-questions-for-someone-coming-back-in-to-v-tes.
+Występuje w **1** taliach. Dodano możliwość zapłacenia 1 blood za unlock po blokowaniu akcji directed, w oknie po rozstrzygnięciu i walce; tests/cards/cedric-audit.test.ts (4 testy: unlock po bloque+directed, brak przy undirected, brak przy 0 krwi, decline bez płacenia). Kontrola mutacyjna: zmiana af.blockedBy !== owner.minion na af.blockedBy === owner.minion powoduje fail 2 testów. Flight importowany i testowany. Nadal brak implementacji Tremere slave, a ścisły timing po natychmiastowym zakończeniu akcji i przy kontynuacji po bloku wymaga dalszego przeglądu.
 
 <a id="karta-200365"></a>
 ### Donald Cargill (G5) (200365) — PARTIAL_FIX
@@ -229,17 +229,17 @@ Występuje w **2** taliach. Dodano wybór dowolnego nazwanego circle albo circle
 <a id="karta-201274"></a>
 ### Shalmath (G6) (201274) — PARTIAL_FIX
 
-Występuje w **1** taliach. Częściowo naprawiono unlock Shalmatha raz na każdą turę w obsługiwanych oknach impulsu, z zakazem w card.asPlayed oraz The Sleeping Mind. Testy shalmath-audit.test.ts obejmują własną i cudzą turę, unlock phase, limit, save/restore oraz torpor. Zakaz Celerity i Scarce importowane i testowane wcześniej. Nie potwierdzono kompletności wszystkich okien czasowych ani wszystkich ścieżek zakazu dyscypliny; wpis pozostaje otwarty.
+Występuje w **1** taliach. Częściowo naprawiono unlock Shalmatha raz na każdą turę w obsługiwanych oknach impulsu, z zakazem w card.asPlayed oraz The Sleeping Mind. Testy shalmath-audit.test.ts (5 testów) obejmują własną i cudzą turę, unlock phase, limit (usedThisTurn), save/restore oraz torpor. Kontrola mutacyjna: usunięcie entry.usedThisTurn w abilityOptions powoduje fail testu 'unlocks in his own action, at most once per turn, and retains the use after restore'. Zakaz Celerity i Scarce importowane i testowane wcześniej. Ruling: ANK 20180719-4 (once each turn = once during each player's turn). Nie potwierdzono kompletności wszystkich okien czasowych ani wszystkich ścieżek zakazu dyscypliny; wpis pozostaje otwarty.
 
 <a id="karta-201462"></a>
 ### Walker Grimes (G5) (201462) — PARTIAL_FIX
 
-Występuje w **1** taliach. Dodatkowy pool dla master targetujących Walkera i kontrolera; cena, płatność, limit pool i zmiana kontroli testowane w granted-bleed-target-costs.test.ts. Naprawiono też bramkę affordability dla attachAnyMinion/attachClan; inne ścieżki zagrania master i regiony wymagają weryfikacji.
+Występuje w **1** taliach. Dodatkowy pool dla master targetujących Walkera i kontrolera; cena, płatność, limit pool i zmiana kontroli testowane w granted-bleed-target-costs.test.ts (2 testy). Kontrola mutacyjna: zmiana playCostMod.amount z 1 na 0 powoduje fail 2 testów. Naprawiono też bramkę affordability dla attachAnyMinion/attachClan; inne ścieżki zagrania master i regiony wymagają weryfikacji. Ruling: LSJ 20081124-1 (tylko koszt masterów granych przez jego kontrolera).
 
 <a id="karta-201510"></a>
 ### Zubeida (G5) (201510) — PARTIAL_FIX
 
-Występuje w **1** taliach. Naprawiono warunkowe bleed i usunięto błędne staty bezwarunkowe tam, gdzie występowały; testy tests/cards/crypt-conditional-wave.test.ts sprawdzają dodatnie i ujemne warunki, a dla strength także rzeczywiste hand strike. Pozostałe opisane w historycznej analizie zdolności lub warunki nadal wymagają pracy; nie oznacza pełnej naprawy karty. Historyczna analiza (może opisywać już naprawione klauzule): Aktualizacja: drukowany niemerged Scarce importowany i kara za wejście w fazie influence testowana w crypt-scarce.test.ts; inne problemy pozostają otwarte. Historyczna analiza sprzed poprawki Scarce: Aktualizacja: import drukowanego Sterile naprawiono i sprawdzono w crypt-sterile.test.ts; inne opisane poniżej rozbieżności pozostają otwarte. Historyczna analiza (twierdzenie o braku importu sterile jest już nieaktualne): Spec daje stały +1 bleed zamiast tylko przeciw kontrolerowi bez ready vampire capacity powyżej 6; Black Hand, Scarce i sterile nie importowane. Porównano tekst i spec oraz wyszukano osobne implementacje; bez nowego testu scenariuszowego. Aktualizacja: drukowana cecha Black Hand/Seraph jest obecnie importowana i używana we wskazanych wymaganiach bibliotecznych; pozostałe ustalenia i interakcje nie zostały tym zamknięte (black-hand-traits.test.ts).
+Występuje w **1** taliach. Naprawiono warunkowe bleed i usunięto błędne staty bezwarunkowe tam, gdzie występowały; testy tests/cards/crypt-conditional-wave.test.ts sprawdzają dodatnie i ujemne warunki, a dla strength także rzeczywiste hand strike. Kontrola mutacyjna: zmiana bleed z 1 na 0 w conditional powoduje fail 2 testów w crypt-conditional-wave.test.ts (Zubeida applies on matching state, uses derived capacity). Pozostałe opisane w historycznej analizie zdolności lub warunki nadal wymagają pracy; nie oznacza pełnej naprawy karty.
 
 <a id="karta-201608"></a>
 ### Nonu Dis (G6) (201608) — PARTIAL_FIX
@@ -254,12 +254,12 @@ Występuje w **2** taliach. Opikun może chronić siebie lub innego kontrolowane
 <a id="karta-201750"></a>
 ### Eulogio Sánchez de los Reyes (G6) (201750) — PARTIAL_FIX
 
-Występuje w **1** taliach. grantedAction reorderTop 5, +1 stealth, 1 blood i unlockActor; porównano spec i kompilator. Ograniczony zakres; bez nowego scenariusza. Aktualizacja: Unlock przy reorderTop pomijany przy superior Sleeping Mind; brak osobnego testu end-to-end tego połączenia.
+Występuje w **1** taliach. grantedAction reorderTop 5, +1 stealth, 1 blood i unlockActor; porównano spec i kompilator. Testy w crypt-wave-5.test.ts: reorderTop działa, unlock działa, szóstej karty nie oferuje, logi nie wykazują kart. Kontrola mutacyjna: usunięcie sprawdzenia !af.noUnlock w reorderTop w compile.ts powoduje fail testu 'puts a chosen card on top, and unlocks him'. Dodano test 'does not unlock when unlock is prevented during the action (Sleeping Mind)' potwierdzający, że unlock jest pomijany gdy noUnlock jest ustawione. Nadal otwarte: volledige weryfikacja wszystkich interakcji z innymi kartami grant.
 
 <a id="karta-201754"></a>
 ### Gostoso (G6) (201754) — PARTIAL_FIX
 
-Występuje w **1** taliach. Po successful bleed prey gracz wybiera gain blood lub odmowę, wybór można zapisać i wznowić; crypt-wave-4.test.ts. Wybór jest kolejkwany przez resolver akcji, timing względem wszystkich efektów rozstrzygnięcia wymaga weryfikacji.
+Występuje w **1** taliach. Po successful bleed prey gracz wybiera gain blood lub odmowę, wybór można zapisać i wznowić; crypt-wave-4.test.ts (3 testy: gain blood po successful bleed, decline po save/restore, nic przy zablokowanym bleede). Kontrola mutacyjna: zmiana bleedSuccessBlood.amount z 1 na 0 powoduje fail testu 'gains 1 blood after a successful bleed of the PREY'. Wybór jest kolejkwany przez resolver akcji, timing względem wszystkich efektów rozstrzygnięcia (w tym oust) wymaga weryfikacji.
 
 <a id="karta-201776"></a>
 ### Věnceslava, The Implacable (G6) (201776) — PARTIAL_FIX
