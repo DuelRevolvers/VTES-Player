@@ -21098,14 +21098,15 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
-    // Alacrity [100036] — fala 49 wierna (300) pełna zgodność bez wydmuszek
+    // Alacrity [100036] — [cel] +1 stealth. [CEL] As above, and if this action is blocked, this acting vampire gets an optional maneuver during the first round of the resulting combat.
     krcgId: 100036,
     name: "Alacrity",
     cardType: "actionModifier",
     bloodCost: 2,
     usable: [],
     modes: [
-      { level: "basic", discipline: "cel", effects: [{ kind: "modifyStealth", amount: 1 }, { kind: "modifyStealth", amount: 1 }] }
+      { level: "basic", discipline: "cel", effects: [{ kind: "modifyStealth", amount: 1 }] },
+      { level: "superior", discipline: "cel", effects: [{ kind: "modifyStealth", amount: 1 }, { kind: "maneuverNextRound", count: 1 }] }
     ],
   },
   {

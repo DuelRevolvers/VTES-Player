@@ -212,8 +212,8 @@
   {
     "id": 100036,
     "name": "Alacrity",
-    "status": "CONFIRMED_BUG",
-    "evidence": "Jest tylko basic cel z dwoma modifyStealth; brak osobnego superior i opcjonalnego maneuver w pierwszej rundzie po bloku. Tekst: src/cards/registry.json, ID 100036; implementacja: src/cards/effects/cards.ts."
+    "status": "PARTIAL_FIX",
+    "evidence": "Naprawiono spec: basic ma pojedynczy modifyStealth amount 1 (zamiast dwóch), dodano tryb superior z modifyStealth amount 1 i maneuverNextRound count 1 (opcjonalny manewr w pierwszej rundzie walki po bloku). Test: tests/cards/alacrity-audit.test.ts (2 testy, kontrola mutacyjna potwierdzona). Nadal nie przetestowano runtime: czy maneuverNextRound faktycznie daje manewr w pierwszej rundzie walki, czy karta jest zagrywalna jako action modifier podczas akcji bleed. Ruling: brak bezpośredniego wpisu w migawkę, poprawka zgodna z tekstem karty z registry.json."
   },
   {
     "id": 100037,
