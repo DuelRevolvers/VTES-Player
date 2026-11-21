@@ -745,7 +745,7 @@ export class VtesEngine implements EngineOps {
         break;
       }
       case "CardReturnedToHand":
-        getSeat(this.state, ev.seat).hand.push({ id: ev.cardId, name: ev.name });
+        getSeat(this.state, ev.seat).hand.push({ id: ev.cardId, name: ev.name, owner: ev.seat });
         break;
       case "MinionLocked":
         getMinion(this.state, ev.minion).locked = true;
@@ -1240,7 +1240,7 @@ export class VtesEngine implements EngineOps {
         const i = (holder.stored ?? []).findIndex((c) => c.id === ev.cardId);
         if (i >= 0) {
           const [card] = holder.stored!.splice(i, 1);
-          if (card) getSeat(this.state, ev.seat).hand.push(card);
+          if (card) getSeat(this.state, ev.seat).hand.push({ ...card, ...(card.owner ? {} : { owner: ev.seat }) });
         }
         break;
       }
@@ -1439,7 +1439,7 @@ export class VtesEngine implements EngineOps {
         const idx = (seat.ashHeap ?? []).findIndex((c) => c.id === ev.cardId);
         if (idx < 0) break;
         const [card] = seat.ashHeap!.splice(idx, 1);
-        if (card) seat.hand.push(card);
+        if (card) seat.hand.push({ ...card, ...(card.owner ? {} : { owner: ev.seat }) });
         break;
       }
       case "CardSearchedToHand": {
@@ -1449,7 +1449,7 @@ export class VtesEngine implements EngineOps {
         const idx = seat.library.findIndex((c) => c.id === ev.cardId);
         if (idx < 0) break;
         const [card] = seat.library.splice(idx, 1);
-        if (card) seat.hand.push(card);
+        if (card) seat.hand.push({ ...card, ...(card.owner ? {} : { owner: ev.seat }) });
         break;
       }
       case "PermanentMoved": {
@@ -7995,11 +7995,30 @@ export class VtesEngine implements EngineOps {
   }
 
   /** "Move a card from your hand to the bottom of your library" (Heart of
-   *  Nizchetus) — not a discard: no ash heap, no replacement draw. */
+   *  Nizchetus) — not a discard: no ash heap, no replacement draw. The card
+   *  goes to its OWNER's library, not necessarily the controller's. */
   buryInLibrary(seatId: SeatId, cardId: CardInstanceId): void {
-    const card = getSeat(this.state, seatId).hand.find((c) => c.id === cardId);
+    // Find the card in any hand — it may belong to a different seat than the
+    // one that triggered the bury (e.g. a card passed between players).
+    let card: CardInstance | undefined;
+    let cardSeat: SeatId | undefined;
+    for (const s of this.state.seats) {
+      const found = s.hand.find((c) => c.id === cardId);
+      if (found) {
+        card = found;
+        cardSeat = s.id;
+        break;
+      }
+    }
     if (!card) return;
-    this.emit({ type: "CardBuried", seat: seatId, cardId, name: card.name });
+    const owner = card.owner ?? cardSeat ?? seatId;
+    // Remove from the hand it is currently in
+    const hand = getSeat(this.state, cardSeat!).hand;
+    const idx = hand.indexOf(card);
+    if (idx >= 0) hand.splice(idx, 1);
+    this.emit({ type: "CardBuried", seat: owner, cardId, name: card.name });
+    // Move to the bottom of the owner's library
+    getSeat(this.state, owner).library.push(card);
   }
 
   /** "Move a library card from your ash heap to the BOTTOM of your
@@ -14777,7 +14796,7 @@ export class VtesEngine implements EngineOps {
     const seat = getSeat(this.state, seatId);
     const card = seat.library.shift();
     if (card) {
-      seat.hand.push(card);
+      seat.hand.push({ ...card, ...(card.owner ? {} : { owner: seatId }) });
       this.emit({ type: "CardDrawn", seat: seatId, cardId: card.id });
     }
   }

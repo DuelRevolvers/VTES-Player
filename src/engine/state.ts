@@ -511,6 +511,9 @@ export interface CardInstance {
   id: CardInstanceId;
   /** Key into the handler registry. */
   name: string;
+  /** The seat whose library this card returns to when buried (Heart of Nizchetus).
+   *  Defaults to the hand's controller; set explicitly when a card changes hands. */
+  owner?: SeatId;
   /** A burnt VAMPIRE's card sitting in its owner's ash heap (p. 34).
    *
    *  Crypt cards have no handler, so every filter that asks the registry

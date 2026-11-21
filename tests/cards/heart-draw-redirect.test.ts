@@ -128,4 +128,32 @@ describe("Heart of Nizchetus counted draws and redirects", () => {
     expect(ids(z.engine)).toContain(activate(1));
     expect(ids(z.engine)).not.toContain(activate(2));
   });
+
+  // Bury sends a card to its OWNER's library, not the controller's (Heart of Nizchetus).
+  // RTR 19970425, LSJ 20060921: a card taken from an opponent's library goes to its owner's library.
+  it("buries a card to its owner's library, not the controller's", () => {
+    const { state, engine } = setup(2);
+    const bob = state.seats[1]!;
+    // Bob's card in Alice's hand (as if passed between players)
+    const bobCard = { id: "bobCard", name: "Bob's Card", owner: "Bob" } as any;
+    state.seats[0]!.hand.push(bobCard);
+    // Alice's Heart: draw 1, bury 1 (draw from library, no Tarot interference)
+    engine.choose(activate(1));
+    engine.choose(tarot("library"));
+    // Alice's hand: h1 (old card), bobCard (Bob's card), l0 (drawn)
+    expect(state.seats[0]!.hand.map((c) => c.id)).toEqual(["h1", "bobCard", "l0"]);
+    // Bury Bob's card — it must go to Bob's library, not Alice's
+    const dp = engine.decision();
+    expect(dp).toBeDefined();
+    const buryBob = dp!.options.find((o) => o.id.includes(":bury:bobCard"))!;
+    engine.choose(buryBob.id);
+    // Alice's hand lost bobCard
+    expect(state.seats[0]!.hand.map((c) => c.id)).not.toContain("bobCard");
+    // Bob's card is in Bob's library (bottom = end of array)
+    expect(bob.library.map((c) => c.id)).toContain("bobCard");
+    // Alice's library should NOT contain Bob's card
+    expect(state.seats[0]!.library.map((c) => c.id)).not.toContain("bobCard");
+    // bobCard was buried
+    expect(state.eventLog.filter((e) => e.type === "CardBuried").map((e) => e.cardId)).toContain("bobCard");
+  });
 });
