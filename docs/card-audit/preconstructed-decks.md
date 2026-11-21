@@ -174,17 +174,17 @@ Występuje w **1** taliach. Zdolność można teraz aktywować w dalszych oknach
 <a id="karta-102315"></a>
 ### Dance with the Devil (102315) — PARTIAL_FIX
 
-Występuje w **1** taliach. Superior nie pobiera blood automatycznie; w kroku range można opcjonalnie zapłacić za dodatkowy close maneuver, a bez blood nadal zagrać kartę. round-end.test.ts. Zakup jest obecnie dostępny tylko w range przy long, nie dowolnie w rundzie; wymagane są dalsze prace nad timingiem i ograniczeniami dyscyplin.
+Występuje w **1** taliach. Superior nie pobiera blood automatycznie; w kroku range można opcjonalnie zapłacić za dodatkowy close maneuver, a bez blood nadal zagrać kartę. round-end.test.ts. Kontrola mutacyjna: zmiana bloodCost z 1 na 0 w grantCloseManeuver failuje test 'superior: also grants a bought close-only maneuver credit'. Zakup jest obecnie dostępny tylko w range przy long, nie dowolnie w rundzie; wymagane są dalsze prace nad timingiem i ograniczeniami dyscyplin.
 
 <a id="karta-102336"></a>
 ### Rage of Apedemak (102336) — PARTIAL_FIX
 
-Występuje w **1** taliach. Bonus dotyczy hand strike, nie strength ani melee weapon; testy hand, Roundhouse i Femur oraz hand size. tests/cards/frenzy-direction-audit.test.ts i temporary-hand-size.test.ts. Wygaszanie wszystkich wcześniejszych efektów frenzy przez Shield wymaga dalszej weryfikacji.
+Występuje w **1** taliach. Bonus dotyczy hand strike, nie strength ani melee weapon; testy hand, Roundhouse i Femur oraz hand size. tests/cards/frenzy-direction-audit.test.ts i temporary-hand-size.test.ts. Kontrola mutacyjna: zmiana handStrikeDamageBonus z 2 na 0 w superior failuje 2 testy w frenzy-direction-audit.test.ts (hand strike damage, card strike damage). Wygaszanie wszystkich wcześniejszych efektów frenzy przez Shield wymaga dalszej weryfikacji.
 
 <a id="karta-102362"></a>
 ### Tranquility Shield (102362) — PARTIAL_FIX
 
-Występuje w **1** taliach. Zachowuje niezależne ograniczenia przy anulowaniu frenzy, zarówno nałożone przed nim, jak po nim, także po save/load; testy frenzy-direction-audit.test.ts. W starych zapisach brak wystarczającej informacji o pochodzeniu ograniczeń, dlatego zachowywane są niejednoznaczne flagi. Pełna zgodność wszystkich możliwych efektów frenzy wymaga dalszej weryfikacji; wcześniejsza ocena była tylko wąska.
+Występuje w **1** taliach. Zachowuje niezależne ograniczenia przy anulowaniu frenzy, zarówno nałożone przed nim, jak po nim, także po save/load; testy frenzy-direction-audit.test.ts. Kontrola mutacyjna: usunięcie frenzyShield z obu trybów failuje 4 testy w frenzy-direction-audit.test.ts (usuwanie riders frenzy, zachowanie press ban po save/load, zachowanie non-frenzy equipment restriction, zachowanie ograniczenia sprzętu przed frenzy). W starych zapisach brak wystarczającej informacji o pochodzeniu ograniczeń, dlatego zachowywane są niejednoznaczne flagi. Pełna zgodność wszystkich możliwych efektów frenzy wymaga dalszej weryfikacji; wcześniejsza ocena była tylko wąska.
 
 <a id="karta-200039"></a>
 ### Alabástrom (G6) (200039) — PARTIAL_FIX
