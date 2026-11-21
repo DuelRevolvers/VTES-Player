@@ -3641,7 +3641,8 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           if (!hasAddl) continue;
           // "Only one limited additional-strike source per round" (V5 p. 32).
           // If this minion already used their limited slot (e.g. Pursuit
-          // superior), bar every other limited additional-strike card.
+          // superior, or Dodge+additional strike from chooseStrike), bar every
+          // other limited additional-strike card.
           const limited = mode.effects.some(
             (e) => e.kind === "additionalStrike" && e.limited,
           );
@@ -9328,6 +9329,26 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
           },
         ];
       }
+      // "After the bearer strikes with this gun, they get 1 optional
+      // additional strike (limited)..." (AK-47, §2) — offered in the
+      // grantAdditionalStrikes window so it competes with other limited sources.
+      if (ctx.window === "combat.grantAdditionalStrikes") {
+        if (
+          w.additionalStrikeSelf &&
+          !cf.usedLimitedAddl?.[side] &&
+          !cf.optionalAdditionalStrike?.[side] &&
+          cf.additionalStrikes[side] === 0
+        ) {
+          return [{
+            id: `ability:${spec.name}:${entry.card.id}:additionalStrike`,
+            kind: "useAbility",
+            label: `${spec.name}: optional additional strike`,
+            source: entry.card.id,
+            params: { action: "additionalStrike" },
+          }];
+        }
+        return [];
+      }
       if (ctx.window === "combat.chooseStrike") {
         // WHOSE STRIKE IS IT — the engine's `nextStriker` rule, not a
         // guess. "`strikes.acting === null` means it is the acting side's
@@ -9474,6 +9495,14 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
     const weaponUse: NonNullable<CardHandler["useAbility"]> = (entry, owner, choice, ops) => {
       if (!owner.minion) throw new Error(`${spec.name}: no bearer`);
       const act = choice.params["action"];
+      // "optional additional strike (limited)" from the grantAdditionalStrikes window (AK-47, Caseless Rounds)
+      if (act === "additionalStrike") {
+        if (w.additionalStrikeSelf && ops.grantAdditionalStrikeTo(owner.minion, 1, true)) {
+          ops.grantOptionalAdditionalStrikeTo(owner.minion);
+          ops.commitStrikeTo(owner.minion, entry.card.id);
+        }
+        return;
+      }
       if (act === "maneuver") {
         ops.useWeaponManeuver(owner.minion, entry.card.id);
         return;
@@ -9531,7 +9560,7 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
     // Dispatch on the `action` param the four weapon options carry, so a
     // card that is a weapon AND something else keeps both. Anything else
     // was never ours.
-    const WEAPON_ACTIONS = ["maneuver", "strike", "snipe", "cancelKeyword"];
+    const WEAPON_ACTIONS = ["maneuver", "strike", "snipe", "cancelKeyword", "additionalStrike"];
     handler.useAbility = (entry, owner, choice, ops) => {
       if (WEAPON_ACTIONS.includes(choice.params["action"] ?? "")) {
         weaponUse(entry, owner, choice, ops);

@@ -133,4 +133,71 @@ describe("limited additional strike sources per combatant and round", () => {
     expect(combat(state).additionalStrikes.acting).toBe(0);
     expect(has(engine, "play:Diversion:basic:V1:cel:d2")).toBe(true);
   });
+
+  it("AK-47 equipped is offered in grantAdditionalStrikes alongside Blur from hand", () => {
+    const { state, engine } = setup();
+    // Equip AK-47 on V1
+    const v1 = state.seats[0]!.minions[0]!;
+    const ak47 = testRegistry["AK-47"];
+    v1.attached.push({
+      card: { id: "ak", name: "AK-47" },
+      controller: "Alice",
+      owner: "Alice",
+      locked: false,
+      usedThisPhase: false,
+      statics: ak47?.permanentStatics ?? {},
+      tags: ak47?.permanentTags ?? [],
+    });
+    state.seats[0]!.hand.push({ id: "bl", name: "Blur" });
+    advanceTo(engine, "combat.grantAdditionalStrikes", "Alice");
+    // Both AK-47 (as ability) and Blur (from hand) should be offered
+    expect(has(engine, "ability:AK-47:ak:additionalStrike")).toBe(true);
+    expect(has(engine, "play:Blur")).toBe(true);
+  });
+
+  it("after Blur (limited) is taken in grant window, AK-47 is no longer offered", () => {
+    const { state, engine } = setup();
+    const v1 = state.seats[0]!.minions[0]!;
+    const ak47 = testRegistry["AK-47"];
+    v1.attached.push({
+      card: { id: "ak", name: "AK-47" },
+      controller: "Alice",
+      owner: "Alice",
+      locked: false,
+      usedThisPhase: false,
+      statics: ak47?.permanentStatics ?? {},
+      tags: ak47?.permanentTags ?? [],
+    });
+    state.seats[0]!.hand.push({ id: "bl", name: "Blur" });
+    advanceTo(engine, "combat.grantAdditionalStrikes", "Alice");
+    play(engine, "play:Blur");
+    expect(combat(state).usedLimitedAddl.acting).toBe(true);
+    // Advance past Bob's decline to get back to Alice
+    advanceTo(engine, "combat.grantAdditionalStrikes", "Alice");
+    expect(has(engine, "ability:AK-47:ak:additionalStrike")).toBe(false);
+    expect(has(engine, "play:Blur")).toBe(false);
+  });
+
+  it("after AK-47 (limited) is taken in grant window, Blur is no longer offered", () => {
+    const { state, engine } = setup();
+    const v1 = state.seats[0]!.minions[0]!;
+    const ak47 = testRegistry["AK-47"];
+    v1.attached.push({
+      card: { id: "ak", name: "AK-47" },
+      controller: "Alice",
+      owner: "Alice",
+      locked: false,
+      usedThisPhase: false,
+      statics: ak47?.permanentStatics ?? {},
+      tags: ak47?.permanentTags ?? [],
+    });
+    state.seats[0]!.hand.push({ id: "bl", name: "Blur" });
+    advanceTo(engine, "combat.grantAdditionalStrikes", "Alice");
+    play(engine, "ability:AK-47:ak:additionalStrike");
+    expect(combat(state).usedLimitedAddl.acting).toBe(true);
+    // Advance past Bob's decline to get back to Alice
+    advanceTo(engine, "combat.grantAdditionalStrikes", "Alice");
+    expect(has(engine, "ability:AK-47:ak:additionalStrike")).toBe(false);
+    expect(has(engine, "play:Blur")).toBe(false);
+  });
 });

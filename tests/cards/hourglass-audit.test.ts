@@ -136,6 +136,38 @@ describe("Hourglass basic Temporis resolution", () => {
     expect(savedAgain.seats[0].library.slice(0, 4).map((c: { id: string }) => c.id)).toEqual(["lib3", "lib2", "lib1", "stored"]);
     expect(savedAgain.seats[0].minions[0].locked).toBe(false);
   });
+
+  // G00160 (LSJ 20060620): "draw as much as you can" — if the library holds
+  // fewer than four cards, draw what is available and still allow moving
+  // those cards (plus any already in hand) to the top in chosen order.
+  it("[tem] draws as many cards as available when the library is short", () => {
+    const { state, engine, m } = setup();
+    // Library has only 3 cards instead of the usual 20
+    state.seats[0]!.library = state.seats[0]!.library.slice(0, 3);
+    state.seats[0]!.hand.push({ id: "old", name: "Old card" });
+    engine.choose("play:Hourglass of the Mind:basic:V1:tem:hg");
+    untilTop(engine);
+    // Should be able to move up to 4 cards (3 drawn + 1 already in hand)
+    const handBefore = state.seats[0]!.hand.length;
+    expect(handBefore).toBe(4); // old + lib0 + lib1 + lib2
+    // Move the drawn cards and the old card to the top in chosen order
+    for (const id of ["lib2", "lib1", "lib0", "old"]) {
+      engine.choose(top(id));
+    }
+    expect(state.seats[0]!.hand).toHaveLength(0);
+    expect(m.locked).toBe(false);
+    expect(state.eventLog.some((e: { type: string }) => e.type === "ActionResolved")).toBe(true);
+  });
+
+  it("[tem] with empty library and empty hand still unlocks", () => {
+    const { state, engine, m } = setup();
+    state.seats[0]!.library = [];
+    engine.choose("play:Hourglass of the Mind:basic:V1:tem:hg");
+    untilTop(engine);
+    engine.choose(top("done"));
+    expect(m.locked).toBe(false);
+    expect(state.eventLog.some((e: { type: string }) => e.type === "ActionResolved")).toBe(true);
+  });
 });
 
 describe("Hourglass choice privacy and restrictions", () => {
