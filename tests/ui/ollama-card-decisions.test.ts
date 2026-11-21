@@ -22,8 +22,8 @@ describe("Ollama card decisions and context selection", () => {
     const data = JSON.parse(ollamaPrompt(dp, [pass, soak], view, { Soak: "Prevent damage" }));
     expect(data.options).toEqual([pass, soak]);
     expect(data.cardDecision.guidance).toMatch(/Compare playing each card now with passing/);
-    expect(data.cardDecision.guidance).toMatch(/cycle an awkward hand/);
-    expect(data.cardDecision.guidance).toMatch(/Never pass automatically/);
+    expect(data.cardDecision.guidance).toMatch(/A card is a resource/);
+    expect(data.cardDecision.guidance).toMatch(/Do not pass automatically/);
     expect(data.cardDecision.situation).toMatch(/Do not assume damage/);
     expect(data.relevantCardTexts.Soak).toBe("Prevent damage");
     expect(data.relationships.prey).toBeTruthy();
