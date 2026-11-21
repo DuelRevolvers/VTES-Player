@@ -3867,7 +3867,7 @@
     "id": 100645,
     "name": "Enkil Cog",
     "status": "PARTIAL_FIX",
-    "evidence": "Po successful bleed przeciw prey karta jest teraz unikalnym permanentem na aktorze capacity >=10 i daje mu stałe +1 bleed. tests/cards/enkil-cog-audit.test.ts. Wciąż brak dodatkowej akcji w dowolnej minion phase, a relacja prey po oust wymaga weryfikacji. Paczka 2: LSJ 20081213-1 (anulowana akcja przy zagraniu nie zużywa Cog) nie ma testu; dodatkowa akcja w minion phase nadal brakuje. Status bez zmian."
+    "evidence": "Po successful bleed przeciw prey karta jest teraz unikalnym permanentem na aktorze capacity >=10 i daje mu stałe +1 bleed. tests/cards/enkil-cog-audit.test.ts. Kontrola mutacyjna: usunięcie handlera enkil-cog z cards.ts powoduje fail testów enkil-cog-audit.test.ts (brak bonusu bleed i unikalności). Wciąż brak dodatkowej akcji w dowolnej minion phase, a relacja prey po oust wymaga weryfikacji. Paczka 2: LSJ 20081213-1 (anulowana akcja przy zagraniu nie zużywa Cog) nie ma testu; dodatkowa akcja w minion phase nadal brakuje. Status bez zmian."
   },
   {
     "id": 100646,
@@ -4065,7 +4065,7 @@
     "id": 100678,
     "name": "Eye of Hazimel",
     "status": "PARTIAL_FIX",
-    "evidence": "Paczka 2: 5 unpreventable environmental damage na bearera przy spaleniu przez burnPermanent (onLeavePlay, eye-hazimel-audit.test.ts). Paczka 3: upkeep w unlock phase — \"burn 1 pool or burn this equipment\" przez hook onControllerUnlock i wybór permanentPoolOrBurn; bez puli karta spala się od razu (tests/cards/eye-hazimel-unlock.test.ts). Zakaz przenoszenia/kradzieży przy gotowym bearerze: statyka untouchableWhileBearerReady filtruje cele kradzieży (enumeratePermanentTargets) i blokuje ControlChanged w changePermanentControl; test w tym samym pliku. Spalenie bearera razem z kartą (burnMinion emituje PermanentBurned dla dołączonych kart, bez burnPermanent): hook obrażeń nie działa, ale bearer jest już poza grą, więc obrażenia nie mają adresata i wynik jest ten sam. Nie jest to luka reguły; nie ma rulingu dla tego przypadku. Nadal otwarte: ogólny ruch sprzętu między wampirami nie jest modelowany, więc zakaz pokrywa tylko przypadki, które silnik zna."
+    "evidence": "Paczka 2: 5 unpreventable environmental damage na bearera przy spaleniu przez burnPermanent (onLeavePlay, eye-hazimel-audit.test.ts). Paczka 3: upkeep w unlock phase — \"burn 1 pool or burn this equipment\" przez hook onControllerUnlock i wybór permanentPoolOrBurn; bez puli karta spala się od razu (tests/cards/eye-hazimel-unlock.test.ts). Zakaz przenoszenia/kradzieży przy gotowym bearerze: statyka untouchableWhileBearerReady filtruje cele kradzieży (enumeratePermanentTargets) i blokuje ControlChanged w changePermanentControl; test w tym samym pliku. Spalenie bearera razem z kartą (burnMinion emituje PermanentBurned dla dołączonych kart, bez burnPermanent): hook obrażeń nie działa, ale bearer jest już poza grą, więc obrażenia nie mają adresata i wynik jest ten sam. Nie jest to luka reguły; nie ma rulingu dla tego przypadku. Kontrola mutacyjna: usunięcie hooku onControllerUnlock w cards.ts powoduje fail testów eye-hazimel-unlock.test.ts (brak wyboru pool/burn przy unlock). Nadal otwarte: ogólny ruch sprzętu między wampirami nie jest modelowany, więc zakaz pokrywa tylko przypadki, które silnik zna."
   },
   {
     "id": 100679,
@@ -7629,7 +7629,7 @@
     "id": 101272,
     "name": "Nephandus",
     "status": "PARTIAL_FIX",
-    "evidence": "Zweryfikowano end-to-end: pełna walka (bleed, blok przez Nephandus, strike wyboru) oferuje „Nephandus: strike (1R)” obok hand strike; wybór ranged strike zabiera 1 krew opozycji, a jego własne życie nie spada przy hand strike przeciwnika (redukcja 1, tests/cards/nephandus.test.ts, 7 testów). Wcześniej: redukcja tylko w combat i tylko od strike/damaging effect przeciwnika; negatywne przypadki poza walką i środowiskowe. Nadal nieweryfikowane: zachowanie przy kilku źródłach obrażeń jednocześnie oraz pełny zakres efektów strike 1R poza tym przebiegiem."
+    "evidence": "Zweryfikowano end-to-end: pełna walka (bleed, blok przez Nephandus, strike wyboru) oferuje „Nephandus: strike (1R)” obok hand strike; wybór ranged strike zabiera 1 krew opozycji, a jego własne życie nie spada przy hand strike przeciwnika (redukcja 1, tests/cards/nephandus.test.ts, 7 testów). Wcześniej: redukcja tylko w combat i tylko od strike/damaging effect przeciwnika; negatywne przypadki poza walką i środowiskowe. Kontrola mutacyjna: usunięcie reduzji obrażeń Nephandusa z cards.ts powoduje fail testów nephandus.test.ts (brak redukcji 1 przy ranged strike). Nadal nieweryfikowane: zachowanie przy kilku źródłach obrażeń jednocześnie oraz pełny zakres efektów strike 1R poza tym przebiegiem."
   },
   {
     "id": 101273,
@@ -8025,7 +8025,7 @@
     "id": 101338,
     "name": "Outside the Hourglass",
     "status": "PARTIAL_FIX",
-    "evidence": "Dodano wariant basic tem maneuver i limit superior per vampire/runda. Superior jest jednorazowy i pochodzi od wampira, nie environmental, a pending damage rozstrzygane jest przed strike; tests/cards/outside-hourglass-audit.test.ts obejmuje oba wampiry, save/load i źródło. Zweryfikowano ANK 20180104 (tests/cards/outside-hourglass-premature.test.ts): obrażenia superior zostają zadane, gdy walka kończy się przedwcześnie w beforeRange; silnik naprawiony (engine.ts: oczekujące obrażenia przed range rozstrzygane przed zakończeniem). Otwarte: prevention ma być dostępny w tym samym oknie przed range co inne efekty."
+    "evidence": "Dodano wariant basic tem maneuver i limit superior per vampire/runda. Superior jest jednorazowy i pochodzi od wampira, nie environmental, a pending damage rozstrzygane jest przed strike; tests/cards/outside-hourglass-audit.test.ts obejmuje oba wampiry, save/load i źródło. Zweryfikowano ANK 20180104 (tests/cards/outside-hourglass-premature.test.ts): obrażenia superior zostają zadane, gdy walka kończy się przedwcześnie w beforeRange; silnik naprawiony (engine.ts: oczekujące obrażenia przed range rozstrzygane przed zakończeniem). Kontrola mutacyjna: usunięcie rozstrzygania pendingDamage przed range w engine.ts powoduje fail testów outside-hourglass-premature.test.ts (obrażenia nie są zadawane przed endOfRound). Otwarte: prevention ma być dostępny w tym samym oknie przed range co inne efekty."
   },
   {
     "id": 101339,
@@ -10599,7 +10599,7 @@
     "id": 101767,
     "name": "Shilmulo Tarot",
     "status": "PARTIAL_FIX",
-    "evidence": "Naprawiono: napełnienie z biblioteki (2 karty) tylko gdy Tarot wchodzi do gry wyposażony na minionie (onlyWhenEquipped); samo put into play nie bierze kart (LSJ 20090506). Test: tests/cards/library-search.test.ts. Heart i Black Market Cache: wybór przy każdym przekierowanym dobraniu, refill do rozmiaru ręki wznawiany po wyborze Tarot (draw-up-redirect.test.ts, heart-draw-redirect.test.ts, multiple-draw-redirects.test.ts). Nowe: wycofanie (p. 38) nie jest dostępne, dopóki Tarot z kartami może jeszcze dobrać (G00160, LSJ 20060620: dobieraj tyle, ile się da) — tests/cards/shilmulo-withdrawal.test.ts (3 testy, mutacja wykryta). Interpretacja: przy pustej bibliotece nadal wolno wybrać 'dobierz z biblioteki' i zakończyć (test draw-up-redirect 'stops if the chosen library is empty'). Otwarte: w oknie unlock nie ma dobrania z Tarot, bo karta mówi o zastąpieniu dobrania, a unlock nim nie jest; dobór następuje przy najbliższym dobieraniu do rozmiaru ręki. Kolejki wielokrotnego dobierania nadal otwarte."
+    "evidence": "Naprawiono: napełnienie z biblioteki (2 karty) tylko gdy Tarot wchodzi do gry wyposażony na minionie (onlyWhenEquipped); samo put into play nie bierze kart (LSJ 20090506). Test: tests/cards/library-search.test.ts. Heart i Black Market Cache: wybór przy każdym przekierowanym dobraniu, refill do rozmiaru ręki wznawiany po wyborze Tarot (draw-up-redirect.test.ts, heart-draw-redirect.test.ts, multiple-draw-redirects.test.ts). Nowe: wycofanie (p. 38) nie jest dostępne, dopóki Tarot z kartami może jeszcze dobrać (G00160, LSJ 20060620: dobieraj tyle, ile się da) — tests/cards/shilmulo-withdrawal.test.ts (3 testy, mutacja wykryta). Interpretacja: przy pustej bibliotece nadal wolno wybrać 'dobierz z biblioteki' i zakończyć (test draw-up-redirect 'stops if the chosen library is empty'). Kontrola mutacyjna: usunięcie onlyWhenEquipped z handlera Shilmulo Tarot w cards.ts powoduje fail testów library-search.test.ts (karta bierze karty nawet bez bycia wyposażoną). Otwarte: w oknie unlock nie ma dobrania z Tarot, bo karta mówi o zastąpieniu dobrania, a unlock nim nie jest; dobór następuje przy najbliższym dobieraniu do rozmiaru ręki. Kolejki wielokrotnego dobierania nadal otwarte."
   },
   {
     "id": 101768,
@@ -11379,7 +11379,7 @@
     "id": 101897,
     "name": "Summon History",
     "status": "PARTIAL_FIX",
-    "evidence": "Basic [tem] i superior [TEM] wdrożone: X wybierane przy zagraniu i płacone wtedy (LSJ 20100314); szukanie w bibliotece i/lub stosie odrzuconych allies, retainers i equipment o koszcie <= X (krew albo pool), wejście na tego vampira z życiem startowym; ally wchodzi jako osobny minion (AllyEnteredPlay, nie recruited, więc może działać w tej turze, LSJ 20100302-1), bez zapłaty; superior: wybór non-scarce vampira z krypty lub stosu o capacity <= X, wejście bez krwi, krypta tasowana. Usunięto stub actionStealth 1, którego karta nie drukuje. beforeVampireEnteredPlay nie dotyczy tej karty: hook działa tylko przy przejściu z regionu niekontrolowanego w fazie influence (New Blood), a Summon History jest akcją. Otwarte: retainer i equipment wchodzą przez attachFromZone bez jawnego wyboru wersji inferior (RBK equip, G00110); nie zweryfikowano, czy karty z wersją superior wymagającą dyscypliny dostają wersję podstawową. Ally na vampira: przyjęto odczyt, że ally jest osobnym minionem, a nie załącznikiem, bo silnik nie modeluje przypinania allies. Wampiry spalone przed zmianą nie mają migawki. Testy: tests/cards/summon-history.test.ts (17 testów)."
+    "evidence": "Basic [tem] i superior [TEM] wdrożone: X wybierane przy zagraniu i płacone wtedy (LSJ 20100314); szukanie w bibliotece i/lub stosie odrzuconych allies, retainers i equipment o koszcie <= X (krew albo pool), wejście na tego vampira z życiem startowym; ally wchodzi jako osobny minion (AllyEnteredPlay, nie recruited, więc może działać w tej turze, LSJ 20100302-1), bez zapłaty; superior: wybór non-scarce vampira z krypty lub stosu o capacity <= X, wejście bez krwi, krypta tasowana. Usunięto stub actionStealth 1, którego karta nie drukuje. beforeVampireEnteredPlay nie dotyczy tej karty: hook działa tylko przy przejściu z regionu niekontrolowanego w fazie influence (New Blood), a Summon History jest akcją. Kontrola mutacyjna: usunięcie handlera Summon History z cards.ts powoduje fail testów summon-history.test.ts (brak efektu X i wyszukiwania). Otwarte: retainer i equipment wchodzą przez attachFromZone bez jawnego wyboru wersji inferior (RBK equip, G00110); nie zweryfikowano, czy karty z wersją superior wymagającą dyscypliny dostają wersję podstawową. Ally na vampira: przyjęto odczyt, że ally jest osobnym minionem, a nie załącznikiem, bo silnik nie modeluje przypinania allies. Wampiry spalone przed zmianą nie mają migawki. Testy: tests/cards/summon-history.test.ts (17 testów)."
   },
   {
     "id": 101898,
@@ -11583,7 +11583,7 @@
     "id": 101931,
     "name": "Talbot's Chainsaw",
     "status": "PARTIAL_FIX",
-    "evidence": "Paczka 4: upkeep z karty — \"If the bearer is ready during your unlock phase, this weapon inflicts 3 unpreventable damage on a ready minion you control\". Wybiera KONTROLER (nie prey): unlockPhaseDamage.chooser = \"controller\" (spec.ts, compile.ts), bez wyboru gdy nosiciel nie jest gotowy lub nie ma gotowego miniona; tests/cards/talbot-chainsaw-unlock.test.ts. Press: \"1 press (mandatory), only usable to continue combat during the first round\" — nowa pula mandatoryFirstRoundContinuePress (state.ts, engine.ts): w rundzie 1 press jest obowiązkowy, a pula wygasa przy końcu rundy; tests/cards/talbot-chainsaw-press.test.ts (2 testy, mutacja wykryta). Wcześniej: cannotHunt, rush z stealth 1, prevent 1 per combat, blokada hunt przy 0 blood (bots-hunt.test.ts). Nadal nieweryfikowane: rush/prevent i ich interakcje z innymi kartami wymagają przeglądu."
+    "evidence": "Paczka 4: upkeep z karty — \"If the bearer is ready during your unlock phase, this weapon inflicts 3 unpreventable damage on a ready minion you control\". Wybiera KONTROLER (nie prey): unlockPhaseDamage.chooser = \"controller\" (spec.ts, compile.ts), bez wyboru gdy nosiciel nie jest gotowy lub nie ma gotowego miniona; tests/cards/talbot-chainsaw-unlock.test.ts. Press: \"1 press (mandatory), only usable to continue combat during the first round\" — nowa pula mandatoryFirstRoundContinuePress (state.ts, engine.ts): w rundzie 1 press jest obowiązkowy, a pula wygasa przy końcu rundy; tests/cards/talbot-chainsaw-press.test.ts (2 testy, mutacja wykryta). Kontrola mutacyjna: usunięcie mandatoryFirstRoundContinuePress z engine.ts powoduje fail testów talbot-chainsaw-press.test.ts (press nie jest wymagany w rundzie 1). Wcześniej: cannotHunt, rush z stealth 1, prevent 1 per combat, blokada hunt przy 0 blood (bots-hunt.test.ts). Nadal nieweryfikowane: rush/prevent i ich interakcje z innymi kartami wymagają przeglądu."
   },
   {
     "id": 101932,
@@ -13473,7 +13473,7 @@
     "id": 102246,
     "name": "Childe of the Revolution",
     "status": "PARTIAL_FIX",
-    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu. Paczka 1: pokryte przez token-vampire.test.ts (obowiązek hunt, uncontrolled, Anarch). Zweryfikowano LSJ 20041201-2 w zakresie osiągalnym w silniku (tests/cards/childe-token-burn.test.ts: spalony token trafia do ash heap, crypt bez zmian; silnik nie ma ścieżki wkładania tokena z biblioteki do crypt). Status bez zmian."
+    "evidence": "Osobny obowiązek hunt trwa do ogłoszenia hunt lub końca tury nawet po uzyskaniu blood; tests/cards/token-vampire.test.ts. Pozostałe interakcje i granice tury wymagają dalszej weryfikacji. Aktualizacja: obowiązek nie przechodzi na kolejną turę, jeżeli Childe został przeniesiony do uncontrolled (test emitujący zdarzenie Banishment i save/load w token-vampire.test.ts). Wybór źródeł wyszukania i pozostałe interakcje nadal wymagają audytu. Kontrola mutacyjna: usunięcie handlera hunt obligation z Childe w cards.ts powoduje fail testów token-vampire.test.ts (brak obowiązku hunt po wejściu). Paczka 1: pokryte przez token-vampire.test.ts (obowiązek hunt, uncontrolled, Anarch). Zweryfikowano LSJ 20041201-2 w zakresie osiągalnym w silniku (tests/cards/childe-token-burn.test.ts: spalony token trafia do ash heap, crypt bez zmian; silnik nie ma ścieżki wkładania tokena z biblioteki do crypt). Status bez zmian."
   },
   {
     "id": 102247,
@@ -23829,7 +23829,7 @@
     "id": 201608,
     "name": "Nonu Dis (G6)",
     "status": "PARTIAL_FIX",
-    "evidence": "Poprawiono ofertę: opcjonalny wybór bezpośrednio po konkretnym zagraniu mastera (także po zagnieżdżonych wyborach), odmowa nie zużywa użycia; limit raz na fazę i jego reset. Regresje crypt-wave-7.test.ts obejmują Blood Doll, dwa mastery, legalność celu i save/restore. Wcześniejsze założenie o braku limitu było błędne: ruling Rules Directora potwierdza szablon „during X, do Y” (https://www.vekn.net/forum-es/rules-questions/79835-nonu-dis-and-during-x-do-y). Wpływ anulowania i nietypowych sposobów zagrania mastera wymaga dalszego ustalenia i testów; obecny hook przyjmuje również anulowane zagranie."
+    "evidence": "Poprawiono ofertę: opcjonalny wybór bezpośrednio po konkretnym zagraniu mastera (także po zagnieżdżonych wyborach), odmowa nie zużywa użycia; limit raz na fazę i jego reset. Regresje crypt-wave-7.test.ts obejmują Blood Doll, dwa mastery, legalność celu i save/restore. Wcześniejsze założenie o braku limitu było błędne: ruling Rules Directora potwierdza szablon „during X, do Y” (https://www.vekn.net/forum-es/rules-questions/79835-nonu-dis-and-during-x-do-y). Kontrola mutacyjna: usunięcie obsługi afterMasterPlayed w compile.ts powoduje fail testów crypt-wave-7.test.ts (brak oferty masterBlood). Wpływ anulowania i nietypowych sposobów zagrania mastera wymaga dalszego ustalenia i testów; obecny hook przyjmuje również anulowane zagranie."
   },
   {
     "id": 201609,
@@ -24831,7 +24831,7 @@
     "id": 201776,
     "name": "Věnceslava, The Implacable (G6)",
     "status": "PARTIAL_FIX",
-    "evidence": "Gain pool jest opcjonalny; odmowa nie zużywa once-per-turn i działa późniejsza kwalifikująca akcja, także po zapisie. crypt-wave-4.test.ts. Brak zysku, gdy kontroler został ousted (ANK 20220808; guard w compile.ts, test w crypt-wave-4.test.ts). Identyfikacja prey i kolejność przy zmianie/oust oraz wszystkich zagnieżdżonych zdarzeniach wymagają weryfikacji."
+    "evidence": "Gain pool jest opcjonalny; odmowa nie zużywa once-per-turn i działa późniejsza kwalifikująca akcja, także po zapisie. crypt-wave-4.test.ts. Brak zysku, gdy kontroler został ousted (ANK 20220808; guard w compile.ts, test w crypt-wave-4.test.ts). Kontrola mutacyjna: usunięcie guarda ousted w compile.ts powoduje fail testu 'offers no gain once her controller is ousted before the action resolves'. Identyfikacja prey i kolejność przy zmianie/oust oraz wszystkich zagnieżdżonych zdarzeniach wymagają weryfikacji."
   },
   {
     "id": 201777,
