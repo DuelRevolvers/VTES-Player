@@ -119,12 +119,12 @@ Występuje w **1** taliach. Dodano wariant basic tem maneuver i limit superior p
 <a id="karta-101588"></a>
 ### Rego Motum (101588) — PARTIAL_FIX
 
-Występuje w **2** taliach. Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Zweryfikowano RTR 20041202 dla obu trybów (tests/cards/rego-motum-ruling.test.ts, 3 testy: 1 punkt przy basic zapobiega 1 i nic nie przechodzi dalej; superior zapobiega 3 z 3; basic przy 3 zapobiega 2 i zostawia 1; mutacja nieograniczonego zapobiegania wykrywana). Status bez zmian.
+Występuje w **2** taliach. Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Stare pakiety bez strikePhase nie są traktowane jako obrażenia ze strike (test w prevention-provenance-audit.test.ts: Rego Motum basic nie oferuje prewencji dla pakietu bez strikePhase); inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Zweryfikowano RTR 20041202 dla obu trybów (tests/cards/rego-motum-ruling.test.ts, 3 testy: 1 punkt przy basic zapobiega 1 i nic nie przechodzi dalej; superior zapobiega 3 z 3; basic przy 3 zapobiega 2 i zostawia 1; mutacja nieograniczonego zapobiegania wykrywana). Status bez zmian.
 
 <a id="karta-101649"></a>
 ### Rolling with the Punches (101649) — PARTIAL_FIX
 
-Występuje w **2** taliach. Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Zweryfikowano ANK 20210226 dla superior (tests/cards/rolling-punches-burn.test.ts: bramka wymaga 1 krwi na spalenie, a redukcja kosztu nie zmniejsza spalenia; mutacja bramki wykryta). Status bez zmian.
+Występuje w **2** taliach. Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare pakiety bez strikePhase nie są traktowane jako obrażenia ze strike (test w prevention-provenance-audit.test.ts: Rolling with the Punches superior nie oferuje prewencji dla pakietu bez strikePhase); inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Zweryfikowano ANK 20210226 dla superior (tests/cards/rolling-punches-burn.test.ts: bramka wymaga 1 krwi na spalenie, a redukcja kosztu nie zmniejsza spalenia; mutacja bramki wykryta). Status bez zmian.
 
 <a id="karta-101767"></a>
 ### Shilmulo Tarot (101767) — PARTIAL_FIX
@@ -144,12 +144,12 @@ Występuje w **1** taliach. Paczka 4: upkeep z karty — "If the bearer is ready
 <a id="karta-102144"></a>
 ### War Ghoul (102144) — PARTIAL_FIX
 
-Występuje w **1** taliach. Overlay wymaga rekrutującego Tzimisce i uwzględnia modyfikatory kosztu; testy rush-cards.test.ts i retainer-wave.test.ts. Zweryfikowano RTR 19961113 (Ghoul jako jedyny sojusznik musi spalić się sam) i ANK 20170309-2 (wejście każdą drogą): tests/cards/war-ghoul-burn-rule.test.ts, 3 testy; mutacja usuwająca opcję 'self' wykryta. Pozostałe interakcje alternatywnych kosztów i rekrutacji wymagają dalszej weryfikacji.
+Występuje w **1** taliach. Overlay wymaga rekrutującego Tzimisce i uwzględnia modyfikatory kosztu; testy rush-cards.test.ts i retainer-wave.test.ts. Zweryfikowano RTR 19961113 (Ghoul jako jedyny sojusznik musi spalić się sam) i ANK 20170309-2 (wejście każdą drogą): tests/cards/war-ghoul-burn-rule.test.ts, 3 testy; mutacja usuwająca opcję 'self' wykryta. Kontrola mutacyjna potwierdzona. Pozostałe interakcje alternatywnych kosztów i rekrutacji wymagają dalszej weryfikacji.
 
 <a id="karta-102199"></a>
 ### Yawp Court (102199) — PARTIAL_FIX
 
-Występuje w **1** taliach. Naprawiono kolejkę walk przed referendum i jego anulowanie po opuszczeniu ready przez działającego wampira. tests/cards/crypt-and-uncontrolled.test.ts: rzeczywisty torpor (także w drugiej walce Psyche!), torpor samego przeciwnika, symulowany powrót i save/load, damage między walkami. Zweryfikowano RTR 19970630 (crypt-and-uncontrolled.test.ts: obrażenia ambush są zadawane po CombatEnded jako środowiskowe, bez DamageInflicted). Faktyczne użycie Warsaw Station w środku akcji nie jest zaimplementowane; Rötschreck i pozostałe interakcje timingów/prevention niezweryfikowane. Rulings LSJ 20060902, LSJ 20090325-1, ANK 20180910-1.
+Występuje w **1** taliach. Naprawiono kolejkę walk przed referendum i jego anulowanie po opuszczeniu ready przez działającego wampira. tests/cards/crypt-and-uncontrolled.test.ts: rzeczywisty torpor (także w drugiej walce Psyche!), torpor samego przeciwnika, symulowany powrót i save/load, damage między walkami. Kontrola mutacyjna: 7 testów w crypt-and-uncontrolled.test.ts nie przechodzi bez obsługi queuedCombats w engine.ts (afterResolution ambush window). Zweryfikowano RTR 19970630 (crypt-and-uncontrolled.test.ts: obrażenia ambush są zadawane po CombatEnded jako środowiskowe, bez DamageInflicted). Faktyczne użycie Warsaw Station w środku akcji nie jest zaimplementowane; Rötschreck i pozostałe interakcje timingów/prevention niezweryfikowane. Rulings LSJ 20060902, LSJ 20090325-1, ANK 20180910-1.
 
 <a id="karta-102233"></a>
 ### Revelation of the Serpent (102233) — PARTIAL_FIX
@@ -164,12 +164,12 @@ Występuje w **2** taliach. Osobny obowiązek hunt trwa do ogłoszenia hunt lub 
 <a id="karta-102262"></a>
 ### Touch of Valeren (102262) — PARTIAL_FIX
 
-Występuje w **2** taliach. Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Zweryfikowano LSJ 20001114 dla basic combat (tests/cards/touch-valeren-ruling.test.ts: opcja jest oferowana tylko przy obrażeniach do zapobieżenia, nie bez nich). Nadal nie zweryfikowano starych pakietów bez strikePhase. Status bez zmian.
+Występuje w **2** taliach. Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase nie są traktowane jako obrażenia ze strike (test w prevention-provenance-audit.test.ts: Touch of Valeren basic nie oferuje prewencji dla pakietu bez strikePhase). Pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Zweryfikowano LSJ 20001114 dla basic combat (tests/cards/touch-valeren-ruling.test.ts: opcja jest oferowana tylko przy obrażeniach do zapobieżenia, nie bez nich). Status bez zmian.
 
 <a id="karta-102314"></a>
 ### Dance of the Dead (102314) — PARTIAL_FIX
 
-Występuje w **1** taliach. Zdolność można teraz aktywować w dalszych oknach walki, w tym w kroku press. wraith-zombie.test.ts sprawdza press, zużycie ostatniego countera i spalenie karty, limit na combat, kontrolę celu oraz maneuver zachowany do następnej rundy po save/restore. Dodano okno damage resolution (wraith-zombie.test.ts: opcja jest oferowana i zdejmuje licznik). Pozostają do zbadania pozostałe okna oraz interakcje z ograniczeniami ruchu i timingiem. Uwaga: ogólna legalność kart library wymagających Path nadal wymaga egzekwowania; samo pole Path przywrócono do registry.
+Występuje w **1** taliach. Zdolność można teraz aktywować w dalszych oknach walki, w tym w kroku press. wraith-zombie.test.ts sprawdza press, zużycie ostatniego countera i spalenie karty, limit na combat, kontrolę celu oraz maneuver zachowany do następnej rundy po save/restore. Dodano okno damage resolution (wraith-zombie.test.ts: opcja jest oferowana i zdejmuje licznik). Kontrola mutacyjna: usunięcie grantu combatgrant z Dance of the Dead handlera powoduje fail testów wraith-zombie.test.ts. Pozostają do zbadania pozostałe okna oraz interakcje z ograniczeniami ruchu i timingiem. Uwaga: ogólna legalność kart library wymagających Path nadal wymaga egzekwowania; samo pole Path przywrócono do registry.
 
 <a id="karta-102315"></a>
 ### Dance with the Devil (102315) — PARTIAL_FIX
@@ -214,12 +214,12 @@ Występuje w **1** taliach. Dodano możliwość zapłacenia 1 blood za unlock po
 <a id="karta-200365"></a>
 ### Donald Cargill (G5) (200365) — PARTIAL_FIX
 
-Występuje w **1** taliach. Po passed referendum wywołanym przez predatora spala 1 blood; test pass/fail i innego kontrolera w referendum-outcomes.test.ts. Predator odczytywany z chwili wezwania referendum (predatorAtCall): spalenie działa także, gdy predator zostaje usunięty przez to referendum [LSJ 20090115-2]; test w referendum-outcomes.test.ts (Treachery). Pozostają przypadki torpor i niestandardowych referendum do weryfikacji.
+Występuje w **1** taliach. Po passed referendum wywołanym przez predatora spala 1 blood; test pass/fail i innego kontrolera w referendum-outcomes.test.ts. Predator odczytywany z chwili wezwania referendum (predatorAtCall): spalenie działa także, gdy predator zostaje usunięty przez to referendum [LSJ 20090115-2]; test w referendum-outcomes.test.ts (Treachery). Dodano sprawdzenie inTorpor: Donald w torporze nie spala krwi (test w referendum-outcomes.test.ts; fix w cards.ts: m.inTorpor). Kontrola mutacyjna: test torpor nie przechodzi bez sprawdzenia inTorpor. Nadal otwarte: niestandardowe referendum.
 
 <a id="karta-200608"></a>
 ### Hrothulf (G3) (200608) — PARTIAL_FIX
 
-Występuje w **1** taliach. Dodano directed rush Hrothulfa na ready miniona innego Methuselah, tylko przy posiadaniu Edge; koszt spalany przy sukcesie, zgodnie z rulingiem LSJ 20030519. tests/cards/hrothulf-audit.test.ts obejmuje targety, blok, sukces, Go-getter i save/restore. Po utracie Edge przed rozpatrzeniem przyjęto interpretację: akcja pozostaje udana, ale nie dochodzi do walki; ten przypadek wymaga potwierdzenia rulingiem i pozostaje otwarty.
+Występuje w **1** taliach. Dodano directed rush Hrothulfa na ready miniona innego Methuselah, tylko przy posiadaniu Edge; koszt spalany przy sukcesie, zgodnie z rulingiem LSJ 20030519. tests/cards/hrothulf-audit.test.ts obejmuje targety, blok, sukces, Go-getter i save/restore. Kontrola mutacyjna: test 'cannot pay the effect if the Edge changes hands before resolution' nie przechodzi bez obsługi utraty Edge w akcji Hrothulfa. Po utracie Edge przed rozpatrzeniem przyjęto interpretację: akcja pozostaje udana, ale nie dochodzi do walki; ten przypadek wymaga potwierdzenia rulingiem i pozostaje otwarty.
 
 <a id="karta-201052"></a>
 ### New Blood (ANY) (201052) — PARTIAL_FIX
@@ -249,7 +249,7 @@ Występuje w **1** taliach. Poprawiono ofertę: opcjonalny wybór bezpośrednio 
 <a id="karta-201680"></a>
 ### Opikun (G7) (201680) — PARTIAL_FIX
 
-Występuje w **2** taliach. Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; pozostałe interakcje nieweryfikowane. Aktualizacja: zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental; test z pakietami i starym zapisem w tests/cards/hecata-huldu-audit.test.ts. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń. Paczka 2: ponownie sprawdzono tekst (independent, do 2 nieaggravated z jednego strike). Wciąż otwarte: okno kolejności obrażeń i stare zapisy bez pochodzenia; status bez zmian.
+Występuje w **2** taliach. Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase nie są traktowane jako obrażenia ze strike (test 'does not guess later strike identity in a legacy save with no phase id' w tests/cards/hecata-huldu-audit.test.ts). Zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń. Paczka 2: ponownie sprawdzono tekst (independent, do 2 nieaggravated z jednego strike). Wciąż otwarte: okno kolejności obrażeń i stare zapisy bez pochodzenia; status bez zmian.
 
 <a id="karta-201750"></a>
 ### Eulogio Sánchez de los Reyes (G6) (201750) — PARTIAL_FIX

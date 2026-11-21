@@ -767,4 +767,16 @@ describe("Donald Cargill", () => {
     expect(resolved(state).passed).toBe(true);
     expect(bearer.blood).toBe(3);
   });
+
+  it("nie spala krwi gdy Donald w torporze (otwarty przypadek z evidence)", () => {
+    const state = votingGame();
+    const bearer = minion(state, "W");
+    bearer.blood = 4;
+    bearer.inTorpor = true;
+    bearer.attached.push({ card: { id: bearer.id, name: "Donald Cargill (G5)" }, locked: false, usedThisPhase: false, statics: testRegistry["Donald Cargill (G5)"]!.cryptEntry!().statics, tags: [] });
+    const engine = new VtesEngine(state, testRegistry);
+    drive(engine, state, [CALL, ["Alice", "vote:V1:for"]]);
+    expect(resolved(state).passed).toBe(true);
+    expect(bearer.blood).toBe(4);
+  });
 });

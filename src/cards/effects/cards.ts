@@ -44903,7 +44903,7 @@ const donaldCargill: CardHandler = {
   onReferendumPassed(_entry, owner, info, ops) {
     if (!owner.minion) return;
     const m = findMinion(ops.state, owner.minion);
-    if (!m || m.blood <= 0) return;
+    if (!m || m.blood <= 0 || m.inTorpor) return;
     // The predator is read as it stood when the referendum was called: an
     // oust by the referendum does not stop the burn [LSJ 20090115-2].
     const predator = info.predatorAtCall?.[m.controller] ?? predatorOf(ops.state, m.controller);

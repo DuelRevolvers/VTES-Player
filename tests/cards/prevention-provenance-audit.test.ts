@@ -100,6 +100,39 @@ describe("prevention from an opposing strike", () => {
     expect(engine.decision()!.options.some((o) => o.id.startsWith("play:Rego Motum:basic"))).toBe(true);
   });
 
+  it("Touch of Valeren basic nie oferuje prewencji dla pakietu bez strikePhase (stare zapisy)", () => {
+    const { state, engine } = game("Touch of Valeren");
+    const copy = JSON.parse(JSON.stringify(state));
+    const cf = copy.frames.find((f: { kind: string }) => f.kind === "combat")!;
+    cf.pendingDamage = [
+      { minion: "V1", amount: 2, source: "M", aggravated: false },
+    ];
+    const restored = new VtesEngine(copy, testRegistry);
+    expect(restored.decision()!.options.some((o) => o.id.startsWith("play:Touch of Valeren:basic"))).toBe(false);
+  });
+
+  it("Rego Motum basic nie oferuje prewencji dla pakietu bez strikePhase (stare zapisy)", () => {
+    const { state } = game("Rego Motum");
+    const copy = JSON.parse(JSON.stringify(state));
+    const cf = copy.frames.find((f: { kind: string }) => f.kind === "combat")!;
+    cf.pendingDamage = [
+      { minion: "V1", amount: 2, source: "M", aggravated: false },
+    ];
+    const restored = new VtesEngine(copy, testRegistry);
+    expect(restored.decision()!.options.some((o) => o.id.startsWith("play:Rego Motum:basic"))).toBe(false);
+  });
+
+  it("Rolling with the Punches superior nie oferuje prewencji dla pakietu bez strikePhase (stare zapisy)", () => {
+    const { state } = game("Rolling with the Punches");
+    const copy = JSON.parse(JSON.stringify(state));
+    const cf = copy.frames.find((f: { kind: string }) => f.kind === "combat")!;
+    cf.pendingDamage = [
+      { minion: "V1", amount: 2, source: "M", aggravated: false },
+    ];
+    const restored = new VtesEngine(copy, testRegistry);
+    expect(restored.decision()!.options.some((o) => o.id.startsWith("play:Rolling with the Punches:superior"))).toBe(false);
+  });
+
 });
 
 describe("Leather Jacket opposing strike prevention", () => {

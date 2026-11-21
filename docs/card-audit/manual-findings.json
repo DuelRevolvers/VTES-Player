@@ -9525,7 +9525,7 @@
     "id": 101588,
     "name": "Rego Motum",
     "status": "PARTIAL_FIX",
-    "evidence": "Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Nowe zapisy przechowują pochodzenie damage, stare pakiety bez strikePhase (np. bonus ammunition) nie pozwalają odtworzyć źródła i wymagają dalszego rozwiązania; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Zweryfikowano RTR 20041202 dla obu trybów (tests/cards/rego-motum-ruling.test.ts, 3 testy: 1 punkt przy basic zapobiega 1 i nic nie przechodzi dalej; superior zapobiega 3 z 3; basic przy 3 zapobiega 2 i zostawia 1; mutacja nieograniczonego zapobiegania wykrywana). Status bez zmian."
+    "evidence": "Oba tryby ograniczono do obrażeń ze strike przeciwnika, nie dowolnego damage. tests/cards/prevention-provenance-audit.test.ts. Stare pakiety bez strikePhase nie są traktowane jako obrażenia ze strike (test w prevention-provenance-audit.test.ts: Rego Motum basic nie oferuje prewencji dla pakietu bez strikePhase); inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa ograniczenie do strike przeciwnika. Zweryfikowano RTR 20041202 dla obu trybów (tests/cards/rego-motum-ruling.test.ts, 3 testy: 1 punkt przy basic zapobiega 1 i nic nie przechodzi dalej; superior zapobiega 3 z 3; basic przy 3 zapobiega 2 i zostawia 1; mutacja nieograniczonego zapobiegania wykrywana). Status bez zmian."
   },
   {
     "id": 101589,
@@ -9891,7 +9891,7 @@
     "id": 101649,
     "name": "Rolling with the Punches",
     "status": "PARTIAL_FIX",
-    "evidence": "Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Zweryfikowano ANK 20210226 dla superior (tests/cards/rolling-punches-burn.test.ts: bramka wymaga 1 krwi na spalenie, a redukcja kosztu nie zmniejsza spalenia; mutacja bramki wykryta). Status bez zmian."
+    "evidence": "Superior działa tylko na strike przeciwnika, także na kolejne pakiety w rundzie, a nie na environmental lub unpreventable damage; respektuje zakaz prevention przez dyscyplinę. tests/cards/prevention-provenance-audit.test.ts. Stare pakiety bez strikePhase nie są traktowane jako obrażenia ze strike (test w prevention-provenance-audit.test.ts: Rolling with the Punches superior nie oferuje prewencji dla pakietu bez strikePhase); inne interakcje nieweryfikowane. Paczka 1: prevention-provenance-audit.test.ts pokrywa strike i brak wpływu na environmental/unpreventable. Zweryfikowano ANK 20210226 dla superior (tests/cards/rolling-punches-burn.test.ts: bramka wymaga 1 krwi na spalenie, a redukcja kosztu nie zmniejsza spalenia; mutacja bramki wykryta). Status bez zmian."
   },
   {
     "id": 101650,
@@ -12861,7 +12861,7 @@
     "id": 102144,
     "name": "War Ghoul",
     "status": "PARTIAL_FIX",
-    "evidence": "Overlay wymaga rekrutującego Tzimisce i uwzględnia modyfikatory kosztu; testy rush-cards.test.ts i retainer-wave.test.ts. Zweryfikowano RTR 19961113 (Ghoul jako jedyny sojusznik musi spalić się sam) i ANK 20170309-2 (wejście każdą drogą): tests/cards/war-ghoul-burn-rule.test.ts, 3 testy; mutacja usuwająca opcję 'self' wykryta. Pozostałe interakcje alternatywnych kosztów i rekrutacji wymagają dalszej weryfikacji."
+    "evidence": "Overlay wymaga rekrutującego Tzimisce i uwzględnia modyfikatory kosztu; testy rush-cards.test.ts i retainer-wave.test.ts. Zweryfikowano RTR 19961113 (Ghoul jako jedyny sojusznik musi spalić się sam) i ANK 20170309-2 (wejście każdą drogą): tests/cards/war-ghoul-burn-rule.test.ts, 3 testy; mutacja usuwająca opcję 'self' wykryta. Kontrola mutacyjna potwierdzona. Pozostałe interakcje alternatywnych kosztów i rekrutacji wymagają dalszej weryfikacji."
   },
   {
     "id": 102145,
@@ -13191,7 +13191,7 @@
     "id": 102199,
     "name": "Yawp Court",
     "status": "PARTIAL_FIX",
-    "evidence": "Naprawiono kolejkę walk przed referendum i jego anulowanie po opuszczeniu ready przez działającego wampira. tests/cards/crypt-and-uncontrolled.test.ts: rzeczywisty torpor (także w drugiej walce Psyche!), torpor samego przeciwnika, symulowany powrót i save/load, damage między walkami. Zweryfikowano RTR 19970630 (crypt-and-uncontrolled.test.ts: obrażenia ambush są zadawane po CombatEnded jako środowiskowe, bez DamageInflicted). Faktyczne użycie Warsaw Station w środku akcji nie jest zaimplementowane; Rötschreck i pozostałe interakcje timingów/prevention niezweryfikowane. Rulings LSJ 20060902, LSJ 20090325-1, ANK 20180910-1."
+    "evidence": "Naprawiono kolejkę walk przed referendum i jego anulowanie po opuszczeniu ready przez działającego wampira. tests/cards/crypt-and-uncontrolled.test.ts: rzeczywisty torpor (także w drugiej walce Psyche!), torpor samego przeciwnika, symulowany powrót i save/load, damage między walkami. Kontrola mutacyjna: 7 testów w crypt-and-uncontrolled.test.ts nie przechodzi bez obsługi queuedCombats w engine.ts (afterResolution ambush window). Zweryfikowano RTR 19970630 (crypt-and-uncontrolled.test.ts: obrażenia ambush są zadawane po CombatEnded jako środowiskowe, bez DamageInflicted). Faktyczne użycie Warsaw Station w środku akcji nie jest zaimplementowane; Rötschreck i pozostałe interakcje timingów/prevention niezweryfikowane. Rulings LSJ 20060902, LSJ 20090325-1, ANK 20180910-1."
   },
   {
     "id": 102200,
@@ -13569,7 +13569,7 @@
     "id": 102262,
     "name": "Touch of Valeren",
     "status": "PARTIAL_FIX",
-    "evidence": "Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase i pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Zweryfikowano LSJ 20001114 dla basic combat (tests/cards/touch-valeren-ruling.test.ts: opcja jest oferowana tylko przy obrażeniach do zapobieżenia, nie bez nich). Nadal nie zweryfikowano starych pakietów bez strikePhase. Status bez zmian."
+    "evidence": "Combat ograniczono do strike przeciwnika; prevention-provenance-audit.test.ts bada dostępność i źródła. Action dopuszcza pełnego aktora, jeśli koszt krwi zostawia miejsce, respektuje ochronę przed wyborem i limit starting life ally; minion-target-actions.test.ts. Stare pakiety bez strikePhase nie są traktowane jako obrażenia ze strike (test w prevention-provenance-audit.test.ts: Touch of Valeren basic nie oferuje prewencji dla pakietu bez strikePhase). Pełne przejście superior oraz dalsze interakcje pozostają otwarte. Paczka 1: minion-target-actions.test.ts i prevention-provenance-audit.test.ts pokrywają akcję i combat. Zweryfikowano LSJ 20001114 dla basic combat (tests/cards/touch-valeren-ruling.test.ts: opcja jest oferowana tylko przy obrażeniach do zapobieżenia, nie bez nich). Status bez zmian."
   },
   {
     "id": 102263,
@@ -13881,7 +13881,7 @@
     "id": 102314,
     "name": "Dance of the Dead",
     "status": "PARTIAL_FIX",
-    "evidence": "Zdolność można teraz aktywować w dalszych oknach walki, w tym w kroku press. wraith-zombie.test.ts sprawdza press, zużycie ostatniego countera i spalenie karty, limit na combat, kontrolę celu oraz maneuver zachowany do następnej rundy po save/restore. Dodano okno damage resolution (wraith-zombie.test.ts: opcja jest oferowana i zdejmuje licznik). Pozostają do zbadania pozostałe okna oraz interakcje z ograniczeniami ruchu i timingiem. Uwaga: ogólna legalność kart library wymagających Path nadal wymaga egzekwowania; samo pole Path przywrócono do registry."
+    "evidence": "Zdolność można teraz aktywować w dalszych oknach walki, w tym w kroku press. wraith-zombie.test.ts sprawdza press, zużycie ostatniego countera i spalenie karty, limit na combat, kontrolę celu oraz maneuver zachowany do następnej rundy po save/restore. Dodano okno damage resolution (wraith-zombie.test.ts: opcja jest oferowana i zdejmuje licznik). Kontrola mutacyjna: usunięcie grantu combatgrant z Dance of the Dead handlera powoduje fail testów wraith-zombie.test.ts. Pozostają do zbadania pozostałe okna oraz interakcje z ograniczeniami ruchu i timingiem. Uwaga: ogólna legalność kart library wymagających Path nadal wymaga egzekwowania; samo pole Path przywrócono do registry."
   },
   {
     "id": 102315,
@@ -16371,7 +16371,7 @@
     "id": 200365,
     "name": "Donald Cargill (G5)",
     "status": "PARTIAL_FIX",
-    "evidence": "Po passed referendum wywołanym przez predatora spala 1 blood; test pass/fail i innego kontrolera w referendum-outcomes.test.ts. Predator odczytywany z chwili wezwania referendum (predatorAtCall): spalenie działa także, gdy predator zostaje usunięty przez to referendum [LSJ 20090115-2]; test w referendum-outcomes.test.ts (Treachery). Pozostają przypadki torpor i niestandardowych referendum do weryfikacji."
+    "evidence": "Po passed referendum wywołanym przez predatora spala 1 blood; test pass/fail i innego kontrolera w referendum-outcomes.test.ts. Predator odczytywany z chwili wezwania referendum (predatorAtCall): spalenie działa także, gdy predator zostaje usunięty przez to referendum [LSJ 20090115-2]; test w referendum-outcomes.test.ts (Treachery). Dodano sprawdzenie inTorpor: Donald w torporze nie spala krwi (test w referendum-outcomes.test.ts; fix w cards.ts: m.inTorpor). Kontrola mutacyjna: test torpor nie przechodzi bez sprawdzenia inTorpor. Nadal otwarte: niestandardowe referendum."
   },
   {
     "id": 200366,
@@ -17829,7 +17829,7 @@
     "id": 200608,
     "name": "Hrothulf (G3)",
     "status": "PARTIAL_FIX",
-    "evidence": "Dodano directed rush Hrothulfa na ready miniona innego Methuselah, tylko przy posiadaniu Edge; koszt spalany przy sukcesie, zgodnie z rulingiem LSJ 20030519. tests/cards/hrothulf-audit.test.ts obejmuje targety, blok, sukces, Go-getter i save/restore. Po utracie Edge przed rozpatrzeniem przyjęto interpretację: akcja pozostaje udana, ale nie dochodzi do walki; ten przypadek wymaga potwierdzenia rulingiem i pozostaje otwarty."
+    "evidence": "Dodano directed rush Hrothulfa na ready miniona innego Methuselah, tylko przy posiadaniu Edge; koszt spalany przy sukcesie, zgodnie z rulingiem LSJ 20030519. tests/cards/hrothulf-audit.test.ts obejmuje targety, blok, sukces, Go-getter i save/restore. Kontrola mutacyjna: test 'cannot pay the effect if the Edge changes hands before resolution' nie przechodzi bez obsługi utraty Edge w akcji Hrothulfa. Po utracie Edge przed rozpatrzeniem przyjęto interpretację: akcja pozostaje udana, ale nie dochodzi do walki; ten przypadek wymaga potwierdzenia rulingiem i pozostaje otwarty."
   },
   {
     "id": 200609,
@@ -24261,7 +24261,7 @@
     "id": 201680,
     "name": "Opikun (G7)",
     "status": "PARTIAL_FIX",
-    "evidence": "Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase mają niejednoznaczne pochodzenie; pozostałe interakcje nieweryfikowane. Aktualizacja: zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental; test z pakietami i starym zapisem w tests/cards/hecata-huldu-audit.test.ts. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń. Paczka 2: ponownie sprawdzono tekst (independent, do 2 nieaggravated z jednego strike). Wciąż otwarte: okno kolejności obrażeń i stare zapisy bez pochodzenia; status bez zmian."
+    "evidence": "Opikun może chronić siebie lub innego kontrolowanego vampire przed nieaggravated damage ze strike przeciwnika, bez zmiany wymogu another u Huldu. tests/cards/hecata-huldu-audit.test.ts. Stare zapisy z pakietem bez strikePhase nie są traktowane jako obrażenia ze strike (test 'does not guess later strike identity in a legacy save with no phase id' w tests/cards/hecata-huldu-audit.test.ts). Zapobieganie obejmuje wiele nieaggravated pakietów tego samego strike, z wyłączeniem unpreventable, innego strike i environmental. Nadal ograniczenia starszych zapisów oraz okna/właściwej kolejności obrażeń. Paczka 2: ponownie sprawdzono tekst (independent, do 2 nieaggravated z jednego strike). Wciąż otwarte: okno kolejności obrażeń i stare zapisy bez pochodzenia; status bez zmian."
   },
   {
     "id": 201681,
