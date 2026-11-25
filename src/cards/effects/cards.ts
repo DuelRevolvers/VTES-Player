@@ -6755,6 +6755,33 @@ export const cardSpecs: CardSpec[] = [
     ],
   },
   {
+    // "Only usable if an ally or younger vampire attempts to block.
+    //  [aus] That attempt fails and the blocking minion's controller cannot
+    //  attempt to block this action again. The blocking minion can burn 1
+    //  blood or life to cancel this card as it is played.
+    //  [AUS] As above, but canceling this card requires 1 additional blood
+    //  or life." True Love's Face's shape, with the bar on the SEAT and the
+    //  cancel paid by the blocking minion. docs/first-blood-toreador-design.md §1
+    krcgId: 100450,
+    name: "Crocodile's Tongue",
+    cardType: "actionModifier",
+    bloodCost: 0,
+    payToCancel: { pool: 0, who: "blocker", blockerBlood: { basic: 1, superior: 2 } },
+    usable: [],
+    modes: [
+      {
+        level: "basic",
+        discipline: "aus",
+        effects: [{ kind: "failBlockAttempt", blockerAllyOrYounger: true, barBlockersSeat: true }],
+      },
+      {
+        level: "superior",
+        discipline: "aus",
+        effects: [{ kind: "failBlockAttempt", blockerAllyOrYounger: true, barBlockersSeat: true }],
+      },
+    ],
+  },
+  {
     // "Unique location. As this location is played or its controller
     // changes, its controller chooses a ready vampire they control. During
     // this location's controller's unlock phase, the chosen vampire can
@@ -19803,6 +19830,27 @@ export const cryptSpecs: CardSpec[] = [
     referendumEffect: "other",
   },
 
+  // ---- Wave 119: First Blood Toreador (docs/first-blood-toreador-design.md)
+
+  // "Camarilla primogen: Burn 1 pool after Thomas goes to torpor." Fame's
+  // drain at 1 pool, on his own entry.
+  cryptPerm(201366, "Thomas De Lutrius (G4)", {
+    leaveReadyDrain: { amount: 1, how: "torpor", bearerOnly: true },
+  }),
+  // "Camarilla: In a referendum, Tyler gets +1 vote after a Methuselah
+  // burns the Edge for a vote. He cannot block Nosferatu."
+  flatCrypt(201398, "Tyler McGill (G5)", {
+    votesAfterEdgeBurned: 1,
+    cannotBlockClans: ["Nosferatu"],
+  }),
+  // "Camarilla Prince of Prague: Contesting a title costs Vasily +1 blood
+  // unless you have the Edge." Read by `titleContestBloodCost`. Whole but
+  // inert: nothing else in the pool is Prince of Prague (§1).
+  flatCrypt(201430, "Vasily (G5)", { contestSurchargeUnlessEdge: 1 }),
+  // Bespoke overlays: `kateline` and `epikasta`.
+  cryptPerm(200763, "Kateline Nadasdy (G4)", {}),
+  cryptPerm(200427, "Epikasta Rigatos (G4)", {}),
+
   // --- Conditioned on the BOARD. Every one derived on each read. ---
   condCrypt(201667, "Branimira (G6)", [{ intercept: 1, controller: { poolAtMost: 9 } }]),
   condCrypt(201748, "Devorah (G6)", [{ stealth: 1, controller: { poolAtMost: 5 } }]),
@@ -27327,6 +27375,98 @@ const mustafa: CardHandler = {
 };
 
 /**
+ * Kateline Nadasdy (200763) — "During the polling step of a political
+ * action, Kateline can burn 1 blood to force a non-acting vampire to
+ * abstain." Mustafa's shape with the abstain cards' effect. Her rulings,
+ * which win over the ready-only house rule (owner ruling 2026-11-25):
+ * usable while locked or in torpor, once per referendum [ANK 20220705]
+ * [LSJ 20100705]; it cancels votes and ballots [LSJ 20100311]. Not during
+ * an automatically passing referendum, the family's gate [PIB 20150105].
+ * docs/first-blood-toreador-design.md §1
+ */
+const KATELINE = "Kateline Nadasdy (G4)";
+const kateline: CardHandler = {
+  ...compileSpec(cryptSpecByName(KATELINE)),
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "referendum.polling" || !owner.minion || ctx.seat !== owner.seat) return [];
+    const rf = ctx.referendum;
+    // "…of a POLITICAL ACTION": never a blood hunt.
+    if (!rf || rf.variant !== "political" || !referendumOpenToPlay(rf)) return [];
+    if ((rf.usesThisReferendum ?? []).includes(entry.card.id)) return [];
+    const her = findMinion(ctx.state, owner.minion);
+    if (!her || her.blood < 1) return [];
+    const out: LegalOption[] = [];
+    for (const s of ctx.state.seats) {
+      for (const t of s.minions) {
+        if (t.kind !== "vampire" || !isReady(t)) continue;
+        // "…a NON-ACTING vampire".
+        if (t.id === rf.callingMinion || rf.abstaining?.includes(t.id)) continue;
+        // Nothing to cast, buy or take back is nothing to abstain from.
+        if (!hasVoice(ctx.state, rf, t)) continue;
+        out.push({
+          id: `ability:${KATELINE}:${entry.card.id}:${t.id}`,
+          kind: "useAbility",
+          label: `${her.name}: burn 1 blood — ${t.name} abstains`,
+          source: entry.card.id,
+          params: { target: t.id },
+        });
+      }
+    }
+    return out;
+  },
+  useAbility(entry, owner, choice, ops) {
+    const rf = referendumOf(ops.state);
+    const target = choice.params["target"] ?? "";
+    if (!rf || !owner.minion || !findMinion(ops.state, owner.minion) || !findMinion(ops.state, target)) {
+      return;
+    }
+    rf.usesThisReferendum = [...(rf.usesThisReferendum ?? []), entry.card.id];
+    ops.emit({ type: "BloodBurned", minion: owner.minion, amount: 1 });
+    ops.forceAbstain(target);
+  },
+};
+
+/**
+ * Epikasta Rigatos (200427) — "You can move an action card Epikasta played
+ * from your ash heap to your library after resolution (shuffle
+ * afterward)." Only the card of THAT action [ANK 20180628], played the
+ * normal way [LSJ 20090430], and an Action card only — a political action
+ * card is a different type (owner ruling 2026-11-25). Her card says nothing
+ * about torpor, so the ready-only rule applies (owner ruling 2026-11-13).
+ * The move empties the ash heap of that card, so it cannot be re-offered.
+ * docs/first-blood-toreador-design.md §1
+ */
+const EPIKASTA = "Epikasta Rigatos (G4)";
+const epikasta: CardHandler = {
+  ...compileSpec(cryptSpecByName(EPIKASTA)),
+  abilityOptions(entry, owner, ctx) {
+    if (ctx.window !== "action.afterResolution" || !owner.minion || ctx.seat !== owner.seat) return [];
+    const af = ctx.action;
+    if (!af || af.acting !== owner.minion || !af.card || af.political) return [];
+    const her = findMinion(ctx.state, owner.minion);
+    if (!her || !isReady(her)) return [];
+    const card = af.card.instance;
+    if (!(ctx.registry[card.name]?.costTypes?.(af.card.mode) ?? []).includes("action")) return [];
+    if (!(getSeat(ctx.state, owner.seat).ashHeap ?? []).some((c) => c.id === card.id)) return [];
+    return [
+      {
+        id: `ability:${EPIKASTA}:${entry.card.id}:${card.id}`,
+        kind: "useAbility",
+        label: `${her.name}: move ${card.name} from your ash heap to your library`,
+        source: entry.card.id,
+        params: { card: card.id },
+      },
+    ];
+  },
+  useAbility(_entry, owner, choice, ops) {
+    const card = choice.params["card"] ?? "";
+    if (!(getSeat(ops.state, owner.seat).ashHeap ?? []).some((c) => c.id === card)) return;
+    ops.ashHeapToLibraryBottom(owner.seat, card);
+    ops.shuffleLibrary(owner.seat);
+  },
+};
+
+/**
  * Victor Donaldson (201438) — "If a card named Golconda: Inner Peace you
  * play is canceled, you can move that card from your ash heap to your
  * library (shuffle afterward)." The cancel filed the card in the ash heap
@@ -28446,6 +28586,8 @@ export function buildHandlerRegistry(): HandlerRegistry {
     victorDonaldson,
     zane,
     charnas,
+    kateline,
+    epikasta,
     voxDomini,
     auraOfInvincibility,
   ]) {

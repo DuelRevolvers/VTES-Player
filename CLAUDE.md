@@ -43,8 +43,9 @@ contradicts the rulebook, card text wins** (the Golden Rule, p. 16).
   `config/crypt-groups.json` (`open: [{ clan, groups }]`, owner ruling
   2026-11-08 — a bare group list opened every clan at once). Open today:
   **Toreador antitribu groups 4–5** (wave 115), **Nosferatu groups
-  4–5** (wave 116), **Ventrue groups 4–5** (wave 117) and **Tremere
-  groups 4–5** (wave 118). Ask before opening each.
+  4–5** (wave 116), **Ventrue groups 4–5** (wave 117), **Tremere
+  groups 4–5** (wave 118) and **Toreador groups 4–5** (wave 119). Ask
+  before opening each.
 - **Widening is a PIPELINE, not a switch** (`docs/pool-widening-design.md`).
   Opening a group admits only vampires that are already whole — the
   builder gates on it, so the pool can never get ahead of the card waves.
@@ -136,7 +137,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 335 test files, 3824 tests**, with `npm run typecheck`,
+**Green baseline: 336 test files, 3857 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -854,6 +855,12 @@ Each has cost an hour of "why is my card not offered":
   checks `isReady` or doesn't (`first-blood-tremere-design.md` §0). The
   owner approved an audit (one central gate, an opt-out for cards that
   say they work elsewhere); it needs its own design doc first.
+- **THE CARD'S OWN WORD WINS** (2026-11-25). If a card's text, or a
+  ruling on that card, goes against an earlier built or house ruling, go
+  with the card. Fall back to general rulings only where the card is
+  silent. Kateline Nadasdy's rulings let her act in torpor, so the
+  ready-only rule's opt-out covers card RULINGS too
+  (`first-blood-toreador-design.md` §0.1).
 - **Open War's 4-counter payout goes to the card's CONTROLLER**, not to
   whoever places the fourth counter.
 - **The AI plays with what a player can see** (2026-09-06). Handing an
@@ -950,7 +957,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-234 files under `docs/`, one per mechanic that took a decision. **Read the
+239 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.
@@ -996,7 +1003,10 @@ first-blood-ventrue (wave 117, 0.11.67: the `onCardCanceled` hook,
 `usesThisReferendum`, the inert `putsVampireInPlay` action tag),
 first-blood-tremere (wave 118, 0.11.68: a retainer employed onto any
 minion, `PermanentSetAside`, the one-direction vote bar; §0 is the
-owner's ready-only ruling for vampire abilities).
+owner's ready-only ruling for vampire abilities),
+first-blood-toreador (wave 119, 0.11.69: a block bar on a whole seat, a
+cancel paid by the blocking minion, `titleContestBloodCost`; §0.1 is the
+card's-own-word ruling).
 
 **Politics:** table-pool-swings, justicars, table-referendums,
 referendum-blood, referendum-riders, crusades, fee-stake,

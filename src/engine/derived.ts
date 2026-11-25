@@ -1246,6 +1246,19 @@ export function isUndeadAlly(m: MinionState): boolean {
  * and the same is said of bishop, cardinal, priscus and magaji (p. 42) —
  * those answer null and never contest.
  */
+/**
+ * The blood a vampire pays to keep contesting a title: "The cost to contest
+ * a title is 1 blood, which is paid by the vampire" (p. 18), plus "+1 blood
+ * unless you have the Edge" (Vasily). THE one price — the option that
+ * offers to pay and the payment both read it, so they cannot disagree.
+ * Vasily's surcharge follows the ready-only rule (owner ruling 2026-11-13):
+ * his card says nothing about torpor. docs/first-blood-toreador-design.md §1
+ */
+export function titleContestBloodCost(state: GameState, m: MinionState): number {
+  if (!isReady(m) || state.edge === m.controller) return 1;
+  return 1 + m.attached.reduce((n, p) => n + (p.statics.contestSurchargeUnlessEdge ?? 0), 0);
+}
+
 export function titleContestKey(m: MinionState): string | null {
   const claim = m.titleContest ?? (m.title === null ? null : { title: m.title, city: m.titleCity });
   if (!claim) return null;
@@ -1876,6 +1889,16 @@ export function mayAttemptBlock(state: GameState, af: ActionFrame, m: MinionStat
   if (br.noVampires && m.kind === "vampire") return false;
   if (br.noTitled && m.kind === "vampire" && m.title !== null) return false;
   if (br.cannotBlock.includes(m.id)) return false;
+  // "…the blocking minion's controller cannot attempt to block this action
+  // again" (Crocodile's Tongue).
+  if (br.cannotBlockSeats?.includes(m.controller)) return false;
+  // "He cannot block Nosferatu" (Tyler McGill). An ally has no clan.
+  if (
+    actor?.clan != null &&
+    m.attached.some((p) => p.statics.cannotBlockClans?.includes(actor.clan!))
+  ) {
+    return false;
+  }
   // "No vampires of that CLAN may block the acting vampire for the
   // remainder of the TURN" (Clan Loyalty) — read off the turn frame.
   const turn = state.frames.find((f) => f.kind === "turn") as
@@ -1988,6 +2011,12 @@ export function vampireVotes(
   // Votes a card gave THIS vampire are its own, cast with the rest of
   // its group [p. 47, Bewitching Oration]. docs/vampire-votes-design.md §4.3
   const granted = rf.minionVoteGrants?.[m.id];
+  // "…gets +1 vote after a Methuselah burns the Edge for a vote" (Tyler
+  // McGill) — any Methuselah's, read off the referendum each time, so a
+  // group already cast keeps the count stamped on its votes.
+  const afterEdge = (rf.usedSources ?? []).includes("edge")
+    ? m.attached.reduce((n, p) => n + (p.statics.votesAfterEdgeBurned ?? 0), 0)
+    : 0;
   const votes = Math.max(
     0,
     titleVotes +
@@ -1999,6 +2028,7 @@ export function vampireVotes(
       refMod +
       callerBonus +
       referendumRider +
+      afterEdge +
       (granted?.any ?? 0),
   );
   // Votes that may go only ONE way: a directed grant ("+3 votes

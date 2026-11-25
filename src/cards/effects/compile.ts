@@ -4623,6 +4623,17 @@ function effectsLegal(
         const ba = ctx.blockAttempt;
         if (!ba) return false;
         if (e.bloodCost !== undefined && minion.blood < e.bloodCost) return false;
+        // "…if an ALLY or YOUNGER VAMPIRE attempts to block" (Crocodile's
+        // Tongue) — younger than the minion playing it; age is capacity.
+        if (e.blockerAllyOrYounger) {
+          const blocker = findMinion(ctx.state, ba.blocker);
+          if (!blocker) return false;
+          if (blocker.kind === "vampire") {
+            if (minion.kind !== "vampire" || capacityOf(blocker) >= capacityOf(minion)) return false;
+          } else if (blocker.kind !== "ally") {
+            return false;
+          }
+        }
         break;
       }
       case "endAction": {
@@ -5813,7 +5824,7 @@ function compileModifierOrReaction(spec: CardSpec): CardHandler {
             if (e.bloodCost !== undefined && play.minion) {
               ops.emit({ type: "BloodBurned", minion: play.minion, amount: e.bloodCost });
             }
-            ops.failBlockAttempt();
+            ops.failBlockAttempt(e.barBlockersSeat === true);
             break;
           }
           case "failAction":
@@ -10292,7 +10303,7 @@ export function compileSpec(spec: CardSpec): CardHandler {
   // attempt (docs/cheap-tail-design.md §6).
   if (spec.payToCancel) {
     const ptc = spec.payToCancel;
-    handler.payToCancelFor = (state, seat) => {
+    handler.payToCancelFor = (state, seat, _params, mode) => {
       const extra = {
         ...(ptc.discardCombatCards ? { discardCombatCards: ptc.discardCombatCards } : {}),
         ...(ptc.refundsCost ? { refundsCost: true } : {}),
@@ -10321,6 +10332,18 @@ export function compileSpec(spec: CardSpec): CardHandler {
       if (ba?.kind !== "blockAttempt") return null;
       const blocker = findMinion(state, ba.blocker);
       if (!blocker) return null;
+      // "The blocking MINION can burn N blood or life" (Crocodile's
+      // Tongue) — priced by the level played, paid by the minion.
+      if (ptc.blockerBlood) {
+        const amount = ptc.blockerBlood[mode === "superior" ? "superior" : "basic"];
+        if (amount === undefined) return null;
+        return {
+          seat: blocker.controller,
+          pool: 0,
+          minionBlood: { minion: blocker.id, amount },
+          ...extra,
+        };
+      }
       return { seat: blocker.controller, pool: ptc.pool, ...extra };
     };
   }

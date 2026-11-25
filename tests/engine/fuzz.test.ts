@@ -1339,6 +1339,9 @@ function fourSeatGame(seed: number): GameState {
     // directed action when the target is a rival's, and the first card set
     // aside off a burning bearer.
     "Charnas the Imp",
+    // Crocodile's Tongue (wave 119): a block fail that bars the blocker's
+    // whole SEAT, cancelled by the blocking minion paying blood or life.
+    "Crocodile's Tongue",
     // One each round (tranche 3 wave 44). Death Seeker acts inside ANOTHER
     // card's as-played window, which is the one window the fuzz could
     // previously only ever reach with a strike card.
@@ -1541,6 +1544,15 @@ function fourSeatGame(seed: number): GameState {
           capacity: 5,
           clan: "Tremere" as const,
           sect: "camarilla" as const,
+        }),
+        // Crocodile's Tongue (wave 119) needs an Auspex vampire OLDER than
+        // the capacity-4 blockers, or it is dealt and never played.
+        makeMinion(`${id}o`, id, {
+          blood: 3,
+          capacity: 6,
+          clan: "Toreador" as const,
+          sect: "camarilla" as const,
+          disciplines: { aus: "superior" as const, pre: "basic" as const },
         }),
       ],
       // One vampire mid-influence and one still in the crypt, so random

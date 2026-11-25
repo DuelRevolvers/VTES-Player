@@ -54,6 +54,7 @@ import {
   sequencingOrder,
   startingLifeBonus,
   titleContestKey,
+  titleContestBloodCost,
   unlockSuppressed,
   cardRequiresDiscipline,
   bloodVoteOfferFor,
@@ -4251,6 +4252,22 @@ export class VtesEngine implements EngineOps {
       }
       return out;
     }
+    // "The blocking minion can burn N blood or life" (Crocodile's Tongue):
+    // the minion must have it. An ally may pay its last life — the cancel
+    // stands and the attempt then fails with nobody blocking.
+    if (p.minionBlood) {
+      const payer = findMinion(this.state, p.minionBlood.minion);
+      if (!payer || payer.blood < p.minionBlood.amount) return [];
+      const what = payer.kind === "ally" ? "life" : "blood";
+      return [
+        {
+          id: `cancelpay:${cp.card.id}`,
+          kind: "payToCancel",
+          label: `${payer.name} burns ${p.minionBlood.amount} ${what} to cancel ${cp.card.name}`,
+          pool: 0,
+        },
+      ];
+    }
     // Never oust yourself to cancel: the pool must survive the payment,
     // the same gate every master's own cost uses.
     if (getSeat(this.state, seat).pool <= p.pool) return [];
@@ -4832,6 +4849,12 @@ export class VtesEngine implements EngineOps {
       this.emit({ type: "BlockFailed", actionId: ba.actionId, blocker: ba.blocker });
       if (!af.blockRestrictions.cannotBlock.includes(ba.blocker)) {
         af.blockRestrictions.cannotBlock.push(ba.blocker);
+      }
+      // "…the blocking minion's CONTROLLER cannot attempt to block this
+      // action again" (Crocodile's Tongue).
+      if (ba.barSeatOnFail) {
+        const bars = af.blockRestrictions.cannotBlockSeats ?? [];
+        if (!bars.includes(ba.blockerSeat)) af.blockRestrictions.cannotBlockSeats = [...bars, ba.blockerSeat];
       }
       af.step = "A";
       cycleRewind(af.cycle);
@@ -8099,9 +8122,11 @@ export class VtesEngine implements EngineOps {
   /** "That block attempt fails and the blocking minion cannot attempt to
    *  block this action again" — the plain form of what Enchanting Gaze
    *  buys with a corruption counter. */
-  failBlockAttempt(): void {
+  failBlockAttempt(barSeat?: boolean): void {
     const ba = this.blockAttempt();
-    if (ba) ba.forceFail = true;
+    if (!ba) return;
+    ba.forceFail = true;
+    if (barSeat) ba.barSeatOnFail = true;
   }
 
   /** "The blocking minion gets -N intercept" — the acting minion pushing
@@ -11787,6 +11812,11 @@ export class VtesEngine implements EngineOps {
         if (option.pool > 0) {
           this.emit({ type: "PoolBurned", seat: payer, amount: option.pool });
         }
+        // Crocodile's Tongue: the blocking minion pays in blood or life.
+        // An ally at 0 life is burned by the depletion sweep (p. 8).
+        if (ptc.minionBlood && findMinion(this.state, ptc.minionBlood.minion)) {
+          this.emit({ type: "BloodBurned", minion: ptc.minionBlood.minion, amount: ptc.minionBlood.amount });
+        }
         // The card currency (Target Vitals): the discards are a COST, but
         // p. 7 still replaces them — "whenever an effect removes cards
         // from your hand, immediately draw up to match your hand size".
@@ -13373,6 +13403,7 @@ export class VtesEngine implements EngineOps {
           this.state,
           seat.id,
           option.params,
+          option.mode,
         );
         return p ? { payToCancel: p } : {};
       })(),
@@ -13610,11 +13641,13 @@ export class VtesEngine implements EngineOps {
       // "The cost to contest a title is 1 blood, which is PAID BY THE
       // VAMPIRE" — not by their Methuselah, which is why an empty vampire
       // is forced to yield (handled before this frame is ever raised).
-      if (m.blood >= 1) {
+      // Vasily pays more (`titleContestBloodCost`).
+      const price = titleContestBloodCost(this.state, m);
+      if (m.blood >= price) {
         out.push({
           id: `choice:${CONTEST}:${id}:${CONTEST}:pay`,
           kind: "answerChoice" as const,
-          label: `${m.name} burns 1 blood to keep contesting ${m.titleContest.title}`,
+          label: `${m.name} burns ${price} blood to keep contesting ${m.titleContest.title}`,
           params: { answer: "pay" },
         });
       }
@@ -13792,7 +13825,7 @@ export class VtesEngine implements EngineOps {
       const m = findMinion(this.state, id);
       if (!m?.titleContest) return;
       if (!yielding) {
-        this.emit({ type: "BloodBurned", minion: m.id, amount: 1 });
+        this.emit({ type: "BloodBurned", minion: m.id, amount: titleContestBloodCost(this.state, m) });
         return;
       }
       this.emit({ type: "TitleYielded", minion: m.id, title: m.titleContest.title });

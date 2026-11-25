@@ -1006,6 +1006,27 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 119 — First Blood Toreador (5 vampires + 1 action modifier, 10 crypt in), 2026-11-25
+
+`docs/first-blood-toreador-design.md`. Opened **Toreador groups 4–5** on
+the owner's word. First Blood Toreador went from 85% to 100%. Library 936,
+crypt 265 (was 255), total 1,201.
+
+- **New mechanics:** a block bar on a whole SEAT (`cannotBlockSeats`), a
+  cancel-as-played paid by the blocking MINION in blood or life and priced
+  by level (`payToCancel.blockerBlood`), a crypt bar on blocking a clan
+  (`cannotBlockClans`), a vote that appears once the Edge is burned
+  (`votesAfterEdgeBurned`), a crypt ability that forces an abstain, and an
+  after-resolution retrieval of the action card.
+- **Found:** the title-contest price was a literal 1 in two places (the
+  option and the payment); both now read `titleContestBloodCost`. A new
+  derived read of `rf.usedSources` wasn't total and failed on a hand-built
+  frame; fixed in the read. Vasily is whole but can't come up in today's
+  pool.
+- **Owner ruling (same day):** a card's own text or rulings beat an
+  earlier house ruling, so Kateline works in torpor. General rulings apply
+  only where the card is silent.
+
 ### Wave 118 — First Blood Tremere (4 vampires + 1 retainer, 10 crypt in), 2026-11-13
 
 `docs/first-blood-tremere-design.md`. Opened **Tremere groups 4–5** on the

@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-13T19:20:23.412Z",
+ "fetchedAt": "2026-11-25T17:49:18.132Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -3679,6 +3679,32 @@
     "image": "https://static.krcg.org/card/crematorium.jpg",
     "sets": [
      "2006 Tournament promo"
+    ]
+   },
+   "supported": true
+  },
+  "100450": {
+   "card": {
+    "kind": "library",
+    "id": 100450,
+    "name": "Crocodile's Tongue",
+    "types": [
+     "Action Modifier"
+    ],
+    "clans": [],
+    "disciplines": [
+     "aus"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "Only usable if an ally or younger vampire attempts to block.\n[aus] That attempt fails and the blocking minion's controller cannot attempt to block this action again. The blocking minion can burn 1 blood or life to cancel this card as it is played.\n[AUS] As above, but canceling this card requires 1 additional blood or life.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/crocodilestongue.jpg",
+    "sets": [
+     "Gehenna",
+     "Legacies of Blood",
+     "Keepers of Tradition",
+     "First Blood"
     ]
    },
    "supported": true
@@ -22004,6 +22030,31 @@
    },
    "supported": true
   },
+  "200427": {
+   "card": {
+    "kind": "crypt",
+    "id": 200427,
+    "name": "Epikasta Rigatos (G4)",
+    "clan": "Toreador",
+    "capacity": 8,
+    "group": 4,
+    "disciplines": {
+     "Cel": "basic",
+     "Aus": "superior",
+     "Dom": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Camarilla Prince of New York: You can move an action card Epikasta played from your ash heap to your library after resolution (shuffle afterward).",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/epikastarigatosg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "200451": {
    "card": {
     "kind": "crypt",
@@ -22021,6 +22072,28 @@
     "sets": [
      "Keepers of Tradition Reprint",
      "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
+  "200453": {
+   "card": {
+    "kind": "crypt",
+    "id": 200453,
+    "name": "Fahd al-Zawba'a (G4)",
+    "clan": "Toreador",
+    "capacity": 4,
+    "group": 4,
+    "disciplines": {
+     "Cel": "basic",
+     "For": "basic",
+     "Pre": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/fahdalzawbaag4.jpg",
+    "sets": [
+     "Gehenna"
     ]
    },
    "supported": false
@@ -22121,6 +22194,30 @@
     ]
    },
    "supported": true
+  },
+  "200555": {
+   "card": {
+    "kind": "crypt",
+    "id": 200555,
+    "name": "Gwendolyn Fleming (G5)",
+    "clan": "Toreador",
+    "capacity": 6,
+    "group": 5,
+    "disciplines": {
+     "Cel": "basic",
+     "Pro": "basic",
+     "Aus": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/gwendolynflemingg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "First Blood"
+    ]
+   },
+   "supported": false
   },
   "200562": {
    "card": {
@@ -22304,6 +22401,30 @@
    },
    "supported": false
   },
+  "200763": {
+   "card": {
+    "kind": "crypt",
+    "id": 200763,
+    "name": "Kateline Nadasdy (G4)",
+    "clan": "Toreador",
+    "capacity": 7,
+    "group": 4,
+    "disciplines": {
+     "Aus": "superior",
+     "Cel": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Camarilla: During the polling step of a political action, Kateline can burn 1 blood to force a non-acting vampire to abstain.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/katelinenadasdyg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "200787": {
    "card": {
     "kind": "crypt",
@@ -22351,6 +22472,30 @@
     ]
    },
    "supported": true
+  },
+  "200838": {
+   "card": {
+    "kind": "crypt",
+    "id": 200838,
+    "name": "Lindsay Yates (G5)",
+    "clan": "Toreador",
+    "capacity": 5,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "For": "basic",
+     "Pre": "basic",
+     "Cel": "superior"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/lindsayyatesg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": false
   },
   "200848": {
    "card": {
@@ -22420,6 +22565,30 @@
     "image": "https://static.krcg.org/card/louisfortierg4.jpg",
     "sets": [
      "Twilight Rebellion"
+    ]
+   },
+   "supported": false
+  },
+  "200949": {
+   "card": {
+    "kind": "crypt",
+    "id": 200949,
+    "name": "Masdela (G5)",
+    "clan": "Toreador",
+    "capacity": 5,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "Cel": "basic",
+     "Pre": "basic",
+     "Pot": "superior"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/masdelag5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
     ]
    },
    "supported": false
@@ -22611,6 +22780,27 @@
    },
    "supported": true
   },
+  "201254": {
+   "card": {
+    "kind": "crypt",
+    "id": 201254,
+    "name": "Sean Andrews (G4)",
+    "clan": "Toreador",
+    "capacity": 2,
+    "group": 4,
+    "disciplines": {
+     "Cel": "basic"
+    },
+    "cardText": "Camarilla.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/seanandrewsg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": false
+  },
   "201346": {
    "card": {
     "kind": "crypt",
@@ -22635,6 +22825,30 @@
    },
    "supported": false
   },
+  "201366": {
+   "card": {
+    "kind": "crypt",
+    "id": 201366,
+    "name": "Thomas De Lutrius (G4)",
+    "clan": "Toreador",
+    "capacity": 4,
+    "group": 4,
+    "disciplines": {
+     "Aus": "basic",
+     "Cel": "basic",
+     "Pre": "basic"
+    },
+    "cardText": "Camarilla primogen: Burn 1 pool after Thomas goes to torpor.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/thomasdelutriusg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
   "201388": {
    "card": {
     "kind": "crypt",
@@ -22652,6 +22866,54 @@
     "cardText": "Camarilla Prince of Geneva: Troius cannot cast votes or ballots against blood hunt referendums. +1 strength.",
     "advanced": false,
     "image": "https://static.krcg.org/card/troiusg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "201398": {
+   "card": {
+    "kind": "crypt",
+    "id": 201398,
+    "name": "Tyler McGill (G5)",
+    "clan": "Toreador",
+    "capacity": 4,
+    "group": 5,
+    "disciplines": {
+     "Pre": "basic",
+     "Aus": "superior"
+    },
+    "cardText": "Camarilla: In a referendum, Tyler gets +1 vote after a Methuselah burns the Edge for a vote. He cannot block Nosferatu.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/tylermcgillg5.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition",
+     "First Blood"
+    ]
+   },
+   "supported": true
+  },
+  "201430": {
+   "card": {
+    "kind": "crypt",
+    "id": 201430,
+    "name": "Vasily (G5)",
+    "clan": "Toreador",
+    "capacity": 6,
+    "group": 5,
+    "disciplines": {
+     "Aus": "basic",
+     "Pre": "basic",
+     "Ser": "basic",
+     "Cel": "superior"
+    },
+    "cardText": "Camarilla Prince of Prague: Contesting a title costs Vasily +1 blood unless you have the Edge.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/vasilyg5.jpg",
     "sets": [
      "Keepers of Tradition Reprint",
      "Keepers of Tradition",
@@ -32247,6 +32509,100 @@
     },
     {
      "id": 201116,
+     "copies": 1
+    }
+   ]
+  },
+  {
+   "set": "First Blood",
+   "name": "Toreador",
+   "cards": [
+    {
+     "id": 100018,
+     "copies": 3
+    },
+    {
+     "id": 100031,
+     "copies": 4
+    },
+    {
+     "id": 100095,
+     "copies": 1
+    },
+    {
+     "id": 100157,
+     "copies": 2
+    },
+    {
+     "id": 100199,
+     "copies": 3
+    },
+    {
+     "id": 100323,
+     "copies": 4
+    },
+    {
+     "id": 100410,
+     "copies": 2
+    },
+    {
+     "id": 100450,
+     "copies": 2
+    },
+    {
+     "id": 100640,
+     "copies": 6
+    },
+    {
+     "id": 101056,
+     "copies": 4
+    },
+    {
+     "id": 101089,
+     "copies": 2
+    },
+    {
+     "id": 101144,
+     "copies": 4
+    },
+    {
+     "id": 101321,
+     "copies": 5
+    },
+    {
+     "id": 101692,
+     "copies": 2
+    },
+    {
+     "id": 101821,
+     "copies": 1
+    },
+    {
+     "id": 101949,
+     "copies": 4
+    },
+    {
+     "id": 200427,
+     "copies": 1
+    },
+    {
+     "id": 200555,
+     "copies": 1
+    },
+    {
+     "id": 200763,
+     "copies": 1
+    },
+    {
+     "id": 201366,
+     "copies": 1
+    },
+    {
+     "id": 201398,
+     "copies": 1
+    },
+    {
+     "id": 201430,
      "copies": 1
     }
    ]

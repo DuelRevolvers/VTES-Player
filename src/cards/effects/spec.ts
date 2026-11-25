@@ -254,7 +254,17 @@ export type EffectPrimitive =
    *  Forced Confessional, Stygian Shroud) — played by the ACTING minion
    *  while a block attempt is underway. `bloodCost` is an extra cost the
    *  mode charges on top of the card (Stygian Shroud superior). */
-  | { kind: "failBlockAttempt"; bloodCost?: number }
+  | {
+      kind: "failBlockAttempt";
+      bloodCost?: number;
+      /** "Only usable if an ALLY or YOUNGER VAMPIRE attempts to block"
+       *  (Crocodile's Tongue) — younger than the minion playing the card. */
+      blockerAllyOrYounger?: boolean;
+      /** "…the blocking minion's CONTROLLER cannot attempt to block this
+       *  action again" (Crocodile's Tongue): the bar lands on the seat.
+       *  docs/first-blood-toreador-design.md §1 */
+      barBlockersSeat?: boolean;
+    }
   /** "That attempt fails and the blocking minion cannot attempt to block
    *  this action again. Lock this vampire and the blocking minion, and
    *  queue a combat between them" (Hedonism) — one of your OTHER vampires
@@ -2582,6 +2592,12 @@ export interface CardSpec {
      *  "they" is on a combat card (Target Vitals). `anyMethuselah` — "ANY
      *  Methuselah can cancel this card" (Personal Involvement). */
     who: "blocker" | "opposingMinion" | "anyMethuselah";
+    /** "The blocking MINION can burn 1 blood or life to cancel this card
+     *  as it is played. [AUS] … requires 1 additional blood or life"
+     *  (Crocodile's Tongue) — paid by the minion, not in pool, by level.
+     *  An ally's life is its blood, so one number covers both. Only with
+     *  `who: "blocker"`. docs/first-blood-toreador-design.md §1 */
+    blockerBlood?: Partial<Record<"basic" | "superior", number>>;
     /** "(the cost of this card is not paid in that case)". */
     refundsCost?: boolean;
     /** The card currency: "discard two COMBAT cards to cancel this card

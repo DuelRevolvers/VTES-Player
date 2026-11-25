@@ -1,6 +1,6 @@
 # Card status by set
 
-> **Generated 2026-11-13 from `data/vtes-raw.json` and `src/cards/registry.json`** by
+> **Generated 2026-11-25 from `data/vtes-raw.json` and `src/cards/registry.json`** by
 > the script in this doc's footer. Re-run it rather than editing the numbers.
 > A card printed in several sets is counted in each of them; the totals row
 > counts unique cards.
@@ -54,7 +54,7 @@
 | Prophecies league promo (2004)           |     2 |     1 |  **50%** |               0 |       50% |    1 |    0 |    0 |       0 |        0 |      0 |
 | 2004 promo (2004)                        |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
 | Gehenna promo (2004)                     |     1 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |        0 |      0 |
-| Gehenna (2004)                           |   150 |    42 |  **28%** |               2 |       29% |   38 |    6 |   16 |       4 |       42 |      0 |
+| Gehenna (2004)                           |   150 |    43 |  **29%** |               3 |       31% |   38 |    5 |   16 |       3 |       42 |      0 |
 | Fall 2004 Storyline promo (2004)         |     2 |     1 |  **50%** |               0 |       50% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Tenth Anniversary (2004)                 |   190 |    14 |   **7%** |               0 |        7% |   33 |    3 |    4 |      60 |       76 |      0 |
 | Kindred Most Wanted promo (2005)         |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
@@ -62,7 +62,7 @@
 | Kindred Most Wanted (2005)               |   314 |   114 |  **36%** |               1 |       37% |   61 |   21 |   36 |      17 |       64 |      0 |
 | Legacies of Blood promo (2005)           |     2 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        2 |      0 |
 | 2005 Storyline promo (2005)              |     3 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        3 |      0 |
-| Legacies of Blood (2005)                 |   461 |    98 |  **21%** |               0 |       21% |  121 |   19 |  124 |      24 |       75 |      0 |
+| Legacies of Blood (2005)                 |   461 |    99 |  **21%** |               0 |       21% |  121 |   18 |  124 |      24 |       75 |      0 |
 | 2006 Tournament promo (2006)             |     7 |     3 |  **43%** |               0 |       43% |    2 |    1 |    0 |       0 |        1 |      0 |
 | Nights of Reckoning (2006)               |    60 |     0 |   **0%** |               0 |        0% |   14 |    0 |   26 |       0 |        0 |     20 |
 | 2006 Championship promo (2006)           |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
@@ -78,7 +78,7 @@
 | Blood Shadowed Court (2008)              |   100 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |      35 |       65 |      0 |
 | Twilight Rebellion (2008)                |    60 |    13 |  **22%** |               1 |       23% |   17 |    0 |   10 |       2 |       17 |      0 |
 | 2008 Storyline promo (2008)              |     2 |     0 |   **0%** |               0 |        0% |    2 |    0 |    0 |       0 |        0 |      0 |
-| Keepers of Tradition (2008)              |   457 |   221 |  **48%** |              10 |       51% |   81 |   33 |   10 |      16 |       86 |      0 |
+| Keepers of Tradition (2008)              |   457 |   227 |  **50%** |              13 |       53% |   81 |   32 |   10 |      13 |       81 |      0 |
 | 2009 Tournament / Storyline promo (2009) |    13 |     2 |  **15%** |               0 |       15% |    9 |    0 |    0 |       0 |        2 |      0 |
 | Ebony Kingdom (2009)                     |    62 |     1 |   **2%** |               0 |        2% |   31 |    5 |    5 |       6 |       14 |      0 |
 | Heirs to the Blood (2010)                |   324 |    71 |  **22%** |               4 |       23% |   65 |    8 |   86 |      15 |       75 |      0 |
@@ -88,7 +88,7 @@
 | 2015 Storyline Rewards (2015)            |    13 |     0 |   **0%** |               0 |        0% |    1 |    0 |    0 |       0 |       12 |      0 |
 | Anarch Unbound (2016)                    |    42 |     6 |  **14%** |               2 |       19% |    5 |    2 |    6 |       2 |       19 |      0 |
 | Anthology (2017)                         |    65 |     9 |  **14%** |               2 |       17% |    9 |    1 |    3 |      11 |       30 |      0 |
-| Keepers of Tradition Reprint (2018)      |   166 |    32 |  **19%** |              10 |       25% |   10 |    8 |    2 |      17 |       87 |      0 |
+| Keepers of Tradition Reprint (2018)      |   166 |    37 |  **22%** |              14 |       31% |   10 |    8 |    2 |      13 |       82 |      0 |
 | Lost Kindred (2018)                      |    41 |     3 |   **7%** |               0 |        7% |    8 |    0 |    7 |       2 |       21 |      0 |
 | Heirs to the Blood Reprint (2018)        |   134 |     5 |   **4%** |               0 |        4% |   30 |    0 |   41 |       4 |       54 |      0 |
 | 2018 Humble Bundle (2018)                |     5 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        5 |      0 |
@@ -101,7 +101,7 @@
 | 2019 DriveThruCards Promo (2019)         |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       0 |        1 |      0 |
 | Twenty-Fifth Anniversary (2019)          |    61 |    39 |  **64%** |               0 |       64% |   10 |    2 |    3 |       0 |        7 |      0 |
 | 2019 EC Promo (2019)                     |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       1 |        0 |      0 |
-| First Blood (2019)                       |   109 |    86 |  **79%** |               4 |       83% |    1 |    1 |    5 |       3 |        9 |      0 |
+| First Blood (2019)                       |   109 |    92 |  **84%** |               5 |       89% |    1 |    0 |    5 |       2 |        4 |      0 |
 | 2019 AC Promo (2019)                     |     1 |     0 |   **0%** |               1 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2019 ACC Promo (2019)                    |     1 |     0 |   **0%** |               0 |        0% |    0 |    0 |    0 |       1 |        0 |      0 |
 | 2020 GP Promo (2019)                     |     1 |     1 | **100%** |               0 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
@@ -139,19 +139,19 @@
 | ★ Sabbat V5 (2025)                       |   146 |   124 |  **85%** |              22 |      100% |    0 |    0 |    0 |       0 |        0 |      0 |
 | 2025 European GP Promo (2025)            |     1 |     0 |   **0%** |               0 |        0% |    0 |    1 |    0 |       0 |        0 |      0 |
 | Print on Demand                          |   943 |    66 |   **7%** |               0 |        7% |  136 |    3 |  302 |      88 |      348 |      0 |
-| **All unique cards**                     |  4149 |  1049 |  **25%** |             141 |       29% |  789 |  155 |  485 |     363 |     1147 |     20 |
+| **All unique cards**                     |  4149 |  1055 |  **25%** |             146 |       29% |  789 |  154 |  485 |     358 |     1142 |     20 |
 
 ## Totals
 
 |                                            |    Cards |    % |
 | ------------------------------------------ | -------: | ---: |
-| Built                                      |     1049 |  25% |
-| Whole, no build (V5 crypt)                 |      141 |   3% |
+| Built                                      |     1055 |  25% |
+| Whole, no build (V5 crypt)                 |      146 |   4% |
 | Planned T1 (library, no discipline)        |      789 |  19% |
-| Planned T2 (library, pool disciplines)     |      155 |   4% |
+| Planned T2 (library, pool disciplines)     |      154 |   4% |
 | Planned T3 (library, legacy discipline)    |      485 |  12% |
-| Planned §7 gate (legacy vampire, whole)    |      363 |   9% |
-| Planned §7 build (legacy vampire, ability) |     1147 |  28% |
+| Planned §7 gate (legacy vampire, whole)    |      358 |   9% |
+| Planned §7 build (legacy vampire, ability) |     1142 |  28% |
 | Imbued (out of scope)                      |       20 |   0% |
 | **Total**                                  | **4149** | 100% |
 
@@ -161,7 +161,7 @@ planned buckets, except the Imbued. No date is attached to a bucket — waves la
 
 ## Precon decks
 
-The 36 preconstructed decks the registry derives from the KRCG
+The 37 preconstructed decks the registry derives from the KRCG
 snapshot. **Implemented %** counts CARD COPIES whose card is in the pool and
 built. **Playable as printed** is the deck importer's own verdict: a crypt of
 12+, a library of 60–90, one crypt group or two
@@ -206,12 +206,13 @@ half decks, sold in pairs, and not a defect in the pool.
 | Path of Death                     | Sabbat V5                 |    12 |      77 |      **100%** | yes                 | —                             |
 | Path of Power and the Inner Voice | Sabbat V5                 |    12 |      77 |      **100%** | yes                 | —                             |
 | Nosferatu                         | First Blood               |     6 |      49 |      **100%** | no                  | crypt 6 < 12; library 49 < 60 |
+| Toreador                          | First Blood               |     6 |      49 |      **100%** | no                  | crypt 6 < 12; library 49 < 60 |
 | Tremere                           | First Blood               |     6 |      49 |      **100%** | no                  | crypt 6 < 12; library 49 < 60 |
 | Ventrue                           | First Blood               |     6 |      49 |      **100%** | no                  | crypt 6 < 12; library 49 < 60 |
 | Libertine Ball                    | Sabbat Preconstructed     |    12 |      77 |      **100%** | yes                 | —                             |
 
-**19 of 36 playable as printed**, and **36 of
-36 at 100% implemented**. Every card in every precon is a V5 card, so this
+**19 of 37 playable as printed**, and **37 of
+37 at 100% implemented**. Every card in every precon is a V5 card, so this
 table moves only if the V5 pool does — the library waves of §6 widen the pool
 AROUND these decks, not inside them.
 
@@ -272,7 +273,7 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Akunanse                        | Legacies of Blood     | 2005 |    12 |      77 |       **56%** | yes         | —                             |
 | Guruhi                          | Legacies of Blood     | 2005 |    12 |      77 |       **66%** | yes         | —                             |
 | Ishtarri                        | Legacies of Blood     | 2005 |    12 |      77 |       **65%** | yes         | —                             |
-| Osebo                           | Legacies of Blood     | 2005 |    12 |      77 |       **51%** | yes         | —                             |
+| Osebo                           | Legacies of Blood     | 2005 |    12 |      77 |       **54%** | yes         | —                             |
 | Brujah antitribu                | Third Edition         | 2006 |    12 |      77 |       **70%** | yes         | —                             |
 | Malkavian antitribu             | Third Edition         | 2006 |    12 |      77 |       **56%** | yes         | —                             |
 | Starter Kit Brujah antitribu    | Third Edition         | 2006 |     6 |      44 |       **78%** | no          | crypt 6 < 12; library 44 < 60 |
@@ -287,7 +288,7 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Ravnos                          | Lords of the Night    | 2007 |    12 |      77 |       **42%** | yes         | —                             |
 | Brujah                          | Keepers of Tradition  | 2008 |    12 |      77 |       **70%** | yes         | —                             |
 | Malkavian                       | Keepers of Tradition  | 2008 |    12 |      77 |       **48%** | yes         | —                             |
-| Toreador                        | Keepers of Tradition  | 2008 |    12 |      77 |       **69%** | yes         | —                             |
+| Toreador                        | Keepers of Tradition  | 2008 |    12 |      77 |       **82%** | yes         | —                             |
 | Ventrue                         | Keepers of Tradition  | 2008 |    12 |      77 |       **75%** | yes         | —                             |
 | Gargoyles                       | Heirs to the Blood    | 2010 |    12 |      77 |       **53%** | yes         | —                             |
 | Kiasyd                          | Heirs to the Blood    | 2010 |    12 |      77 |       **39%** | yes         | —                             |
@@ -299,7 +300,7 @@ Two decks are left out on purpose, at the owner's word (2026-09-15):
 | Parliament of Shadows           | Sabbat Preconstructed | 2019 |    12 |      77 |       **57%** | yes         | —                             |
 | Malkavian                       | First Blood           | 2019 |     6 |      49 |       **51%** | no          | crypt 6 < 12; library 49 < 60 |
 | Nosferatu                       | First Blood           | 2019 |     6 |      49 |      **100%** | no          | crypt 6 < 12; library 49 < 60 |
-| Toreador                        | First Blood           | 2019 |     6 |      49 |       **85%** | no          | crypt 6 < 12; library 49 < 60 |
+| Toreador                        | First Blood           | 2019 |     6 |      49 |      **100%** | no          | crypt 6 < 12; library 49 < 60 |
 | Tremere                         | First Blood           | 2019 |     6 |      49 |      **100%** | no          | crypt 6 < 12; library 49 < 60 |
 | Ventrue                         | First Blood           | 2019 |     6 |      49 |      **100%** | no          | crypt 6 < 12; library 49 < 60 |
 

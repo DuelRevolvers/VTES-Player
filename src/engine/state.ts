@@ -184,6 +184,7 @@ export const DISCIPLINES: string[] = [
   "pot",
   "pre",
   "pro",
+  "ser",
   "tha",
   "vic",
 ];
@@ -1065,6 +1066,18 @@ export interface PermanentStatics {
    *  Bilé). Read at block time, so a title gained mid-game lifts it.
    *  docs/first-blood-ventrue-design.md §1 */
   cannotBlockTitledWhileUntitled?: boolean;
+  /** "He cannot block Nosferatu" (Tyler McGill) — a bar on the BEARER
+   *  keyed on the acting minion's clan, the mirror of
+   *  `cannotBeBlockedBy.clans`. docs/first-blood-toreador-design.md §1 */
+  cannotBlockClans?: string[];
+  /** "Contesting a title costs Vasily +1 blood unless you have the Edge"
+   *  (Vasily). Read by `titleContestBloodCost`, the one place the contest
+   *  price is asked. docs/first-blood-toreador-design.md §1 */
+  contestSurchargeUnlessEdge?: number;
+  /** "In a referendum, Tyler gets +1 vote after a Methuselah burns the
+   *  Edge for a vote" (Tyler McGill). Derived in `vampireVotes` from the
+   *  referendum's `usedSources`. docs/first-blood-toreador-design.md §1 */
+  votesAfterEdgeBurned?: number;
   /** "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier) —
    *  the same restriction keyed on the ACTION rather than on the actor, so
    *  it bars a bleed at the table's other end and leaves the bearer free to
@@ -2831,6 +2844,11 @@ export interface ActionFrame {
     noVampires: boolean;
     noTitled: boolean;
     cannotBlock: MinionId[];
+    /** "…the blocking minion's CONTROLLER cannot attempt to block this
+     *  action again" (Crocodile's Tongue) — every minion of that seat,
+     *  where `cannotBlock` bars one minion.
+     *  docs/first-blood-toreador-design.md §1 */
+    cannotBlockSeats?: SeatId[];
   };
   cycle: ImpulseCycle;
 }
@@ -2845,6 +2863,9 @@ export interface BlockAttemptFrame {
    *  action again" (Enchanting Gaze) — set by burning a corruption counter;
    *  resolveBlockAttempt fails it and adds the blocker to `cannotBlock`. */
   forceFail?: boolean;
+  /** With `forceFail`: the bar lands on the blocker's CONTROLLER, not
+   *  only the blocker (Crocodile's Tongue). */
+  barSeatOnFail?: boolean;
   /** "If a vampire is currently attempting to block, they can cancel their
    *  block attempt" (Dawn Operation) — the offer, set on the attempt that
    *  is underway. A re-attempt is a NEW frame with this unset, which is
@@ -4248,6 +4269,10 @@ export interface CardPlayFrame {
      *  takes the option. docs/out-of-turn-cancels-design.md §6 */
     seat: SeatId | "any";
     pool: number;
+    /** "The blocking minion can burn N blood or life to cancel this card"
+     *  (Crocodile's Tongue) — the MINION pays; `pool` is then 0.
+     *  docs/first-blood-toreador-design.md §1 */
+    minionBlood?: { minion: MinionId; amount: number };
     /** "They can DISCARD TWO COMBAT CARDS to cancel this card as it is
      *  played" (Target Vitals) — the same gate, a different currency.
      *  docs/round-end-design.md §3 */

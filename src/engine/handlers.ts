@@ -534,7 +534,9 @@ export interface EngineOps {
    *  their block attempt fail" (Enchanting Gaze). */
   /** "That block attempt fails and the blocking minion cannot attempt to
    *  block this action again" (Elder Impersonation, Relentlessness). */
-  failBlockAttempt(): void;
+  /** `barSeat`: the bar lands on the blocker's controller (Crocodile's
+   *  Tongue), not only on the blocker. */
+  failBlockAttempt(barSeat?: boolean): void;
   /** "The blocking minion gets -N intercept", played by the acting
    *  minion against the current blocker. */
   modifyBlockerIntercept(delta: number, source: string): void;
@@ -1327,6 +1329,9 @@ export interface CardHandler {
     state: GameState,
     seat: SeatId,
     params: Record<string, string>,
+    /** The mode played: a cancel price can vary by level (Crocodile's
+     *  Tongue). */
+    mode?: DisciplineLevel | null,
   ): NonNullable<CardPlayFrame["payToCancel"]> | null;
   /** This mode, played, is a card that CANCELS the card whose as-played
    *  window it is played in (p. 7 — the only other thing allowed there is a
