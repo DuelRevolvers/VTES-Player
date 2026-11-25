@@ -1342,6 +1342,13 @@ function fourSeatGame(seed: number): GameState {
     // Crocodile's Tongue (wave 119): a block fail that bars the blocker's
     // whole SEAT, cancelled by the blocking minion paying blood or life.
     "Crocodile's Tongue",
+    // Wave 120: Psyche! queues a combat at End of Round (cel, superior on
+    // the odd seats' b-vampire); Armor of Vitality destroys a melee weapon
+    // that dealt the damage (for); two Berettas so a pair can be dealt.
+    "Psyche!",
+    "Armor of Vitality",
+    "Beretta 9mm",
+    "Beretta 9mm",
     // One each round (tranche 3 wave 44). Death Seeker acts inside ANOTHER
     // card's as-played window, which is the one window the fuzz could
     // previously only ever reach with a strike card.

@@ -1259,6 +1259,18 @@ export function titleContestBloodCost(state: GameState, m: MinionState): number 
   return 1 + m.attached.reduce((n, p) => n + (p.statics.contestSurchargeUnlessEdge ?? 0), 0);
 }
 
+/**
+ * "Frenzy cards cannot be played on him" (Gotsdam) — THE one question every
+ * frenzy-card target list asks: a combat card aimed at a combatant, an
+ * action card put on a vampire, a minion chosen for Bloodlust, the vampire
+ * Deep Song enters combat with. A standing vampire ability, so it follows
+ * the ready-only rule (owner ruling 2026-11-13): his card says nothing
+ * about torpor. docs/keepers-of-tradition-design.md §1
+ */
+export function barsFrenzyCards(m: MinionState): boolean {
+  return isReady(m) && m.attached.some((p) => p.statics.noFrenzyCards === true);
+}
+
 export function titleContestKey(m: MinionState): string | null {
   const claim = m.titleContest ?? (m.title === null ? null : { title: m.title, city: m.titleCity });
   if (!claim) return null;

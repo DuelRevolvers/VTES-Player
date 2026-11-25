@@ -137,7 +137,7 @@ ever `.click()`s a button already on screen. The menu's Profile button is
 now **Settings** (tabs Profile / Bots / Controls); the table's Settings
 dialog has General / Controls.
 
-**Green baseline: 336 test files, 3857 tests**, with `npm run typecheck`,
+**Green baseline: 337 test files, 3874 tests**, with `npm run typecheck`,
 `vite build` and `npm run simulate` all clean. If a fresh session sees
 fewer, something regressed.
 
@@ -254,7 +254,9 @@ CATALOGUE by data-zoomid, bound once in the constructor (see §16).
    `docs/card-status-by-set.md` (all 32 V5 precons are whole, so this
    means the "Precon decks outside V5" table). Cards outside those decks
    join a wave only when they share its mechanic. The mechanic rule above
-   still decides how a wave is grouped.
+   still decides how a wave is grouped. **`docs/precon-bundles-plan.md`**
+   (2026-11-25) groups the unfinished decks into clan BUNDLES that share
+   cards and one clan opening, plus a cross-bundle commons wave.
 
 3. **AI.** Weight-tweaking is exhausted, demonstrably
    (`docs/richer-options-design.md` §5–§8). A search agent exists, is
@@ -957,7 +959,7 @@ supports every MTG card with zero card implementations and equally why it
 
 ## Design docs — the index
 
-239 files under `docs/`, one per mechanic that took a decision. **Read the
+240 files under `docs/`, one per mechanic that took a decision. **Read the
 doc before touching the mechanic** rather than re-deriving it; each holds
 the rulebook citations and the readings taken. `ls docs/` for the current
 list — names are `<mechanic>-design.md`.

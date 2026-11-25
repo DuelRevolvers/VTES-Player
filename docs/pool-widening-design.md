@@ -1006,6 +1006,22 @@ than the 1,130 in the table above; the difference is 3 Conviction cards
 a slightly different discipline test. Re-derive it rather than trusting
 either number.
 
+### Wave 120 — Keepers of Tradition combat (2 vampires + 3 library), 2026-11-25
+
+`docs/keepers-of-tradition-design.md` §1, bundle A's first wave. No clan
+opening. Keepers Toreador 82% → 93%, Keepers Ventrue 75% → 82%. Library
+939, crypt 267, total 1,206.
+
+- **New mechanics:** standing aggravated-as-normal in combat and a standing
+  frenzy-card bar (`barsFrenzyCards`, asked by all four frenzy target
+  lists), a queued rematch at End of Round (`queueRematch`), damage that
+  records its melee weapon (`fromMeleeWeapon`), and a weapon profile that
+  depends on holding a second copy (`pairedWithAnother`).
+- **Found:** the "one weapon maneuver per side per combat" slot has no
+  rulebook source; Beretta's own text overrides it for a pair. Psyche!
+  makes Mercy for the Weak's "lost if combat continues" ruling reachable,
+  and every strike: combat ends rider is now dropped on a rematch.
+
 ### Wave 119 — First Blood Toreador (5 vampires + 1 action modifier, 10 crypt in), 2026-11-25
 
 `docs/first-blood-toreador-design.md`. Opened **Toreador groups 4–5** on

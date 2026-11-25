@@ -72,6 +72,7 @@ import {
   isReady,
   playCostFor,
   untargetableBy,
+  barsFrenzyCards,
   predatorOf,
   preyOf,
   rushTargetOk,
@@ -1827,6 +1828,9 @@ function compileActionCard(spec: CardSpec): CardHandler {
               }
               // "…cannot be the target of other Methuselahs' actions".
               if (untargetableBy(t, ctx.seat, m)) continue;
+              // "Frenzy cards cannot be played on him" (Gotsdam): Enrage
+              // is put ON its target.
+              if (spec.frenzy && barsFrenzyCards(t)) continue;
               push(mode, { target: t.id });
             }
             continue;
@@ -1837,7 +1841,9 @@ function compileActionCard(spec: CardSpec): CardHandler {
             // X, which the acting vampire must be able to pay (p. 9) and
             // which must leave enough distinct minions to choose. The
             // minions themselves are picked before announcement.
-            for (let x = 0; x <= m.blood && x + chooseOwn.extra <= seat.minions.length; x++) {
+            // Only minions a frenzy card may be played ON count (Gotsdam).
+            const choosable = seat.minions.filter((c) => !(spec.frenzy && barsFrenzyCards(c))).length;
+            for (let x = 0; x <= m.blood && x + chooseOwn.extra <= choosable; x++) {
               push(mode, { xBlood: String(x) });
             }
             continue;
@@ -1853,6 +1859,10 @@ function compileActionCard(spec: CardSpec): CardHandler {
           if (rider && rider.kind === "actionEnterCombat") {
             // Rush target fixed at announcement (p. 25).
             for (const t of enumerateRushTargets(ctx.state, m, rider)) {
+              // "Frenzy cards cannot be played on him" (Gotsdam): Deep
+              // Song superior enters combat with its target.
+              const tm = spec.frenzy ? findMinion(ctx.state, t) : null;
+              if (tm && barsFrenzyCards(tm)) continue;
               push(mode, { target: t });
             }
           } else if (mode.effects.some((e) => e.kind === "actionOnPermanent")) {
@@ -2870,6 +2880,8 @@ function compileActionCard(spec: CardSpec): CardHandler {
       // vampire among them (design §4).
       const candidates = getSeat(state, actor.controller)
         .minions.filter((m) => !picked.includes(m.id))
+        // "Frenzy cards cannot be played on him" (Gotsdam).
+        .filter((m) => !(spec.frenzy && barsFrenzyCards(m)))
         .map((m) => m.id);
       return { remaining: want - picked.length, candidates };
     };
@@ -3081,6 +3093,7 @@ function combatWindowFor(mode: CardMode): WindowId | null {
       // "Only usable if combat would end" — the End of Round window,
       // where `willContinue` is already decided (§1).
       case "startNewRound":
+      case "queueRematch":
         return "combat.endOfRound";
       // "Only usable AS THIS MINION CHOOSES A STRIKE" (Target Vitals, §3).
       case "aimRider":
@@ -3303,7 +3316,13 @@ function compileCombatCard(spec: CardSpec): CardHandler {
         // Shield). Which vampire a frenzy mode is used on comes from its
         // own effects, not a list of card names — see
         // docs/round-recurring-combat-design.md §6.
-        if (spec.frenzy && cf.frenzyImmune[frenzyTargetSide(mode, side)]) continue;
+        if (spec.frenzy) {
+          const on = frenzyTargetSide(mode, side);
+          if (cf.frenzyImmune[on]) continue;
+          // …and the standing form (Gotsdam).
+          const onMinion = findMinion(ctx.state, on === "acting" ? cf.acting : cf.opposing);
+          if (onMinion && barsFrenzyCards(onMinion)) continue;
+        }
         // "Only one <card> at SUPERIOR each combat" (Terror Frenzy) — a
         // per-mode limit, so the mode is part of the recorded key.
         if (
@@ -3755,6 +3774,17 @@ function compileCombatCard(spec: CardSpec): CardHandler {
               (cf.willContinue || cf.endedPrematurely)
             ) {
               continue;
+            }
+            // Psyche! has REPLACED the ending with a queued combat, so a
+            // replacement played "when a combat would end" (Telepathic
+            // Tracking) can no longer be played [ANK 20191219], and neither
+            // can a second Psyche!.
+            if (mode.usable?.includes("onlyIfCombatWouldEnd") && cf.rematch) continue;
+            if (mode.effects.some((e) => e.kind === "queueRematch")) {
+              // "(Not usable if there is already a combat queued.)"
+              // [RTR 20020501] — Hedonism's queue counts too.
+              const af = ctx.state.frames.find((f) => f.kind === "action");
+              if (af?.kind === "action" && af.queuedCombats.length > 0) continue;
             }
             if (mode.usable?.includes("onlyIfBothCombatantsReady")) {
               const a = findMinion(ctx.state, cf.acting);
@@ -4319,6 +4349,9 @@ function compileCombatCard(spec: CardSpec): CardHandler {
           case "press":
             ops.applyPressCard(play, play.params["press"] !== "cancel");
             break;
+          case "queueRematch":
+            ops.queueRematch();
+            break;
           case "startNewRound":
             if (e.bloodCost && play.minion) {
               ops.emit({ type: "BloodBurned", minion: play.minion, amount: e.bloodCost });
@@ -4374,7 +4407,11 @@ function compileCombatCard(spec: CardSpec): CardHandler {
             if (x > 0 && play.minion) {
               ops.emit({ type: "BloodBurned", minion: play.minion, amount: x });
             }
-            ops.preventDamage(play, e.base + x);
+            ops.preventDamage(
+              play,
+              e.base + x,
+              e.destroyMeleeWeapon ? { destroyMeleeWeapon: true } : undefined,
+            );
             break;
           }
           case "preventForOther": {
@@ -8305,7 +8342,23 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
     const priorOptions = handler.abilityOptions?.bind(handler);
     const priorUse = handler.useAbility?.bind(handler);
     const priorEnded = handler.onCombatEnded?.bind(handler);
+    // "If bearer has another Beretta 9mm" — the printed alternative profile,
+    // asked of the bearer on every read (§1 of keepers-of-tradition-design).
+    const base = w;
+    const pairedOn = (entryId: string, minion: MinionId | null, state: GameState): boolean => {
+      if (!base.pairedWithAnother || minion === null) return false;
+      const bearer = findMinion(state, minion);
+      return (
+        bearer?.attached.some((p) => p.card.name === spec.name && p.card.id !== entryId) ?? false
+      );
+    };
+    const profileOf = (entryId: string, minion: MinionId | null, state: GameState) =>
+      pairedOn(entryId, minion, state)
+        ? { ...base, damage: base.pairedWithAnother!.damage, maneuverPerCombat: true }
+        : base;
     const weaponOptions: NonNullable<CardHandler["abilityOptions"]> = (entry, owner, ctx) => {
+      const w = profileOf(entry.card.id, owner.minion, ctx.state);
+      const paired = pairedOn(entry.card.id, owner.minion, ctx.state);
       const cf = ctx.combat;
       if (!cf || owner.minion === null) return [];
       const side =
@@ -8328,7 +8381,16 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
         // One weapon per side, but that weapon may have more than one.
         const spentByThis = cf.weaponManeuversUsed?.[entry.card.id] ?? 0;
         const sideSlot = cf.usedWeaponManeuver[side];
-        if (sideSlot !== null && sideSlot !== entry.card.id) return [];
+        // A paired Beretta may follow ANOTHER Beretta's maneuver from an
+        // earlier round — "only one Beretta 9mm to maneuver each round" —
+        // but never any other weapon's, and never in the same round.
+        const slotIsSibling =
+          paired &&
+          sideSlot !== null &&
+          findMinion(ctx.state, owner.minion)?.attached.find((p) => p.card.id === sideSlot)?.card
+            .name === spec.name;
+        if (sideSlot !== null && sideSlot !== entry.card.id && !slotIsSibling) return [];
+        if (paired && cf.usedThisRound.includes(`maneuver:${spec.name}`)) return [];
         if (spentByThis >= maneuverLimit) return [];
         // "…only usable to get to CLOSE RANGE" (Blade of Bellona): a
         // maneuver flips the range, so only a long round can reach close.
@@ -8487,9 +8549,14 @@ function addWeaponAbilities(spec: CardSpec, handler: CardHandler): void {
     }
     const weaponUse: NonNullable<CardHandler["useAbility"]> = (entry, owner, choice, ops) => {
       if (!owner.minion) throw new Error(`${spec.name}: no bearer`);
+      const w = profileOf(entry.card.id, owner.minion, ops.state);
       const act = choice.params["action"];
       if (act === "maneuver") {
-        ops.useWeaponManeuver(owner.minion, entry.card.id);
+        ops.useWeaponManeuver(
+          owner.minion,
+          entry.card.id,
+          pairedOn(entry.card.id, owner.minion, ops.state) ? spec.name : undefined,
+        );
         return;
       }
       if (act === "snipe") {

@@ -1078,6 +1078,16 @@ export interface PermanentStatics {
    *  Edge for a vote" (Tyler McGill). Derived in `vampireVotes` from the
    *  referendum's `usedSources`. docs/first-blood-toreador-design.md §1 */
   votesAfterEdgeBurned?: number;
+  /** "He treats aggravated damage as normal damage in combat" (Gotsdam).
+   *  The standing, whole-combat form of `aggravatedAsNormalRound`, asked
+   *  at the same one place (`applyResolvedDamage`), so the item itself
+   *  stays aggravated [LSJ 20040812-2]. docs/keepers-of-tradition-design.md §1 */
+  aggravatedAsNormalInCombat?: boolean;
+  /** "Frenzy cards cannot be played on him" (Gotsdam). The standing form
+   *  of Tranquility Shield's `frenzyImmune`; read by `barsFrenzyCards`,
+   *  the one helper every frenzy-card target list asks.
+   *  docs/keepers-of-tradition-design.md §1 */
+  noFrenzyCards?: boolean;
   /** "This vampire cannot block UNDIRECTED actions" (Kaymakli Barrier) —
    *  the same restriction keyed on the ACTION rather than on the actor, so
    *  it bars a bleed at the table's other end and leaves the bearer free to
@@ -3084,6 +3094,11 @@ export interface PendingDamage {
    *  strike"). Read off `strike.source`, so a melee weapon is not one.
    *  docs/first-strike-cards-design.md §2 */
   fromHandStrike?: boolean;
+  /** The MELEE WEAPON whose strike made this damage — "if any of the damage
+   *  was from the opposing minion's melee weapon, that weapon is destroyed"
+   *  (Armor of Vitality superior). Set at the push chokepoint, beside
+   *  `fromGun`, for the same reason. docs/keepers-of-tradition-design.md §1 */
+  fromMeleeWeapon?: CardInstanceId;
   /**
    * "This vampire treats all aggravated damage from the opposing minion's
    * STRIKE as normal damage" (Adaptability basic) — recorded on the ITEM,
@@ -3835,6 +3850,13 @@ export interface CombatFrame {
   pendingDamage: PendingDamage[];
   willContinue: boolean;
   endedPrematurely: boolean;
+  /** "Queue a combat with the opposing minion" (Psyche! superior), set in
+   *  End of Round when combat would end. Honoured at the ONE CombatEnded
+   *  site: the same two minions fight again, still inside the current
+   *  action [LSJ 20021213], and what the ending effect would have done
+   *  after combat is lost [LSJ 19980109] [RTR 20020501].
+   *  docs/keepers-of-tradition-design.md §1 */
+  rematch?: boolean;
   cycle: ImpulseCycle;
 }
 

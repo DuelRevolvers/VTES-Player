@@ -2996,6 +2996,17 @@ export class VtesEngine implements EngineOps {
             // Ambush) — an ally that exists only for one fight. Before
             // the event, so the combatant list is still intact.
             this.burnOneFightAllies(cf);
+            // "Effects that end combat and then do something else after
+            // combat (include continuing the action as if unblocked) will be
+            // lost, except for unlock effects" (Psyche! [LSJ 19980109]
+            // [RTR 20020501]). Every rider but a rush's own `outcome` comes
+            // from a strike: combat ends card (Form of Mist, Mercy for the
+            // Weak, Pass Through Shadow, Catatonic Fear, Kiss of Cathari);
+            // none is an unlock. The outcome belongs to the rush, not to
+            // whatever ended its combat, so it stays.
+            if (cf.rematch) {
+              cf.afterCombatEnds = cf.afterCombatEnds.filter((r) => r.kind === "outcome");
+            }
             this.emit({ type: "CombatEnded", rounds: cf.round });
             this.pop();
             // AFTER the pop, not before: a hook here may raise a choice
@@ -3023,6 +3034,19 @@ export class VtesEngine implements EngineOps {
             // and this is the engine's single CombatEnded site, which is
             // what makes the derived model safe (§3).
             this.expireHandSizeBonus(cf.handSizeBonus);
+            // Psyche!'s queued combat — LAST, so "cards that are only
+            // replaced after combat are replaced before the new combat"
+            // [LSJ 20001122] (the flush above). Both must still be ready:
+            // a minion burned or sent to torpor in between does not fight.
+            // The new combat is still part of the current action
+            // [LSJ 20021213], so it goes on the stack above the action.
+            if (cf.rematch) {
+              const a = findMinion(this.state, cf.acting);
+              const o = findMinion(this.state, cf.opposing);
+              if (a && o && isReady(a) && isReady(o)) {
+                this.pushCombat(a.id, a.controller, o.id, o.controller, null, cf.fromBlock);
+              }
+            }
           }
           return true;
         }
@@ -5550,6 +5574,7 @@ export class VtesEngine implements EngineOps {
           ...(strike.noPreventBy?.length ? { noPreventBy: strike.noPreventBy } : {}),
           ...(this.isGunStrike(strike) ? { fromGun: true } : {}),
           ...(strike.source === "hand" ? { fromHandStrike: true } : {}),
+          ...(this.meleeWeaponOf(strike) ? { fromMeleeWeapon: this.meleeWeaponOf(strike)! } : {}),
         });
       }
       if (load?.aggravatedDamage) {
@@ -5996,6 +6021,13 @@ export class VtesEngine implements EngineOps {
     return true;
   }
 
+  /** The melee weapon this strike was made with, if it was one — by CARD,
+   *  never by name, for the reason `isGunStrike` gives. */
+  private meleeWeaponOf(strike: Strike): CardInstanceId | null {
+    if (strike.source !== "weapon" || !strike.weaponCard) return null;
+    return this.findEntry(strike.weaponCard)?.tags.includes("melee") ? strike.weaponCard : null;
+  }
+
   private isGunStrike(strike: Strike): boolean {
     if (strike.source !== "weapon") return false;
     // BY CARD when the strike names one. The name search below takes the
@@ -6096,6 +6128,13 @@ export class VtesEngine implements EngineOps {
    *  docs/round-end-design.md §1 */
   startNewRound(): void {
     this.requireCombat().willContinue = true;
+  }
+
+  /** "Queue a combat with the opposing minion" (Psyche! superior) — the
+   *  combat still ends; `settleCombat` starts the next one at the one
+   *  CombatEnded site. docs/keepers-of-tradition-design.md §1 */
+  queueRematch(): void {
+    this.requireCombat().rematch = true;
   }
 
   /** "Strikes that are not hand strikes cannot be used this round (BY
@@ -7085,13 +7124,24 @@ export class VtesEngine implements EngineOps {
     return n <= 0 ? 0 : rngInt(this.state, n);
   }
 
-  useWeaponManeuver(minion: MinionId, cardId: string): void {
+  useWeaponManeuver(minion: MinionId, cardId: string, pairedName?: string): void {
     const cf = this.requireCombat();
     const side = this.sideOf(cf, minion);
     // One WEAPON per side per combat — but a weapon printed with two
-    // maneuvers may go again, so the same card is not a repeat.
-    if (cf.usedWeaponManeuver[side] !== null && cf.usedWeaponManeuver[side] !== cardId) {
+    // maneuvers may go again, so the same card is not a repeat. And "a
+    // minion may use only one Beretta 9mm to maneuver EACH ROUND": a paired
+    // Beretta may follow its sibling's maneuver from an earlier round.
+    const slot = cf.usedWeaponManeuver[side];
+    const sibling =
+      pairedName !== undefined && slot !== null && this.findEntry(slot)?.card.name === pairedName;
+    if (slot !== null && slot !== cardId && !sibling) {
       throw new Error("weapon maneuver already used this combat");
+    }
+    if (pairedName !== undefined) {
+      if (cf.usedThisRound.includes(`maneuver:${pairedName}`)) {
+        throw new Error(`${pairedName} already maneuvered this round`);
+      }
+      cf.usedThisRound.push(`maneuver:${pairedName}`);
     }
     cf.usedWeaponManeuver[side] = cardId;
     cf.weaponManeuversUsed = {
@@ -8928,7 +8978,7 @@ export class VtesEngine implements EngineOps {
     cf.closeManeuvers[this.sideOf(cf, play.minion)] += 1;
   }
 
-  preventDamage(play: CardPlayFrame, amount: number): void {
+  preventDamage(play: CardPlayFrame, amount: number, opts?: { destroyMeleeWeapon?: boolean }): void {
     const cf = this.requireCombat();
     // A prevention is CHOSEN in one window and RESOLVES in another, and
     // the minion it protects can leave in between: an ALLY paying the
@@ -8955,6 +9005,15 @@ export class VtesEngine implements EngineOps {
     if (pd.amount <= 0) {
       // Fully prevented — nothing left to mend.
       cf.pendingDamage.shift();
+    }
+    // "…and if any of the damage was from the OPPOSING MINION'S melee
+    // weapon, that weapon is destroyed" (Armor of Vitality superior). The
+    // damage this card answers is this item; the weapon must still be in
+    // play and still on the minion who struck with it.
+    if (opts?.destroyMeleeWeapon && pd.fromMeleeWeapon && pd.source !== null) {
+      const weapon = pd.fromMeleeWeapon;
+      const striker = findMinion(this.state, pd.source);
+      if (striker?.attached.some((p) => p.card.id === weapon)) this.burnPermanent(weapon);
     }
   }
 
@@ -12564,9 +12623,13 @@ export class VtesEngine implements EngineOps {
     // aggravated, which is what keeps Resilience's non-aggravated
     // prevention off it [LSJ 20040812-2]. docs/armour-design.md §3
     const cf = this.state.frames.find((f) => f.kind === "combat");
+    // "He treats aggravated damage as normal damage IN COMBAT" (Gotsdam) is
+    // the standing, whole-combat form of the same question.
     const asNormal =
       pd.treatAsNormal ||
-      (cf?.kind === "combat" && (cf.aggravatedAsNormalRound ?? []).includes(pd.minion));
+      (cf?.kind === "combat" &&
+        ((cf.aggravatedAsNormalRound ?? []).includes(pd.minion) ||
+          (isReady(m) && m.attached.some((p) => p.statics.aggravatedAsNormalInCombat === true))));
     if (pd.aggravated && !asNormal) {
       // Aggravated cannot be mended (p. 34). An already-wounded (in
       // torpor) vampire burns 1 blood per point to prevent destruction,

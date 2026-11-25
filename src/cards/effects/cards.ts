@@ -6781,6 +6781,79 @@ export const cardSpecs: CardSpec[] = [
       },
     ],
   },
+  // ---- Wave 120: Keepers of Tradition combat (docs/keepers-of-tradition-design.md §1)
+  {
+    // "[cel] Press.
+    //  [CEL] Only usable if both combatants are still ready and combat is
+    //  about to end. Queue a combat with the opposing minion. (Not usable
+    //  if there is already a combat queued. This can interrupt the
+    //  resolution of an effect that ends a combat.)"
+    //
+    // The superior is Telepathic Tracking's window with a different
+    // answer: the combat ENDS and a new one is queued, rather than a new
+    // round starting. What the ending effect would have done after combat
+    // is lost [LSJ 19980109]; the new combat is part of the same action
+    // [LSJ 20021213].
+    krcgId: 101507,
+    name: "Psyche!",
+    cardType: "combat",
+    bloodCost: 0,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "cel", effects: [{ kind: "press", continueOnly: false }] },
+      {
+        level: "superior",
+        discipline: "cel",
+        usable: ["onlyIfCombatWouldEnd", "onlyIfBothCombatantsReady"],
+        effects: [{ kind: "queueRematch" }],
+      },
+    ],
+  },
+  {
+    // "[for] Prevent 3 damage.
+    //  [FOR] As above, and if any of the damage was from the opposing
+    //  minion's melee weapon, that weapon is destroyed."  Cost: 1 blood.
+    //
+    // Fewer than 3 pending is all of it prevented [RTR 20041202]; nothing
+    // carries over, because the prevention is not optional
+    // [ANK 20200318]; and it is not offered with nothing to prevent
+    // [LSJ 20001114] — all three are what `prevent` already does.
+    krcgId: 100089,
+    name: "Armor of Vitality",
+    cardType: "combat",
+    bloodCost: 1,
+    usable: [],
+    modes: [
+      { level: "basic", discipline: "for", effects: [{ kind: "prevent", base: 3, perBloodX: false }] },
+      {
+        level: "superior",
+        discipline: "for",
+        effects: [{ kind: "prevent", base: 3, perBloodX: false, destroyMeleeWeapon: true }],
+      },
+    ],
+  },
+  {
+    // "Weapon, gun. Strike: 1R damage. Or, if bearer has another Beretta
+    //  9mm, strike: 2R damage, with an optional maneuver each combat (a
+    //  minion may use only one Beretta 9mm to maneuver each round)."
+    //
+    // The maneuver cannot be used when the strike cannot [LSJ 20021028] —
+    // the weapon gate already sits above both options.
+    krcgId: 100152,
+    name: "Beretta 9mm",
+    cardType: "equipment",
+    bloodCost: 0,
+    poolCost: 1,
+    weapon: {
+      damage: 1,
+      ranged: true,
+      aggravated: false,
+      pairedWithAnother: { damage: 2 },
+    },
+    permanent: { where: "bearer", statics: {}, tags: ["weapon", "gun"] },
+    usable: [],
+    modes: [{ level: "basic", discipline: null, effects: [] }],
+  },
   {
     // "Unique location. As this location is played or its controller
     // changes, its controller chooses a ready vampire they control. During
@@ -19850,6 +19923,21 @@ export const cryptSpecs: CardSpec[] = [
   // Bespoke overlays: `kateline` and `epikasta`.
   cryptPerm(200763, "Kateline Nadasdy (G4)", {}),
   cryptPerm(200427, "Epikasta Rigatos (G4)", {}),
+
+  // ---- Wave 120: Keepers of Tradition combat (docs/keepers-of-tradition-design.md §1)
+
+  // "Camarilla primogen: Once each combat, Eugene can strike: dodge." —
+  // Flávio's clause word for word.
+  cryptPerm(200441, "Eugene (G4)", { grantsStrikePerCombat: { kind: "dodge" } }),
+  // "Camarilla: Gotsdam can burn 1 blood to strike: combat ends. He treats
+  // aggravated damage as normal damage in combat. Frenzy cards cannot be
+  // played on him." The strike is Agnieszka's clause word for word; the
+  // other two are the standing forms of Skin of Night and Tranquility
+  // Shield.
+  cryptPerm(200530, "Gotsdam, The Tired Warrior (G4)", {
+    statics: { aggravatedAsNormalInCombat: true, noFrenzyCards: true },
+    grantsStrikePerCombat: { kind: "combatEnds", bloodCost: 1 },
+  }),
 
   // --- Conditioned on the BOARD. Every one derived on each read. ---
   condCrypt(201667, "Branimira (G6)", [{ intercept: 1, controller: { poolAtMost: 9 } }]),

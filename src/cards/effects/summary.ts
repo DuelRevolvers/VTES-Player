@@ -202,6 +202,7 @@ export const EFFECT_TAGS: Record<EffectPrimitive["kind"], PlayEffectTag | null> 
   rushRiders: "combat",
   setStrength: "combat",
   startNewRound: "combat",
+  queueRematch: "combat",
 
   // Politics.
   autoPassReferendum: "votes",

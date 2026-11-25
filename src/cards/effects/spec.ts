@@ -1483,6 +1483,11 @@ export type EffectPrimitive =
    *  (Hunting the Quarry superior, Telepathic Tracking superior).
    *  docs/round-end-design.md §1 */
   | { kind: "startNewRound"; bloodCost?: number }
+  /** "Only usable if both combatants are still ready and combat is about
+   *  to end. Queue a combat with the opposing minion. (Not usable if there
+   *  is already a combat queued.)" (Psyche! superior). The same End of
+   *  Round window as `startNewRound`. docs/keepers-of-tradition-design.md §1 */
+  | { kind: "queueRematch" }
   /** "Strikes that are not hand strikes cannot be used this round (by
    *  EITHER combatant)" (Immortal Grapple). §2 */
   | { kind: "handStrikesOnly"; skipNextRange?: boolean }
@@ -1520,7 +1525,16 @@ export type EffectPrimitive =
    *  OPTION, like `PendingDamage.noPreventBy`: a card that provably
    *  cannot touch this damage is never offered against it.
    *  docs/combat-attachments-design.md §3 */
-  | { kind: "prevent"; base: number; perBloodX: boolean; nonAggravated?: boolean }
+  | {
+      kind: "prevent";
+      base: number;
+      perBloodX: boolean;
+      nonAggravated?: boolean;
+      /** "…and if any of the damage was from the opposing minion's melee
+       *  weapon, that weapon is destroyed" (Armor of Vitality superior).
+       *  docs/keepers-of-tradition-design.md §1 */
+      destroyMeleeWeapon?: boolean;
+    }
   /**
    * "This vampire treats aggravated damage as normal damage for the
    * remainder of this round" (Skin of Night, Jua Vema).
@@ -4402,6 +4416,15 @@ export interface CardSpec {
      *  question (the combat's first round, not the card's).
      *  docs/armed-mid-combat-design.md §2 */
     notUsableAttachRound?: boolean;
+    /** "Or, if bearer has ANOTHER <this weapon>, strike: 2R damage, with an
+     *  optional maneuver each combat (a minion may use only one Beretta
+     *  9mm to maneuver each round)" (Beretta 9mm). Asked of the bearer on
+     *  every read, so losing the second copy loses the profile. The
+     *  parenthetical is the card's own word and beats the engine's "one
+     *  weapon maneuver per side per combat" for two copies of this card:
+     *  each copy may maneuver once a combat, one copy a round.
+     *  docs/keepers-of-tradition-design.md §1 */
+    pairedWithAnother?: { damage: number };
   };
   /** Printed KEYWORDS — a line above the card text, like "Grapple." or
    *  "Aim.", which are neither card types nor Disciplines. Answered

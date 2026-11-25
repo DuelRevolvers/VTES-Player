@@ -1,5 +1,5 @@
 {
- "fetchedAt": "2026-11-25T17:49:18.132Z",
+ "fetchedAt": "2026-11-25T18:20:26.631Z",
  "pool": [
   "Fifth Edition",
   "Fifth Edition (Anarch)",
@@ -802,6 +802,30 @@
    },
    "supported": true
   },
+  "100089": {
+   "card": {
+    "kind": "library",
+    "id": 100089,
+    "name": "Armor of Vitality",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "for"
+    ],
+    "poolCost": null,
+    "bloodCost": 1,
+    "cardText": "[for] Prevent 3 damage.\n[FOR] As above, and if any of the damage was from the opposing minion's melee weapon, that weapon is destroyed.",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/armorofvitality.jpg",
+    "sets": [
+     "Lords of the Night",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "100093": {
    "card": {
     "kind": "library",
@@ -1435,6 +1459,28 @@
      "Black Hand",
      "Kindred Most Wanted",
      "Third Edition",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
+  "100152": {
+   "card": {
+    "kind": "library",
+    "id": 100152,
+    "name": "Beretta 9mm",
+    "types": [
+     "Equipment"
+    ],
+    "clans": [],
+    "disciplines": [],
+    "poolCost": 1,
+    "bloodCost": null,
+    "cardText": "Weapon, gun.\nStrike: 1R damage. Or, if bearer has another Beretta 9mm, strike: 2R damage, with an optional maneuver each combat (a minion may use only one Beretta 9mm to maneuver each round).",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/beretta9mm.jpg",
+    "sets": [
+     "Kindred Most Wanted",
      "Keepers of Tradition"
     ]
    },
@@ -13031,6 +13077,36 @@
    },
    "supported": true
   },
+  "101507": {
+   "card": {
+    "kind": "library",
+    "id": 101507,
+    "name": "Psyche!",
+    "types": [
+     "Combat"
+    ],
+    "clans": [],
+    "disciplines": [
+     "cel"
+    ],
+    "poolCost": null,
+    "bloodCost": null,
+    "cardText": "[cel] Press.\n[CEL] Only usable if both combatants are still ready and combat is about to end. Queue a combat with the opposing minion. (Not usable if there is already a combat queued. This can interrupt the resolution of an effect that ends a combat.)",
+    "burnOption": false,
+    "image": "https://static.krcg.org/card/psyche.jpg",
+    "sets": [
+     "Jyhad",
+     "Vampire: The Eternal Struggle",
+     "Final Nights",
+     "Camarilla Edition",
+     "Kindred Most Wanted",
+     "Third Edition",
+     "Keepers of Tradition",
+     "2025 European GP Promo"
+    ]
+   },
+   "supported": true
+  },
   "101513": {
    "card": {
     "kind": "library",
@@ -22055,6 +22131,30 @@
    },
    "supported": true
   },
+  "200441": {
+   "card": {
+    "kind": "crypt",
+    "id": 200441,
+    "name": "Eugene (G4)",
+    "clan": "Toreador",
+    "capacity": 8,
+    "group": 4,
+    "disciplines": {
+     "Aus": "superior",
+     "Cel": "superior",
+     "For": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Camarilla primogen: Once each combat, Eugene can strike: dodge.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/eugeneg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
+  },
   "200451": {
    "card": {
     "kind": "crypt",
@@ -22143,6 +22243,31 @@
     ]
    },
    "supported": false
+  },
+  "200530": {
+   "card": {
+    "kind": "crypt",
+    "id": 200530,
+    "name": "Gotsdam, The Tired Warrior (G4)",
+    "clan": "Ventrue",
+    "capacity": 9,
+    "group": 4,
+    "disciplines": {
+     "Ani": "basic",
+     "Aus": "superior",
+     "Dom": "superior",
+     "For": "superior",
+     "Pre": "superior"
+    },
+    "cardText": "Camarilla: Gotsdam can burn 1 blood to strike: combat ends. He treats aggravated damage as normal damage in combat. Frenzy cards cannot be played on him.",
+    "advanced": false,
+    "image": "https://static.krcg.org/card/gotsdamthetiredwarriorg4.jpg",
+    "sets": [
+     "Keepers of Tradition Reprint",
+     "Keepers of Tradition"
+    ]
+   },
+   "supported": true
   },
   "200533": {
    "card": {

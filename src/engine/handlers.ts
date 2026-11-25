@@ -288,6 +288,9 @@ export interface EngineOps {
    *  (Hunting the Quarry, Telepathic Tracking).
    *  docs/round-end-design.md §1 */
   startNewRound(): void;
+  /** "Queue a combat with the opposing minion" when combat is about to
+   *  end (Psyche! superior). docs/keepers-of-tradition-design.md §1 */
+  queueRematch(): void;
   /** "Strikes that are not hand strikes cannot be used this round (by
    *  either combatant)" (Immortal Grapple). */
   restrictToHandStrikes(): void;
@@ -405,8 +408,11 @@ export interface EngineOps {
   /** "Frenzy cards cannot be used on this vampire this combat; cancel the
    *  effects of those already used on them" (Tranquility Shield). §6 */
   shieldFromFrenzy(play: CardPlayFrame): void;
-  /** Prevent damage on the currently-resolving pending damage. */
-  preventDamage(play: CardPlayFrame, amount: number): void;
+  /** Prevent damage on the currently-resolving pending damage.
+   *  `destroyMeleeWeapon`: "…and if any of the damage was from the opposing
+   *  minion's melee weapon, that weapon is destroyed" (Armor of Vitality
+   *  superior). docs/keepers-of-tradition-design.md §1 */
+  preventDamage(play: CardPlayFrame, amount: number, opts?: { destroyMeleeWeapon?: boolean }): void;
   /** Grant a press credit spendable in this round's press step. */
   /** "You gain the Edge" (Esteem) / "the chosen Methuselah gets the Edge"
    *  (Regaining the Upper Hand). docs/the-edge-design.md §2 */
@@ -956,7 +962,10 @@ export interface EngineOps {
   armBiggerHitterPress(): void;
   /** Weapon maneuver: maneuvers AND commits the weapon's strike for the
    *  round; one weapon maneuver per combat (.44 ruling p. 47). */
-  useWeaponManeuver(minion: MinionId, cardId: CardInstanceId): void;
+  /** `pairedName`: a Beretta 9mm used as one of a pair, which may follow a
+   *  sibling copy's maneuver from an earlier round and latches the name
+   *  for this round. docs/keepers-of-tradition-design.md §1 */
+  useWeaponManeuver(minion: MinionId, cardId: CardInstanceId, pairedName?: string): void;
   /** Choose a weapon's strike for the round. `damage: null` = strength +
    *  `handBonus` (melee); a number = fixed (gun). */
   chooseWeaponStrike(
